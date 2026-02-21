@@ -68,7 +68,16 @@ export const useTelemetryStore = create<TelemetryState>((set, get) => {
             ws = null;
         }
 
-        set({ activeSymbol: symbol, activeTimeframe: timeframe, candles: [], isConnected: false });
+        set({
+            activeSymbol: symbol,
+            activeTimeframe: timeframe,
+            candles: [],
+            isConnected: false,
+            smcData: null,
+            latestPrice: null,
+            mlProjection: { direction: 'NEUTRAL', probability: 50 },
+            tacticalDecision: { regime: "ANALIZANDO NUEVO RIESGO...", strategy: "STANDBY", reasoning: `Sincronizando telemetría y topografía de liquidez para ${symbol}.` }
+        });
 
         // Connect to FastAPI Backend WebSocket - pass timeframe as query param
         ws = new WebSocket(`ws://localhost:8000/api/v1/stream/${symbol}?interval=${timeframe}`);

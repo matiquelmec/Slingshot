@@ -31,6 +31,8 @@ export default function Dashboard() {
     const { indicators, toggleIndicator } = useIndicatorsStore();
     const [addingSymbol, setAddingSymbol] = useState(false);
     const [newSymbol, setNewSymbol] = useState('');
+    const [availableSymbols, setAvailableSymbols] = useState<string[]>([]);
+    const [filteredSymbols, setFilteredSymbols] = useState<string[]>([]);
 
     const indicatorsPanelRef = useRef<HTMLDivElement>(null);
 
@@ -40,6 +42,34 @@ export default function Dashboard() {
         setMounted(true);
         connect('BTCUSDT', '15m');
     }, []);
+
+    // Fetch Binance USDT Symbols on demand
+    useEffect(() => {
+        if (addingSymbol && availableSymbols.length === 0) {
+            fetch('https://api.binance.com/api/v3/ticker/price')
+                .then(res => res.json())
+                .then(data => {
+                    const usdtSymbols = data
+                        .map((t: any) => t.symbol)
+                        .filter((s: string) => s.endsWith('USDT'))
+                        .sort();
+                    setAvailableSymbols(usdtSymbols);
+                })
+                .catch(err => console.error("Error fetching Binance symbols", err));
+        }
+    }, [addingSymbol, availableSymbols.length]);
+
+    // Autocomplete filtering
+    useEffect(() => {
+        if (newSymbol.trim() === '') {
+            setFilteredSymbols([]);
+        } else {
+            const term = newSymbol.trim().toUpperCase();
+            setFilteredSymbols(
+                availableSymbols.filter(s => s.includes(term) && !watchlist.includes(s)).slice(0, 5)
+            );
+        }
+    }, [newSymbol, availableSymbols, watchlist]);
 
     // Close indicators panel on outside click (uses 'click', not 'mousedown',
     // so toggle buttons inside fire their onClick first then stop propagation)
@@ -68,13 +98,14 @@ export default function Dashboard() {
         }
     };
 
-    const handleAddSymbol = () => {
-        const sym = newSymbol.trim().toUpperCase();
+    const handleAddSymbol = (symToAdd?: string | React.MouseEvent) => {
+        const sym = (typeof symToAdd === 'string' ? symToAdd : newSymbol).trim().toUpperCase();
         if (sym && !watchlist.includes(sym)) {
             setWatchlist(prev => [...prev, sym]);
         }
         setNewSymbol('');
         setAddingSymbol(false);
+        setFilteredSymbols([]);
     };
 
     const handleRemoveSymbol = (sym: string) => {
@@ -180,19 +211,44 @@ export default function Dashboard() {
                                     exit={{ height: 0, opacity: 0 }}
                                     className="overflow-hidden px-4 pt-3"
                                 >
-                                    <div className="flex gap-2">
-                                        <input
-                                            autoFocus
-                                            type="text"
-                                            placeholder="BTCUSDT..."
-                                            value={newSymbol}
-                                            onChange={e => setNewSymbol(e.target.value)}
-                                            onKeyDown={e => e.key === 'Enter' && handleAddSymbol()}
-                                            className="flex-1 bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-white placeholder-white/20 focus:outline-none focus:border-neon-cyan/50"
-                                        />
-                                        <button onClick={handleAddSymbol} className="bg-neon-cyan/15 border border-neon-cyan/30 text-neon-cyan text-xs px-3 py-1.5 rounded-lg hover:bg-neon-cyan/25 transition-all">
-                                            +
-                                        </button>
+                                    <div className="flex flex-col gap-2 relative">
+                                        <div className="flex gap-2">
+                                            <input
+                                                autoFocus
+                                                type="text"
+                                                placeholder="Buscar par (ej. PEPE)..."
+                                                value={newSymbol}
+                                                onChange={e => setNewSymbol(e.target.value)}
+                                                onKeyDown={e => {
+                                                    if (e.key === 'Enter') {
+                                                        if (filteredSymbols.length > 0) {
+                                                            handleAddSymbol(filteredSymbols[0]);
+                                                        } else {
+                                                            handleAddSymbol(newSymbol);
+                                                        }
+                                                    }
+                                                }}
+                                                className="flex-1 bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-white placeholder-white/20 focus:outline-none focus:border-neon-cyan/50"
+                                            />
+                                            <button onClick={handleAddSymbol} className="bg-neon-cyan/15 border border-neon-cyan/30 text-neon-cyan text-xs px-3 py-1.5 rounded-lg hover:bg-neon-cyan/25 transition-all">
+                                                +
+                                            </button>
+                                        </div>
+
+                                        {/* Dropdown de Autocompletado */}
+                                        {filteredSymbols.length > 0 && (
+                                            <div className="flex flex-col gap-1 mt-1">
+                                                {filteredSymbols.map(sym => (
+                                                    <button
+                                                        key={sym}
+                                                        onClick={() => handleAddSymbol(sym)}
+                                                        className="w-full text-left px-3 py-1.5 text-xs bg-[#050B14] hover:bg-neon-cyan/20 border border-white/5 hover:border-neon-cyan/50 rounded-lg transition-colors text-white/80 hover:text-white"
+                                                    >
+                                                        {sym}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        )}
                                     </div>
                                 </motion.div>
                             )}
