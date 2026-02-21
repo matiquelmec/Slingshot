@@ -84,6 +84,10 @@ class RegimeDetector:
         mask_markdown = is_downtrend & ~is_consolidation
         df.loc[mask_markdown, 'market_regime'] = 'MARKDOWN'
         
+        # 5. RANGING: Consolidación media (sin extensión extrema arriba o abajo)
+        mask_ranging = is_consolidation & ~mask_accum & ~mask_distrib
+        df.loc[mask_ranging, 'market_regime'] = 'RANGING'
+        
         return df
 
 if __name__ == "__main__":

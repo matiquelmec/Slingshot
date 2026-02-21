@@ -147,24 +147,62 @@ async def websocket_stream_endpoint(websocket: WebSocket, symbol: str, interval:
                     "data": initial_smc
                 })
                 print(f"[{symbol}] SMC Data Inicial enviada con éxito.")
+                
+                # Ejecutar el ruteo táctico con los datos iniciales para no dejar la UI "ciega" hasta el próximo cierre de vela
+                from engine.main_router import SlingshotRouter
+                initial_router = SlingshotRouter()
+                # pasamos una copia del DataFrame para no alterarlo accidentalmente
+                tactical_result = initial_router.process_market_data(df_init.copy(), asset=symbol.upper())
+                await websocket.send_json({
+                    "type": "tactical_update",
+                    "data": tactical_result
+                })
+                print(f"[{symbol}] Decisión Táctica Inicial enviada con éxito.")
             except Exception as e:
                 print(f"[{symbol}] Error procesando SMC Inicial: {e}")
 
-        stream_name = f"{symbol.lower()}@kline_{interval}"
-        binance_url = f"wss://stream.binance.com:9443/ws/{stream_name}"
+        # Conexión Multiplexada: Klines (Velas) + Order Book (Depth)
+        kline_stream = f"{symbol.lower()}@kline_{interval}"
+        depth_stream = f"{symbol.lower()}@depth20@100ms"
+        binance_url = f"wss://stream.binance.com:9443/stream?streams={kline_stream}/{depth_stream}"
         
-        print(f"[{symbol}] Conectando al stream en tiempo real: {stream_name}")
+        print(f"[{symbol}] Conectando al stream multiplexado en tiempo real: {binance_url}")
         
         # Buffer en memoria para los recálculos en vivo
-        live_candles_buffer = history[-200:] if 'history' in locals() else []
+        live_candles_buffer = history[-250:] if 'history' in locals() else []
+        
+        # Estado de Liquidez en Tiempo Real
+        current_liquidity = {"bids": [], "asks": []}
+        from engine.indicators.liquidity import detect_liquidity_clusters
+        
+        # Control de Throttling para el Fast Path
+        last_pulse_time = 0
+        import time
+        import random
         
         async with ws_client.connect(binance_url) as binance_ws:
-            print(f"[{symbol}] Stream en tiempo real ACTIVO.")
+            print(f"[{symbol}] Stream Multiplexado en tiempo real ACTIVO.")
             while True:
                 try:
                     raw_message = await asyncio.wait_for(binance_ws.recv(), timeout=30.0)
-                    data = json.loads(raw_message)
+                    multiplex_data = json.loads(raw_message)
                     
+                    stream_type = multiplex_data.get('stream')
+                    data = multiplex_data.get('data', {})
+                    
+                    # --- Procesar Stream de Liquidez (Order Book Depth) ---
+                    if stream_type == depth_stream:
+                        current_liquidity = detect_liquidity_clusters(
+                            bids=data.get('bids', []),
+                            asks=data.get('asks', []),
+                            top_n=3
+                        )
+                        continue # Seguimos esperando Klines para inyectarlo en el Pulse
+                        
+                    # --- Procesar Stream de Velas (Klines) ---
+                    if stream_type != kline_stream:
+                        continue
+                        
                     kline = data.get('k')
                     if not kline:
                         continue
@@ -185,14 +223,53 @@ async def websocket_stream_endpoint(websocket: WebSocket, symbol: str, interval:
                     # === ROUTER SMC (Vía Cómputo Lenta, pero en Tiempo Real) ===
                     is_candle_closed = kline.get('x', False)
                     
+                    # --- FAST PATH: Neural Pulse (Live Tick con Throttling) ---
+                    current_time = time.time()
+                    if current_time - last_pulse_time >= 1.0: # Max 1 actualización por segundo
+                        last_pulse_time = current_time
+                        
+                        # Generamos un Neural Pulse ligero (Tick Momentum Real)
+                        _open = float(kline['o'])
+                        _high = float(kline['h'])
+                        _low = float(kline['l'])
+                        _close = float(kline['c'])
+                        
+                        _range = _high - _low
+                        bull_power = ((_close - _low) / _range * 100) if _range > 0 else 50.0
+                        
+                        if _close >= _open:
+                            tick_momentum = "ALCISTA"
+                            real_prob = int(max(50.0, bull_power))
+                        else:
+                            tick_momentum = "BAJISTA"
+                            real_prob = int(max(50.0, 100.0 - bull_power))
+                            
+                        # Extraer un log neural de sistema dinámico para la "cinta"
+                        pulse_payload = {
+                            "type": "neural_pulse",
+                            "data": {
+                                "ml_projection": {
+                                    "direction": tick_momentum,
+                                    "probability": real_prob
+                                },
+                                "liquidity_heatmap": current_liquidity,
+                                "log": {
+                                    "type": "SENSOR",
+                                    "message": f"[Fast Path] Analizando volatilidad de tick. Precio: ${float(kline['c']):.2f}"
+                                }
+                            }
+                        }
+                        await websocket.send_json(pulse_payload)
+                        
+                    # --- SLOW PATH: Procesamiento Estructural (Cierre de Vela) ---
                     # Si recibimos el tick de cierre final de la vela, ejecutamos análisis profundo
                     if is_candle_closed:
                         # 1. Agregar nueva vela al buffer
                         date_obj = datetime.fromtimestamp(kline['t'] / 1000)
                         live_candles_buffer.append(payload)
                         
-                        # Mantener el buffer manejable (200 velas para SMC es suficiente)
-                        if len(live_candles_buffer) > 200:
+                        # Mantener el buffer manejable (250 velas es suficiente para SMA200 y SMC)
+                        if len(live_candles_buffer) > 250:
                             live_candles_buffer.pop(0)
                         
                         # 2. Convertir buffer a DataFrame optimizado
@@ -215,6 +292,19 @@ async def websocket_stream_endpoint(websocket: WebSocket, symbol: str, interval:
                         }
                         await websocket.send_json(smc_payload)
                         print(f"[{symbol}] SMC Data emitida: OBs actualizados.")
+                        
+                        # 5. Procesamiento Matemático del Cerebro (Decisión Táctica)
+                        try:
+                            # Pasamos el DataFrame entero al motor para un análisis contextual
+                            tactical_result = engine_router.process_market_data(df_live, asset=symbol.upper())
+                            tactical_payload = {
+                                "type": "tactical_update",
+                                "data": tactical_result
+                            }
+                            await websocket.send_json(tactical_payload)
+                            print(f"[{symbol}] Decisión Táctica Estructural emitida.")
+                        except Exception as e:
+                            print(f"[{symbol}] Error emitiendo decisión táctica: {e}")
                     
                 except asyncio.TimeoutError:
                     # Keepalive: si en 30s no llega nada, verificamos si el cliente sigue vivo

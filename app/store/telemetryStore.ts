@@ -50,6 +50,7 @@ interface TelemetryState {
     candles: CandleData[];
     latestPrice: number | null;
     mlProjection: { direction: 'ALCISTA' | 'BAJISTA' | 'NEUTRAL', probability: number };
+    liquidityHeatmap: { bids: { price: number, volume: number }[], asks: { price: number, volume: number }[] } | null;
     neuralLogs: NeuralLog[];
     tacticalDecision: TacticalDecision;
     smcData: SMCDataPayload | null;
@@ -75,6 +76,7 @@ export const useTelemetryStore = create<TelemetryState>((set, get) => {
             isConnected: false,
             smcData: null,
             latestPrice: null,
+            liquidityHeatmap: null,
             mlProjection: { direction: 'NEUTRAL', probability: 50 },
             tacticalDecision: { regime: "ANALIZANDO NUEVO RIESGO...", strategy: "STANDBY", reasoning: `Sincronizando telemetría y topografía de liquidez para ${symbol}.` }
         });
@@ -112,79 +114,39 @@ export const useTelemetryStore = create<TelemetryState>((set, get) => {
                             if (currentCandles.length > 1000) currentCandles.shift();
                         }
 
-                        // --- Mock ML Projection Dynamics ---
-                        // Only bump probability slightly to simulate 'live' calculating behavior, 
-                        // jumping based loosely on close vs open of the latest tick.
-                        let prob = state.mlProjection.probability;
-                        const direction = newCandle.close >= newCandle.open ? 'ALCISTA' : 'BAJISTA';
-
-                        // Drift towards the short term candle bias 
-                        if (direction === state.mlProjection.direction) {
-                            prob = Math.min(99, prob + (Math.random() * 2));
-                        } else {
-                            prob = Math.max(51, prob - (Math.random() * 3));
-                            if (prob <= 51) {
-                                prob = 52 + Math.random() * 10;
-                            }
-                        }
-
-                        // --- Dynamic Neural Logs ---
-                        let updatedLogs = [...state.neuralLogs];
-                        // Chance to generate log (e.g. 5% per tick)
-                        if (Math.random() > 0.95 && currentCandles.length > 5) {
-                            const types: Array<'SYSTEM' | 'SENSOR' | 'ALERT'> = ['SYSTEM', 'SENSOR', 'ALERT'];
-                            const selectedType = types[Math.floor(Math.random() * types.length)];
-
-                            let msg = "Analizando volumen derivado...";
-                            const priceNode = newCandle.close.toFixed(2);
-
-                            if (selectedType === 'ALERT') {
-                                msg = direction === 'ALCISTA' ? `Cacería de liquidez alcista detectada cerca de $${priceNode}. (RVOL > 1.4x)` : `Rechazo de liquidez inminente en $${priceNode}. Monitoreando volumen (RVOL > 1.8x).`;
-                            } else if (selectedType === 'SENSOR') {
-                                msg = `Mapeo Topográfico... FVG detectado en $${priceNode} (Block Institucional ${direction.toLowerCase()}).`;
-                            } else {
-                                msg = `Ajustando pesos del modelo XGBoost. Divergencia en TF ${state.activeTimeframe} detectada.`;
-                            }
-
-                            const newLog: NeuralLog = {
-                                id: Math.random().toString(36).substring(7),
-                                timestamp: new Date().toLocaleTimeString('en-US', { hour12: false }),
-                                type: selectedType,
-                                message: msg
-                            };
-
-                            updatedLogs.unshift(newLog); // prepend
-                            if (updatedLogs.length > 3) updatedLogs = updatedLogs.slice(0, 3); // keep only 3
-                        }
-
-                        // --- Dynamic Tactical Decision (Market Regime Router Mock) ---
-                        let currentDecision = { ...state.tacticalDecision };
-
-                        // Slowly adapt the regime to give organic feel
-                        if (Math.random() > 0.90) { // 10% chance per tick to potentially change phase
-                            const isTrending = prob > 65 || prob < 35;
-                            if (isTrending) {
-                                currentDecision.regime = direction === 'ALCISTA' ? "TENDENCIA BULLISH CONSTANTE" : "SELL-OFF BEARISH SEVERO";
-                                currentDecision.strategy = "Trend Pullbacks";
-                                currentDecision.reasoning = direction === 'ALCISTA' ? "Fuerte moméntum detectado. Esperando retroceso a la franja del Golden Pocket." : "Alta presión de venta institucional. Buscando rebotes débiles a premium zones.";
-                            } else if (prob > 55 || prob < 45) {
-                                currentDecision.regime = "COMPRESIÓN DE VOLATILIDAD";
-                                currentDecision.strategy = "SMC Liquidations";
-                                currentDecision.reasoning = "El precio está comprimiendo liquidez en rangos estrechos. Detectando barridos falsos de Order Blocks.";
-                            } else {
-                                currentDecision.regime = "RANGO LATERAL SIN TENDENCIA";
-                                currentDecision.strategy = "Mean Reversion / Neutral";
-                                currentDecision.reasoning = "Asimetría en RVOL insuficiente. Estrategias tácticas de reversión a la media mediante desviación estándar.";
-                            }
-                        }
-
+                        // Desactivamos la simulación (Mock Data). Ahora esperamos 'neural_pulse' y 'tactical_update' reales.
                         return {
                             candles: currentCandles,
-                            latestPrice: newCandle.close,
-                            mlProjection: { direction: (prob > 52 && newCandle.close >= newCandle.open) ? 'ALCISTA' : 'BAJISTA', probability: Math.round(prob) },
-                            neuralLogs: updatedLogs,
-                            tacticalDecision: currentDecision
+                            latestPrice: newCandle.close
                         };
+                    });
+                } else if (data.type === 'neural_pulse') {
+                    // Update del Fast Path (Tiempo Real Inter-Vela)
+                    set((state) => {
+                        const newLog: NeuralLog = {
+                            id: Math.random().toString(36).substring(7),
+                            timestamp: new Date().toLocaleTimeString('en-US', { hour12: false }),
+                            type: data.data.log.type,
+                            message: data.data.log.message
+                        };
+                        const updatedLogs = [newLog, ...state.neuralLogs].slice(0, 5); // Mantener últimos 5
+
+                        return {
+                            mlProjection: data.data.ml_projection,
+                            liquidityHeatmap: data.data.liquidity_heatmap,
+                            neuralLogs: updatedLogs
+                        };
+                    });
+                } else if (data.type === 'tactical_update') {
+                    // Update del Slow Path (Confirmación Estructural al Cierre de Vela)
+                    set({
+                        tacticalDecision: {
+                            regime: data.data.market_regime,
+                            strategy: data.data.active_strategy,
+                            // Por ahora armamos un reasoning estático basado en la data real.
+                            // Próximamente se le puede inyectar del Python The Core Reason.
+                            reasoning: `Estructura Procesada. Soportes Mapeados. Régimen Activo: ${data.data.market_regime}.`
+                        }
                     });
                 } else if (data.type === 'smc_data') {
                     // Update global state with precise institutional structure blocks
@@ -232,6 +194,7 @@ export const useTelemetryStore = create<TelemetryState>((set, get) => {
             reasoning: "Inicializando motores de inferencia."
         },
         smcData: null,
+        liquidityHeatmap: null,
 
         connect: (symbol: string, timeframe?: Timeframe) => {
             const tf = timeframe ?? get().activeTimeframe;

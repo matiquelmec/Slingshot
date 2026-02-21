@@ -36,7 +36,17 @@ export default function Dashboard() {
 
     const indicatorsPanelRef = useRef<HTMLDivElement>(null);
 
-    const { isConnected, activeSymbol, activeTimeframe, latestPrice, mlProjection, tacticalDecision, connect, setTimeframe } = useTelemetryStore();
+    const {
+        isConnected,
+        activeSymbol,
+        activeTimeframe,
+        latestPrice,
+        mlProjection,
+        tacticalDecision,
+        neuralLogs,
+        connect,
+        setTimeframe
+    } = useTelemetryStore();
 
     useEffect(() => {
         setMounted(true);
@@ -119,7 +129,7 @@ export default function Dashboard() {
     };
     const itemVariants = {
         hidden: { opacity: 0, scale: 0.97, y: 15 },
-        show: { opacity: 1, scale: 1, y: 0, transition: { type: 'spring', stiffness: 250, damping: 22 } }
+        show: { opacity: 1, scale: 1, y: 0, transition: { type: 'spring' as const, stiffness: 250, damping: 22 } }
     };
 
     const enabledCount = indicators.filter(i => i.enabled).length;
@@ -448,10 +458,10 @@ export default function Dashboard() {
                         </div>
 
                         <div className="p-5 flex flex-col gap-5 overflow-y-auto text-[11.5px] leading-relaxed font-mono">
-                            {useTelemetryStore.getState().neuralLogs.length === 0 ? (
+                            {neuralLogs.length === 0 ? (
                                 <div className="text-white/40 italic">Esperando inicialización del motor neural...</div>
                             ) : (
-                                useTelemetryStore.getState().neuralLogs.map((log) => (
+                                neuralLogs.map((log) => (
                                     <div
                                         key={log.id}
                                         className={`relative pl-4 ${log.type === 'ALERT' ? 'bg-neon-red/5 p-3 rounded-xl border border-neon-red/10' : ''}`}

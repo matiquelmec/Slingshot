@@ -3,9 +3,10 @@ import numpy as np
 from pathlib import Path
 from scipy.signal import find_peaks
 
-def identify_order_blocks(df: pd.DataFrame, threshold: float = 1.5) -> pd.DataFrame:
+def identify_order_blocks(df: pd.DataFrame, threshold: float = 2.0) -> pd.DataFrame:
     """
     SMC Nivel 2: Detecta Order Blocks e Imbalances (Fair Value Gaps).
+    Actualizado: Umbral más alto y filtro de tamaño mínimo para evitar ruido.
     """
     df = df.copy()
     
@@ -13,19 +14,17 @@ def identify_order_blocks(df: pd.DataFrame, threshold: float = 1.5) -> pd.DataFr
     df['body_size'] = abs(df['close'] - df['open'])
     df['total_size'] = df['high'] - df['low']
     df['avg_body'] = df['body_size'].rolling(window=20).mean()
+    df['avg_total'] = df['total_size'].rolling(window=20).mean()
     
     # 2. Identificar Velas Institucionales (Expansión Fuerte / Imbalance)
-    # Una vela es institucional si su cuerpo es bastante más grande que el promedio reciente (ej. 1.5x)
-    df['is_imbalance'] = df['body_size'] > (df['avg_body'] * threshold)
+    # Exigimos cuerpo grande (threshold relativo) Y que el tamaño total sea mayor al promedio (filtra dojis anchos)
+    df['is_imbalance'] = (df['body_size'] > (df['avg_body'] * threshold)) & (df['total_size'] > df['avg_total'])
     
     # Dirección del imbalance
     df['imbalance_bullish'] = df['is_imbalance'] & (df['close'] > df['open'])
     df['imbalance_bearish'] = df['is_imbalance'] & (df['close'] < df['open'])
     
     # 3. Detectar Order Blocks (OB)
-    # Un Bullish OB es la ÚLTIMA VELA BAJISTA antes de un movimiento alcista fuerte (Imbalance Bullish)
-    # Buscamos si la vela ACTUAL es un imbalance alcista, y si la ANTERIOR fue bajista, marcamos la anterior como OB.
-    
     # Inicializamos columnas
     df['ob_bullish'] = False
     df['ob_bearish'] = False
@@ -33,8 +32,6 @@ def identify_order_blocks(df: pd.DataFrame, threshold: float = 1.5) -> pd.DataFr
     # Bullish OB: La vela actual es alcista fuerte, la vela ANTERIOR fue bajista
     prev_bearish = df['close'].shift(1) < df['open'].shift(1)
     mask_bull_ob = df['imbalance_bullish'] & prev_bearish
-    # Marcamos la vela actual como confirmación del OB que se formó en la vela anterior
-    # (En la práctica de backtesting, usamos la vela de confirmación para saber que el OB existe)
     df.loc[mask_bull_ob, 'ob_bullish'] = True 
     
     # Bearish OB: La vela actual es bajista fuerte, la vela ANTERIOR fue alcista
@@ -43,10 +40,10 @@ def identify_order_blocks(df: pd.DataFrame, threshold: float = 1.5) -> pd.DataFr
     df.loc[mask_bear_ob, 'ob_bearish'] = True
     
     # 4. Fair Value Gaps (FVG) Básicos Filtrados por Imbalance
-    # FVG Alcista: El Low de la vela actual no toca el High de hace 2 velas, Y la vela anterior (centro) fue un imbalance alcista
+    # FVG Alcista: Low(3) > High(1) Y Imbalance(2) Alcista
     df['fvg_bullish'] = (df['low'] > df['high'].shift(2)) & df['imbalance_bullish'].shift(1)
     
-    # FVG Bajista: El High de la vela actual no toca el Low de hace 2 velas, Y la vela anterior (centro) fue un imbalance bajista
+    # FVG Bajista: High(3) < Low(1) Y Imbalance(2) Bajista
     df['fvg_bearish'] = (df['high'] < df['low'].shift(2)) & df['imbalance_bearish'].shift(1)
     
     return df
@@ -115,88 +112,98 @@ def identify_support_resistance(df: pd.DataFrame, window: int = 21, num_levels: 
 
 def extract_smc_coordinates(df: pd.DataFrame) -> dict:
     """
-    Toma el DataFrame con las columnas calculadas de SMC 
-    (ob_bullish, ob_bearish, fvg_bullish, fvg_bearish) y extrae las coordenadas reales.
-    Retorna un diccionario con listas de objetos listos para la UI.
+    Algoritmo de Mitigación Vectorizado:
+    Recorre el DataFrame secuencialmente para rastrear el ciclo de vida de OBs y FVGs.
+    Retorna ÚNICAMENTE las zonas que siguen "vivas" (sin mitigar) al final del periodo.
     """
-    # Necesitamos las velas con sus indices temporales
-    bullish_obs = []
-    bearish_obs = []
-    bullish_fvgs = []
-    bearish_fvgs = []
+    active_bullish_obs = []
+    active_bearish_obs = []
+    active_bullish_fvgs = []
+    active_bearish_fvgs = []
     
-    # ── 1. Extraer Order Blocks (OB) ──
-    bull_confirmations = df[df['ob_bullish'] == True]
-    for idx_conf in bull_confirmations.index:
-        loc_conf = df.index.get_loc(idx_conf)
-        if loc_conf > 0:
-            ob_candle = df.iloc[loc_conf - 1] 
-            conf_candle = df.iloc[loc_conf]
-            
-            bullish_obs.append({
+    # Iteramos sobre el DataFrame para rastrear mitigaciones paso a paso
+    for i, row in df.iterrows():
+        loc = df.index.get_loc(i)
+        current_low = row['low']
+        current_high = row['high']
+        current_ts = row['timestamp'].timestamp()
+        
+        # --- 1. PROCESAR MITIGACIONES DE ZONAS EXISTENTES ---
+        
+        # Mitigación FVG Alcista: Para mantener el gráfico extremadamente limpio y preciso,
+        # si el precio cruza más del 50% del gap, lo damos por mitigado y destruido.
+        active_bullish_fvgs = [fvg for fvg in active_bullish_fvgs if current_low > (fvg['bottom'] + (fvg['top'] - fvg['bottom']) * 0.5)]
+        
+        # Mitigación FVG Bajista: Si el precio sube por encima del 50% del gap, se mitiga.
+        active_bearish_fvgs = [fvg for fvg in active_bearish_fvgs if current_high < (fvg['bottom'] + (fvg['top'] - fvg['bottom']) * 0.5)]
+        
+        # Mitigación OB Alcista: Stop loss tocado o bloque mitigado en un 50% (para limpieza de gráfico)
+        active_bullish_obs = [ob for ob in active_bullish_obs if current_low > (ob['bottom'] + (ob['top'] - ob['bottom']) * 0.5)]
+        
+        # Mitigación OB Bajista: Stop loss tocado o bloque mitigado en un 50%
+        active_bearish_obs = [ob for ob in active_bearish_obs if current_high < (ob['bottom'] + (ob['top'] - ob['bottom']) * 0.5)]
+        
+        
+        # --- 2. REGISTRAR NUEVAS ZONAS ---
+        
+        # (A) Nuevos Order Blocks
+        if row.get('ob_bullish') == True and loc > 0:
+            ob_candle = df.iloc[loc - 1]
+            active_bullish_obs.append({
                 "time": ob_candle['timestamp'].timestamp(),
                 "top": float(ob_candle['high']),
                 "bottom": float(ob_candle['low']),
                 "status": "active",
-                "confirmation_time": conf_candle['timestamp'].timestamp()
+                "confirmation_time": current_ts
             })
-
-    bear_confirmations = df[df['ob_bearish'] == True]
-    for idx_conf in bear_confirmations.index:
-        loc_conf = df.index.get_loc(idx_conf)
-        if loc_conf > 0:
-            ob_candle = df.iloc[loc_conf - 1] 
-            conf_candle = df.iloc[loc_conf]
             
-            bearish_obs.append({
+        if row.get('ob_bearish') == True and loc > 0:
+            ob_candle = df.iloc[loc - 1]
+            active_bearish_obs.append({
                 "time": ob_candle['timestamp'].timestamp(),
                 "top": float(ob_candle['high']),
                 "bottom": float(ob_candle['low']),
                 "status": "active",
-                "confirmation_time": conf_candle['timestamp'].timestamp()
+                "confirmation_time": current_ts
             })
             
-    # ── 2. Extraer Fair Value Gaps (FVG) ──
-    # Bullish FVG (Demand): Gap entre el High de la Vela 1 (C(-2)) y el Low de la Vela 3 (C)
-    bull_fvg_confs = df[df['fvg_bullish'] == True]
-    for idx_conf in bull_fvg_confs.index:
-        loc_conf = df.index.get_loc(idx_conf)
-        if loc_conf >= 2:
-            c1 = df.iloc[loc_conf - 2]
-            c3 = df.iloc[loc_conf]
-            
-            bullish_fvgs.append({
-                "time": c1['timestamp'].timestamp(),
-                "top": float(c3['low']),      # El techo del gap es el bottom de C3
-                "bottom": float(c1['high']),   # El piso del gap es el top de C1
-                "status": "active",
-                "confirmation_time": c3['timestamp'].timestamp()
-            })
-
-    # Bearish FVG (Supply): Gap entre el Low de la Vela 1 (C(-2)) y el High de la Vela 3 (C)
-    bear_fvg_confs = df[df['fvg_bearish'] == True]
-    for idx_conf in bear_fvg_confs.index:
-        loc_conf = df.index.get_loc(idx_conf)
-        if loc_conf >= 2:
-            c1 = df.iloc[loc_conf - 2]
-            c3 = df.iloc[loc_conf]
-            
-            bearish_fvgs.append({
-                "time": c1['timestamp'].timestamp(),
-                "top": float(c1['low']),       # El techo del gap es el piso de C1
-                "bottom": float(c3['high']),   # el piso del gap es el techo de C3
-                "status": "active",
-                "confirmation_time": c3['timestamp'].timestamp()
-            })
-            
+        # (B) Nuevos Fair Value Gaps (Requieren 3 velas: C1, C2_imbalance, C3_actual)
+        if row.get('fvg_bullish') == True and loc >= 2:
+            c1 = df.iloc[loc - 2]
+            # Techo del gap = Piso de C3 (actual), Piso del gap = Techo de C1
+            top = float(row['low'])
+            bottom = float(c1['high'])
+            if top > bottom: # Check de seguridad
+                active_bullish_fvgs.append({
+                    "time": c1['timestamp'].timestamp(),
+                    "top": top,
+                    "bottom": bottom,
+                    "status": "active",
+                    "confirmation_time": current_ts
+                })
+                
+        if row.get('fvg_bearish') == True and loc >= 2:
+            c1 = df.iloc[loc - 2]
+            # Techo del gap = Piso de C1, Piso del gap = Techo de C3 (actual)
+            top = float(c1['low'])
+            bottom = float(row['high'])
+            if top > bottom: # Check de seguridad
+                active_bearish_fvgs.append({
+                    "time": c1['timestamp'].timestamp(),
+                    "top": top,
+                    "bottom": bottom,
+                    "status": "active",
+                    "confirmation_time": current_ts
+                })
+                
     return {
         "order_blocks": {
-            "bullish": bullish_obs,
-            "bearish": bearish_obs
+            "bullish": active_bullish_obs,
+            "bearish": active_bearish_obs
         },
         "fvgs": {
-            "bullish": bullish_fvgs,
-            "bearish": bearish_fvgs
+            "bullish": active_bullish_fvgs,
+            "bearish": active_bearish_fvgs
         }
     }
 

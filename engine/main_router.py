@@ -69,8 +69,13 @@ class SlingshotRouter:
             analyzed_df = self.strat_smc.analyze(df)
             opportunities = self.strat_smc.find_opportunities(analyzed_df)
             
+        elif current_regime == 'RANGING':
+            # Rango medio (ni sobrecomprado ni sobrevendido)
+            result["active_strategy"] = "Standby (Awaiting Breakout)"
+            opportunities = []
+            
         else:
-            # UNKNOWN (Falta historial para medias móviles)
+            # UNKNOWN (Falta historial para medias móviles o comportamiento anómalo)
             result["active_strategy"] = "STANDBY (Calibrating moving averages...)"
             opportunities = []
             

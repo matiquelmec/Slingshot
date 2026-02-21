@@ -22,8 +22,8 @@ export const INDICATOR_DEFAULTS: Indicator[] = [
     { id: 'volume', label: 'Volumen', sublabel: 'Barras de volumen', enabled: true, color: '#00FF41' },
     { id: 'rsi', label: 'RSI (14)', sublabel: 'Fuerza relativa', enabled: false, color: '#FF7043' },
     { id: 'macd', label: 'MACD', sublabel: 'Convergencia/Divergencia', enabled: false, color: '#26A69A' },
-    { id: 'smc', label: 'SMC Blocks', sublabel: 'Estructura Institucional (OBs)', enabled: true, color: '#00FF41' },
-    { id: 'fvg', label: 'Fair Value Gaps', sublabel: 'Vacíos de Liquidez (FVG)', enabled: true, color: '#FFCC00' },
+    { id: 'smc', label: 'SMC Blocks', sublabel: 'Estructura Institucional (OBs)', enabled: false, color: '#00FF41' },
+    { id: 'fvg', label: 'Fair Value Gaps', sublabel: 'Vacíos de Liquidez (FVG)', enabled: false, color: '#FFCC00' },
 ];
 
 export const useIndicatorsStore = create<IndicatorsState>((set) => ({

@@ -110,7 +110,7 @@ export default function TradingChart() {
     const macdSigRef = useRef<ISeriesApi<'Line'> | null>(null);
     const macdHistRef = useRef<ISeriesApi<'Histogram'> | null>(null);
 
-    const { candles, isConnected, smcData } = useTelemetryStore();
+    const { candles, isConnected, smcData, liquidityHeatmap } = useTelemetryStore();
     const { indicators } = useIndicatorsStore();
 
     const isEnabled = (id: string) => indicators.find(i => i.id === id)?.enabled ?? false;
@@ -326,8 +326,13 @@ export default function TradingChart() {
     const smcSeriesRef = useRef<ISeriesApi<'Baseline'>[]>([]);
     const fvgSeriesRef = useRef<ISeriesApi<'Baseline'>[]>([]);
 
+    // Array de tiempos para alinear la serie a través de todo el gráfico horizontal
+    // (useMemo evita recrear innecesariamente)
+    const times = React.useMemo(() => candles.map(c => c.time), [candles.length]);
+    const candleCount = candles.length;
+
     useEffect(() => {
-        if (!chartRef.current || !smcData || candles.length === 0) return;
+        if (!chartRef.current || !smcData || times.length === 0) return;
 
         const chart = chartRef.current;
 
@@ -342,17 +347,14 @@ export default function TradingChart() {
         });
         fvgSeriesRef.current = [];
 
-        // Formato para llenar el ancho completo de las velas en pantalla
-        const times = candles.map(c => c.time);
-
         if (isEnabled('smc')) {
-            // Zonas Verdes (Soportes - Últimos 2)
-            smcData.order_blocks.bullish.slice(-2).forEach(ob => {
+            // Zonas Verdes (Demand/Support - Activos sin mitigar)
+            smcData.order_blocks.bullish.forEach(ob => {
                 const obSeries = chart.addSeries(BaselineSeries, {
                     baseValue: { type: 'price', price: ob.bottom },
-                    topFillColor1: 'rgba(0, 255, 65, 0.15)',
-                    topFillColor2: 'rgba(0, 255, 65, 0.15)',
-                    topLineColor: 'rgba(0, 255, 65, 0.6)',
+                    topFillColor1: 'rgba(0, 255, 136, 0.20)', // Más opaco según preferencia
+                    topFillColor2: 'rgba(0, 255, 136, 0.15)',
+                    topLineColor: 'rgba(0, 255, 136, 0.7)',
                     bottomFillColor1: 'transparent',
                     bottomFillColor2: 'transparent',
                     bottomLineColor: 'transparent',
@@ -363,29 +365,19 @@ export default function TradingChart() {
                     crosshairMarkerVisible: false,
                 });
 
-                // Piso (Distal Line - Stop Loss) - Línea Gruesa
-                obSeries.createPriceLine({
-                    price: ob.bottom,
-                    color: 'rgba(0, 255, 65, 0.9)',
-                    lineWidth: 2,
-                    lineStyle: LineStyle.Solid,
-                    axisLabelVisible: false,
-                    title: ''
-                });
-
-                // Trazar el Alto del bloque a lo largo de todo el horizonte del chart
-                const data = times.map(time => ({ time, value: ob.top }));
+                // Trazar el Alto del bloque a lo largo del horizonte futuro
+                const data = times.filter(t => Number(t) >= ob.time).map(time => ({ time, value: ob.top }));
                 obSeries.setData(data as any);
                 smcSeriesRef.current.push(obSeries);
             });
 
-            // Zonas Rojas (Resistencias - Últimos 2)
-            smcData.order_blocks.bearish.slice(-2).forEach(ob => {
+            // Zonas Rojas (Resistencias - Activos sin mitigar)
+            smcData.order_blocks.bearish.forEach(ob => {
                 const obSeries = chart.addSeries(BaselineSeries, {
                     baseValue: { type: 'price', price: ob.top },
-                    bottomFillColor1: 'rgba(255, 0, 60, 0.15)',
+                    bottomFillColor1: 'rgba(255, 0, 60, 0.20)', // Más opaco según preferencia
                     bottomFillColor2: 'rgba(255, 0, 60, 0.15)',
-                    bottomLineColor: 'rgba(255, 0, 60, 0.6)',
+                    bottomLineColor: 'rgba(255, 0, 60, 0.7)',
                     topFillColor1: 'transparent',
                     topFillColor2: 'transparent',
                     topLineColor: 'transparent',
@@ -396,90 +388,110 @@ export default function TradingChart() {
                     crosshairMarkerVisible: false,
                 });
 
-                // Techo Superior Duro (Distal Line - Stop Loss) - Línea Gruesa
-                obSeries.createPriceLine({
-                    price: ob.top,
-                    color: 'rgba(255, 0, 60, 0.9)',
-                    lineWidth: 2,
-                    lineStyle: LineStyle.Solid,
-                    axisLabelVisible: false,
-                    title: ''
-                });
-
-                // Trazar el "piso" de la zona y usar el "Techo" como Base
-                const data = times.map(time => ({ time, value: ob.bottom }));
+                // Trazar el "piso" de la zona hacia la derecha
+                const data = times.filter(t => Number(t) >= ob.time).map(time => ({ time, value: ob.bottom }));
                 obSeries.setData(data as any);
                 smcSeriesRef.current.push(obSeries);
             });
         }
 
         if (isEnabled('fvg')) {
-            // Zonas de Liquidez (FVG Alcistas - Últimos 2)
-            smcData.fvgs.bullish.slice(-2).forEach(fvg => {
+            // Zonas de Liquidez (FVG Alcistas - Activos sin mitigar)
+            smcData.fvgs.bullish.forEach(fvg => {
                 const fvgSeries = chart.addSeries(BaselineSeries, {
                     baseValue: { type: 'price', price: fvg.bottom },
-                    topFillColor1: 'rgba(255, 204, 0, 0.12)', // Dorado translúcido
-                    topFillColor2: 'rgba(255, 204, 0, 0.05)',
-                    topLineColor: 'rgba(255, 204, 0, 0.6)', // Techo del vacío (Dashed)
+                    topFillColor1: 'rgba(255, 204, 0, 0.15)', // Dorado más intenso
+                    topFillColor2: 'rgba(255, 204, 0, 0.10)',
+                    topLineColor: 'rgba(255, 204, 0, 0.6)',
                     bottomFillColor1: 'transparent',
                     bottomFillColor2: 'transparent',
                     bottomLineColor: 'transparent',
                     lineWidth: 1,
-                    lineStyle: LineStyle.Dashed,
+                    lineStyle: LineStyle.Dotted,
                     priceLineVisible: false,
                     lastValueVisible: false,
                     crosshairMarkerVisible: false,
                 });
 
-                // Piso del vacío (Dashed)
-                fvgSeries.createPriceLine({
-                    price: fvg.bottom,
-                    color: 'rgba(255, 204, 0, 0.6)',
-                    lineWidth: 1,
-                    lineStyle: LineStyle.Dashed,
-                    axisLabelVisible: false,
-                    title: ''
-                });
-
-                const data = times.map(time => ({ time, value: fvg.top }));
+                const data = times.filter(t => Number(t) >= fvg.time).map(time => ({ time, value: fvg.top }));
                 fvgSeries.setData(data as any);
                 fvgSeriesRef.current.push(fvgSeries);
             });
 
-            // Zonas de Liquidez (FVG Bajistas - Últimos 2)
-            smcData.fvgs.bearish.slice(-2).forEach(fvg => {
+            // Zonas de Liquidez (FVG Bajistas - Activos sin mitigar)
+            smcData.fvgs.bearish.forEach(fvg => {
                 const fvgSeries = chart.addSeries(BaselineSeries, {
                     baseValue: { type: 'price', price: fvg.top },
-                    bottomFillColor1: 'rgba(255, 204, 0, 0.12)', // Dorado translúcido
-                    bottomFillColor2: 'rgba(255, 204, 0, 0.05)',
-                    bottomLineColor: 'rgba(255, 204, 0, 0.6)', // Base del vacío
+                    bottomFillColor1: 'rgba(255, 204, 0, 0.15)', // Dorado más intenso
+                    bottomFillColor2: 'rgba(255, 204, 0, 0.10)',
+                    bottomLineColor: 'rgba(255, 204, 0, 0.6)',
                     topFillColor1: 'transparent',
                     topFillColor2: 'transparent',
                     topLineColor: 'transparent',
                     lineWidth: 1,
-                    lineStyle: LineStyle.Dashed,
+                    lineStyle: LineStyle.Dotted,
                     priceLineVisible: false,
                     lastValueVisible: false,
                     crosshairMarkerVisible: false,
                 });
 
-                // Techo del vacío (Dashed)
-                fvgSeries.createPriceLine({
-                    price: fvg.top,
-                    color: 'rgba(255, 204, 0, 0.6)',
-                    lineWidth: 1,
-                    lineStyle: LineStyle.Dashed,
-                    axisLabelVisible: false,
-                    title: ''
-                });
-
-                const data = times.map(time => ({ time, value: fvg.bottom }));
+                const data = times.filter(t => Number(t) >= fvg.time).map(time => ({ time, value: fvg.bottom }));
                 fvgSeries.setData(data as any);
                 fvgSeriesRef.current.push(fvgSeries);
             });
         }
 
-    }, [smcData, indicators, candles]);
+        // El truco de rendimiento: depender de 'candleCount' y 'smcData', NO de 'candles'.
+        // Esto previene que react borre y recree las 8 zonas en CADA TICK inter-vela.
+    }, [smcData, indicators, candleCount]);
+
+    // ── Liquidity Heatmap visualization (Order Book Depth) ──
+    const liquidityLinesRef = useRef<any[]>([]);
+
+    useEffect(() => {
+        if (!chartRef.current || !liquidityHeatmap || !candleSeriesRef.current || times.length === 0) return;
+
+        // Limpiar líneas de liquidez anteriores
+        liquidityLinesRef.current.forEach(line => {
+            try { candleSeriesRef.current?.removePriceLine(line); } catch (e) { }
+        });
+        liquidityLinesRef.current = [];
+
+        if (isEnabled('smc')) { // Usamos el mismo toggle de SMC o podríamos crear uno nuevo 'liquidity'
+
+            // Función auxiliar para normalizar el volumen y calcular opacidad (0.2 a 0.8)
+            const maxBidVol = Math.max(...liquidityHeatmap.bids.map(b => b.volume), 1);
+            const maxAskVol = Math.max(...liquidityHeatmap.asks.map(a => a.volume), 1);
+
+            // Bids (Soportes en verde)
+            liquidityHeatmap.bids.forEach(bid => {
+                const intensity = 0.2 + (0.6 * (bid.volume / maxBidVol));
+                const line = candleSeriesRef.current?.createPriceLine({
+                    price: bid.price,
+                    color: `rgba(0, 255, 65, ${intensity})`,
+                    lineWidth: 2,
+                    lineStyle: LineStyle.Solid,
+                    axisLabelVisible: true,
+                    title: `BID: ${bid.volume.toFixed(3)}`
+                });
+                if (line) liquidityLinesRef.current.push(line);
+            });
+
+            // Asks (Resistencias en rojo)
+            liquidityHeatmap.asks.forEach(ask => {
+                const intensity = 0.2 + (0.6 * (ask.volume / maxAskVol));
+                const line = candleSeriesRef.current?.createPriceLine({
+                    price: ask.price,
+                    color: `rgba(255, 0, 60, ${intensity})`,
+                    lineWidth: 2,
+                    lineStyle: LineStyle.Solid,
+                    axisLabelVisible: true,
+                    title: `ASK: ${ask.volume.toFixed(3)}`
+                });
+                if (line) liquidityLinesRef.current.push(line);
+            });
+        }
+    }, [liquidityHeatmap, indicators]);
 
     return (
         <div className="w-full h-full relative" ref={chartContainerRef}>
