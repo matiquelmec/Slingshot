@@ -1,0 +1,29 @@
+# 🐍 Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+env/
+venv/
+ENV/
+.env
+
+# 📦 Node / Bun
+node_modules/
+.next/
+out/
+build/
+dist/
+.DS_Store
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+bun.lockb
+
+# 🤖 Agents
+.agents/cache/
+.agents/temp/
+
+# 🧪 Artifacts
+/brain/
