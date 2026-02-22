@@ -136,7 +136,7 @@ async def websocket_stream_endpoint(websocket: WebSocket, symbol: str, interval:
         
         # Generar SMC Inicial con el historial que acabamos de cargar
         if history and len(history) > 0:
-            print(f"[{symbol}] Calculando SMC Engine Inicial...")
+            print(f"[{symbol}] Calculando SMC y ML Inicial...")
             df_init = pd.DataFrame([item['data'] for item in history])
             df_init['timestamp'] = pd.to_datetime(df_init['timestamp'], unit='s')
             try:
@@ -174,6 +174,10 @@ async def websocket_stream_endpoint(websocket: WebSocket, symbol: str, interval:
         # Estado de Liquidez en Tiempo Real
         current_liquidity = {"bids": [], "asks": []}
         from engine.indicators.liquidity import detect_liquidity_clusters
+        from engine.ml.inference import ml_engine
+        
+        # Última predicción ML cacheada para no sobrecargar CPU en cada micro-tick
+        last_ml_prediction = {"direction": "CALIBRANDO", "probability": 50, "status": "warmup"}
         
         # Control de Throttling para el Fast Path
         last_pulse_time = 0
@@ -228,30 +232,22 @@ async def websocket_stream_endpoint(websocket: WebSocket, symbol: str, interval:
                     if current_time - last_pulse_time >= 1.0: # Max 1 actualización por segundo
                         last_pulse_time = current_time
                         
-                        # Generamos un Neural Pulse ligero (Tick Momentum Real)
-                        _open = float(kline['o'])
-                        _high = float(kline['h'])
-                        _low = float(kline['l'])
-                        _close = float(kline['c'])
-                        
-                        _range = _high - _low
-                        bull_power = ((_close - _low) / _range * 100) if _range > 0 else 50.0
-                        
-                        if _close >= _open:
-                            tick_momentum = "ALCISTA"
-                            real_prob = int(max(50.0, bull_power))
-                        else:
-                            tick_momentum = "BAJISTA"
-                            real_prob = int(max(50.0, 100.0 - bull_power))
+                        # Para la inyección ML necesitamos un DataFrame actualizado
+                        # Tomamos el buffer histórico y le sumamos el tick actual efímero
+                        current_df_data = [item['data'] for item in live_candles_buffer] + [payload['data']]
+                        if len(current_df_data) > 50: # Tenemos historia suficiente
+                            df_live_tick = pd.DataFrame(current_df_data)
+                            df_live_tick['timestamp'] = pd.to_datetime(df_live_tick['timestamp'], unit='s')
+                            
+                            # Realizamos la inferencia XGBoost
+                            # (Es lo suficientemente rápido para correr 1 vez por segundo)
+                            last_ml_prediction = ml_engine.predict_live(df_live_tick)
                             
                         # Extraer un log neural de sistema dinámico para la "cinta"
                         pulse_payload = {
                             "type": "neural_pulse",
                             "data": {
-                                "ml_projection": {
-                                    "direction": tick_momentum,
-                                    "probability": real_prob
-                                },
+                                "ml_projection": last_ml_prediction,
                                 "liquidity_heatmap": current_liquidity,
                                 "log": {
                                     "type": "SENSOR",

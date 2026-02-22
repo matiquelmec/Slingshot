@@ -49,7 +49,7 @@ interface TelemetryState {
     activeTimeframe: Timeframe;
     candles: CandleData[];
     latestPrice: number | null;
-    mlProjection: { direction: 'ALCISTA' | 'BAJISTA' | 'NEUTRAL', probability: number };
+    mlProjection: { direction: 'ALCISTA' | 'BAJISTA' | 'NEUTRAL' | 'ANALIZANDO' | 'CALIBRANDO' | 'ERROR', probability: number, reason?: string };
     liquidityHeatmap: { bids: { price: number, volume: number }[], asks: { price: number, volume: number }[] } | null;
     neuralLogs: NeuralLog[];
     tacticalDecision: TacticalDecision;
@@ -77,7 +77,7 @@ export const useTelemetryStore = create<TelemetryState>((set, get) => {
             smcData: null,
             latestPrice: null,
             liquidityHeatmap: null,
-            mlProjection: { direction: 'NEUTRAL', probability: 50 },
+            mlProjection: { direction: 'NEUTRAL', probability: 50, reason: "Aguardando conexión de telemetría..." },
             tacticalDecision: { regime: "ANALIZANDO NUEVO RIESGO...", strategy: "STANDBY", reasoning: `Sincronizando telemetría y topografía de liquidez para ${symbol}.` }
         });
 

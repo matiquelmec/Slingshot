@@ -28,6 +28,26 @@ class FeatureEngineer:
         # 1. Inyectar suite base de TA (RSI, MACD, BBWP)
         df = apply_criptodamus_suite(df)
         
+        # 1.5 Inyectar Smart Money Concepts (El "Cerebro" Institucional)
+        from engine.indicators.structure import identify_order_blocks
+        df = identify_order_blocks(df)
+        
+        # Convertimos booleanos de SMC a numéricos (1/0)
+        df['ob_bullish'] = df['ob_bullish'].astype(int)
+        df['ob_bearish'] = df['ob_bearish'].astype(int)
+        df['fvg_bullish'] = df['fvg_bullish'].astype(int)
+        df['fvg_bearish'] = df['fvg_bearish'].astype(int)
+        
+        # Crear features de "tiempo desde el último bloque" (Decay)
+        # Esto le enseña al modelo que un bloque recién creado tiene más fuerza
+        # que uno creado hace 50 velas.
+        def time_since_last(series):
+            return series.groupby(series.cumsum()).cumcount()
+        
+        # Llenamos con un número grande (ej. 100) al principio cuando no hay bloques previos
+        df['bars_since_bull_ob'] = time_since_last(df['ob_bullish']).replace(0, np.nan).ffill().fillna(100)
+        df['bars_since_bear_ob'] = time_since_last(df['ob_bearish']).replace(0, np.nan).ffill().fillna(100)
+        
         # 2. Features de Retorno (Velocidad del precio)
         # Retorno logarítmico (mejor para ML financiero)
         df['return_1'] = np.log(df['close'] / df['close'].shift(1))
@@ -54,7 +74,7 @@ class FeatureEngineer:
              df['hour_cos'] = np.cos(2 * np.pi * df['timestamp'].dt.hour / 24.0)
              df['day_of_week'] = df['timestamp'].dt.dayofweek
              
-        # Limpieza: Descartar valores NaN generados por los rolling windows
+        # Limpieza: Descartar valores NaN generados por los rolling windows o time_since_last
         df = df.dropna()
         
         return df

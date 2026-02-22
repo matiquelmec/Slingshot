@@ -76,7 +76,7 @@ def train_slingshot_model(data_path: Path, model_dir: Path):
     
     # 7. Guardar el Modelo (Exportación Ultrarrápida JSON)
     os.makedirs(model_dir, exist_ok=True)
-    model_path = model_dir / "slingshot_xgb_v1.json"
+    model_path = model_dir / "slingshot_xgb_15m_v2.json"
     model.save_model(str(model_path))
     
     print(f"💾 Modelo guardado exitosamente en: {model_path}")
@@ -84,7 +84,7 @@ def train_slingshot_model(data_path: Path, model_dir: Path):
 if __name__ == "__main__":
     # Rutas relativas al proyecto
     base_dir = Path(__file__).parent.parent.parent
-    data_file = base_dir / "data" / "btcusdt_15m.parquet"
+    data_file = base_dir / "data" / "btcusdt_15m_1YEAR.parquet"
     models_out = base_dir / "engine" / "ml" / "models"
     
     train_slingshot_model(data_file, models_out)
