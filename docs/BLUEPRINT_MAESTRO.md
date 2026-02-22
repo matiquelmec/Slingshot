@@ -232,12 +232,14 @@ slingshot/
 - [ ] Tests unitarios para cada módulo (pytest)
 
 ### FASE 3 — La Inteligencia (Semana 5-6): "El Cerebro"
-> Objetivo: ML real con validación rigurosa
+> Objetivo: ML real con Arquitectura Multi-Temporal Especializada
 
-- [ ] Feature engineering profesional (50+ features)
-- [ ] Entrenamiento XGBoost con walk-forward validation
-- [ ] Exportar a ONNX para inferencia en producción
-- [ ] Drift monitor (PSI + KS test)
+- [ ] Feature engineering profesional (Inyectar métricas de SMC Order Blocks)
+- [ ] Construir script de descarga masiva (35,000+ velas) desde Binance API
+- [ ] Entrenar **Cerebro Core (15m)** - Modelo táctico intradía (`slingshot_xgb_15m_v2`)
+- [ ] Entrenar **Cerebro Macro (4H)** - Filtro direccional guardián (`slingshot_xgb_4h_v2`)
+- [ ] Exportar a ONNX para inferencia en producción con latencia <50ms
+- [ ] Drift monitor (PSI + KS test) para alertar si el modelo queda obsoleto
 - [ ] Backtesting vectorizado con vectorbt
 - [ ] Dashboard de métricas ML en tiempo real
 
