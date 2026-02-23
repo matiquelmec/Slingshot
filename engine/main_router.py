@@ -4,7 +4,7 @@ import json
 
 # Motores e Indicadores
 from engine.indicators.regime import RegimeDetector
-from engine.indicators.structure import identify_support_resistance
+from engine.indicators.structure import identify_support_resistance, get_key_levels, identify_order_blocks, extract_smc_coordinates
 
 # Estrategias
 from engine.strategy import PaulPerdicesStrategy # Estrategia SMC (Distribución/Manipulación)
@@ -26,14 +26,21 @@ class SlingshotRouter:
         self.strat_trend = TrendFollowingStrategy()
         self.strat_reversion = ReversionStrategy()
         
-    def process_market_data(self, df: pd.DataFrame, asset: str = "BTCUSDT") -> dict:
+    def process_market_data(
+        self, 
+        df: pd.DataFrame, 
+        asset: str = "BTCUSDT", 
+        interval: str = "15m",
+        macro_levels: dict = None
+    ) -> dict:
         """
         El pipeline principal. Por aquí pasará cada vela en vivo.
         """
         df = df.copy()
+        from engine.indicators.structure import consolidate_mtf_levels
         
-        # 1. Mapeo Topográfico Base (Soportes/Resistencias Horizontales Clásicos)
-        df = identify_support_resistance(df)
+        # 1. Mapeo Topográfico Base con ventana dinámica por interval
+        df = identify_support_resistance(df, interval=interval)
         
         # 2. Detección de Régimen de Wyckoff
         df = self.regime_detector.detect_regime(df)
@@ -43,14 +50,56 @@ class SlingshotRouter:
         # Diccionario de resultados
         result = {
             "asset": asset,
+            "interval": interval,
             "timestamp": str(df['timestamp'].iloc[-1]),
-            "current_price": df['close'].iloc[-1],
+            "current_price": float(df['close'].iloc[-1]),
             "market_regime": current_regime,
-            "nearest_support": df['support_level'].iloc[-1] if 'support_level' in df.columns else None,
-            "nearest_resistance": df['resistance_level'].iloc[-1] if 'resistance_level' in df.columns else None,
+            "nearest_support": float(df['support_level'].iloc[-1]) if 'support_level' in df.columns and pd.notna(df['support_level'].iloc[-1]) else None,
+            "nearest_resistance": float(df['resistance_level'].iloc[-1]) if 'resistance_level' in df.columns and pd.notna(df['resistance_level'].iloc[-1]) else None,
+            # Indicadores internos del RegimeDetector (para el panel de diagnóstico)
+            "sma_fast": float(df['sma_fast'].iloc[-1]) if 'sma_fast' in df.columns and pd.notna(df['sma_fast'].iloc[-1]) else None,
+            "sma_slow": float(df['sma_slow'].iloc[-1]) if 'sma_slow' in df.columns and pd.notna(df['sma_slow'].iloc[-1]) else None,
+            "sma_slow_slope": float(df['sma_slow_slope'].iloc[-1]) if 'sma_slow_slope' in df.columns and pd.notna(df['sma_slow_slope'].iloc[-1]) else None,
+            "bb_width": float(df['bb_width'].iloc[-1]) if 'bb_width' in df.columns and pd.notna(df['bb_width'].iloc[-1]) else None,
+            "bb_width_mean": float(df['bb_width_mean'].iloc[-1]) if 'bb_width_mean' in df.columns and pd.notna(df['bb_width_mean'].iloc[-1]) else None,
+            "dist_to_sma200": float(df['dist_to_sma200'].iloc[-1]) if 'dist_to_sma200' in df.columns and pd.notna(df['dist_to_sma200'].iloc[-1]) else None,
             "active_strategy": None,
-            "signals": []
+            "signals": [],
         }
+
+        # 2a. Fusión OB + S/R: detectar confluencias ANTES de serializar key_levels
+        try:
+            atr_val = df.attrs.get('atr_value', float(df['close'].iloc[-1]) * 0.003)
+            df_ob   = identify_order_blocks(df)
+            smc     = extract_smc_coordinates(df_ob)
+            ob_zones = (
+                [{'top': o['top'], 'bottom': o['bottom']} for o in smc['order_blocks']['bullish']] +
+                [{'top': o['top'], 'bottom': o['bottom']} for o in smc['order_blocks']['bearish']] +
+                [{'top': f['top'], 'bottom': f['bottom']} for f in smc['fvgs']['bullish']] +
+                [{'top': f['top'], 'bottom': f['bottom']} for f in smc['fvgs']['bearish']]
+            )
+
+            def has_ob_near(price: float) -> bool:
+                for z in ob_zones:
+                    if z['bottom'] - atr_val <= price <= z['top'] + atr_val:
+                        return True
+                return False
+
+            for lvl in df.attrs.get('key_resistances', []):
+                lvl['ob_confluence'] = has_ob_near(lvl['price'])
+            for lvl in df.attrs.get('key_supports', []):
+                lvl['ob_confluence'] = has_ob_near(lvl['price'])
+        except Exception:
+            pass  # Si la fusión falla, no se bloquea el pipeline
+
+        # 2b. Consolidación MTF si hay datos macro
+        base_key_levels = get_key_levels(df)
+        if macro_levels:
+            base_key_levels = consolidate_mtf_levels(base_key_levels, macro_levels)
+            
+        result["key_levels"] = base_key_levels
+
+
         
         # 3. ENRUTAMIENTO INTELIGENTE (El 'Switch' Maestro)
         if current_regime == 'ACCUMULATION':

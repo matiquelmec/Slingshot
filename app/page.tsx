@@ -5,7 +5,7 @@ import React, { useState, useEffect, useRef } from 'react';
 
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-    Crosshair, Activity, Cpu, Terminal, ShieldCheck, Database,
+    Crosshair, Activity, Terminal, ShieldCheck, Database,
     Radio, ChevronRight, BarChart2, Plus, X
 } from 'lucide-react';
 import dynamic from 'next/dynamic';
@@ -13,6 +13,8 @@ import { useTelemetryStore, Timeframe } from './store/telemetryStore';
 import { useIndicatorsStore } from './store/indicatorsStore';
 
 const TradingChart = dynamic(() => import('./components/ui/TradingChart'), { ssr: false });
+const QuantDiagnosticPanel = dynamic(() => import('./components/ui/QuantDiagnosticPanel'), { ssr: false });
+const SessionClock = dynamic(() => import('./components/ui/SessionClock'), { ssr: false });
 
 // === WATCHLIST: Agrega o quita activos aquí. El backend soporta CUALQUIER par de Binance ===
 const DEFAULT_WATCHLIST = [
@@ -187,10 +189,10 @@ export default function Dashboard() {
                 className="flex-1 grid grid-cols-12 gap-5 p-5 z-10 overflow-hidden"
             >
                 {/* Left: Command Center */}
-                <motion.section variants={itemVariants} className="col-span-3 flex flex-col gap-5 overflow-hidden">
+                <motion.section variants={itemVariants} className="col-span-3 flex flex-col gap-3 overflow-hidden min-h-0">
 
                     {/* Watchlist / Radar */}
-                    <div className="bg-[#050B14]/60 backdrop-blur-xl border border-white/5 rounded-2xl shadow-2xl flex flex-col flex-1 relative overflow-hidden">
+                    <div className="bg-[#050B14]/60 backdrop-blur-xl border border-white/5 rounded-2xl shadow-2xl flex flex-col relative overflow-hidden" style={{ minHeight: '160px', maxHeight: '35%' }}>
                         <div className="absolute inset-0 bg-gradient-to-b from-white/[0.02] to-transparent pointer-events-none" />
                         <div className="p-4 border-b border-white/5 flex items-center justify-between bg-white/[0.01]">
                             <div className="flex items-center gap-2.5">
@@ -301,38 +303,10 @@ export default function Dashboard() {
                         </div>
                     </div>
 
-                    {/* Tactical Decision */}
-                    <div className="bg-[#050B14]/60 backdrop-blur-xl border border-white/5 rounded-2xl shadow-2xl flex-1 flex flex-col relative overflow-hidden" style={{ maxHeight: '40%' }}>
-                        <div className="p-4 border-b border-white/5 flex items-center justify-between bg-white/[0.01]">
-                            <div className="flex items-center gap-2.5">
-                                <Cpu size={16} className={`${tacticalDecision.strategy === 'STANDBY' ? 'text-white/40' : 'text-neon-green'}`} />
-                                <h2 className="text-xs font-bold text-white/90 tracking-widest">DECISIÓN TÁCTICA</h2>
-                            </div>
-                        </div>
-                        <div className="p-5 flex flex-col gap-4 overflow-y-auto">
-
-                            <div className="bg-white/[0.02] border border-white/5 rounded-xl p-3">
-                                <span className="text-[9px] font-bold text-white/40 tracking-[0.2em] mb-1.5 block">RÉGIMEN DE MERCADO</span>
-                                <span className={`text-sm font-black tracking-wider ${tacticalDecision.regime.includes('BULLISH') ? 'text-neon-green' : tacticalDecision.regime.includes('BEARISH') ? 'text-neon-red' : 'text-neon-cyan'}`}>{tacticalDecision.regime}</span>
-                            </div>
-
-                            <div className="bg-white/[0.02] border border-white/5 rounded-xl p-3">
-                                <span className="text-[9px] font-bold text-white/40 tracking-[0.2em] mb-1.5 block">ESTRATEGIA ENRUTADA</span>
-                                <div className="flex items-center gap-2">
-                                    <span className={`h-2 w-2 rounded-full ${tacticalDecision.strategy !== 'STANDBY' ? 'bg-neon-green shadow-[0_0_8px_rgba(0,255,65,0.8)]' : 'bg-white/20'}`} />
-                                    <span className="text-white/90 font-bold text-xs tracking-wide">{tacticalDecision.strategy}</span>
-                                </div>
-                            </div>
-
-                            <div className="bg-white/[0.02] border border-white/5 rounded-xl p-3 relative overflow-hidden">
-                                <div className="absolute left-0 top-0 bottom-0 w-1 bg-white/20" />
-                                <span className="text-[9px] font-bold text-white/40 tracking-[0.2em] mb-1.5 block pl-3">RAZONAMIENTO ML</span>
-                                <span className="text-[11px] text-white/70 font-mono leading-relaxed pl-3 block">
-                                    {tacticalDecision.reasoning}
-                                </span>
-                            </div>
-
-                        </div>
+                    {/* Retina Técnica + Sesiones — scroll interno */}
+                    <div className="flex flex-col gap-3 overflow-y-auto flex-1 min-h-0">
+                        <QuantDiagnosticPanel />
+                        <SessionClock />
                     </div>
                 </motion.section>
 

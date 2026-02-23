@@ -110,7 +110,7 @@ export default function TradingChart() {
     const macdSigRef = useRef<ISeriesApi<'Line'> | null>(null);
     const macdHistRef = useRef<ISeriesApi<'Histogram'> | null>(null);
 
-    const { candles, isConnected, smcData, liquidityHeatmap } = useTelemetryStore();
+    const { candles, isConnected, smcData, liquidityHeatmap, tacticalDecision, sessionData } = useTelemetryStore();
     const { indicators } = useIndicatorsStore();
 
     const isEnabled = (id: string) => indicators.find(i => i.id === id)?.enabled ?? false;
@@ -492,6 +492,100 @@ export default function TradingChart() {
             });
         }
     }, [liquidityHeatmap, indicators]);
+
+    // ── S/R High-Touch + Niveles de Sesión ───────────────────────────────────
+    const srLinesRef = useRef<{ line: any; series: any }[]>([]);
+
+    useEffect(() => {
+        const series = candleSeriesRef.current;
+        if (!chartRef.current || !series) return;
+
+        // Limpiar con la referencia exacta de la serie que creó cada línea
+        srLinesRef.current.forEach(({ line, series: s }) => {
+            try { s?.removePriceLine(line); } catch (e) { }
+        });
+        srLinesRef.current = [];
+
+        const addLine = (price: number | null | undefined, color: string, title: string, style: number, width: number = 1) => {
+            if (!price || !series) return;
+            const line = series.createPriceLine({
+                price, color, lineWidth: width as any, lineStyle: style,
+                axisLabelVisible: true, title
+            });
+            if (line) srLinesRef.current.push({ line, series });
+        };
+
+        // ── Key Levels (High-Touch + MTF + Volume) ─────────────────────────
+        const touchesToWidth = (lvl: any): number =>
+            lvl.mtf_confluence ? 4 : (lvl.ob_confluence ? 3 : lvl.touches >= 4 ? 3 : lvl.touches >= 2 ? 2 : 1);
+
+        const touchesToAlpha = (t: number, mtf: boolean): string =>
+            mtf ? '1.0' : t >= 4 ? '0.9' : t >= 2 ? '0.7' : '0.4';
+
+        const getLevelColor = (lvl: { type: string; origin: string }, alpha: string): string => {
+            if (lvl.type === 'RESISTANCE') {
+                return lvl.origin === 'ROLE_REVERSAL'
+                    ? `rgba(251,146,60,${alpha})`   // naranja
+                    : `rgba(255,0,60,${alpha})`;    // rojo
+            } else {
+                return lvl.origin === 'ROLE_REVERSAL'
+                    ? `rgba(250,204,21,${alpha})`   // amarillo
+                    : `rgba(0,255,65,${alpha})`;    // verde
+            }
+        };
+
+        const { resistances, supports } = tacticalDecision.key_levels;
+
+        // Renderizar Resistencias
+        resistances.forEach((r, i) => {
+            const rank = i + 1;
+            const alpha = touchesToAlpha(r.touches, r.mtf_confluence ?? false);
+            const w = touchesToWidth(r);
+            const color = getLevelColor(r, alpha);
+
+            // Iconos de poder
+            const mtfTag = r.mtf_confluence ? '◈' : ''; // Rombo para MTF (Institucional)
+            const obTag = r.ob_confluence ? '★' : '';
+            const volTag = (r.volume_score ?? 1) > 1.5 ? '⚡' : '';
+            const typeTag = r.origin === 'ROLE_REVERSAL' ? '↩' : '▲';
+
+            const label = `R${rank}${mtfTag}${obTag}${volTag}${typeTag}(${r.touches}t)`;
+            // Niveles MTF Mayor son SÓLIDOS. R1 intraday es DASHED. Otros son DOTTED.
+            const style = r.mtf_confluence ? LineStyle.Solid : (rank === 1 ? LineStyle.Dashed : LineStyle.Dotted);
+
+            addLine(r.price, color, label, style, w);
+        });
+
+        // Renderizar Soportes
+        supports.forEach((s, i) => {
+            const rank = i + 1;
+            const alpha = touchesToAlpha(s.touches, s.mtf_confluence ?? false);
+            const w = touchesToWidth(s);
+            const color = getLevelColor(s, alpha);
+
+            const mtfTag = s.mtf_confluence ? '◈' : '';
+            const obTag = s.ob_confluence ? '★' : '';
+            const volTag = (s.volume_score ?? 1) > 1.5 ? '⚡' : '';
+            const typeTag = s.origin === 'ROLE_REVERSAL' ? '↩' : '▼';
+
+            const label = `S${rank}${mtfTag}${obTag}${volTag}${typeTag}(${s.touches}t)`;
+            const style = s.mtf_confluence ? LineStyle.Solid : (rank === 1 ? LineStyle.Dashed : LineStyle.Dotted);
+
+            addLine(s.price, color, label, style, w);
+        });
+
+
+        // ── Niveles de Sesión ───────────────────────────────────────────────
+        if (sessionData) {
+            const { sessions, pdh, pdl } = sessionData;
+            addLine(pdh, 'rgba(255,255,255,0.55)', 'PDH', LineStyle.LargeDashed);
+            addLine(pdl, 'rgba(255,255,255,0.55)', 'PDL', LineStyle.LargeDashed);
+            addLine(sessions.asia.high, 'rgba(251,146,60,0.7)', 'Asia H', LineStyle.Dotted);
+            addLine(sessions.asia.low, 'rgba(251,146,60,0.7)', 'Asia L', LineStyle.Dotted);
+            addLine(sessions.london.high, 'rgba(96,165,250,0.7)', 'Lon H', LineStyle.Dotted);
+            addLine(sessions.london.low, 'rgba(96,165,250,0.7)', 'Lon L', LineStyle.Dotted);
+        }
+    }, [tacticalDecision, sessionData]);
 
     return (
         <div className="w-full h-full relative" ref={chartContainerRef}>

@@ -18,10 +18,55 @@ export interface NeuralLog {
     message: string;
 }
 
+export interface KeyLevel {
+    price: number;
+    touches: number;
+    zone_top: number;
+    zone_bottom: number;
+    type: 'SUPPORT' | 'RESISTANCE';
+    origin: 'PIVOT' | 'ROLE_REVERSAL';
+    strength: 'WEAK' | 'MODERATE' | 'STRONG';
+    is_active: boolean;
+    ob_confluence: boolean;
+    volume_score: number;
+    mtf_confluence: boolean;
+    mtf_score: number;
+}
+
 export interface TacticalDecision {
     regime: string;
     strategy: string;
     reasoning: string;
+    nearest_support: number | null;
+    nearest_resistance: number | null;
+    sma_fast: number | null;
+    sma_slow: number | null;
+    sma_slow_slope: number | null;
+    bb_width: number | null;
+    bb_width_mean: number | null;
+    dist_to_sma200: number | null;
+    signals: any[];
+    key_levels: { resistances: KeyLevel[]; supports: KeyLevel[] };
+}
+
+export interface SessionInfo {
+    high: number | null;
+    low: number | null;
+    status: 'ACTIVE' | 'CLOSED' | 'PENDING';
+    swept_high: boolean;
+    swept_low: boolean;
+}
+
+export interface SessionData {
+    current_session: string;
+    current_session_utc: string;
+    local_time: string;
+    is_killzone: boolean;
+    sessions: { asia: SessionInfo; london: SessionInfo; ny: SessionInfo; };
+    pdh: number | null;
+    pdl: number | null;
+    pdh_swept: boolean;
+    pdl_swept: boolean;
 }
 
 export interface OrderBlockData {
@@ -54,6 +99,7 @@ interface TelemetryState {
     neuralLogs: NeuralLog[];
     tacticalDecision: TacticalDecision;
     smcData: SMCDataPayload | null;
+    sessionData: SessionData | null;
     connect: (symbol: string, timeframe?: Timeframe) => void;
     disconnect: () => void;
     setTimeframe: (tf: Timeframe) => void;
@@ -75,10 +121,18 @@ export const useTelemetryStore = create<TelemetryState>((set, get) => {
             candles: [],
             isConnected: false,
             smcData: null,
+            sessionData: null,
             latestPrice: null,
             liquidityHeatmap: null,
             mlProjection: { direction: 'NEUTRAL', probability: 50, reason: "Aguardando conexión de telemetría..." },
-            tacticalDecision: { regime: "ANALIZANDO NUEVO RIESGO...", strategy: "STANDBY", reasoning: `Sincronizando telemetría y topografía de liquidez para ${symbol}.` }
+            tacticalDecision: {
+                regime: "ANALIZANDO NUEVO RIESGO...", strategy: "STANDBY",
+                reasoning: `Sincronizando telemetría para ${symbol}.`,
+                nearest_support: null, nearest_resistance: null,
+                sma_fast: null, sma_slow: null, sma_slow_slope: null,
+                bb_width: null, bb_width_mean: null, dist_to_sma200: null, signals: [],
+                key_levels: { resistances: [], supports: [] }
+            }
         });
 
         // Connect to FastAPI Backend WebSocket - pass timeframe as query param
@@ -138,30 +192,36 @@ export const useTelemetryStore = create<TelemetryState>((set, get) => {
                         };
                     });
                 } else if (data.type === 'tactical_update') {
-                    // Update del Slow Path (Confirmación Estructural al Cierre de Vela)
+                    const d = data.data;
                     set({
                         tacticalDecision: {
-                            regime: data.data.market_regime,
-                            strategy: data.data.active_strategy,
-                            // Por ahora armamos un reasoning estático basado en la data real.
-                            // Próximamente se le puede inyectar del Python The Core Reason.
-                            reasoning: `Estructura Procesada. Soportes Mapeados. Régimen Activo: ${data.data.market_regime}.`
+                            regime: d.market_regime ?? 'UNKNOWN',
+                            strategy: d.active_strategy ?? 'STANDBY',
+                            reasoning: `Régimen: ${d.market_regime}. Soportes mapeados. Dist SMA200: ${d.dist_to_sma200 != null ? (d.dist_to_sma200 * 100).toFixed(2) + '%' : 'N/A'}`,
+                            nearest_support: d.nearest_support ?? null,
+                            nearest_resistance: d.nearest_resistance ?? null,
+                            sma_fast: d.sma_fast ?? null,
+                            sma_slow: d.sma_slow ?? null,
+                            sma_slow_slope: d.sma_slow_slope ?? null,
+                            bb_width: d.bb_width ?? null,
+                            bb_width_mean: d.bb_width_mean ?? null,
+                            dist_to_sma200: d.dist_to_sma200 ?? null,
+                            signals: d.signals ?? [],
+                            key_levels: d.key_levels ?? { resistances: [], supports: [] },
                         }
                     });
+                } else if (data.type === 'session_update') {
+                    set({ sessionData: data.data });
                 } else if (data.type === 'smc_data') {
-                    // Update global state with precise institutional structure blocks
                     set({ smcData: data.data });
-
-                    // Option to add a system log announcing structure update
                     set((state) => {
                         const newLog: NeuralLog = {
                             id: Math.random().toString(36).substring(7),
                             timestamp: new Date().toLocaleTimeString('en-US', { hour12: false }),
                             type: 'SENSOR',
-                            message: `[SMC] Estructura Institucional sincronizada. OBs detectados: ${data.data.order_blocks.bullish.length} Bull, ${data.data.order_blocks.bearish.length} Bear. FVGs: ${data.data.fvgs.bullish.length + data.data.fvgs.bearish.length}.`
+                            message: `[SMC] Estructura actualizada. OBs: ${data.data.order_blocks.bullish.length} Bull / ${data.data.order_blocks.bearish.length} Bear. FVGs: ${data.data.fvgs.bullish.length + data.data.fvgs.bearish.length}.`
                         };
-                        const updatedLogs = [newLog, ...state.neuralLogs].slice(0, 3);
-                        return { neuralLogs: updatedLogs };
+                        return { neuralLogs: [newLog, ...state.neuralLogs].slice(0, 3) };
                     });
                 }
             } catch (e) {
@@ -191,9 +251,14 @@ export const useTelemetryStore = create<TelemetryState>((set, get) => {
         tacticalDecision: {
             regime: "DESCUBRIENDO...",
             strategy: "STANDBY",
-            reasoning: "Inicializando motores de inferencia."
+            reasoning: "Inicializando motores de inferencia.",
+            nearest_support: null, nearest_resistance: null,
+            sma_fast: null, sma_slow: null, sma_slow_slope: null,
+            bb_width: null, bb_width_mean: null, dist_to_sma200: null, signals: [],
+            key_levels: { resistances: [], supports: [] }
         },
         smcData: null,
+        sessionData: null,
         liquidityHeatmap: null,
 
         connect: (symbol: string, timeframe?: Timeframe) => {

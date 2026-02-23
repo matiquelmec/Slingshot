@@ -3,6 +3,25 @@ import numpy as np
 from pathlib import Path
 from scipy.signal import find_peaks
 
+# Fase 1: Window óptimo por temporalidad
+# Principio: ventana = cantidad de velas que forman una "estructura" significativa en esa TF
+WINDOW_BY_INTERVAL: dict[str, int] = {
+    '1m':  5,   # 5 min de estructura mínima
+    '3m':  7,
+    '5m':  10,
+    '15m': 21,  # ~5 horas de estructura
+    '30m': 18,
+    '1h':  21,  # ~21 horas
+    '2h':  15,
+    '4h':  14,  # ~56 horas = ~2.3 días
+    '6h':  10,
+    '8h':  10,
+    '12h': 8,
+    '1d':  8,   # 8 días de estructura
+    '3d':  5,
+    '1w':  4,
+}
+
 def identify_order_blocks(df: pd.DataFrame, threshold: float = 2.0) -> pd.DataFrame:
     """
     SMC Nivel 2: Detecta Order Blocks e Imbalances (Fair Value Gaps).
@@ -48,67 +67,219 @@ def identify_order_blocks(df: pd.DataFrame, threshold: float = 2.0) -> pd.DataFr
     
     return df
 
-def identify_support_resistance(df: pd.DataFrame, window: int = 21, num_levels: int = 5) -> pd.DataFrame:
+def identify_support_resistance(
+    df: pd.DataFrame,
+    window: int = 21,
+    num_levels: int = 5,
+    interval: str = '15m',
+) -> pd.DataFrame:
     """
-    Identifica Soportes y Resistencias Horizontales (Topografía de Mercado).
-    Utiliza detección algorítmica de picos (Local Maxima y Minima) y los agrupa en niveles de precio.
+    S/R Profesional v3 — Multi-Timeframe ready.
+
+    Mejoras sobre v2:
+    - Fase 1: Window dinámico por temporalidad (WINDOW_BY_INTERVAL)
+    - Fase 3: Volume score en cada cluster (volumen ponderado por toque)
     """
     df = df.copy()
-    
-    # Si tenemos muy pocos datos, retornamos sin calcular
+
+    # Fase 1: usar window dinámico si no se override explícitamente
+    window = WINDOW_BY_INTERVAL.get(interval, window)
+
     if len(df) < window * 2:
-        df['nearest_support'] = np.nan
-        df['nearest_resistance'] = np.nan
+        df['support_level']    = np.nan
+        df['resistance_level'] = np.nan
         return df
 
-    # 1. Encontrar Pivot Highs (Resistencias) y Pivot Lows (Soportes)
-    # window determina cuán "lejos" deben estar los picos para ser relevantes
-    
-    # Encontrar índices de los máximos locales
-    highs = df['high'].values
-    peak_indices, _ = find_peaks(highs, distance=window)
-    resistance_prices = highs[peak_indices]
-    
-    # Encontrar índices de los mínimos locales (invirtiendo la serie)
-    lows = -df['low'].values
-    valley_indices, _ = find_peaks(lows, distance=window)
-    support_prices = -lows[valley_indices] # Restauramos valores positivos
-    
-    # Inicializamos columnas para el soporte y resistencia INMEDIATO más cercano al precio actual
-    df['resistance_level'] = np.nan
-    df['support_level'] = np.nan
-    
-    # Nota: Analizar iterativamente cada vela es lento para Big Data, por lo que este método 
-    # asume un cálculo de los S/R relevantes HASTA la vela actual.
-    
-    for i in range(window * 2, len(df)):
-        current_price = df['close'].iloc[i]
-        
-        # Filtrar picos que ocurrieron ANTES de la vela actual para evitar "mirar al futuro"
-        valid_res_indices = [idx for idx in peak_indices if idx < i]
-        valid_sup_indices = [idx for idx in valley_indices if idx < i]
-        
-        if valid_res_indices and valid_sup_indices:
-            # Seleccionar los precios de esos picos válidos
-            valid_res_prices = highs[valid_res_indices]
-            valid_sup_prices = df['low'].values[valid_sup_indices]
-            
-            # Resistencia Inmediata: El pico histórico más cercano que está POR ENCIMA del precio actual
-            res_above = [r for r in valid_res_prices if r > current_price]
-            nearest_res = min(res_above) if res_above else np.nan
-            
-            # Soporte Inmediato: El valle histórico más cercano que está POR DEBAJO del precio actual
-            sup_below = [s for s in valid_sup_prices if s < current_price]
-            nearest_sup = max(sup_below) if sup_below else np.nan
-            
-            df.loc[df.index[i], 'resistance_level'] = nearest_res
-            df.loc[df.index[i], 'support_level'] = nearest_sup
-    
-    # Rellenar (forward fill) para mantener el nivel hasta que se detecte uno nuevo o se rompa
-    df['resistance_level'] = df['resistance_level'].ffill()
-    df['support_level'] = df['support_level'].ffill()
-    
+    highs  = df['high'].values
+    lows   = df['low'].values
+    closes = df['close'].values
+
+    # ── 1. ATR dinámico para tolerancia y umbral de invalidación ─────────────
+    tr = np.maximum(
+        highs - lows,
+        np.maximum(
+            np.abs(highs - np.roll(closes, 1)),
+            np.abs(lows  - np.roll(closes, 1))
+        )
+    )
+    tr[0] = highs[0] - lows[0]
+    atr14 = pd.Series(tr).rolling(14, min_periods=1).mean().values
+    current_atr   = float(atr14[-1])
+    current_price = float(closes[-1])
+
+    # Tolerancia: 0.5×ATR como % del precio (adapta a volatilidad)
+    tolerance_pct = max(0.002, min(0.008, (0.5 * current_atr) / current_price))
+
+    # ── 2. Detectar pivotes (sin lookahead) ──────────────────────────────────
+    peak_indices,   _ = find_peaks( highs, distance=window)
+    valley_indices, _ = find_peaks(-lows,  distance=window)
+
+    volumes = df['volume'].values if 'volume' in df.columns else np.ones(len(df))
+    avg_vol = float(np.mean(volumes)) if float(np.mean(volumes)) > 0 else 1.0
+
+    # ── 3. Clustering por precio con volume_score ─────────────────────────────
+    def cluster_levels(
+        prices: np.ndarray,
+        indices: np.ndarray,
+        tol: float
+    ) -> list[dict]:
+        if len(prices) == 0:
+            return []
+        # Ordenar por precio pero mantener el índice original
+        order = np.argsort(prices)
+        sorted_p = prices[order]
+        sorted_i = indices[order]
+
+        clusters: list[tuple[list[float], list[int]]] = []
+        cur_p: list[float] = [float(sorted_p[0])]
+        cur_i: list[int]   = [int(sorted_i[0])]
+
+        for p, idx in zip(sorted_p[1:], sorted_i[1:]):
+            if abs(float(p) - float(np.mean(cur_p))) / float(np.mean(cur_p)) <= tol:
+                cur_p.append(float(p))
+                cur_i.append(int(idx))
+            else:
+                clusters.append((cur_p, cur_i))
+                cur_p, cur_i = [float(p)], [int(idx)]
+        clusters.append((cur_p, cur_i))
+
+        result = []
+        for cp, ci in clusters:
+            vol_at_pivots = [float(volumes[i]) for i in ci if i < len(volumes)]
+            med_vol = float(np.median(vol_at_pivots)) if vol_at_pivots else avg_vol
+            result.append({
+                'price':        float(np.mean(cp)),
+                'touches':      len(cp),
+                'zone_top':     float(max(cp)),
+                'zone_bottom':  float(min(cp)),
+                'volume_score': round(med_vol / avg_vol, 2),  # 1.0 = promedio
+            })
+        return result
+
+    res_clusters = cluster_levels(highs[peak_indices],   peak_indices,   tolerance_pct)
+    sup_clusters = cluster_levels(lows[valley_indices],  valley_indices,  tolerance_pct)
+
+
+    # ── 4. Detectar si un nivel fue roto en el historial ─────────────────────
+    def was_broken(level_price: float, level_type: str) -> bool:
+        """
+        True si el precio cerró al otro lado del nivel y lo penetró > 0.5×ATR.
+        Solo considera cierres para evitar falsas rupturas por wick.
+        """
+        if level_type == 'RESISTANCE':
+            # Resistencia rota si hubo un cierre POR ENCIMA + margen
+            return any(c > level_price + 0.3 * current_atr for c in closes)
+        else:  # SUPPORT
+            return any(c < level_price - 0.3 * current_atr for c in closes)
+
+    # ── 5. Construir lista final con type/origin/strength/is_active ──────────
+    def _strength(t: int) -> str:
+        if t >= 4: return 'STRONG'
+        if t >= 2: return 'MODERATE'
+        return 'WEAK'
+
+    all_levels: list[dict] = []
+
+    for r in res_clusters:
+        broken = was_broken(r['price'], 'RESISTANCE')
+        if not broken:
+            # Resistencia válida normal
+            all_levels.append({**r, 'type': 'RESISTANCE', 'origin': 'PIVOT',
+                                'strength': _strength(r['touches']), 'is_active': True})
+        else:
+            # Resistencia rota → Role Reversal → ahora es SOPORTE
+            all_levels.append({**r, 'type': 'SUPPORT', 'origin': 'ROLE_REVERSAL',
+                                'strength': _strength(r['touches']), 'is_active': True})
+
+    for s in sup_clusters:
+        broken = was_broken(s['price'], 'SUPPORT')
+        if not broken:
+            all_levels.append({**s, 'type': 'SUPPORT', 'origin': 'PIVOT',
+                                'strength': _strength(s['touches']), 'is_active': True})
+        else:
+            # Soporte roto → Role Reversal → ahora es RESISTENCIA
+            all_levels.append({**s, 'type': 'RESISTANCE', 'origin': 'ROLE_REVERSAL',
+                                'strength': _strength(s['touches']), 'is_active': True})
+
+    # ── 6. Separar por tipo y ordenar por proximidad al precio ───────────────
+    resistances = sorted(
+        [l for l in all_levels if l['type'] == 'RESISTANCE' and l['price'] > current_price],
+        key=lambda x: x['price']          # más cercana primero
+    )[:num_levels]
+
+    supports = sorted(
+        [l for l in all_levels if l['type'] == 'SUPPORT' and l['price'] < current_price],
+        key=lambda x: x['price'], reverse=True   # más cercano primero
+    )[:num_levels]
+
+    # ── 7. Columnas de compatibilidad ────────────────────────────────────────
+    df['resistance_level'] = resistances[0]['price'] if resistances else np.nan
+    df['support_level']    = supports[0]['price']    if supports    else np.nan
+
+    # Guardar en attrs para get_key_levels()
+    df.attrs['key_resistances'] = resistances
+    df.attrs['key_supports']    = supports
+    df.attrs['atr_value']       = current_atr
+
     return df
+
+
+def get_key_levels(df: pd.DataFrame) -> dict:
+    """
+    Extrae niveles clave del DataFrame analizado.
+    Incluye type, origin, strength, is_active y volume_score.
+    """
+    def _fmt(levels: list[dict]) -> list[dict]:
+        return [{
+            'price':         l['price'],
+            'touches':       l['touches'],
+            'zone_top':      l['zone_top'],
+            'zone_bottom':   l['zone_bottom'],
+            'type':          l['type'],             # SUPPORT | RESISTANCE
+            'origin':        l['origin'],           # PIVOT | ROLE_REVERSAL
+            'strength':      l['strength'],         # WEAK | MODERATE | STRONG
+            'is_active':     l['is_active'],
+            'ob_confluence': l.get('ob_confluence', False),
+            'volume_score':  l.get('volume_score', 1.0),
+            'mtf_confluence': l.get('mtf_confluence', False),
+            'mtf_score':      l.get('mtf_score', 0),
+        } for l in levels]
+
+    return {
+        'resistances': _fmt(df.attrs.get('key_resistances', [])),
+        'supports':    _fmt(df.attrs.get('key_supports',    [])),
+        'atr':         df.attrs.get('atr_value', None),
+    }
+
+def consolidate_mtf_levels(base_levels: dict, macro_levels: dict, timeframe_weight: int = 2) -> dict:
+    """
+    Fase 2: Consolidación Multi-Timeframe.
+    Cruza los niveles de la temporalidad actual con los de temporalidades mayores.
+    Si un nivel macro está cerca de uno base, se marca como confluencia fuerte.
+    """
+    import numpy as np
+
+    def _process(base_list: list[dict], macro_list: list[dict], atr: float):
+        if not atr: return base_list
+        for b in base_list:
+            for m in macro_list:
+                # Si el nivel macro está dentro de 1 ATR del nivel base
+                if abs(b['price'] - m['price']) < atr:
+                    b['mtf_confluence'] = True
+                    b['mtf_score'] += timeframe_weight
+                    # El nivel macro aporta sus toques al score mtf
+                    b['mtf_score'] += m['touches']
+                    if m['touches'] >= 3: b['strength'] = 'STRONG'
+        return base_list
+
+    atr = base_levels.get('atr', 0)
+    base_levels['resistances'] = _process(base_levels['resistances'], macro_levels.get('resistances', []), atr)
+    base_levels['supports']    = _process(base_levels['supports'],    macro_levels.get('supports', []),    atr)
+    
+    return base_levels
+
+
+
 
 def extract_smc_coordinates(df: pd.DataFrame) -> dict:
     """
