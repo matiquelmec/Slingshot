@@ -88,6 +88,17 @@ export interface SMCDataPayload {
     };
 }
 
+export interface GhostData {
+    fear_greed_value: number;
+    fear_greed_label: string;
+    btc_dominance: number;
+    funding_rate: number;
+    macro_bias: 'BULLISH' | 'BEARISH' | 'NEUTRAL' | 'BLOCK_LONGS' | 'BLOCK_SHORTS' | 'CONFLICTED';
+    block_longs: boolean;
+    block_shorts: boolean;
+    reason: string;
+}
+
 interface TelemetryState {
     isConnected: boolean;
     activeSymbol: string;
@@ -100,6 +111,7 @@ interface TelemetryState {
     tacticalDecision: TacticalDecision;
     smcData: SMCDataPayload | null;
     sessionData: SessionData | null;
+    ghostData: GhostData | null;
     connect: (symbol: string, timeframe?: Timeframe) => void;
     disconnect: () => void;
     setTimeframe: (tf: Timeframe) => void;
@@ -107,36 +119,47 @@ interface TelemetryState {
 
 export const useTelemetryStore = create<TelemetryState>((set, get) => {
     let ws: WebSocket | null = null;
+    let retryCount = 0;
+    let retryTimeout: ReturnType<typeof setTimeout> | null = null;
+    const MAX_RETRIES = 5;
 
-    const doConnect = (symbol: string, timeframe: Timeframe) => {
-        // Clean up existing connection
+    const doConnect = (symbol: string, timeframe: Timeframe, isRetry = false) => {
+        // Clean up existing connection and pending retries
         if (ws) {
             ws.close();
             ws = null;
         }
+        if (retryTimeout) {
+            clearTimeout(retryTimeout);
+            retryTimeout = null;
+        }
 
-        set({
-            activeSymbol: symbol,
-            activeTimeframe: timeframe,
-            candles: [],
-            isConnected: false,
-            smcData: null,
-            sessionData: null,
-            latestPrice: null,
-            liquidityHeatmap: null,
-            mlProjection: { direction: 'NEUTRAL', probability: 50, reason: "Aguardando conexión de telemetría..." },
-            tacticalDecision: {
-                regime: "ANALIZANDO NUEVO RIESGO...", strategy: "STANDBY",
-                reasoning: `Sincronizando telemetría para ${symbol}.`,
-                nearest_support: null, nearest_resistance: null,
-                sma_fast: null, sma_slow: null, sma_slow_slope: null,
-                bb_width: null, bb_width_mean: null, dist_to_sma200: null, signals: [],
-                key_levels: { resistances: [], supports: [] }
-            }
-        });
+        if (!isRetry) {
+            retryCount = 0; // Reset counter on fresh connect
+            set({
+                activeSymbol: symbol,
+                activeTimeframe: timeframe,
+                candles: [],
+                isConnected: false,
+                smcData: null,
+                sessionData: null,
+                latestPrice: null,
+                liquidityHeatmap: null,
+                mlProjection: { direction: 'NEUTRAL', probability: 50, reason: "Aguardando conexión de telemetría..." },
+                tacticalDecision: {
+                    regime: "ANALIZANDO NUEVO RIESGO...", strategy: "STANDBY",
+                    reasoning: `Sincronizando telemetría para ${symbol}.`,
+                    nearest_support: null, nearest_resistance: null,
+                    sma_fast: null, sma_slow: null, sma_slow_slope: null,
+                    bb_width: null, bb_width_mean: null, dist_to_sma200: null, signals: [],
+                    key_levels: { resistances: [], supports: [] }
+                }
+            });
+        }
 
-        // Connect to FastAPI Backend WebSocket - pass timeframe as query param
-        ws = new WebSocket(`ws://localhost:8000/api/v1/stream/${symbol}?interval=${timeframe}`);
+        // ✅ FIX: URL dinámica desde variable de entorno — funciona en producción (Vercel)
+        const BASE_WS = process.env.NEXT_PUBLIC_API_WS_URL ?? 'ws://localhost:8000';
+        ws = new WebSocket(`${BASE_WS}/api/v1/stream/${symbol}?interval=${timeframe}`);
 
         ws.onopen = () => {
             set({ isConnected: true });
@@ -223,18 +246,60 @@ export const useTelemetryStore = create<TelemetryState>((set, get) => {
                         };
                         return { neuralLogs: [newLog, ...state.neuralLogs].slice(0, 3) };
                     });
+                } else if (data.type === 'ghost_update') {
+                    // 🔮 Datos Fantasma — Niveles macro del mercado
+                    set({ ghostData: data.data });
+                    set((state) => {
+                        const biasIcons: Record<string, string> = {
+                            BULLISH: '🟢', BEARISH: '🔴', NEUTRAL: '⚪',
+                            BLOCK_LONGS: '🟠', BLOCK_SHORTS: '🟤', CONFLICTED: '🟡'
+                        };
+                        const icon = biasIcons[data.data.macro_bias] ?? '⚪';
+                        const newLog: NeuralLog = {
+                            id: Math.random().toString(36).substring(7),
+                            timestamp: new Date().toLocaleTimeString('en-US', { hour12: false }),
+                            type: data.data.block_longs || data.data.block_shorts ? 'ALERT' : 'SENSOR',
+                            message: `[GHOST] ${icon} F&G=${data.data.fear_greed_value} (${data.data.fear_greed_label}) | BTCD=${data.data.btc_dominance}% | Fund=${data.data.funding_rate.toFixed(4)}% | Bias=${data.data.macro_bias}`
+                        };
+                        return { neuralLogs: [newLog, ...state.neuralLogs].slice(0, 5) };
+                    });
+                } else if (data.type === 'drift_alert') {
+                    // 🧠 Alerta de drift del modelo ML
+                    set((state) => {
+                        const levelIcon = data.data.drift_level === 'SEVERE' ? '🚨' : '⚠️';
+                        const newLog: NeuralLog = {
+                            id: Math.random().toString(36).substring(7),
+                            timestamp: new Date().toLocaleTimeString('en-US', { hour12: false }),
+                            type: 'ALERT',
+                            message: `[DRIFT] ${levelIcon} ${data.data.drift_level}: PSI=${data.data.psi_max.toFixed(3)} | Acc=${(data.data.rolling_accuracy * 100).toFixed(1)}% | ${data.data.recommendation}`
+                        };
+                        return { neuralLogs: [newLog, ...state.neuralLogs].slice(0, 5) };
+                    });
                 }
             } catch (e) {
                 console.error("Failed to parse telemetry message", e);
             }
         };
 
-        ws.onclose = () => {
+
+        ws.onclose = (event) => {
             set({ isConnected: false });
+            // ✅ FIX: Reconexión automática con exponential backoff
+            // No reconectar si fue un cierre intencional (código 1000) o excedimos reintentos
+            if (event.code !== 1000 && retryCount < MAX_RETRIES) {
+                const delayMs = Math.pow(2, retryCount) * 2000; // 2s, 4s, 8s, 16s, 32s
+                retryCount++;
+                const { activeSymbol, activeTimeframe } = get();
+                console.warn(`[WS] Conexión perdida. Reintento ${retryCount}/${MAX_RETRIES} en ${delayMs / 1000}s...`);
+                retryTimeout = setTimeout(() => {
+                    doConnect(activeSymbol, activeTimeframe, true);
+                }, delayMs);
+            }
         };
 
         ws.onerror = () => {
             set({ isConnected: false });
+            // El evento 'close' se dispara inmediatamente después, que maneja el retry
         };
     };
 
@@ -259,6 +324,7 @@ export const useTelemetryStore = create<TelemetryState>((set, get) => {
         },
         smcData: null,
         sessionData: null,
+        ghostData: null,
         liquidityHeatmap: null,
 
         connect: (symbol: string, timeframe?: Timeframe) => {

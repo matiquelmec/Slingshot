@@ -6,10 +6,10 @@ import json
 from engine.indicators.regime import RegimeDetector
 from engine.indicators.structure import identify_support_resistance, get_key_levels, identify_order_blocks, extract_smc_coordinates
 
-# Estrategias
-from engine.strategy import PaulPerdicesStrategy # Estrategia SMC (Distribución/Manipulación)
-from engine.strategies.trend import TrendFollowingStrategy # Estrategia Continuación (Markup/Markdown)
-from engine.strategies.reversion import ReversionStrategy # Estrategia Reversión (Acumulación)
+# Estrategias — todas desde engine/strategies/ (lugar canónico)
+from engine.strategies.smc      import PaulPerdicesStrategy     # SMC Francotirador (Distribución/Manipulación)
+from engine.strategies.trend    import TrendFollowingStrategy    # Continuación (Markup/Markdown)
+from engine.strategies.reversion import ReversionStrategy        # Reversión a la Media (Acumulación/Distribución)
 
 class SlingshotRouter:
     """
@@ -103,23 +103,43 @@ class SlingshotRouter:
         
         # 3. ENRUTAMIENTO INTELIGENTE (El 'Switch' Maestro)
         if current_regime == 'ACCUMULATION':
+            # Buscamos LONGs: RSI sobrevendido en soporte + OBs alcistas
             result["active_strategy"] = "ReversionStrategy (Longs on Floor)"
             analyzed_df = self.strat_reversion.analyze(df)
             opportunities = self.strat_reversion.find_opportunities(analyzed_df)
             
         elif current_regime in ['MARKUP', 'MARKDOWN']:
+            # Tendencia clara: seguimos el impulso con pullbacks a EMA + Fibonacci
             result["active_strategy"] = "TrendFollowingStrategy (Pullbacks + Fibo)"
             analyzed_df = self.strat_trend.analyze(df)
             opportunities = self.strat_trend.find_opportunities(analyzed_df)
             
         elif current_regime == 'DISTRIBUTION':
-            # En distribución buscamos manipulaciones de techo o cacerías de liquidez
-            result["active_strategy"] = "PaulPerdicesSMC (Liquidity Sweeps & OBs)"
-            analyzed_df = self.strat_smc.analyze(df)
-            opportunities = self.strat_smc.find_opportunities(analyzed_df)
+            # FIX: En distribución ejecutamos AMBAS estrategias:
+            # → SMC detecta cacerías de liquidez en techos (SHORTs institucionales)
+            # → ReversionStrategy detecta RSI sobrecomprado (SHORTs de reversión)
+            # Ambas confirman la misma hipótesis bajista desde ángulos distintos.
+            result["active_strategy"] = "Dual: SMC (Liquidity Sweeps) + ReversionStrategy (SHORT on Ceiling)"
+            
+            analyzed_smc = self.strat_smc.analyze(df)
+            opps_smc = self.strat_smc.find_opportunities(analyzed_smc)
+            
+            analyzed_rev = self.strat_reversion.analyze(df)
+            opps_rev = self.strat_reversion.find_opportunities(analyzed_rev)
+            
+            # Combinar y deduplicar (filtrar solo SHORTs de ReversionStrategy en DISTRIBUTION)
+            opps_rev_short = [o for o in opps_rev if 'SHORT' in str(o.get('type', '')).upper()]
+            opportunities = opps_smc + opps_rev_short
+            # Ordenar por timestamp descendente
+            try:
+                opportunities = sorted(opportunities, key=lambda x: x.get('timestamp', ''), reverse=True)
+            except Exception:
+                pass
+
+            print(f"[ROUTER] DISTRIBUTION: SMC={len(opps_smc)} opps, Reversion SHORT={len(opps_rev_short)} opps")
             
         elif current_regime == 'RANGING':
-            # Rango medio (ni sobrecomprado ni sobrevendido)
+            # Rango medio sin extensión extrema — aguardamos ruptura
             result["active_strategy"] = "Standby (Awaiting Breakout)"
             opportunities = []
             
@@ -127,13 +147,24 @@ class SlingshotRouter:
             # UNKNOWN (Falta historial para medias móviles o comportamiento anómalo)
             result["active_strategy"] = "STANDBY (Calibrating moving averages...)"
             opportunities = []
+
             
-        # Extraer solo la última señal si la hay (ya que estamos procesando vela a vela en vivo idealmente)
+        # Extraer señales recientes (velas dentro del intervalo actual o el anterior)
+        # BUG FIX: Comparar como Timestamps, no como strings (la conversión string nunca era igual)
         if opportunities:
-            # Filtrar solo señales generadas en la vela actual o muy reciente
-            latest_signal = opportunities[-1]
-            if str(latest_signal['timestamp']) == result['timestamp']:
-                result['signals'].append(latest_signal)
+            ts_result = pd.Timestamp(result['timestamp'])
+            # Mapeamos el intervalo a segundos para la tolerancia de ventana
+            _interval_seconds = {
+                '1m': 60, '3m': 180, '5m': 300, '15m': 960,
+                '30m': 1800, '1h': 3600, '4h': 14400, '1d': 86400
+            }.get(interval, 960)
+            for sig in opportunities[-5:]:  # Revisar las últimas 5 señales
+                ts_signal = pd.Timestamp(sig['timestamp'])
+                if abs((ts_signal - ts_result).total_seconds()) <= _interval_seconds:
+                    result['signals'].append(sig)
+                    print(f"[ROUTER] ✅ Señal válida: {sig['type']} @ ${sig['price']:.2f} (Δt={abs((ts_signal-ts_result).total_seconds()):.0f}s)")
+            if not result['signals']:
+                print(f"[ROUTER] ℹ️ {len(opportunities)} oportunidades históricas, ninguna en la vela actual ({ts_result}).")
                 
         return result
 

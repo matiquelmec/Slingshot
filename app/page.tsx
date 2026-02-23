@@ -304,9 +304,13 @@ export default function Dashboard() {
                     </div>
 
                     {/* Retina Técnica + Sesiones — scroll interno */}
-                    <div className="flex flex-col gap-3 overflow-y-auto flex-1 min-h-0">
-                        <QuantDiagnosticPanel />
-                        <SessionClock />
+                    <div className="flex flex-col gap-3 overflow-y-auto flex-1 min-h-0 pr-1 custom-scrollbar">
+                        <div className="flex-shrink-0">
+                            <QuantDiagnosticPanel />
+                        </div>
+                        <div className="flex-shrink-0">
+                            <SessionClock />
+                        </div>
                     </div>
                 </motion.section>
 

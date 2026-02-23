@@ -16,16 +16,21 @@ class ReversionStrategy:
         
     def analyze(self, df: pd.DataFrame) -> pd.DataFrame:
         df = df.copy()
-        
+
+        # Paso 0: Inyectar régimen si el DataFrame no lo tiene todavía
+        # (garantiza que la estrategia funcione tanto desde SlingshotRouter
+        # como desde tests directos / scripts externos)
+        if 'market_regime' not in df.columns:
+            regime_detector = RegimeDetector()
+            df = regime_detector.detect_regime(df)
+
         # Inyectar suite Criptodamus entera (RSI, MACD, BBWP)
         df = apply_criptodamus_suite(df)
-        
-        # Filtro de Distancia Extrema (Banda de Bollinger o SMA)
-        # Una buena reversión a la media ocurre cuando el precio se alejó absurdamente del promedio.
-        # Vamos a usar la distancia a la EMA 50 como trigger de "goma estirada"
+
+        # Distancia extrema a la EMA 50 ("goma estirada")
         df['ema_50'] = df['close'].ewm(span=50, adjust=False).mean()
         df['dist_to_ema50'] = (df['close'] - df['ema_50']) / df['ema_50']
-        
+
         return df
 
     def find_opportunities(self, df: pd.DataFrame) -> list:
@@ -35,43 +40,35 @@ class ReversionStrategy:
             current = df.iloc[i]
             
             # --- ESTRATEGIA LONG: Acumulación (Suelo) ---
-            if current['market_regime'] == 'ACCUMULATION':
-                # Confluencia Criptodamus Clásica: RSI en el suelo + Cruce Alcista del MACD
-                if current['rsi_oversold'] and current['macd_bullish_cross']:
-                    # Opcional: Que haya un buen nivel de Squeeze
+            if current.get('market_regime') == 'ACCUMULATION':
+                if current.get('rsi_oversold') and current.get('macd_bullish_cross'):
                     entry = current['close']
-                    # SL Técnico: Simplemente un stop de emergencia debajo del precio de la vela
-                    stop = current['low'] * 0.99
-                    
+                    stop  = current['low'] * 0.99
                     trade = self.risk_manager.calculate_position(entry, stop)
                     if trade['valid']:
                         opportunities.append({
                             "timestamp": current['timestamp'],
-                            "type": "LONG 🟢 (REVERSION IN ACCUMULATION)",
-                            "price": entry,
-                            "trigger": "RSI < 30 + MACD Bull Cross",
-                            "risk": trade['risk_usd'],
-                            "position": trade['position_size_usd']
+                            "type":      "LONG 🟢 (REVERSION IN ACCUMULATION)",
+                            "price":     entry,
+                            "trigger":   "RSI < 30 + MACD Bull Cross",
+                            "risk":      trade['risk_usd'],
+                            "position":  trade['position_size_usd']
                         })
                         
             # --- ESTRATEGIA SHORT: Distribución (Techo) ---
-            elif current['market_regime'] == 'DISTRIBUTION':
-                # RSI arriba + Caída inminente (no tenemos cross bajista explícito en el código aún, 
-                # así que usamos RSI estirado + el hecho de ser un régimen de techo)
-                if current['rsi_overbought']:
+            elif current.get('market_regime') == 'DISTRIBUTION':
+                if current.get('rsi_overbought'):
                     entry = current['close']
-                    # SL Técnico: Stop de emergencia encima de la vela
-                    stop = current['high'] * 1.01
-                    
+                    stop  = current['high'] * 1.01
                     trade = self.risk_manager.calculate_position(entry, stop)
                     if trade['valid']:
                         opportunities.append({
                             "timestamp": current['timestamp'],
-                            "type": "SHORT 🔴 (REVERSION IN DISTRIBUTION)",
-                            "price": entry,
-                            "trigger": "RSI > 70 in Zone Ceiling",
-                            "risk": trade['risk_usd'],
-                            "position": trade['position_size_usd']
+                            "type":      "SHORT 🔴 (REVERSION IN DISTRIBUTION)",
+                            "price":     entry,
+                            "trigger":   "RSI > 70 in Zone Ceiling",
+                            "risk":      trade['risk_usd'],
+                            "position":  trade['position_size_usd']
                         })
                         
         return opportunities

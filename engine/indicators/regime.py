@@ -48,6 +48,7 @@ class RegimeDetector:
     def detect_regime(self, df: pd.DataFrame) -> pd.DataFrame:
         """
         Aplica las reglas lógicas para etiquetar cada vela con su Régimen de Mercado.
+        Las máscaras se aplican en orden de PRIORIDAD DESCENDENTE con exclusión mutua.
         """
         df = self._calculate_base_metrics(df)
         
@@ -62,33 +63,36 @@ class RegimeDetector:
         is_consolidation = df['bb_width'] < (df['bb_width_mean'] * 0.8) # 20% menos volatilidad que el promedio
         
         # Precio sobre extendido = Techo. Precio muy por debajo = Suelo.
-        # Asumimos que más de un 5% de distancia a la SMA 200 en 15m es sobre-extensión
         is_high_price = df['dist_to_sma200'] > 0.03
         is_low_price = df['dist_to_sma200'] < -0.03
         
-        # --- Lógica WYCKOFF ---
+        # --- Lógica WYCKOFF con PRIORIDAD EXPLÍCITA (sin conflictos de sobreescritura) ---
+        # El orden importa: las tendencias claras tienen prioridad sobre la consolidación,
+        # y dentro de consolidación, las zonas extremas (ACCUM/DIST) tienen prioridad sobre RANGING.
         
-        # 1. ACUMULACIÓN: Rango + Precio Bajo + Tendencia Previa Bajista apagándose
-        mask_accum = is_consolidation & (df['dist_to_sma200'] < 0)
-        df.loc[mask_accum, 'market_regime'] = 'ACCUMULATION'
-        
-        # 2. MARKUP: Tendencia Alcista Clara + Expansión de Volatilidad (Fuerte impulso)
+        # 1. MARKUP: Tendencia Alcista Clara + Expansión de Volatilidad (prioridad alta)
         mask_markup = is_uptrend & ~is_consolidation
         df.loc[mask_markup, 'market_regime'] = 'MARKUP'
         
-        # 3. DISTRIBUCIÓN: Rango + Precio Alto (Extendido)
-        mask_distrib = is_consolidation & is_high_price
-        df.loc[mask_distrib, 'market_regime'] = 'DISTRIBUTION'
-        
-        # 4. MARKDOWN: Tendencia Bajista Clara + Expansión de Volatilidad
+        # 2. MARKDOWN: Tendencia Bajista Clara + Expansión de Volatilidad (prioridad alta)
         mask_markdown = is_downtrend & ~is_consolidation
         df.loc[mask_markdown, 'market_regime'] = 'MARKDOWN'
         
-        # 5. RANGING: Consolidación media (sin extensión extrema arriba o abajo)
-        mask_ranging = is_consolidation & ~mask_accum & ~mask_distrib
+        # 3. ACUMULACIÓN: Rango + Precio Bajo (excluye regímenes de tendencia ya asignados)
+        # BUG FIX: Usar ~mask_markup & ~mask_markdown para exclusión mutua explícita
+        mask_accum = is_consolidation & is_low_price & ~mask_markup & ~mask_markdown
+        df.loc[mask_accum, 'market_regime'] = 'ACCUMULATION'
+        
+        # 4. DISTRIBUCIÓN: Rango + Precio Alto (excluye todo lo anterior)
+        mask_distrib = is_consolidation & is_high_price & ~mask_markup & ~mask_markdown & ~mask_accum
+        df.loc[mask_distrib, 'market_regime'] = 'DISTRIBUTION'
+        
+        # 5. RANGING: Consolidación media sin extensión extrema (lo que sobra)
+        mask_ranging = is_consolidation & ~mask_markup & ~mask_markdown & ~mask_accum & ~mask_distrib
         df.loc[mask_ranging, 'market_regime'] = 'RANGING'
         
         return df
+
 
 if __name__ == "__main__":
     import os

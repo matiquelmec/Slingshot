@@ -70,7 +70,7 @@ export default function QuantDiagnosticPanel() {
                 <h2 className="text-xs font-bold text-white/90 tracking-widest">RETINA TÉCNICA</h2>
             </div>
 
-            <div className="p-3 flex flex-col gap-3 overflow-y-auto">
+            <div className="p-3 flex flex-col gap-3">
 
                 {/* 1. Radar de Régimen Wyckoff */}
                 <div className={`rounded-xl p-3 border ${regimeMeta.bg}`} style={{ boxShadow: `0 0 20px ${regimeMeta.glow}` }}>

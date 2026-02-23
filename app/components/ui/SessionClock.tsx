@@ -105,7 +105,7 @@ export default function SessionClock() {
     const disp = SESSION_DISPLAY[session] ?? SESSION_DISPLAY['OFF_HOURS'];
 
     return (
-        <div className="bg-[#050B14]/60 backdrop-blur-xl border border-white/5 rounded-2xl shadow-2xl flex flex-col overflow-hidden relative">
+        <div className="bg-[#050B14]/60 backdrop-blur-xl border border-white/5 rounded-2xl shadow-2xl flex flex-col relative">
             <div className="absolute inset-0 bg-gradient-to-b from-white/[0.02] to-transparent pointer-events-none" />
 
             {/* Header */}

@@ -2,6 +2,7 @@ import sys
 from pathlib import Path
 sys.path.append(str(Path(__file__).parent.parent.parent))
 
+from collections import deque
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 import asyncio
@@ -15,6 +16,26 @@ import pytz
 from engine.main_router import SlingshotRouter
 from engine.api.config import settings
 from engine.api.ws_manager import manager
+
+# 💬 Notificaciones
+from engine.notifications.telegram import send_signal_async
+from engine.notifications.filter import signal_filter
+
+# 🔮 Datos Fantasma (Nivel 1 - Filtro Macro)
+from engine.indicators.ghost_data import refresh_ghost_data, get_ghost_state, filter_signals_by_macro
+
+# 🧠 Drift Monitor (Auto-supervisión del Modelo ML)
+from engine.ml.drift_monitor import drift_monitor
+from engine.ml.features import FeatureEngineer
+
+# 🏗️ Estructura e Indicadores
+from engine.indicators.structure import (
+    identify_support_resistance, 
+    get_key_levels, 
+    identify_order_blocks, 
+    extract_smc_coordinates,
+    consolidate_mtf_levels
+)
 
 
 def build_session_update(df_buffer: list) -> dict:
@@ -97,18 +118,25 @@ def build_session_update(df_buffer: list) -> dict:
         except Exception:
             pass
 
-    # Marcar estados de sesión según la hora actual
+    # Marcar estado ACTIVE/CLOSED/PENDING de cada sesión según hora UTC
+    # Asia: 00:00-06:00 | London KZ: 07-10 | London: 10-13 | NY KZ: 13-16 | NY: 16-20 | Off: 20-24
     if hour_utc < 6:
-        sessions_data['asia']['status'] = 'ACTIVE'
-    elif hour_utc < 15:
-        sessions_data['asia']['status'] = 'CLOSED'
-        sessions_data['london']['status'] = 'ACTIVE' if hour_utc >= 7 else 'PENDING'
-    else:
-        sessions_data['asia']['status'] = 'CLOSED'
+        sessions_data['asia']['status']   = 'ACTIVE'
+        sessions_data['london']['status'] = 'PENDING'
+        sessions_data['ny']['status']     = 'PENDING'
+    elif hour_utc < 13:
+        sessions_data['asia']['status']   = 'CLOSED'
+        sessions_data['london']['status'] = 'ACTIVE'
+        sessions_data['ny']['status']     = 'PENDING'
+    elif hour_utc < 20:
+        sessions_data['asia']['status']   = 'CLOSED'
         sessions_data['london']['status'] = 'CLOSED'
-        sessions_data['ny']['status'] = 'ACTIVE' if hour_utc >= 13 else 'PENDING'
-    if hour_utc >= 20:
-        sessions_data['ny']['status'] = 'CLOSED'
+        sessions_data['ny']['status']     = 'ACTIVE'
+    else:
+        sessions_data['asia']['status']   = 'PENDING'   # Preparándose para Asia del día siguiente
+        sessions_data['london']['status'] = 'PENDING'
+        sessions_data['ny']['status']     = 'CLOSED'
+
 
     return {
         'type': 'session_update',
@@ -245,7 +273,6 @@ async def websocket_stream_endpoint(websocket: WebSocket, symbol: str, interval:
         if interval not in ['1d', '1w']:
             print(f"[{symbol}] Descargando niveles MTF (1h, 4h)...")
             try:
-                # Descargar 1h y 4h para confluencia
                 h1_data_raw = await fetch_binance_history(symbol, interval="1h", limit=200)
                 h4_data_raw = await fetch_binance_history(symbol, interval="4h", limit=200)
                 
@@ -258,12 +285,34 @@ async def websocket_stream_endpoint(websocket: WebSocket, symbol: str, interval:
                 l1h = _get_levels(h1_data_raw, "1h")
                 l4h = _get_levels(h4_data_raw, "4h")
                 
-                # Fusionar macro_levels (l4h tiene más peso que l1h)
                 from engine.indicators.structure import consolidate_mtf_levels
                 macro_levels = consolidate_mtf_levels(l1h, l4h, timeframe_weight=3)
                 print(f"[{symbol}] Niveles macro consolidados con éxito.")
             except Exception as e:
                 print(f"[{symbol}] Error obteniendo niveles MTF: {e}")
+
+        # === FASE 1c: Actualizar Ghost Data (Datos Fantasma - Nivel 1) ===
+        ghost_state = None
+        try:
+            ghost_state = await refresh_ghost_data(symbol)
+            ghost_payload = {
+                "type": "ghost_update",
+                "data": {
+                    "fear_greed_value": ghost_state.fear_greed_value,
+                    "fear_greed_label": ghost_state.fear_greed_label,
+                    "btc_dominance":    ghost_state.btc_dominance,
+                    "funding_rate":      ghost_state.funding_rate,
+                    "macro_bias":        ghost_state.macro_bias,
+                    "block_longs":       ghost_state.block_longs,
+                    "block_shorts":      ghost_state.block_shorts,
+                    "reason":            ghost_state.reason,
+                }
+            }
+            await websocket.send_json(ghost_payload)
+            print(f"[{symbol}] Ghost Data enviado: Bias={ghost_state.macro_bias}, F&G={ghost_state.fear_greed_value}")
+        except Exception as e:
+            print(f"[{symbol}] Ghost Data no disponible: {e}. Continuando sin filtro macro.")
+            ghost_state = get_ghost_state()  # Usar caché incluso si está stale
 
         # === FASE 2: Stream en tiempo real desde Binance WebSocket ===
         import websockets as ws_client
@@ -274,6 +323,15 @@ async def websocket_stream_endpoint(websocket: WebSocket, symbol: str, interval:
             print(f"[{symbol}] Calculando SMC y ML Inicial...")
             df_init = pd.DataFrame([item['data'] for item in history])
             df_init['timestamp'] = pd.to_datetime(df_init['timestamp'], unit='s')
+
+            # 🧠 DRIFT MONITOR: Establecer distribución de referencia con el historial
+            try:
+                fe = FeatureEngineer()
+                df_features = fe.create_features(df_init.copy())
+                drift_monitor.set_reference(df_features)
+            except Exception as e:
+                print(f"[DRIFT] ⚠️  No se pudo establecer referencia: {e}")
+
             try:
                 df_init_analyzed = identify_order_blocks(df_init)
                 initial_smc = extract_smc_coordinates(df_init_analyzed)
@@ -316,7 +374,8 @@ async def websocket_stream_endpoint(websocket: WebSocket, symbol: str, interval:
         print(f"[{symbol}] Conectando al stream multiplexado en tiempo real: {binance_url}")
         
         # Buffer en memoria para los recálculos en vivo
-        live_candles_buffer = history[-250:] if 'history' in locals() else []
+        # ✅ FIX: Usar deque(maxlen=250) en lugar de list.pop(0) que era O(n)
+        live_candles_buffer: deque = deque(history[-250:], maxlen=250) if 'history' in locals() and history else deque(maxlen=250)
         
         # Estado de Liquidez en Tiempo Real
         current_liquidity = {"bids": [], "asks": []}
@@ -407,19 +466,34 @@ async def websocket_stream_endpoint(websocket: WebSocket, symbol: str, interval:
                     # --- SLOW PATH: Procesamiento Estructural (Cierre de Vela) ---
                     # Si recibimos el tick de cierre final de la vela, ejecutamos análisis profundo
                     if is_candle_closed:
-                        # 1. Agregar nueva vela al buffer
-                        date_obj = datetime.fromtimestamp(kline['t'] / 1000)
+                        # Agregar nueva vela al buffer — deque(maxlen=250) descarta automáticamente la más vieja
                         live_candles_buffer.append(payload)
                         
-                        # Mantener el buffer manejable (250 velas es suficiente para SMA200 y SMC)
-                        if len(live_candles_buffer) > 250:
-                            live_candles_buffer.pop(0)
-                        
                         # 2. Convertir buffer a DataFrame optimizado
-                        # Extraemos solo la parte 'data' para Pandas
                         df_data = [item['data'] for item in live_candles_buffer]
                         df_live = pd.DataFrame(df_data)
                         df_live['timestamp'] = pd.to_datetime(df_live['timestamp'], unit='s')
+
+                        # 🧠 DRIFT MONITOR: Ejecutar cada 100 cierres de vela (≈ 25h en 15m)
+                        _candle_close_count = getattr(websocket, '_candle_count', 0) + 1
+                        websocket._candle_count = _candle_close_count  # type: ignore[attr-defined]
+
+                        if _candle_close_count % 100 == 0:
+                            try:
+                                fe_live = FeatureEngineer()
+                                df_live_features = fe_live.create_features(df_live.copy())
+                                drift_report = drift_monitor.check(df_live_features)
+                                if drift_report and drift_report.alert_triggered:
+                                    await websocket.send_json({
+                                        "type": "drift_alert",
+                                        "data": drift_report.to_dict()
+                                    })
+                                    # Notificar también por Telegram si está configurado
+                                    from engine.notifications.telegram import send_drift_alert_async
+                                    asyncio.create_task(send_drift_alert_async(drift_report.to_dict()))
+                            except Exception as e:
+                                print(f"[DRIFT] Error en check: {e}")
+
                         
                         # 3. Procesamiento Paralelo Matemático (SMC)
                         # Identificamos imbalances y estructuras (OBs)
@@ -451,6 +525,29 @@ async def websocket_stream_endpoint(websocket: WebSocket, symbol: str, interval:
                             }
                             await websocket.send_json(tactical_payload)
                             print(f"[{symbol}] Decisión Táctica Estructural emitida.")
+
+                            # 🔮 GHOST DATA: Filtrar señales por contexto macro (Nivel 1)
+                            # Si hay miedo extremo + funding negativo → bloquear LONGs
+                            raw_signals = tactical_result.get('signals', [])
+                            current_ghost = get_ghost_state()
+                            macro_filtered_signals = filter_signals_by_macro(raw_signals, current_ghost)
+
+                            if len(raw_signals) > len(macro_filtered_signals):
+                                blocked = len(raw_signals) - len(macro_filtered_signals)
+                                print(f"[GHOST] 🚫 {blocked} señal(es) bloqueada(s) por filtro macro: {current_ghost.macro_bias}")
+
+                            # 💬 TELEGRAM: Notificar señales aprobadas por macro + anti-spam
+                            for sig in macro_filtered_signals:
+                                ok_to_send, block_reason = signal_filter.should_send(symbol, sig)
+                                if ok_to_send:
+                                    asyncio.create_task(send_signal_async(
+                                        signal=sig,
+                                        asset=symbol.upper(),
+                                        regime=tactical_result.get('market_regime', 'UNKNOWN'),
+                                        strategy=tactical_result.get('active_strategy', 'N/A')
+                                    ))
+                                else:
+                                    print(f"[TELEGRAM] 🔕 Señal bloqueada por anti-spam: {block_reason}")
                         except Exception as e:
                             print(f"[{symbol}] Error emitiendo decisión táctica: {e}")
 

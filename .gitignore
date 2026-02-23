@@ -27,3 +27,9 @@ bun.lockb
 
 # 🧪 Artifacts
 /brain/
+
+# 🔑 Private
+.env.local
+
+# 📝 Temporary / Output
+*.txt

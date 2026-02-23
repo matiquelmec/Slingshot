@@ -222,26 +222,26 @@ slingshot/
 ### FASE 2 — El Motor (Semana 3-4): "La Piedra"
 > Objetivo: Análisis técnico profesional + estrategias limpias
 
-- [ ] Módulos de Macro-Data (Fear & Greed, Funding Rates, BTCD)
-- [ ] Módulos de Liquidez (Liquidation Maps, Sweep detection)
-- [ ] Implementar todos los indicadores con TA-Lib (RSI Divs, MACD, BBWP)
-- [ ] Implementar Order Blocks y Fair Value Gaps (SMC puro)
-- [ ] Sistema de scoring modular hiper-confluente (0-100)
-- [ ] Gestión de riesgo estricta (Kelly Criterion + ATR + Breakeven OS)
-- [ ] Pipeline completo: Datos → Indicadores → Score → Señal
-- [ ] Tests unitarios para cada módulo (pytest)
+- [x] Módulos de Macro-Data (Fear & Greed, Funding Rates, BTCD)
+- [x] Módulos de Liquidez (Liquidation Maps, Sweep detection)
+- [x] Implementar todos los indicadores con TA-Lib (RSI Divs, MACD, BBWP)
+- [x] Implementar Order Blocks y Fair Value Gaps (SMC puro)
+- [x] Sistema de scoring modular hiper-confluente (0-100)
+- [x] Gestión de riesgo estricta (Kelly Criterion + ATR + Breakeven OS)
+- [x] Pipeline completo: Datos → Indicadores → Score → Señal
+- [/] Tests unitarios para cada módulo (pytest)
 
 ### FASE 3 — La Inteligencia (Semana 5-6): "El Cerebro"
 > Objetivo: ML real con Arquitectura Multi-Temporal Especializada
 
-- [ ] Feature engineering profesional (Inyectar métricas de SMC Order Blocks)
-- [ ] Construir script de descarga masiva (35,000+ velas) desde Binance API
-- [ ] Entrenar **Cerebro Core (15m)** - Modelo táctico intradía (`slingshot_xgb_15m_v2`)
+- [x] Feature engineering profesional (Inyectar métricas de SMC Order Blocks)
+- [x] Construir script de descarga masiva (35,000+ velas) desde Binance API
+- [x] Entrenar **Cerebro Core (15m)** - Modelo táctico intradía (`slingshot_xgb_15m_v2`)
 - [ ] Entrenar **Cerebro Macro (4H)** - Filtro direccional guardián (`slingshot_xgb_4h_v2`)
-- [ ] Exportar a ONNX para inferencia en producción con latencia <50ms
+- [x] Exportar a ONNX para inferencia en producción con latencia <50ms
 - [ ] Drift monitor (PSI + KS test) para alertar si el modelo queda obsoleto
-- [ ] Backtesting vectorizado con vectorbt
-- [ ] Dashboard de métricas ML en tiempo real
+- [x] Backtesting vectorizado con vectorbt
+- [/] Dashboard de métricas ML en tiempo real
 
 ### FASE 4 — La Precisión (Semana 7-8): "El Disparo"
 > Objetivo: Sistema end-to-end, producción-ready

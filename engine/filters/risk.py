@@ -1,4 +1,5 @@
 import pandas as pd
+import os
 
 class RiskManager:
     """
@@ -7,7 +8,12 @@ class RiskManager:
     asegura que toda entrada tenga un Ratio Beneficio/Riesgo (R:R) mínimo de 3:1.
     """
     
-    def __init__(self, account_balance: float = 1000.0, max_risk_pct: float = 0.01, min_rr: float = 3.0):
+    def __init__(
+        self,
+        account_balance: float = float(os.getenv('ACCOUNT_BALANCE', '1000.0')),
+        max_risk_pct: float = float(os.getenv('MAX_RISK_PCT', '0.01')),
+        min_rr: float = float(os.getenv('MIN_RR', '3.0'))
+    ):
         self.account_balance = account_balance
         self.max_risk_pct = max_risk_pct     # 1% por trade
         self.min_rr = min_rr                 # 3:1 de ganancia obligatoria
