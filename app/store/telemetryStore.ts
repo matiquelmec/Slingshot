@@ -112,6 +112,7 @@ interface TelemetryState {
     smcData: SMCDataPayload | null;
     sessionData: SessionData | null;
     ghostData: GhostData | null;
+    activeConnectionId: string | null; // ID único para matar condiciones de carrera
     connect: (symbol: string, timeframe?: Timeframe) => void;
     disconnect: () => void;
     setTimeframe: (tf: Timeframe) => void;
@@ -124,6 +125,8 @@ export const useTelemetryStore = create<TelemetryState>((set, get) => {
     const MAX_RETRIES = 5;
 
     const doConnect = (symbol: string, timeframe: Timeframe, isRetry = false) => {
+        const connectionId = Math.random().toString(36).substring(7);
+
         // Clean up existing connection and pending retries
         if (ws) {
             ws.close();
@@ -139,6 +142,7 @@ export const useTelemetryStore = create<TelemetryState>((set, get) => {
             set({
                 activeSymbol: symbol,
                 activeTimeframe: timeframe,
+                activeConnectionId: connectionId,
                 candles: [],
                 isConnected: false,
                 smcData: null,
@@ -155,6 +159,9 @@ export const useTelemetryStore = create<TelemetryState>((set, get) => {
                     key_levels: { resistances: [], supports: [] }
                 }
             });
+        } else {
+            // Si es un reintento, mantenemos el ID pero lo registramos como activo
+            set({ activeConnectionId: connectionId });
         }
 
         // ✅ FIX: URL dinámica desde variable de entorno — funciona en producción (Vercel)
@@ -167,6 +174,12 @@ export const useTelemetryStore = create<TelemetryState>((set, get) => {
         };
 
         ws.onmessage = (event) => {
+            const currentId = get().activeConnectionId;
+            if (connectionId !== currentId) {
+                // Mensaje de una conexión antigua o re-intentada que ya no es la activa
+                return;
+            }
+
             try {
                 const data = JSON.parse(event.data);
 
@@ -184,11 +197,21 @@ export const useTelemetryStore = create<TelemetryState>((set, get) => {
                         const currentCandles = [...state.candles];
                         const lastIdx = currentCandles.length - 1;
 
-                        if (lastIdx >= 0 && currentCandles[lastIdx].time === newCandle.time) {
-                            currentCandles[lastIdx] = newCandle; // Update ongoing candle
+                        if (lastIdx >= 0) {
+                            const lastTime = Number(currentCandles[lastIdx].time);
+                            const newTime = Number(newCandle.time);
+
+                            // Protección Monotónica: Ignorar si el timestamp retrocede (evita bug de lightweight-charts)
+                            if (newTime < lastTime) return state;
+
+                            if (lastTime === newTime) {
+                                currentCandles[lastIdx] = newCandle; // Update ongoing candle
+                            } else {
+                                currentCandles.push(newCandle); // New candle
+                                if (currentCandles.length > 1000) currentCandles.shift();
+                            }
                         } else {
-                            currentCandles.push(newCandle); // New candle
-                            if (currentCandles.length > 1000) currentCandles.shift();
+                            currentCandles.push(newCandle); // Primera vela
                         }
 
                         // Desactivamos la simulación (Mock Data). Ahora esperamos 'neural_pulse' y 'tactical_update' reales.
@@ -326,6 +349,7 @@ export const useTelemetryStore = create<TelemetryState>((set, get) => {
         sessionData: null,
         ghostData: null,
         liquidityHeatmap: null,
+        activeConnectionId: null,
 
         connect: (symbol: string, timeframe?: Timeframe) => {
             const tf = timeframe ?? get().activeTimeframe;

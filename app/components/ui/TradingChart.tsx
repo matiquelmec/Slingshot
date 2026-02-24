@@ -227,9 +227,19 @@ export default function TradingChart() {
         if (!candleSeriesRef.current || candles.length === 0) return;
 
         // ─ Candlestick series: use setData for full history to keep indicator time alignment correct ─
-        candleSeriesRef.current.setData(candles as any);
+        if (candles.length === 0) {
+            candleSeriesRef.current.setData([]);
+            return;
+        }
 
-        if (candles.length < 5) return;
+        // Sanitización defensiva: Ordenar por tiempo y eliminar duplicados (última línea de defensa)
+        const sortedCandles = [...candles]
+            .sort((a, b) => Number(a.time) - Number(b.time))
+            .filter((c, i, arr) => i === 0 || c.time !== arr[i - 1].time);
+
+        candleSeriesRef.current.setData(sortedCandles as any);
+
+        if (sortedCandles.length < 5) return;
 
         // ─ Helper ─
         const on = (id: string) => indicators.find(i => i.id === id)?.enabled ?? false;
