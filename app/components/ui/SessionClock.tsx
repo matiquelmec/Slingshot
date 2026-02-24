@@ -7,10 +7,10 @@ import { useTelemetryStore, SessionData, SessionInfo } from '../../store/telemet
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-const SESSION_META: Record<string, { label: string; flag: string; color: string; glow: string }> = {
-    asia: { label: 'Asia', flag: '🌏', color: 'text-orange-400', glow: 'rgba(251,146,60,0.4)' },
-    london: { label: 'Londres', flag: '🏦', color: 'text-blue-400', glow: 'rgba(96,165,250,0.4)' },
-    ny: { label: 'Nueva York', flag: '🗽', color: 'text-purple-400', glow: 'rgba(192,132,252,0.4)' },
+const SESSION_META: Record<string, { label: string; flag: string; color: string; glow: string; startUTC: number; endUTC: number }> = {
+    asia: { label: 'Asia', flag: '🌏', color: 'text-orange-400', glow: 'rgba(251,146,60,0.4)', startUTC: 0, endUTC: 6 },
+    london: { label: 'Londres', flag: '🏦', color: 'text-blue-400', glow: 'rgba(96,165,250,0.4)', startUTC: 7, endUTC: 15 },
+    ny: { label: 'Nueva York', flag: '🗽', color: 'text-purple-400', glow: 'rgba(192,132,252,0.4)', startUTC: 13, endUTC: 20 },
 };
 
 const SESSION_DISPLAY: Record<string, { label: string; color: string; bg: string }> = {
@@ -33,6 +33,19 @@ function fmt(n: number | null, decimals = 0) {
     return '$' + n.toLocaleString('en-US', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
 }
 
+function formatSessionTimes(startUTC: number, endUTC: number) {
+    const formatTime = (hour: number) => hour.toString().padStart(2, '0') + ':00';
+
+    // Calcular dinámicamente el horario en Chile a partir del UTC actual
+    const dStart = new Date();
+    dStart.setUTCHours(startUTC, 0, 0, 0);
+    const dEnd = new Date();
+    dEnd.setUTCHours(endUTC, 0, 0, 0);
+
+    const fmtChile = new Intl.DateTimeFormat('es-CL', { timeZone: 'America/Santiago', hour: '2-digit', minute: '2-digit', hour12: false });
+    return `${formatTime(startUTC)}-${formatTime(endUTC)} UTC | ${fmtChile.format(dStart)}-${fmtChile.format(dEnd)} CL`;
+}
+
 function SweepBadge({ swept, label }: { swept: boolean; label: string }) {
     if (!swept) return null;
     return (
@@ -45,13 +58,18 @@ function SweepBadge({ swept, label }: { swept: boolean; label: string }) {
 function SessionRow({ id, info }: { id: string; info: SessionInfo }) {
     const meta = SESSION_META[id];
     return (
-        <div className={`grid grid-cols-[auto_1fr_1fr_auto] items-center gap-2 py-2 px-3 rounded-lg border transition-colors ${info.status === 'ACTIVE' ? 'bg-white/[0.04] border-white/10' : 'bg-transparent border-transparent'}`}>
+        <div className={`grid grid-cols-[1fr_auto_auto_auto] items-center gap-3 py-2 px-3 rounded-lg border transition-colors ${info.status === 'ACTIVE' ? 'bg-white/[0.04] border-white/10' : 'bg-transparent border-transparent'}`}>
             {/* Sesión */}
-            <div className="flex items-center gap-1.5 min-w-[80px]">
+            <div className="flex items-center gap-2">
                 <span className="text-sm">{meta.flag}</span>
-                <div>
-                    <p className={`text-[10px] font-bold ${meta.color} leading-none`}>{meta.label}</p>
-                    <p className={`text-[9px] mt-0.5 font-semibold ${STATUS_STYLE[info.status]}`}>{info.status}</p>
+                <div className="flex flex-col">
+                    <div className="flex items-baseline gap-1.5">
+                        <p className={`text-[10px] font-bold ${meta.color} leading-none`}>{meta.label}</p>
+                        <p className={`text-[8px] font-semibold ${STATUS_STYLE[info.status]}`}>{info.status}</p>
+                    </div>
+                    <p className="text-[8.5px] text-white/40 mt-0.5 leading-tight font-mono tracking-tighter">
+                        {formatSessionTimes(meta.startUTC, meta.endUTC)}
+                    </p>
                 </div>
             </div>
 
@@ -177,6 +195,21 @@ export default function SessionClock() {
                         <p className="text-[12px] font-black text-neon-red/90 font-mono">{fmt(sessionData?.pdl ?? null, 0)}</p>
                         <p className="text-[8px] text-neon-red/30 mt-0.5">Objetivo bajista</p>
                     </div>
+                </div>
+            </div>
+
+            {/* Leyenda Educativa */}
+            <div className="px-4 pb-3">
+                <div className="bg-white/[0.02] border border-white/5 rounded-lg p-2.5 text-[9px] text-white/40 leading-snug">
+                    <p className="font-bold text-white/60 mb-1.5 border-b border-white/5 pb-1 flex items-center gap-1">
+                        <span className="text-neon-cyan">ℹ️</span> Tácticas Institucionales (SMC/ICT)
+                    </p>
+                    <ul className="grid grid-cols-1 gap-1.5">
+                        <li><span className="text-white/60 font-bold">HIGH / LOW:</span> Puntos que el mercado es magnetizado a tocar.</li>
+                        <li><span className="text-neon-cyan font-bold">PDH / PDL:</span> (Previous Daily High/Low) Niveles mayores del día anterior. Obran como barreras.</li>
+                        <li><span className="text-yellow-400 font-bold">⚡ KILLZONE:</span> Ventana de alta volatilidad donde inyectan liquidez.</li>
+                        <li><span className="text-neon-red font-bold">⚡ BARRIDO (Sweep):</span> Trampa. El precio rompe el H/L para "cazar" stop-losses y atrapar traders.</li>
+                    </ul>
                 </div>
             </div>
         </div>

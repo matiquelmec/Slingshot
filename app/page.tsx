@@ -15,6 +15,8 @@ import { useIndicatorsStore } from './store/indicatorsStore';
 const TradingChart = dynamic(() => import('./components/ui/TradingChart'), { ssr: false });
 const QuantDiagnosticPanel = dynamic(() => import('./components/ui/QuantDiagnosticPanel'), { ssr: false });
 const SessionClock = dynamic(() => import('./components/ui/SessionClock'), { ssr: false });
+const MacroRadar = dynamic(() => import('./components/ui/MacroRadar'), { ssr: false });
+const LiquidityHeatmap = dynamic(() => import('./components/ui/LiquidityHeatmap'), { ssr: false });
 
 // === WATCHLIST: Agrega o quita activos aquí. El backend soporta CUALQUIER par de Binance ===
 const DEFAULT_WATCHLIST = [
@@ -499,6 +501,16 @@ export default function Dashboard() {
                                 </motion.div>
                             </div>
                         </div>
+                    </div>
+
+                    {/* Macro Radar */}
+                    <div className="flex-none flex flex-col overflow-hidden">
+                        <MacroRadar />
+                    </div>
+
+                    {/* Liquidity Heatmap */}
+                    <div className="flex-1 flex flex-col overflow-hidden min-h-[180px]">
+                        <LiquidityHeatmap />
                     </div>
 
                 </motion.section>

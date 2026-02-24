@@ -20,8 +20,10 @@ export const INDICATOR_DEFAULTS: Indicator[] = [
     { id: 'ema200', label: 'EMA 200', sublabel: 'Media móvil lenta', enabled: false, color: '#EF5350' },
     { id: 'bb', label: 'Bollinger', sublabel: 'Bandas de volatilidad', enabled: false, color: '#9C27B0' },
     { id: 'volume', label: 'Volumen', sublabel: 'Barras de volumen', enabled: true, color: '#00FF41' },
+    { id: 'fibonacci', label: 'Autofib', sublabel: 'Retrocesos Algorítmicos', enabled: false, color: '#FF7043' },
     { id: 'rsi', label: 'RSI (14)', sublabel: 'Fuerza relativa', enabled: false, color: '#FF7043' },
     { id: 'macd', label: 'MACD', sublabel: 'Convergencia/Divergencia', enabled: false, color: '#26A69A' },
+    { id: 'sr', label: 'Soporte / Resistencia', sublabel: 'Zonas Institucionales (MTF)', enabled: true, color: '#00E5FF' },
     { id: 'smc', label: 'SMC Blocks', sublabel: 'Estructura Institucional (OBs)', enabled: false, color: '#00FF41' },
     { id: 'fvg', label: 'Fair Value Gaps', sublabel: 'Vacíos de Liquidez (FVG)', enabled: false, color: '#FFCC00' },
 ];

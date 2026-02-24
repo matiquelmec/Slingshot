@@ -47,6 +47,11 @@ export interface TacticalDecision {
     dist_to_sma200: number | null;
     signals: any[];
     key_levels: { resistances: KeyLevel[]; supports: KeyLevel[] };
+    fibonacci?: {
+        swing_high: number;
+        swing_low: number;
+        levels: Record<string, number>;
+    };
 }
 
 export interface SessionInfo {
@@ -254,6 +259,7 @@ export const useTelemetryStore = create<TelemetryState>((set, get) => {
                             dist_to_sma200: d.dist_to_sma200 ?? null,
                             signals: d.signals ?? [],
                             key_levels: d.key_levels ?? { resistances: [], supports: [] },
+                            fibonacci: d.fibonacci ?? undefined,
                         }
                     });
                 } else if (data.type === 'session_update') {

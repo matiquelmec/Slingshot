@@ -467,40 +467,38 @@ export default function TradingChart() {
         });
         liquidityLinesRef.current = [];
 
-        if (isEnabled('smc')) { // Usamos el mismo toggle de SMC o podríamos crear uno nuevo 'liquidity'
+        // Función auxiliar para normalizar el volumen y calcular opacidad
+        const maxBidVol = Math.max(...liquidityHeatmap.bids.map(b => b.volume), 1);
+        const maxAskVol = Math.max(...liquidityHeatmap.asks.map(a => a.volume), 1);
 
-            // Función auxiliar para normalizar el volumen y calcular opacidad (0.2 a 0.8)
-            const maxBidVol = Math.max(...liquidityHeatmap.bids.map(b => b.volume), 1);
-            const maxAskVol = Math.max(...liquidityHeatmap.asks.map(a => a.volume), 1);
-
-            // Bids (Soportes en verde)
-            liquidityHeatmap.bids.forEach(bid => {
-                const intensity = 0.2 + (0.6 * (bid.volume / maxBidVol));
-                const line = candleSeriesRef.current?.createPriceLine({
-                    price: bid.price,
-                    color: `rgba(0, 255, 65, ${intensity})`,
-                    lineWidth: 2,
-                    lineStyle: LineStyle.Solid,
-                    axisLabelVisible: true,
-                    title: `BID: ${bid.volume.toFixed(3)}`
-                });
-                if (line) liquidityLinesRef.current.push(line);
+        // Bids (Soportes en verde)
+        liquidityHeatmap.bids.forEach(bid => {
+            const intensity = 0.1 + (0.3 * (bid.volume / maxBidVol)); // Opacidad muy sutil
+            const line = candleSeriesRef.current?.createPriceLine({
+                price: bid.price,
+                color: `rgba(0, 255, 65, ${intensity})`,
+                lineWidth: 1, // Línea fina
+                lineStyle: LineStyle.Solid,
+                axisLabelVisible: false, // Ocultar etiqueta en el eje Y para no molestar
+                title: `BID: ${bid.volume.toFixed(2)} Vol`
             });
+            if (line) liquidityLinesRef.current.push(line);
+        });
 
-            // Asks (Resistencias en rojo)
-            liquidityHeatmap.asks.forEach(ask => {
-                const intensity = 0.2 + (0.6 * (ask.volume / maxAskVol));
-                const line = candleSeriesRef.current?.createPriceLine({
-                    price: ask.price,
-                    color: `rgba(255, 0, 60, ${intensity})`,
-                    lineWidth: 2,
-                    lineStyle: LineStyle.Solid,
-                    axisLabelVisible: true,
-                    title: `ASK: ${ask.volume.toFixed(3)}`
-                });
-                if (line) liquidityLinesRef.current.push(line);
+        // Asks (Resistencias en rojo)
+        liquidityHeatmap.asks.forEach(ask => {
+            const intensity = 0.1 + (0.3 * (ask.volume / maxAskVol)); // Opacidad muy sutil
+            const line = candleSeriesRef.current?.createPriceLine({
+                price: ask.price,
+                color: `rgba(255, 0, 60, ${intensity})`,
+                lineWidth: 1, // Línea fina
+                lineStyle: LineStyle.Solid,
+                axisLabelVisible: false, // Ocultar etiqueta en el eje Y
+                title: `ASK: ${ask.volume.toFixed(2)} Vol`
             });
-        }
+            if (line) liquidityLinesRef.current.push(line);
+        });
+
     }, [liquidityHeatmap, indicators]);
 
     // ── S/R High-Touch + Niveles de Sesión ───────────────────────────────────
@@ -525,64 +523,66 @@ export default function TradingChart() {
             if (line) srLinesRef.current.push({ line, series });
         };
 
-        // ── Key Levels (High-Touch + MTF + Volume) ─────────────────────────
-        const touchesToWidth = (lvl: any): number =>
-            lvl.mtf_confluence ? 4 : (lvl.ob_confluence ? 3 : lvl.touches >= 4 ? 3 : lvl.touches >= 2 ? 2 : 1);
+        if (isEnabled('sr')) {
+            // ── Key Levels (High-Touch + MTF + Volume) ─────────────────────────
+            const touchesToWidth = (lvl: any): number =>
+                lvl.mtf_confluence ? 4 : (lvl.ob_confluence ? 3 : lvl.touches >= 4 ? 3 : lvl.touches >= 2 ? 2 : 1);
 
-        const touchesToAlpha = (t: number, mtf: boolean): string =>
-            mtf ? '1.0' : t >= 4 ? '0.9' : t >= 2 ? '0.7' : '0.4';
+            const touchesToAlpha = (t: number, mtf: boolean): string =>
+                mtf ? '1.0' : t >= 4 ? '0.9' : t >= 2 ? '0.7' : '0.4';
 
-        const getLevelColor = (lvl: { type: string; origin: string }, alpha: string): string => {
-            if (lvl.type === 'RESISTANCE') {
-                return lvl.origin === 'ROLE_REVERSAL'
-                    ? `rgba(251,146,60,${alpha})`   // naranja
-                    : `rgba(255,0,60,${alpha})`;    // rojo
-            } else {
-                return lvl.origin === 'ROLE_REVERSAL'
-                    ? `rgba(250,204,21,${alpha})`   // amarillo
-                    : `rgba(0,255,65,${alpha})`;    // verde
-            }
-        };
+            const getLevelColor = (lvl: { type: string; origin: string }, alpha: string): string => {
+                if (lvl.type === 'RESISTANCE') {
+                    return lvl.origin === 'ROLE_REVERSAL'
+                        ? `rgba(251,146,60,${alpha})`   // naranja
+                        : `rgba(255,0,60,${alpha})`;    // rojo
+                } else {
+                    return lvl.origin === 'ROLE_REVERSAL'
+                        ? `rgba(250,204,21,${alpha})`   // amarillo
+                        : `rgba(0,255,65,${alpha})`;    // verde
+                }
+            };
 
-        const { resistances, supports } = tacticalDecision.key_levels;
+            const { resistances, supports } = tacticalDecision.key_levels;
 
-        // Renderizar Resistencias
-        resistances.forEach((r, i) => {
-            const rank = i + 1;
-            const alpha = touchesToAlpha(r.touches, r.mtf_confluence ?? false);
-            const w = touchesToWidth(r);
-            const color = getLevelColor(r, alpha);
+            // Renderizar Resistencias
+            resistances.forEach((r, i) => {
+                const rank = i + 1;
+                const alpha = touchesToAlpha(r.touches, r.mtf_confluence ?? false);
+                const w = touchesToWidth(r);
+                const color = getLevelColor(r, alpha);
 
-            // Iconos de poder
-            const mtfTag = r.mtf_confluence ? '◈' : ''; // Rombo para MTF (Institucional)
-            const obTag = r.ob_confluence ? '★' : '';
-            const volTag = (r.volume_score ?? 1) > 1.5 ? '⚡' : '';
-            const typeTag = r.origin === 'ROLE_REVERSAL' ? '↩' : '▲';
+                // Iconos de poder
+                const mtfTag = r.mtf_confluence ? '◈' : ''; // Rombo para MTF (Institucional)
+                const obTag = r.ob_confluence ? '★' : '';
+                const volTag = (r.volume_score ?? 1) > 1.5 ? '⚡' : '';
+                const typeTag = r.origin === 'ROLE_REVERSAL' ? '↩' : '▲';
 
-            const label = `R${rank}${mtfTag}${obTag}${volTag}${typeTag}(${r.touches}t)`;
-            // Niveles MTF Mayor son SÓLIDOS. R1 intraday es DASHED. Otros son DOTTED.
-            const style = r.mtf_confluence ? LineStyle.Solid : (rank === 1 ? LineStyle.Dashed : LineStyle.Dotted);
+                const label = `R${rank}${mtfTag}${obTag}${volTag}${typeTag}(${r.touches}t)`;
+                // Niveles MTF Mayor son SÓLIDOS. R1 intraday es DASHED. Otros son DOTTED.
+                const style = r.mtf_confluence ? LineStyle.Solid : (rank === 1 ? LineStyle.Dashed : LineStyle.Dotted);
 
-            addLine(r.price, color, label, style, w);
-        });
+                addLine(r.price, color, label, style, w);
+            });
 
-        // Renderizar Soportes
-        supports.forEach((s, i) => {
-            const rank = i + 1;
-            const alpha = touchesToAlpha(s.touches, s.mtf_confluence ?? false);
-            const w = touchesToWidth(s);
-            const color = getLevelColor(s, alpha);
+            // Renderizar Soportes
+            supports.forEach((s, i) => {
+                const rank = i + 1;
+                const alpha = touchesToAlpha(s.touches, s.mtf_confluence ?? false);
+                const w = touchesToWidth(s);
+                const color = getLevelColor(s, alpha);
 
-            const mtfTag = s.mtf_confluence ? '◈' : '';
-            const obTag = s.ob_confluence ? '★' : '';
-            const volTag = (s.volume_score ?? 1) > 1.5 ? '⚡' : '';
-            const typeTag = s.origin === 'ROLE_REVERSAL' ? '↩' : '▼';
+                const mtfTag = s.mtf_confluence ? '◈' : '';
+                const obTag = s.ob_confluence ? '★' : '';
+                const volTag = (s.volume_score ?? 1) > 1.5 ? '⚡' : '';
+                const typeTag = s.origin === 'ROLE_REVERSAL' ? '↩' : '▼';
 
-            const label = `S${rank}${mtfTag}${obTag}${volTag}${typeTag}(${s.touches}t)`;
-            const style = s.mtf_confluence ? LineStyle.Solid : (rank === 1 ? LineStyle.Dashed : LineStyle.Dotted);
+                const label = `S${rank}${mtfTag}${obTag}${volTag}${typeTag}(${s.touches}t)`;
+                const style = s.mtf_confluence ? LineStyle.Solid : (rank === 1 ? LineStyle.Dashed : LineStyle.Dotted);
 
-            addLine(s.price, color, label, style, w);
-        });
+                addLine(s.price, color, label, style, w);
+            });
+        }
 
 
         // ── Niveles de Sesión ───────────────────────────────────────────────
@@ -595,7 +595,26 @@ export default function TradingChart() {
             addLine(sessions.london.high, 'rgba(96,165,250,0.7)', 'Lon H', LineStyle.Dotted);
             addLine(sessions.london.low, 'rgba(96,165,250,0.7)', 'Lon L', LineStyle.Dotted);
         }
-    }, [tacticalDecision, sessionData]);
+
+        // ── Fibonacci (Autofib) ─────────────────────────────────────────────
+        if (isEnabled('fibonacci') && tacticalDecision?.fibonacci) {
+            const { levels } = tacticalDecision.fibonacci;
+            Object.entries(levels).forEach(([label, price]) => {
+                // Golden Pocket (0.618 - 0.66)
+                if (label === '0.618' || label === '0.66') {
+                    addLine(price, 'rgba(0, 229, 255, 0.9)', `Fib ${label} 🌟`, LineStyle.Solid, 2);
+                }
+                // Extremos (0 y 1)
+                else if (label === '0.0' || label === '1.0') {
+                    addLine(price, 'rgba(255,255,255,0.8)', `Fib ${label}`, LineStyle.Solid, 2);
+                }
+                // Niveles intermedios clásicos
+                else {
+                    addLine(price, 'rgba(255,255,255,0.4)', `Fib ${label}`, LineStyle.Dashed, 1);
+                }
+            });
+        }
+    }, [tacticalDecision, sessionData, indicators]);
 
     return (
         <div className="w-full h-full relative" ref={chartContainerRef}>
@@ -603,6 +622,42 @@ export default function TradingChart() {
                 <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-black/50 backdrop-blur-sm">
                     <div className="w-12 h-12 border-2 border-t-neon-cyan border-r-neon-cyan/50 border-b-transparent border-l-transparent rounded-full animate-spin" />
                     <p className="text-neon-cyan/80 text-xs tracking-[0.2em] mt-4 font-bold">CONECTANDO TELEMETRÍA...</p>
+                </div>
+            )}
+
+            {/* S/R Legend Overlay */}
+            {isEnabled('sr') && tacticalDecision?.key_levels && (
+                <div className="absolute top-4 left-4 z-20 pointer-events-none bg-[#050B14]/80 backdrop-blur-md border border-white/10 rounded-lg p-3 max-w-[280px] shadow-2xl">
+                    <p className="text-[10px] font-bold text-white/80 mb-2 border-b border-white/10 pb-1 flex items-center justify-between">
+                        <span>Leyes de S/R Institucional</span>
+                        <span className="text-neon-cyan">SMC</span>
+                    </p>
+                    <ul className="flex flex-col gap-1.5 text-[9px] text-white/60">
+                        <li className="flex items-start gap-1">
+                            <span className="text-white font-mono mt-0.5 w-8">▲, ▼</span>
+                            <span>Soporte/Resistencia convencional.</span>
+                        </li>
+                        <li className="flex items-start gap-1">
+                            <span className="text-white font-mono mt-0.5 w-8">↩</span>
+                            <span><span className="text-yellow-400 font-bold">Role Reversal:</span> S/R roto que se invierte (Soporte pasa a Resistencia o viceversa).</span>
+                        </li>
+                        <li className="flex items-start gap-1">
+                            <span className="text-white font-mono mt-0.5 w-8">(Nt)</span>
+                            <span>Toques (Ej: 3t = 3 Toques). Mide la validación estructural.</span>
+                        </li>
+                        <li className="flex items-start gap-1">
+                            <span className="text-white font-mono mt-0.5 w-8">⚡</span>
+                            <span><span className="text-neon-cyan font-bold">Volumen:</span> Nivel con inyección de capital anómala (&gt;1.5x score).</span>
+                        </li>
+                        <li className="flex items-start gap-1">
+                            <span className="text-white font-mono mt-0.5 w-8">◈</span>
+                            <span><span className="text-purple-400 font-bold">MTF:</span> Confluencia con temporalidad pesada (4H/1D). <span className="text-white/80 underline decoration-purple-400/50">Líneas Sólidas</span>.</span>
+                        </li>
+                        <li className="flex items-start gap-1">
+                            <span className="text-white font-mono mt-0.5 w-8">★</span>
+                            <span>OB Confluencia: Nivel solapado con un Order Block activo.</span>
+                        </li>
+                    </ul>
                 </div>
             )}
         </div>

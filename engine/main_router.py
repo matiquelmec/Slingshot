@@ -5,6 +5,7 @@ import json
 # Motores e Indicadores
 from engine.indicators.regime import RegimeDetector
 from engine.indicators.structure import identify_support_resistance, get_key_levels, identify_order_blocks, extract_smc_coordinates
+from engine.indicators.fibonacci import get_current_fibonacci_levels
 
 # Estrategias — todas desde engine/strategies/ (lugar canónico)
 from engine.strategies.smc      import PaulPerdicesStrategy     # SMC Francotirador (Distribución/Manipulación)
@@ -99,7 +100,11 @@ class SlingshotRouter:
             
         result["key_levels"] = base_key_levels
 
-
+        # 2c. Fibonacci Dinámico
+        try:
+            result["fibonacci"] = get_current_fibonacci_levels(df, window=40)
+        except Exception:
+            result["fibonacci"] = None
         
         # 3. ENRUTAMIENTO INTELIGENTE (El 'Switch' Maestro)
         if current_regime == 'ACCUMULATION':

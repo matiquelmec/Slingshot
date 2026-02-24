@@ -65,6 +65,40 @@ def identify_dynamic_fib_swing(df: pd.DataFrame, window: int = 40) -> pd.DataFra
     
     return df
 
+def get_current_fibonacci_levels(df: pd.DataFrame, window: int = 40) -> dict | None:
+    """
+    Extrae el Swing High y Swing Low actual de la ventana y devuelve
+    todos los niveles de Fibonacci para ser dibujados en el frontend.
+    """
+    if len(df) < window:
+        window = len(df)
+        if window < 2:
+            return None
+            
+    tail_df = df.tail(window)
+    recent_high = float(tail_df['high'].max())
+    recent_low = float(tail_df['low'].min())
+    
+    if recent_high == recent_low:
+        return None
+        
+    # Obtener qué ocurrió primero (el mínimo o el máximo) para determinar la tendencia local
+    high_idx = tail_df['high'].idxmax()
+    low_idx = tail_df['low'].idxmin()
+    
+    # Si el Mínimo ocurrió antes que el Máximo -> Tendencia Alcista (Subida)
+    # Si el Máximo ocurrió antes que el Mínimo -> Tendencia Bajista (Caída)
+    is_uptrend = low_idx < high_idx
+        
+    # Calcular los niveles con la dirección correcta del pullback
+    levels = calculate_fibonacci_retracements(high=recent_high, low=recent_low, uptrend=is_uptrend)
+    
+    return {
+        "swing_high": recent_high,
+        "swing_low": recent_low,
+        "levels": levels
+    }
+
 if __name__ == "__main__":
     import os
     from pathlib import Path
