@@ -28,26 +28,23 @@ def map_sessions_liquidity(df: pd.DataFrame) -> pd.DataFrame:
     # Rango de Nueva York: 13:00 UTC a 20:00 UTC
     ny_mask = (df['hour'] >= 13) & (df['hour'] < 20)
     
-    # 1. Extraer los Máximos y Mínimos de Asia (El objetivo número 1 de Londres)
-    asian_highs = df[asian_mask].groupby('trading_day')['high'].max()
-    asian_lows = df[asian_mask].groupby('trading_day')['low'].min()
+    # 1. Extraer los Máximos y Mínimos de Asia
+    df['asian_high'] = df[asian_mask].groupby('trading_day')['high'].transform('max')
+    df['asian_low'] = df[asian_mask].groupby('trading_day')['low'].transform('min')
     
-    df['asian_high'] = df['trading_day'].map(asian_highs)
-    df['asian_low'] = df['trading_day'].map(asian_lows)
-    
-    # 2. Extraer los Máximos y Mínimos de Londres (El objetivo de Nueva York)
-    london_highs = df[london_mask].groupby('trading_day')['high'].max()
-    london_lows = df[london_mask].groupby('trading_day')['low'].min()
-    
-    df['london_high'] = df['trading_day'].map(london_highs)
-    df['london_low'] = df['trading_day'].map(london_lows)
+    # 2. Extraer los Máximos y Mínimos de Londres
+    df['london_high'] = df[london_mask].groupby('trading_day')['high'].transform('max')
+    df['london_low'] = df[london_mask].groupby('trading_day')['low'].transform('min')
 
     # 2.5 Extraer los Máximos y Mínimos de Nueva York
-    ny_highs = df[ny_mask].groupby('trading_day')['high'].max()
-    ny_lows = df[ny_mask].groupby('trading_day')['low'].min()
+    df['ny_high'] = df[ny_mask].groupby('trading_day')['high'].transform('max')
+    df['ny_low'] = df[ny_mask].groupby('trading_day')['low'].transform('min')
     
-    df['ny_high'] = df['trading_day'].map(ny_highs)
-    df['ny_low'] = df['trading_day'].map(ny_lows)
+    # --- ARREGLO DE PERSISTENCIA (Rolling Sessions) ---
+    # Usamos ffill() para que si hoy aún no ha ocurrido la sesión (ej: Londres a las 00:00 UTC),
+    # el sistema mantenga los niveles de la sesión de ayer en lugar de mostrar NaN.
+    cols_to_fill = ['asian_high', 'asian_low', 'london_high', 'london_low', 'ny_high', 'ny_low']
+    df[cols_to_fill] = df[cols_to_fill].ffill()
     
     # 3. Extraer Previous Daily High/Low (PDH / PDL) - Objetivos Macro
     daily_highs = df.groupby('trading_day')['high'].max().shift(1) # Máximo del día anterior
