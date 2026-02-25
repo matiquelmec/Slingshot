@@ -46,6 +46,14 @@ class SlingshotRouter:
         # 2. Detección de Régimen de Wyckoff
         df = self.regime_detector.detect_regime(df)
         
+        # 2.5 Inyección de Momentum Global (Suite Criptodamus: RSI, MACD, BBWP)
+        # Esto expone las variables a la UI sin afectar cómo las estrategias las consumen internamente
+        from engine.indicators.momentum import apply_criptodamus_suite
+        try:
+            df = apply_criptodamus_suite(df)
+        except Exception as e:
+            print(f"[ROUTER] Warning: Fallo al aplicar Suite Criptodamus global: {e}")
+        
         current_regime = df['market_regime'].iloc[-1]
         
         # Diccionario de resultados
@@ -64,6 +72,17 @@ class SlingshotRouter:
             "bb_width": float(df['bb_width'].iloc[-1]) if 'bb_width' in df.columns and pd.notna(df['bb_width'].iloc[-1]) else None,
             "bb_width_mean": float(df['bb_width_mean'].iloc[-1]) if 'bb_width_mean' in df.columns and pd.notna(df['bb_width_mean'].iloc[-1]) else None,
             "dist_to_sma200": float(df['dist_to_sma200'].iloc[-1]) if 'dist_to_sma200' in df.columns and pd.notna(df['dist_to_sma200'].iloc[-1]) else None,
+            "diagnostic": {
+                "rsi": float(df['rsi'].iloc[-1]) if 'rsi' in df.columns and pd.notna(df['rsi'].iloc[-1]) else None,
+                "rsi_oversold": bool(df['rsi_oversold'].iloc[-1]) if 'rsi_oversold' in df.columns else False,
+                "rsi_overbought": bool(df['rsi_overbought'].iloc[-1]) if 'rsi_overbought' in df.columns else False,
+                "macd_line": float(df['macd_line'].iloc[-1]) if 'macd_line' in df.columns and pd.notna(df['macd_line'].iloc[-1]) else None,
+                "macd_signal": float(df['macd_signal'].iloc[-1]) if 'macd_signal' in df.columns and pd.notna(df['macd_signal'].iloc[-1]) else None,
+                "macd_bullish_cross": bool(df['macd_bullish_cross'].iloc[-1]) if 'macd_bullish_cross' in df.columns else False,
+                "bbwp": float(df['bbwp'].iloc[-1]) if 'bbwp' in df.columns and pd.notna(df['bbwp'].iloc[-1]) else None,
+                "squeeze_active": bool(df['squeeze_active'].iloc[-1]) if 'squeeze_active' in df.columns else False,
+                "volume": float(df['volume'].iloc[-1]) if 'volume' in df.columns and pd.notna(df['volume'].iloc[-1]) else 0.0
+            },
             "active_strategy": None,
             "signals": [],
         }
@@ -73,23 +92,29 @@ class SlingshotRouter:
             atr_val = df.attrs.get('atr_value', float(df['close'].iloc[-1]) * 0.003)
             df_ob   = identify_order_blocks(df)
             smc     = extract_smc_coordinates(df_ob)
-            ob_zones = (
+            
+            # Separar zonas alcistas y bajistas para confluencia pura
+            bullish_zones = (
                 [{'top': o['top'], 'bottom': o['bottom']} for o in smc['order_blocks']['bullish']] +
+                [{'top': f['top'], 'bottom': f['bottom']} for f in smc['fvgs']['bullish']]
+            )
+            bearish_zones = (
                 [{'top': o['top'], 'bottom': o['bottom']} for o in smc['order_blocks']['bearish']] +
-                [{'top': f['top'], 'bottom': f['bottom']} for f in smc['fvgs']['bullish']] +
                 [{'top': f['top'], 'bottom': f['bottom']} for f in smc['fvgs']['bearish']]
             )
 
-            def has_ob_near(price: float) -> bool:
-                for z in ob_zones:
+            def has_ob_near(price: float, zones: list) -> bool:
+                for z in zones:
                     if z['bottom'] - atr_val <= price <= z['top'] + atr_val:
                         return True
                 return False
 
             for lvl in df.attrs.get('key_resistances', []):
-                lvl['ob_confluence'] = has_ob_near(lvl['price'])
+                # Una Resistencia tiene confluencia si se alinea con liquidez bajista (Bearish OB/FVG)
+                lvl['ob_confluence'] = has_ob_near(lvl['price'], bearish_zones)
             for lvl in df.attrs.get('key_supports', []):
-                lvl['ob_confluence'] = has_ob_near(lvl['price'])
+                # Un Soporte tiene confluencia si se alinea con liquidez alcista (Bullish OB/FVG)
+                lvl['ob_confluence'] = has_ob_near(lvl['price'], bullish_zones)
         except Exception:
             pass  # Si la fusión falla, no se bloquea el pipeline
 
@@ -100,9 +125,9 @@ class SlingshotRouter:
             
         result["key_levels"] = base_key_levels
 
-        # 2c. Fibonacci Dinámico
+        # 2c. Fibonacci Dinámico (Fractal Swing Detection)
         try:
-            result["fibonacci"] = get_current_fibonacci_levels(df, window=40)
+            result["fibonacci"] = get_current_fibonacci_levels(df)
         except Exception:
             result["fibonacci"] = None
         

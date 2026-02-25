@@ -17,6 +17,7 @@ const QuantDiagnosticPanel = dynamic(() => import('./components/ui/QuantDiagnost
 const SessionClock = dynamic(() => import('./components/ui/SessionClock'), { ssr: false });
 const MacroRadar = dynamic(() => import('./components/ui/MacroRadar'), { ssr: false });
 const LiquidityHeatmap = dynamic(() => import('./components/ui/LiquidityHeatmap'), { ssr: false });
+const SignalTerminal = dynamic(() => import('./components/signals/SignalTerminal'), { ssr: false });
 
 // === WATCHLIST: Agrega o quita activos aquí. El backend soporta CUALQUIER par de Binance ===
 const DEFAULT_WATCHLIST = [
@@ -421,8 +422,13 @@ export default function Dashboard() {
 
 
                     {/* Chart — z-0 so toolbar (z-20) always sits above the canvas */}
-                    <div className="flex-1 w-full h-full relative z-0">
+                    <div className="flex-1 w-full relative z-0 min-h-0">
                         <TradingChart />
+                    </div>
+
+                    {/* Signal Terminal (HFT) */}
+                    <div className="flex-none h-[220px] w-full">
+                        <SignalTerminal />
                     </div>
                 </motion.section>
 

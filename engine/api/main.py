@@ -37,6 +37,9 @@ from engine.indicators.structure import (
     consolidate_mtf_levels
 )
 
+# 🧙‍♂️ Asesor Cuantitativo (LLM)
+from engine.api.advisor import generate_tactical_advice
+
 
 def build_session_update(df_buffer: list) -> dict:
     """
@@ -355,13 +358,27 @@ async def websocket_stream_endpoint(websocket: WebSocket, symbol: str, interval:
                 print(f"[{symbol}] Decisión Táctica Inicial (MTF) enviada con éxito.")
 
 
-                # Session update inicial: emitir inmediatamente con el historial cargado
                 try:
                     initial_session = build_session_update(history)
                     await websocket.send_json(initial_session)
                     print(f"[{symbol}] Session Update Inicial enviada: {initial_session['data']['current_session']}")
                 except Exception as e:
                     print(f"[{symbol}] Error enviando session update inicial: {e}")
+                    initial_session = {'data': {'current_session': 'UNKNOWN'}}
+
+                # 🤖 ANALISTA AUTÓNOMO (Llamada Inicial Tras Cargar Histórico)
+                try:
+                    advice_text = generate_tactical_advice(
+                        tactical_data=tactical_result,
+                        current_session=initial_session['data'].get('current_session', 'UNKNOWN')
+                    )
+                    await websocket.send_json({
+                        "type": "advisor_update",
+                        "data": advice_text
+                    })
+                    print(f"[{symbol}] Asesor Autónomo (LLM) informe inicial emitido.")
+                except Exception as e:
+                    print(f"[{symbol}] Error ejecutando Asesor Autónomo inicial: {e}")
 
             except Exception as e:
                 print(f"[{symbol}] Error procesando SMC Inicial: {e}")
@@ -449,6 +466,22 @@ async def websocket_stream_endpoint(websocket: WebSocket, symbol: str, interval:
                             # (Es lo suficientemente rápido para correr 1 vez por segundo)
                             last_ml_prediction = ml_engine.predict_live(df_live_tick)
                             
+                            # ✨ NUEVO: HFT Confluence Matrix 
+                            # Ejecutamos el router maestro en el Fast Path para hidratar la UI en tiempo real
+                            try:
+                                live_tactical = engine_router.process_market_data(
+                                    df_live_tick, 
+                                    asset=symbol.upper(), 
+                                    interval=interval,
+                                    macro_levels=macro_levels
+                                )
+                                await websocket.send_json({
+                                    "type": "tactical_update",
+                                    "data": live_tactical
+                                })
+                            except Exception as e:
+                                print(f"[{symbol}] Error hidratando Confluence Matrix en vivo: {e}")
+                            
                         # Extraer un log neural de sistema dinámico para la "cinta"
                         pulse_payload = {
                             "type": "neural_pulse",
@@ -510,25 +543,23 @@ async def websocket_stream_endpoint(websocket: WebSocket, symbol: str, interval:
                         await websocket.send_json(smc_payload)
                         print(f"[{symbol}] SMC Data emitida: OBs actualizados.")
                         
-                        # 5. Procesamiento Matemático del Cerebro (Decisión Táctica)
+                        # 5. Procesamiento Matemático Final del Cerebro
                         try:
-                            # Pasamos el DataFrame entero al motor para un análisis contextual
-                            tactical_result = engine_router.process_market_data(
+                            # Re-evaluamos con la vela oficialmente cerrada
+                            final_tactical = engine_router.process_market_data(
                                 df_live, 
                                 asset=symbol.upper(), 
                                 interval=interval,
                                 macro_levels=macro_levels
                             )
-                            tactical_payload = {
+                            await websocket.send_json({
                                 "type": "tactical_update",
-                                "data": tactical_result
-                            }
-                            await websocket.send_json(tactical_payload)
-                            print(f"[{symbol}] Decisión Táctica Estructural emitida.")
+                                "data": final_tactical
+                            })
+                            print(f"[{symbol}] Decisión Táctica Estructural de Cierre emitida.")
 
                             # 🔮 GHOST DATA: Filtrar señales por contexto macro (Nivel 1)
-                            # Si hay miedo extremo + funding negativo → bloquear LONGs
-                            raw_signals = tactical_result.get('signals', [])
+                            raw_signals = final_tactical.get('signals', [])
                             current_ghost = get_ghost_state()
                             macro_filtered_signals = filter_signals_by_macro(raw_signals, current_ghost)
 
@@ -543,8 +574,8 @@ async def websocket_stream_endpoint(websocket: WebSocket, symbol: str, interval:
                                     asyncio.create_task(send_signal_async(
                                         signal=sig,
                                         asset=symbol.upper(),
-                                        regime=tactical_result.get('market_regime', 'UNKNOWN'),
-                                        strategy=tactical_result.get('active_strategy', 'N/A')
+                                        regime=final_tactical.get('market_regime', 'UNKNOWN'),
+                                        strategy=final_tactical.get('active_strategy', 'N/A')
                                     ))
                                 else:
                                     print(f"[TELEGRAM] 🔕 Señal bloqueada por anti-spam: {block_reason}")
@@ -558,6 +589,24 @@ async def websocket_stream_endpoint(websocket: WebSocket, symbol: str, interval:
                             print(f"[{symbol}] Session Update emitido: {session_payload['data']['current_session']}")
                         except Exception as e:
                             print(f"[{symbol}] Error emitiendo session update: {e}")
+                            session_payload = {'data': {'current_session': 'UNKNOWN'}}
+                            
+                        # 7. 🧠 ANALISTA AUTÓNOMO (LLM - Gemini)
+                        # Se ejecuta al final de la cascada de la vela para tener todo el contexto (Sesión y Táctica)
+                        try:
+                            # 1. Llamada bloqueante pero rápida a Gemini (idealmente a futuro usar versión async)
+                            advice_text = generate_tactical_advice(
+                                tactical_data=final_tactical,
+                                current_session=session_payload['data'].get('current_session', 'UNKNOWN')
+                            )
+                            # 2. Emitir el consejo al FrontEnd
+                            await websocket.send_json({
+                                "type": "advisor_update",
+                                "data": advice_text
+                            })
+                            print(f"[{symbol}] Asesor Autónomo (LLM) informe emitido.")
+                        except Exception as e:
+                            print(f"[{symbol}] Error ejecutando Asesor Autónomo: {e}")
                     
                 except asyncio.TimeoutError:
                     # Keepalive: si en 30s no llega nada, verificamos si el cliente sigue vivo

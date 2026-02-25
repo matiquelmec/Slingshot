@@ -52,6 +52,17 @@ export interface TacticalDecision {
         swing_low: number;
         levels: Record<string, number>;
     };
+    diagnostic?: {
+        rsi: number | null;
+        rsi_oversold: boolean;
+        rsi_overbought: boolean;
+        macd_line: number | null;
+        macd_signal: number | null;
+        macd_bullish_cross: boolean;
+        bbwp: number | null;
+        squeeze_active: boolean;
+        volume: number;
+    };
 }
 
 export interface SessionInfo {
@@ -105,6 +116,7 @@ export interface GhostData {
 }
 
 interface TelemetryState {
+    advisor_log: string | null;
     isConnected: boolean;
     activeSymbol: string;
     activeTimeframe: Timeframe;
@@ -154,6 +166,7 @@ export const useTelemetryStore = create<TelemetryState>((set, get) => {
                 sessionData: null,
                 latestPrice: null,
                 liquidityHeatmap: null,
+                advisor_log: null,
                 mlProjection: { direction: 'NEUTRAL', probability: 50, reason: "Aguardando conexión de telemetría..." },
                 tacticalDecision: {
                     regime: "ANALIZANDO NUEVO RIESGO...", strategy: "STANDBY",
@@ -260,8 +273,11 @@ export const useTelemetryStore = create<TelemetryState>((set, get) => {
                             signals: d.signals ?? [],
                             key_levels: d.key_levels ?? { resistances: [], supports: [] },
                             fibonacci: d.fibonacci ?? undefined,
+                            diagnostic: d.diagnostic ?? undefined,
                         }
                     });
+                } else if (data.type === 'advisor_update') {
+                    set({ advisor_log: data.data });
                 } else if (data.type === 'session_update') {
                     set({ sessionData: data.data });
                 } else if (data.type === 'smc_data') {

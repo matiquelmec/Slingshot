@@ -226,6 +226,7 @@ slingshot/
 - [x] Módulos de Liquidez (Liquidation Maps, Sweep detection)
 - [x] Implementar todos los indicadores con TA-Lib (RSI Divs, MACD, BBWP)
 - [x] Implementar Order Blocks y Fair Value Gaps (SMC puro)
+- [x] Indicador Autofib Bidireccional con Golden Pocket institucional
 - [x] Sistema de scoring modular hiper-confluente (0-100)
 - [x] Gestión de riesgo estricta (Kelly Criterion + ATR + Breakeven OS)
 - [x] Pipeline completo: Datos → Indicadores → Score → Señal

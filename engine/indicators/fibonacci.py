@@ -65,11 +65,84 @@ def identify_dynamic_fib_swing(df: pd.DataFrame, window: int = 40) -> pd.DataFra
     
     return df
 
-def get_current_fibonacci_levels(df: pd.DataFrame, window: int = 40) -> dict | None:
+def _find_algo_pivots(df: pd.DataFrame, n_bars: int = 5):
     """
-    Extrae el Swing High y Swing Low actual de la ventana y devuelve
-    todos los niveles de Fibonacci para ser dibujados en el frontend.
+    Encuentra los Pivots High y Pivots Low matemáticos (Fractales) 
+    revisando n_bars a la izquierda y n_bars a la derecha.
+    Devuelve los dataframes filtrados solo con los pivots confirmados.
     """
+    df_copy = df.copy()
+    window_size = (n_bars * 2) + 1
+    
+    # max() iterando con center=True ubica el valor en el indice central (vela actual)
+    df_copy['rolling_max'] = df_copy['high'].rolling(window=window_size, center=True).max()
+    df_copy['rolling_min'] = df_copy['low'].rolling(window=window_size, center=True).min()
+    
+    is_pivot_high = (df_copy['high'] == df_copy['rolling_max']) & (df_copy['high'].notna())
+    is_pivot_low =  (df_copy['low'] == df_copy['rolling_min']) & (df_copy['low'].notna())
+    
+    return df_copy[is_pivot_high], df_copy[is_pivot_low]
+
+def _get_fibonacci_major_leg(df: pd.DataFrame, n_bars: int = 5, lookback_pivots: int = 15) -> dict | None:
+    """Fallback: Filtra los últimos `lookback_pivots` para encontrar el Swing Mayor (Major Leg)."""
+    pivot_highs, pivot_lows = _find_algo_pivots(df, n_bars)
+    
+    if pivot_highs.empty or pivot_lows.empty:
+        return _fallback_fibonacci(df)
+        
+    recent_ph = pivot_highs.tail(lookback_pivots)
+    recent_pl = pivot_lows.tail(lookback_pivots)
+    
+    major_ph_idx = recent_ph['high'].idxmax()
+    major_pl_idx = recent_pl['low'].idxmin()
+    
+    major_ph_val = float(recent_ph.loc[major_ph_idx, 'high'])
+    major_pl_val = float(recent_pl.loc[major_pl_idx, 'low'])
+    
+    is_uptrend_confirmed = major_pl_idx < major_ph_idx
+    
+    if is_uptrend_confirmed:
+        recent_data = df.loc[major_ph_idx:]
+        absolute_high = float(recent_data['high'].max())
+        if absolute_high > major_ph_val:
+            major_ph_val = absolute_high
+            
+        leg_data = df.loc[major_pl_idx:major_ph_idx]
+        if not leg_data.empty:
+            major_pl_val = float(leg_data['low'].min())
+    else:
+        recent_data = df.loc[major_pl_idx:]
+        absolute_low = float(recent_data['low'].min())
+        if absolute_low < major_pl_val:
+            major_pl_val = absolute_low
+            
+        leg_data = df.loc[major_ph_idx:major_pl_idx]
+        if not leg_data.empty:
+            major_ph_val = float(leg_data['high'].max())
+
+    final_is_uptrend = major_pl_idx < major_ph_idx
+    
+    if major_ph_val == major_pl_val:
+        return None
+        
+    levels = calculate_fibonacci_retracements(high=major_ph_val, low=major_pl_val, uptrend=final_is_uptrend)
+    return {
+        "swing_high": major_ph_val,
+        "swing_low": major_pl_val,
+        "levels": levels
+    }
+
+def get_current_fibonacci_levels(df: pd.DataFrame, n_bars: int = 5) -> dict | None:
+    """
+    SMC God Mode (Macro Swing): Identifica la 'Major Leg' (Pierna Institucional Completa)
+    filtrando micro-impulsos para evitar un Fibonacci hiperactivo.
+    Traza la cuadrícula estricta desde el Pivot High Absoluto al Pivot Low Absoluto del ciclo.
+    """
+    # Usamos lookback de 20 pivots (aprox 1.5 a 3 días de data en 15m) para capturar el gran swing
+    return _get_fibonacci_major_leg(df, n_bars=n_bars, lookback_pivots=20)
+
+def _fallback_fibonacci(df: pd.DataFrame, window: int = 40) -> dict | None:
+    """Implementación clásica estática de emergencia en caso de fallar el escáner fractal."""
     if len(df) < window:
         window = len(df)
         if window < 2:
@@ -82,17 +155,11 @@ def get_current_fibonacci_levels(df: pd.DataFrame, window: int = 40) -> dict | N
     if recent_high == recent_low:
         return None
         
-    # Obtener qué ocurrió primero (el mínimo o el máximo) para determinar la tendencia local
     high_idx = tail_df['high'].idxmax()
     low_idx = tail_df['low'].idxmin()
-    
-    # Si el Mínimo ocurrió antes que el Máximo -> Tendencia Alcista (Subida)
-    # Si el Máximo ocurrió antes que el Mínimo -> Tendencia Bajista (Caída)
     is_uptrend = low_idx < high_idx
-        
-    # Calcular los niveles con la dirección correcta del pullback
-    levels = calculate_fibonacci_retracements(high=recent_high, low=recent_low, uptrend=is_uptrend)
     
+    levels = calculate_fibonacci_retracements(high=recent_high, low=recent_low, uptrend=is_uptrend)
     return {
         "swing_high": recent_high,
         "swing_low": recent_low,
