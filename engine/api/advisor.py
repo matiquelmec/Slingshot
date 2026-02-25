@@ -88,8 +88,7 @@ def generate_tactical_advice(tactical_data: dict, current_session: str, ml_proje
         response = model.generate_content(
             prompt,
             generation_config=genai.types.GenerationConfig(
-                temperature=0.0,
-                max_output_tokens=150
+                temperature=0.0
             )
         )
         advice = response.text.strip()
