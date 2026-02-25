@@ -404,7 +404,8 @@ async def websocket_stream_endpoint(websocket: WebSocket, symbol: str, interval:
                 try:
                     advice_text = generate_tactical_advice(
                         tactical_data=tactical_result,
-                        current_session=initial_session['data'].get('current_session', 'UNKNOWN')
+                        current_session=initial_session['data'].get('current_session', 'UNKNOWN'),
+                        ml_projection=None # Sin cálculo inicial de ML, se llenará en el loop
                     )
                     await websocket.send_json({
                         "type": "advisor_update",
@@ -635,7 +636,8 @@ async def websocket_stream_endpoint(websocket: WebSocket, symbol: str, interval:
                             # 1. Llamada bloqueante pero rápida a Gemini (idealmente a futuro usar versión async)
                             advice_text = generate_tactical_advice(
                                 tactical_data=final_tactical,
-                                current_session=session_payload['data'].get('current_session', 'UNKNOWN')
+                                current_session=session_payload['data'].get('current_session', 'UNKNOWN'),
+                                ml_projection=last_ml_prediction
                             )
                             # 2. Emitir el consejo al FrontEnd
                             await websocket.send_json({
