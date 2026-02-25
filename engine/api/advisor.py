@@ -72,19 +72,26 @@ def generate_tactical_advice(tactical_data: dict, current_session: str, ml_proje
     - Proyección Algorítmica Probabilística: {ml_dir} ({ml_prob}%)
     
     REGLAS ESTRICTAS PARA TU RESPUESTA:
-    1. DEBES devolver ÚNICAMENTE el texto final, sin formato markdown, sin saludos, sin explicaciones, sin el texto "ADVISOR LOG:".
-    2. El tono debe ser de un terminal de alta frecuencia: frío, militar, ultra-preciso, analítico y en español capitalizado (MAYÚSCULAS, símil a Bloomberg Terminal).
+    1. DEBES devolver ÚNICAMENTE el texto final, ortografía PERFECTA, sin errores tipográficos simulados, sin markdown.
+    2. El tono debe ser frío, militar, ultra-preciso, analítico y en MAYÚSCULAS PURAS.
     3. Si las métricas (SMC, RSI, ML) convergen, emite una directiva clara (ej: "DESPLEGAR LARGOS").
-    4. Si hay contradicción grave (Ej: XGBoost dice BAJISTA pero pisamos Soporte con divergencia), recomienda "ESPERAR CONFIRMACIÓN" o "MANTENERSE AL MARGEN".
-    5. No tienes permitido mencionar indicadores si no aportan valor clave.
-    6. AL FINAL de tu mensaje, DEBES incluir obligatoriamente la recomendación de Ratio Riesgo/Beneficio dinámico adjunta en el formato [R:R TGT {recommended_rr}]
+    4. Si hay contradicción grave, recomienda "ESPERAR CONFIRMACIÓN" o "MANTENERSE AL MARGEN".
+    5. No menciones los nombres de los indicadores si no aportan valor clave.
+    6. JAMÁS dejes la frase cortada a medias. Termina tu análisis limpiamente.
+    7. AL FINAL de tu mensaje, DEBES incluir obligatoriamente la recomendación de Ratio Riesgo/Beneficio dinámico adjunta en el formato [R:R TGT {recommended_rr}]
 
     Ejemplo de respuesta ideal:
     MÁXIMA CONFLUENCIA ALCISTA DETECTADA EN LONDRES KILLZONE. PRECIO APOYADO SOBRE DEMANDA INSTITUCIONAL CON IA PROYECTANDO 62% DE PROBABILIDAD. DESPLEGAR ÓRDENES LARGAS APUNTANDO A LA RESISTENCIA MÁS CERCANA. [R:R TGT 1:3]
     """
 
     try:
-        response = model.generate_content(prompt)
+        response = model.generate_content(
+            prompt,
+            generation_config=genai.types.GenerationConfig(
+                temperature=0.0,
+                max_output_tokens=150
+            )
+        )
         advice = response.text.strip()
         # Limpieza básica por si el LLM se pasa de listo
         advice = advice.replace('\n', ' ').replace('**', '').replace('ADVISOR LOG:', '').strip()
