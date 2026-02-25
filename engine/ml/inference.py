@@ -45,11 +45,16 @@ class SlingshotML:
             # Extraer solo la ÚLTIMA fila (la vela actual/viva)
             latest_features = features_df.iloc[[-1]].copy()
             
-            # 2. Limpiar las columnas (Excluir 'timestamp', 'open', 'high', 'low', 'close', etc)
-            to_drop = ['timestamp', 'open', 'high', 'low', 'close', 'number_of_trades', 'TARGET', 'close_time', 'quote_asset_volume', 'taker_buy_base_asset_volume', 'taker_buy_quote_asset_volume', 'ignore']
-            feature_cols = [col for col in latest_features.columns if col not in to_drop and pd.api.types.is_numeric_dtype(latest_features[col])]
+            # 2. Interceptar estrictamente las features que el modelo espera
+            # Evita crashes si agregamos nuevas columnas al DataFrame global (ej: SMC / Soportes) en el futuro
+            expected_features = list(self.model.feature_names_in_)
             
-            X_live = latest_features[feature_cols]
+            # Rellenar con 0 de seguridad si por rediseños estructurales falta alguna feature
+            for f in expected_features:
+                if f not in latest_features.columns:
+                    latest_features[f] = 0
+                    
+            X_live = latest_features[expected_features]
             
             # 3. Predicción
             # predict_proba devuelve [prob_caer, prob_subir]
