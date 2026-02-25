@@ -142,23 +142,31 @@ def build_session_update(df_buffer: list, cached_state: dict = None) -> dict:
         'ny':     {**cached_state['ny'], 'status': 'PENDING'}
     }
 
-    # Marcar estado ACTIVE/CLOSED/PENDING de cada sesión según hora UTC
-    if hour_utc < 6:
-        sessions_data['asia']['status']   = 'ACTIVE'
-        sessions_data['london']['status'] = 'PENDING'
-        sessions_data['ny']['status']     = 'PENDING'
-    elif hour_utc < 13:
-        sessions_data['asia']['status']   = 'CLOSED'
-        sessions_data['london']['status'] = 'ACTIVE'
-        sessions_data['ny']['status']     = 'PENDING'
-    elif hour_utc < 20:
-        sessions_data['asia']['status']   = 'CLOSED'
-        sessions_data['london']['status'] = 'CLOSED'
-        sessions_data['ny']['status']     = 'ACTIVE'
+    # Marcar estado ACTIVE/CLOSED/PENDING de cada sesión según hora UTC individualmente
+    # ASIA (00:00 - 06:00)
+    if 0 <= hour_utc < 6:
+        sessions_data['asia']['status'] = 'ACTIVE'
+    elif hour_utc >= 20:
+        # Pre-apertura del día siguiente
+        sessions_data['asia']['status'] = 'PENDING'
     else:
-        sessions_data['asia']['status']   = 'PENDING'   # Preparándose para Asia del día siguiente
+        sessions_data['asia']['status'] = 'CLOSED'
+
+    # LONDON (07:00 - 15:00)
+    if hour_utc < 7:
         sessions_data['london']['status'] = 'PENDING'
-        sessions_data['ny']['status']     = 'CLOSED'
+    elif 7 <= hour_utc < 15:
+        sessions_data['london']['status'] = 'ACTIVE'
+    else:
+        sessions_data['london']['status'] = 'CLOSED'
+
+    # NEW YORK (13:00 - 20:00)
+    if hour_utc < 13:
+        sessions_data['ny']['status'] = 'PENDING'
+    elif 13 <= hour_utc < 20:
+        sessions_data['ny']['status'] = 'ACTIVE'
+    else:
+        sessions_data['ny']['status'] = 'CLOSED'
 
 
     return {

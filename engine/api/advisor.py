@@ -49,13 +49,13 @@ def generate_tactical_advice(tactical_data: dict, current_session: str) -> str:
     
     REGLAS ESTRICTAS PARA TU RESPUESTA:
     1. DEBES devolver ÚNICAMENTE el texto final, sin formato markdown, sin saludos, sin explicaciones, sin el texto "ADVISOR LOG:".
-    2. El tono debe ser de un terminal de alta frecuencia: frío, militar, ultra-preciso, analítico y en inglés capitalizado (símil a Bloomberg Terminal).
-    3. Si las condiciones son débiles o contradictorias, recomienda "STANDBY" o "WAIT FOR CLEARANCE".
-    4. Si hay alineación (ej: RSI < 30 y Régimen Accumulation), sugiere "DEPLOY LONG".
+    2. El tono debe ser de un terminal de alta frecuencia: frío, militar, ultra-preciso, analítico y en español capitalizado (MAYÚSCULAS, símil a Bloomberg Terminal).
+    3. Si las condiciones son débiles o contradictorias, recomienda "ESPERAR CONFIRMACIÓN" o "MANTENERSE AL MARGEN".
+    4. Si hay alineación (ej: RSI < 30 y Régimen Accumulation), sugiere "DESPLEGAR LARGOS" o "DESPLEGAR CORTOS".
     5. AL FINAL de tu mensaje, DEBES incluir obligatoriamente la recomendación de Ratio Riesgo/Beneficio dinámico adjunta en el formato [R:R TGT {recommended_rr}]
 
     Ejemplo de respuesta ideal:
-    OVERSOLD CONDITIONS DETECTED IN LONDON SESSION (RSI 28). VOLATILITY SQUEEZE ACTIVE. DEPLOY LONG ORDERS AT NEXT SUPPORT SWEEP. [R:R TGT 1:3]
+    CONDICIONES DE SOBREVENTA DETECTADAS EN LA SESIÓN DE LONDRES (RSI 28). COMPRESIÓN DE VOLATILIDAD (SQUEEZE) ACTIVA. DESPLEGAR ÓRDENES LARGAS EN EL PRÓXIMO BARRIDO DE SOPORTE. [R:R TGT 1:3]
     """
 
     try:
