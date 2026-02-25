@@ -9,20 +9,31 @@ function TypewriterText({ text, speed = 30 }: { text: string; speed?: number }) 
     const [displayedText, setDisplayedText] = useState('');
 
     useEffect(() => {
-        setDisplayedText('');
-        if (!text) return;
+        if (!text) {
+            setDisplayedText('');
+            return;
+        }
 
-        let i = 0;
-        const timer = setInterval(() => {
-            if (i < text.length) {
-                setDisplayedText(prev => prev + text.charAt(i));
-                i++;
-            } else {
-                clearInterval(timer);
-            }
-        }, speed);
+        // Reset if we receive completely fresh text
+        setDisplayedText((current) => {
+            if (!text.startsWith(current)) return '';
+            return current;
+        });
 
-        return () => clearInterval(timer);
+        let timeoutId: NodeJS.Timeout;
+
+        const tick = () => {
+            setDisplayedText((current) => {
+                if (current.length < text.length) {
+                    timeoutId = setTimeout(tick, speed);
+                    return text.slice(0, current.length + 1);
+                }
+                return current;
+            });
+        };
+
+        timeoutId = setTimeout(tick, speed);
+        return () => clearTimeout(timeoutId);
     }, [text, speed]);
 
     return (
