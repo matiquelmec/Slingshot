@@ -41,10 +41,12 @@ from engine.indicators.structure import (
 from engine.api.advisor import generate_tactical_advice
 
 
-def build_session_update(df_buffer: list) -> dict:
+def build_session_update(df_buffer: list, cached_state: dict = None) -> dict:
     """
     Calcula el estado actual de las sesiones de mercado basado en UTC del servidor.
-    Extrae H/L de cada sesión y estados de sweep del buffer de velas.
+    Mantiene el 'cached_state' para no borrar de la pantalla las sesiones previas
+    cuando trabajamos en temporalidades muy bajas (ej: 1m) donde el buffer de velas 
+    se queda corto en tiempo.
     """
     now_utc = datetime.now(timezone.utc)
     hour_utc = now_utc.hour
@@ -73,14 +75,15 @@ def build_session_update(df_buffer: list) -> dict:
         session_name = 'OFF_HOURS'
         is_killzone = False
 
-    # Extraer H/L por sesión del buffer si hay datos
-    sessions_data = {
-        'asia':   {'high': None, 'low': None, 'status': 'CLOSED', 'swept_high': False, 'swept_low': False},
-        'london': {'high': None, 'low': None, 'status': 'PENDING', 'swept_high': False, 'swept_low': False},
-        'ny':     {'high': None, 'low': None, 'status': 'PENDING', 'swept_high': False, 'swept_low': False},
-    }
-    pdh, pdl = None, None
-    pdh_swept, pdl_swept = False, False
+    if cached_state is None:
+        cached_state = {
+            'asia':   {'high': None, 'low': None, 'swept_high': False, 'swept_low': False},
+            'london': {'high': None, 'low': None, 'swept_high': False, 'swept_low': False},
+            'ny':     {'high': None, 'low': None, 'swept_high': False, 'swept_low': False},
+            'pdh': None, 'pdl': None,
+            'pdh_swept': False, 'pdl_swept': False,
+            'trading_day': None
+        }
 
     if df_buffer and len(df_buffer) > 0:
         try:
@@ -91,38 +94,55 @@ def build_session_update(df_buffer: list) -> dict:
             df = map_sessions_liquidity(df)
             last = df.iloc[-1]
 
-            # Sesión Asia
+            # Si cruzamos la medianoche UTC, reseamos el caché para un nuevo día
+            current_day = last.get('trading_day')
+            if current_day and cached_state.get('trading_day') != current_day:
+                for sess in ['asia', 'london', 'ny']:
+                    cached_state[sess] = {'high': None, 'low': None, 'swept_high': False, 'swept_low': False}
+                cached_state['pdh'] = None
+                cached_state['pdl'] = None
+                cached_state['pdh_swept'] = False
+                cached_state['pdl_swept'] = False
+                cached_state['trading_day'] = current_day
+
+            # Actualizar Sesión Asia
             if pd.notna(last.get('asian_high')):
-                sessions_data['asia']['high'] = float(last['asian_high'])
-                sessions_data['asia']['low'] = float(last['asian_low'])
-                sessions_data['asia']['swept_high'] = bool(last.get('sweep_asian_high', False))
-                sessions_data['asia']['swept_low'] = bool(last.get('sweep_asian_low', False))
+                cached_state['asia']['high'] = float(last['asian_high'])
+                cached_state['asia']['low'] = float(last['asian_low'])
+                cached_state['asia']['swept_high'] = bool(last.get('sweep_asian_high', False))
+                cached_state['asia']['swept_low'] = bool(last.get('sweep_asian_low', False))
 
-            # Sesión Londres
+            # Actualizar Sesión Londres
             if pd.notna(last.get('london_high')):
-                sessions_data['london']['high'] = float(last['london_high'])
-                sessions_data['london']['low'] = float(last['london_low'])
-                sessions_data['london']['swept_high'] = bool(last.get('sweep_london_high', False))
-                sessions_data['london']['swept_low'] = bool(last.get('sweep_london_low', False))
+                cached_state['london']['high'] = float(last['london_high'])
+                cached_state['london']['low'] = float(last['london_low'])
+                cached_state['london']['swept_high'] = bool(last.get('sweep_london_high', False))
+                cached_state['london']['swept_low'] = bool(last.get('sweep_london_low', False))
 
-            # Sesión NY
+            # Actualizar Sesión NY
             if pd.notna(last.get('ny_high')):
-                sessions_data['ny']['high'] = float(last['ny_high'])
-                sessions_data['ny']['low'] = float(last['ny_low'])
-                sessions_data['ny']['swept_high'] = bool(last.get('sweep_ny_high', False))
-                sessions_data['ny']['swept_low'] = bool(last.get('sweep_ny_low', False))
+                cached_state['ny']['high'] = float(last['ny_high'])
+                cached_state['ny']['low'] = float(last['ny_low'])
+                cached_state['ny']['swept_high'] = bool(last.get('sweep_ny_high', False))
+                cached_state['ny']['swept_low'] = bool(last.get('sweep_ny_low', False))
 
-            # PDH / PDL
+            # Actualizar PDH / PDL
             if pd.notna(last.get('previous_daily_high')):
-                pdh = float(last['previous_daily_high'])
-                pdl = float(last['previous_daily_low'])
-                pdh_swept = bool(last.get('sweep_pdh', False))
-                pdl_swept = bool(last.get('sweep_pdl', False))
+                cached_state['pdh'] = float(last['previous_daily_high'])
+                cached_state['pdl'] = float(last['previous_daily_low'])
+                cached_state['pdh_swept'] = bool(last.get('sweep_pdh', False))
+                cached_state['pdl_swept'] = bool(last.get('sweep_pdl', False))
         except Exception:
             pass
 
+    # Clonamos el estado cacheado para inyectarle el status dinámico
+    sessions_data = {
+        'asia':   {**cached_state['asia'], 'status': 'CLOSED'},
+        'london': {**cached_state['london'], 'status': 'PENDING'},
+        'ny':     {**cached_state['ny'], 'status': 'PENDING'}
+    }
+
     # Marcar estado ACTIVE/CLOSED/PENDING de cada sesión según hora UTC
-    # Asia: 00:00-06:00 | London KZ: 07-10 | London: 10-13 | NY KZ: 13-16 | NY: 16-20 | Off: 20-24
     if hour_utc < 6:
         sessions_data['asia']['status']   = 'ACTIVE'
         sessions_data['london']['status'] = 'PENDING'
@@ -149,10 +169,11 @@ def build_session_update(df_buffer: list) -> dict:
             'local_time': local_str,
             'is_killzone': is_killzone,
             'sessions': sessions_data,
-            'pdh': pdh,
-            'pdl': pdl,
-            'pdh_swept': pdh_swept,
-            'pdl_swept': pdl_swept,
+            'pdh': cached_state['pdh'],
+            'pdl': cached_state['pdl'],
+            'pdh_swept': cached_state['pdh_swept'],
+            'pdl_swept': cached_state['pdl_swept'],
+            '_internal_cache': cached_state
         }
     }
 
@@ -402,6 +423,9 @@ async def websocket_stream_endpoint(websocket: WebSocket, symbol: str, interval:
         # Última predicción ML cacheada para no sobrecargar CPU en cada micro-tick
         last_ml_prediction = {"direction": "CALIBRANDO", "probability": 50, "status": "warmup"}
         
+        # Caché persistente para garantizar que las sesiones no desaparezcan en TF menores a 15 min
+        websocket_session_cache = None
+        
         # Control de Throttling para el Fast Path
         last_pulse_time = 0
         import time
@@ -584,7 +608,9 @@ async def websocket_stream_endpoint(websocket: WebSocket, symbol: str, interval:
 
                         # 6. Sesiones de Mercado (Se emite en cada cierre de vela)
                         try:
-                            session_payload = build_session_update(live_candles_buffer)
+                            session_payload = build_session_update(live_candles_buffer, websocket_session_cache)
+                            # Extraemos el caché actualizado y lo quitamos del payload de red
+                            websocket_session_cache = session_payload['data'].pop('_internal_cache', websocket_session_cache)
                             await websocket.send_json(session_payload)
                             print(f"[{symbol}] Session Update emitido: {session_payload['data']['current_session']}")
                         except Exception as e:
