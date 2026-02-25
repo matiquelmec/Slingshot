@@ -342,6 +342,9 @@ async def websocket_stream_endpoint(websocket: WebSocket, symbol: str, interval:
         import websockets as ws_client
         from engine.indicators.structure import identify_order_blocks, extract_smc_coordinates
         
+        # Inicializar el caché aquí para que sea de ámbito superior y evitar 'UnboundLocalError' si no hay history
+        websocket_session_cache = None
+        
         # Generar SMC Inicial con el historial que acabamos de cargar
         if history and len(history) > 0:
             print(f"[{symbol}] Calculando SMC y ML Inicial...")
@@ -381,6 +384,8 @@ async def websocket_stream_endpoint(websocket: WebSocket, symbol: str, interval:
 
                 try:
                     initial_session = build_session_update(history)
+                    # Extraer el cache inicial para que estemos listos en el stream en vivo (con los datos de hace 500 velas)
+                    websocket_session_cache = initial_session['data'].pop('_internal_cache', None)
                     await websocket.send_json(initial_session)
                     print(f"[{symbol}] Session Update Inicial enviada: {initial_session['data']['current_session']}")
                 except Exception as e:
@@ -423,8 +428,7 @@ async def websocket_stream_endpoint(websocket: WebSocket, symbol: str, interval:
         # Última predicción ML cacheada para no sobrecargar CPU en cada micro-tick
         last_ml_prediction = {"direction": "CALIBRANDO", "probability": 50, "status": "warmup"}
         
-        # Caché persistente para garantizar que las sesiones no desaparezcan en TF menores a 15 min
-        websocket_session_cache = None
+        # El websocket_session_cache ya fue inicializado y rellenado en la FASE 2
         
         # Control de Throttling para el Fast Path
         last_pulse_time = 0
