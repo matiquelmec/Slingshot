@@ -30,6 +30,7 @@ def generate_tactical_advice(tactical_data: dict, current_session: str) -> str:
     macd_cross = "BULLISH" if diag.get('macd_bullish_cross') else "BEARISH/NEUTRAL"
     bbwp = diag.get('bbwp', 0)
     squeeze = "ACTIVE" if diag.get('squeeze_active') else "INACTIVE"
+    in_killzone = "SÍ (Volumen Institucional Alto)" if diag.get('in_killzone', False) else "NO (Volumen Minorista/Lento)"
     
     # Definir R:R dinámico basado en la estrategia
     # Reversion = Más defensivo (1:2) | Trend/SMC = Más agresivo (1:3 o superior)
@@ -41,6 +42,7 @@ def generate_tactical_advice(tactical_data: dict, current_session: str) -> str:
     
     ESTADO ACTUAL DEL MERCADO:
     - Sesión Activa: {current_session}
+    - Dentro de KillZone (Horario Institucional): {in_killzone}
     - Régimen Wyckoff: {regime}
     - Estrategia Seleccionada por el Motor Algorítmico: {strategy}
     - RSI: {rsi:.1f}
@@ -50,12 +52,12 @@ def generate_tactical_advice(tactical_data: dict, current_session: str) -> str:
     REGLAS ESTRICTAS PARA TU RESPUESTA:
     1. DEBES devolver ÚNICAMENTE el texto final, sin formato markdown, sin saludos, sin explicaciones, sin el texto "ADVISOR LOG:".
     2. El tono debe ser de un terminal de alta frecuencia: frío, militar, ultra-preciso, analítico y en español capitalizado (MAYÚSCULAS, símil a Bloomberg Terminal).
-    3. Si las condiciones son débiles o contradictorias, recomienda "ESPERAR CONFIRMACIÓN" o "MANTENERSE AL MARGEN".
-    4. Si hay alineación (ej: RSI < 30 y Régimen Accumulation), sugiere "DESPLEGAR LARGOS" o "DESPLEGAR CORTOS".
+    3. Si las condiciones son débiles o contradictorias, o estamos FUERA de KillZone, recomienda "ESPERAR CONFIRMACIÓN" o "MANTENERSE AL MARGEN".
+    4. Si hay alineación (ej: RSI < 30 y Régimen Accumulation) Y estamos DENTRO de Killzone, sugiere "DESPLEGAR LARGOS" o "DESPLEGAR CORTOS".
     5. AL FINAL de tu mensaje, DEBES incluir obligatoriamente la recomendación de Ratio Riesgo/Beneficio dinámico adjunta en el formato [R:R TGT {recommended_rr}]
 
     Ejemplo de respuesta ideal:
-    CONDICIONES DE SOBREVENTA DETECTADAS EN LA SESIÓN DE LONDRES (RSI 28). COMPRESIÓN DE VOLATILIDAD (SQUEEZE) ACTIVA. DESPLEGAR ÓRDENES LARGAS EN EL PRÓXIMO BARRIDO DE SOPORTE. [R:R TGT 1:3]
+    CONDICIONES DE SOBREVENTA DETECTADAS DENTRO DE LONDRES KILLZONE (RSI 28). COMPRESIÓN DE VOLATILIDAD (SQUEEZE) ACTIVA. DESPLEGAR ÓRDENES LARGAS EN EL PRÓXIMO BARRIDO DE SOPORTE. [R:R TGT 1:3]
     """
 
     try:
