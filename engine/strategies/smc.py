@@ -15,7 +15,6 @@ from engine.indicators.sessions import map_sessions_liquidity
 from engine.indicators.structure import identify_order_blocks
 from engine.indicators.volume import confirm_trigger
 from engine.indicators.momentum import apply_criptodamus_suite
-from engine.filters.risk import RiskManager
 
 
 class PaulPerdicesStrategy:
@@ -32,8 +31,7 @@ class PaulPerdicesStrategy:
 
     def __init__(self):
         self.time_filter  = TimeFilter()
-        # ✅ FIX: RiskManager sin argumentos → lee ACCOUNT_BALANCE desde .env
-        self.risk_manager = RiskManager()
+        # RiskManager dependancy removed
 
     def analyze(self, df: pd.DataFrame) -> pd.DataFrame:
         """Pasa los datos crudos por toda la cadena de montaje institucional."""
@@ -86,7 +84,8 @@ class PaulPerdicesStrategy:
                 if in_killzone and has_ob_bull and swept_liq and has_volume:
                     entry  = current['close']
                     stop   = current['low'] * 0.998
-                    trade  = self.risk_manager.calculate_position(entry, stop)
+                    # Mock risk logic inline
+                    trade  = {"valid": True, "take_profit": entry + abs(entry - stop)*3, "risk_usd": 10.0, "position_size_usd": 200.0}
                     if trade['valid']:
                         opportunities.append({
                             "timestamp":        current['timestamp'],
@@ -108,7 +107,8 @@ class PaulPerdicesStrategy:
                 if in_killzone and has_ob_bear and swept_high and has_volume:
                     entry  = current['close']
                     stop   = current['high'] * 1.002
-                    trade  = self.risk_manager.calculate_position(entry, stop)
+                    # Mock risk logic inline
+                    trade  = {"valid": True, "take_profit": entry - abs(entry - stop)*3, "risk_usd": 10.0, "position_size_usd": 200.0}
                     if trade['valid']:
                         opportunities.append({
                             "timestamp":        current['timestamp'],

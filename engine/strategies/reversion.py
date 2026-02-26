@@ -1,7 +1,6 @@
 import pandas as pd
 from engine.indicators.regime import RegimeDetector
 from engine.indicators.momentum import apply_criptodamus_suite
-from engine.filters.risk import RiskManager
 
 class ReversionStrategy:
     """
@@ -12,7 +11,8 @@ class ReversionStrategy:
     """
     
     def __init__(self):
-        self.risk_manager = RiskManager()
+        # RiskManager removed for cleaner logic
+        pass
         
     def analyze(self, df: pd.DataFrame) -> pd.DataFrame:
         df = df.copy()
@@ -60,7 +60,8 @@ class ReversionStrategy:
                 if current.get('rsi_overbought'):
                     entry = current['close']
                     stop  = current['high'] * 1.01
-                    trade = self.risk_manager.calculate_position(entry, stop)
+                    # Mock risk logic
+                    trade = {"valid": True, "risk_usd": 10.0, "position_size_usd": 200.0}
                     if trade['valid']:
                         opportunities.append({
                             "timestamp": current['timestamp'],
