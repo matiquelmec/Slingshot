@@ -11,6 +11,7 @@ from engine.indicators.fibonacci import get_current_fibonacci_levels
 from engine.strategies.smc      import PaulPerdicesStrategy     # SMC Francotirador (Distribución/Manipulación)
 from engine.strategies.trend    import TrendFollowingStrategy    # Continuación (Markup/Markdown)
 from engine.strategies.reversion import ReversionStrategy        # Reversión a la Media (Acumulación/Distribución)
+from engine.risk.risk_manager import RiskManager                 # Motor de Riesgo Dinámico y Cuantitativo
 
 class SlingshotRouter:
     """
@@ -26,6 +27,9 @@ class SlingshotRouter:
         self.strat_smc = PaulPerdicesStrategy()
         self.strat_trend = TrendFollowingStrategy()
         self.strat_reversion = ReversionStrategy()
+        
+        # Instanciar el Gestor de Riesgos con capital estándar de fondeo ($1,000 al 1%)
+        self.risk_manager = RiskManager(account_balance=1000.0, base_risk_pct=0.01)
         
     def process_market_data(
         self, 
@@ -179,22 +183,36 @@ class SlingshotRouter:
             opportunities = []
 
             
-        # Extraer señales recientes (velas dentro del intervalo actual o el anterior)
-        # BUG FIX: Comparar como Timestamps, no como strings (la conversión string nunca era igual)
+        # Extraer el backlog de señales históricas recientes para que la UI no se vacíe
         if opportunities:
-            ts_result = pd.Timestamp(result['timestamp'])
-            # Mapeamos el intervalo a segundos para la tolerancia de ventana
-            _interval_seconds = {
-                '1m': 60, '3m': 180, '5m': 300, '15m': 960,
-                '30m': 1800, '1h': 3600, '4h': 14400, '1d': 86400
-            }.get(interval, 960)
-            for sig in opportunities[-5:]:  # Revisar las últimas 5 señales
-                ts_signal = pd.Timestamp(sig['timestamp'])
-                if abs((ts_signal - ts_result).total_seconds()) <= _interval_seconds:
-                    result['signals'].append(sig)
-                    print(f"[ROUTER] ✅ Señal válida: {sig['type']} @ ${sig['price']:.2f} (Δt={abs((ts_signal-ts_result).total_seconds()):.0f}s)")
+            for sig in opportunities[-10:]:  # Mantener las últimas 10 señales históricas
+                # ✅ FASE 4: CÁLCULO DE RIESGO GEOGRÁFICO Y CUANTITATIVO
+                risk_data = self.risk_manager.calculate_position(
+                    current_price=sig['price'],
+                    signal_type=sig.get('signal_type', 'LONG'),
+                    market_regime=sig.get('regime', 'RANGING'),
+                    nearest_structural_level=sig.get('nearest_structural_level', None),
+                    atr_value=sig.get('atr_value', 0.0)
+                )
+                
+                # Inyectar la matemática pura a la señal antes de despacharla al Frontend
+                sig.update({
+                    "risk_usd": risk_data["risk_amount_usdt"],
+                    "risk_pct": risk_data["risk_pct"],
+                    "leverage": risk_data["leverage"],
+                    "position_size": risk_data["position_size_usdt"], # En el frontend lee 'position_size'
+                    "stop_loss": risk_data["stop_loss"],
+                    "take_profit_3r": risk_data["take_profit"], # Compatibilidad Frontend
+                })
+                
+                result['signals'].append(sig)
+                
+            if result['signals']:
+                last_sig = result['signals'][-1]
+                print(f"[ROUTER] ✅ Backlog cargado | Última Señal: {last_sig['type']} @ ${last_sig['price']:.2f} | Leverage: {last_sig.get('leverage')}x")
+            
             if not result['signals']:
-                print(f"[ROUTER] ℹ️ {len(opportunities)} oportunidades históricas, ninguna en la vela actual ({ts_result}).")
+                print(f"[ROUTER] ℹ️ {len(opportunities)} oportunidades históricas analizadas, cero válidas al final.")
                 
         return result
 

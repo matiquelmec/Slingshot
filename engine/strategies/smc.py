@@ -83,45 +83,39 @@ class PaulPerdicesStrategy:
                 has_ob_bull = current.get('ob_bullish', False)
                 if in_killzone and has_ob_bull and swept_liq and has_volume:
                     entry  = current['close']
-                    stop   = current['low'] * 0.998
-                    # Mock risk logic inline
-                    trade  = {"valid": True, "take_profit": entry + abs(entry - stop)*3, "risk_usd": 10.0, "position_size_usd": 200.0}
-                    if trade['valid']:
-                        opportunities.append({
-                            "timestamp":        current['timestamp'],
-                            "type":             "LONG 🟢 (SMC FRANCOTIRADOR)",
-                            "regime":           current.get('market_regime'),
-                            "price":            entry,
-                            "stop_loss":        stop,
-                            "take_profit_3r":   trade['take_profit'],
-                            "risk_usd":         trade['risk_usd'],
-                            "position_size":    trade['position_size_usd'],
-                            "trigger":          "KillZone + OB Alcista + Sweep Liquidez + RVOL",
-                            "rsi":              round(current.get('rsi', 0), 2),
-                            "is_squeeze":       current.get('squeeze_active', False),
-                        })
+                    nearest_structural = current['low']
+                    
+                    opportunities.append({
+                        "timestamp":        current['timestamp'],
+                        "type":             "LONG 🟢 (SMC FRANCOTIRADOR)",
+                        "signal_type":      "LONG",
+                        "regime":           current.get('market_regime'),
+                        "price":            entry,
+                        "nearest_structural_level": nearest_structural,
+                        "trigger":          "KillZone + OB Alcista + Sweep Liquidez + RVOL",
+                        "rsi":              round(current.get('rsi', 0), 2),
+                        "is_squeeze":       current.get('squeeze_active', False),
+                        "atr_value":        current.get('atr_value', 0.0)
+                    })
 
             # ── SHORT: DISTRIBUTION con barrida alcista → caída ─────────
             elif current.get('market_regime') == 'DISTRIBUTION':
                 has_ob_bear = current.get('ob_bearish', False)
                 if in_killzone and has_ob_bear and swept_high and has_volume:
                     entry  = current['close']
-                    stop   = current['high'] * 1.002
-                    # Mock risk logic inline
-                    trade  = {"valid": True, "take_profit": entry - abs(entry - stop)*3, "risk_usd": 10.0, "position_size_usd": 200.0}
-                    if trade['valid']:
-                        opportunities.append({
-                            "timestamp":        current['timestamp'],
-                            "type":             "SHORT 🔴 (SMC FRANCOTIRADOR)",
-                            "regime":           current.get('market_regime'),
-                            "price":            entry,
-                            "stop_loss":        stop,
-                            "take_profit_3r":   trade['take_profit'],
-                            "risk_usd":         trade['risk_usd'],
-                            "position_size":    trade['position_size_usd'],
-                            "trigger":          "KillZone + OB Bajista + Sweep Liquidez + RVOL",
-                            "rsi":              round(current.get('rsi', 0), 2),
-                            "is_squeeze":       current.get('squeeze_active', False),
-                        })
+                    nearest_structural = current['high']
+                    
+                    opportunities.append({
+                        "timestamp":        current['timestamp'],
+                        "type":             "SHORT 🔴 (SMC FRANCOTIRADOR)",
+                        "signal_type":      "SHORT",
+                        "regime":           current.get('market_regime'),
+                        "price":            entry,
+                        "nearest_structural_level": nearest_structural,
+                        "trigger":          "KillZone + OB Bajista + Sweep Liquidez + RVOL",
+                        "rsi":              round(current.get('rsi', 0), 2),
+                        "is_squeeze":       current.get('squeeze_active', False),
+                        "atr_value":        current.get('atr_value', 0.0)
+                    })
 
         return opportunities

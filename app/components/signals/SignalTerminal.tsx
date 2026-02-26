@@ -319,14 +319,20 @@ export default function SignalTerminal() {
                                             </div>
 
                                             <div className="col-span-3 flex items-center flex-wrap gap-1">
+                                                <span className="px-1.5 py-0.5 text-[8px] font-bold tracking-wider text-neon-cyan/80 bg-neon-cyan/10 border border-neon-cyan/20 rounded">
+                                                    RISK: {sig.risk_pct ? `${sig.risk_pct}%` : 'N/A'} (${sig.risk_usd || 'N/A'})
+                                                </span>
+                                                <span className="px-1.5 py-0.5 text-[8px] font-bold tracking-wider text-[#d4af37] bg-[#d4af37]/10 border border-[#d4af37]/20 rounded tracking-widest">
+                                                    {sig.leverage ? `${sig.leverage}x` : '1x'} LEV
+                                                </span>
+                                                <span className="px-1.5 py-0.5 text-[8px] font-bold tracking-wider text-white/70 bg-white/10 border border-white/20 rounded">
+                                                    SIZE: ${sig.position_size || '---'}
+                                                </span>
                                                 {sig.trigger?.split('+').map((badge: string, i: number) => (
-                                                    <span key={i} className="px-1.5 py-0.5 text-[8px] font-bold tracking-wider text-white/50 bg-white/5 border border-white/10 rounded">
+                                                    <span key={i} className="px-1.5 py-0.5 text-[8px] font-bold tracking-wider text-white/40 bg-white/5 border border-white/10 rounded">
                                                         {badge.trim()}
                                                     </span>
                                                 ))}
-                                                <span className="px-1.5 py-0.5 text-[8px] font-bold tracking-wider text-neon-cyan/80 bg-neon-cyan/10 border border-neon-cyan/20 rounded">
-                                                    RISK: ${sig.risk_usd || 'N/A'}
-                                                </span>
                                             </div>
 
                                         </motion.div>

@@ -45,18 +45,18 @@ class TrendFollowingStrategy:
             if current.get('market_regime') == 'MARKUP':
                 if current.get('pullback_to_ema50_bull') and current.get('in_golden_pocket'):
                     entry = current['close']
-                    stop  = current.get('swing_low', current['low']) * 0.99
-                    # Mock risk logic
-                    trade = {"valid": True, "risk_usd": 10.0, "position_size_usd": 200.0}
-                    if trade['valid']:
-                        opportunities.append({
-                            "timestamp": current['timestamp'],
-                            "type":      "LONG 🟢 (TREND PULLBACK)",
-                            "price":     entry,
-                            "trigger":   "EMA 50 + Fibo 0.618 Confluencia",
-                            "risk":      trade['risk_usd'],
-                            "position":  trade['position_size_usd']
-                        })
+                    nearest_structural = current.get('swing_low', current['low'])
+                    
+                    opportunities.append({
+                        "timestamp": current['timestamp'],
+                        "type":      "LONG 🟢 (TREND PULLBACK)",
+                        "signal_type":"LONG",
+                        "regime":    current.get('market_regime'),
+                        "price":     entry,
+                        "nearest_structural_level": nearest_structural,
+                        "trigger":   "EMA 50 + Fibo 0.618 Confluencia",
+                        "atr_value": current.get('atr_value', 0.0)
+                    })
                         
             # --- ESTRATEGIA SHORT: Pullback en MARKDOWN ---
             # (No implementamos Fibonacci Bearish estricto en el indicador aún, 
@@ -64,17 +64,17 @@ class TrendFollowingStrategy:
             elif current.get('market_regime') == 'MARKDOWN':
                 if current.get('pullback_to_ema50_bear'):
                     entry = current['close']
-                    stop  = current.get('ema_50', current['high']) * 1.01
-                    # Mock risk logic
-                    trade = {"valid": True, "risk_usd": 10.0, "position_size_usd": 200.0}
-                    if trade['valid']:
-                        opportunities.append({
-                            "timestamp": current['timestamp'],
-                            "type":      "SHORT 🔴 (TREND PULLBACK)",
-                            "price":     entry,
-                            "trigger":   "Rechazo de EMA 50 en Downtrend",
-                            "risk":      trade['risk_usd'],
-                            "position":  trade['position_size_usd']
-                        })
+                    nearest_structural = current.get('ema_50', current['high'])
+                    
+                    opportunities.append({
+                        "timestamp": current['timestamp'],
+                        "type":      "SHORT 🔴 (TREND PULLBACK)",
+                        "signal_type":"SHORT",
+                        "regime":    current.get('market_regime'),
+                        "price":     entry,
+                        "nearest_structural_level": nearest_structural,
+                        "trigger":   "Rechazo de EMA 50 en Downtrend",
+                        "atr_value": current.get('atr_value', 0.0)
+                    })
                         
         return opportunities

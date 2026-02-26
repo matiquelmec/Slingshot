@@ -43,33 +43,34 @@ class ReversionStrategy:
             if current.get('market_regime') == 'ACCUMULATION':
                 if current.get('rsi_oversold') and current.get('macd_bullish_cross'):
                     entry = current['close']
-                    stop  = current['low'] * 0.99
-                    trade = self.risk_manager.calculate_position(entry, stop)
-                    if trade['valid']:
-                        opportunities.append({
-                            "timestamp": current['timestamp'],
-                            "type":      "LONG 🟢 (REVERSION IN ACCUMULATION)",
-                            "price":     entry,
-                            "trigger":   "RSI < 30 + MACD Bull Cross",
-                            "risk":      trade['risk_usd'],
-                            "position":  trade['position_size_usd']
-                        })
+                    nearest_structural = current['low']
+                    
+                    opportunities.append({
+                        "timestamp": current['timestamp'],
+                        "type":      "LONG 🟢 (REVERSION IN ACCUMULATION)",
+                        "signal_type":"LONG",
+                        "regime":    current.get('market_regime'),
+                        "price":     entry,
+                        "nearest_structural_level": nearest_structural,
+                        "trigger":   "RSI < 30 + MACD Bull Cross",
+                        "atr_value": current.get('atr_value', 0.0)
+                    })
                         
             # --- ESTRATEGIA SHORT: Distribución (Techo) ---
             elif current.get('market_regime') == 'DISTRIBUTION':
                 if current.get('rsi_overbought'):
                     entry = current['close']
-                    stop  = current['high'] * 1.01
-                    # Mock risk logic
-                    trade = {"valid": True, "risk_usd": 10.0, "position_size_usd": 200.0}
-                    if trade['valid']:
-                        opportunities.append({
-                            "timestamp": current['timestamp'],
-                            "type":      "SHORT 🔴 (REVERSION IN DISTRIBUTION)",
-                            "price":     entry,
-                            "trigger":   "RSI > 70 in Zone Ceiling",
-                            "risk":      trade['risk_usd'],
-                            "position":  trade['position_size_usd']
-                        })
+                    nearest_structural = current['high']
+                    
+                    opportunities.append({
+                        "timestamp": current['timestamp'],
+                        "type":      "SHORT 🔴 (REVERSION IN DISTRIBUTION)",
+                        "signal_type":"SHORT",
+                        "regime":    current.get('market_regime'),
+                        "price":     entry,
+                        "nearest_structural_level": nearest_structural,
+                        "trigger":   "RSI > 70 in Zone Ceiling",
+                        "atr_value": current.get('atr_value', 0.0)
+                    })
                         
         return opportunities
