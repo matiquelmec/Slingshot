@@ -1,11 +1,13 @@
 import pandas as pd
+import pytz
 
 def map_sessions_liquidity(df: pd.DataFrame) -> pd.DataFrame:
     """
     Escáner de Liquidez por Sesión (SMC).
     Identifica los Máximos y Mínimos (Liquidity Pools) de las sesiones principales
     para detectar Sweeps (Cacería de Liquidez) institucional.
-    Trabaja estrictamente con timestamps en UTC.
+    Calcula dinámicamente usando las zonas horarias locales para soportar
+    los cambios de horario de verano (DST) de Estados Unidos y Europa.
     """
     df = df.copy()
     
@@ -14,19 +16,26 @@ def map_sessions_liquidity(df: pd.DataFrame) -> pd.DataFrame:
     else:
         df['timestamp'] = df['timestamp'].dt.tz_convert('UTC')
         
-    # Establecer el día de trading
+    # Establecer el día de trading en base a UTC
     df['trading_day'] = df['timestamp'].dt.date
-    df['hour'] = df['timestamp'].dt.hour
     
-    # Definir los rangos de las sesiones (Horarios UTC)
-    # Rango de Asia: 00:00 UTC a 06:00 UTC
-    asian_mask = (df['hour'] >= 0) & (df['hour'] < 6)
+    # Horas UTC puras para Asia (Sydney/Tokyo proxies)
+    df['hour_utc'] = df['timestamp'].dt.hour
     
-    # Rango de Londres: 07:00 UTC a 15:00 UTC
-    london_mask = (df['hour'] >= 7) & (df['hour'] < 15)
+    # 🕒 INTELECTO DE HUSOS HORARIOS (DST-AWARE)
+    # Convertir a las horas locales exactas de las bolsas para filtrar
+    df['ny_local_hour'] = df['timestamp'].dt.tz_convert('America/New_York').dt.hour
+    df['lon_local_hour'] = df['timestamp'].dt.tz_convert('Europe/London').dt.hour
     
-    # Rango de Nueva York: 13:00 UTC a 20:00 UTC
-    ny_mask = (df['hour'] >= 13) & (df['hour'] < 20)
+    # Definir los rangos de las sesiones mediante la HORA LOCAL
+    # Asia: Consideraremos de 00:00 UTC a 06:00 UTC tradicional.
+    asian_mask = (df['hour_utc'] >= 0) & (df['hour_utc'] < 6)
+    
+    # Londres: 08:00 AM a 16:00 PM (Hora de Reino Unido, ajustado a DST automáticamente)
+    london_mask = (df['lon_local_hour'] >= 8) & (df['lon_local_hour'] < 16)
+    
+    # Nueva York: 08:00 AM a 16:00 PM (Hora EST/EDT, mercado bursátil desde las 09:30 pre-market a 16:00 cierra)
+    ny_mask = (df['ny_local_hour'] >= 8) & (df['ny_local_hour'] < 16)
     
     # 1. Extraer los Máximos y Mínimos de Asia
     df['asian_high'] = df[asian_mask].groupby('trading_day')['high'].transform('max')

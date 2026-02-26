@@ -71,6 +71,8 @@ export interface SessionInfo {
     status: 'ACTIVE' | 'CLOSED' | 'PENDING';
     swept_high: boolean;
     swept_low: boolean;
+    start_utc: number;
+    end_utc: number;
 }
 
 export interface SessionData {

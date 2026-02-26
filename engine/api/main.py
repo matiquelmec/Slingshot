@@ -43,32 +43,45 @@ from engine.api.advisor import generate_tactical_advice
 
 def build_session_update(df_buffer: list, cached_state: dict = None) -> dict:
     """
-    Calcula el estado actual de las sesiones de mercado basado en UTC del servidor.
-    Mantiene el 'cached_state' para no borrar de la pantalla las sesiones previas
-    cuando trabajamos en temporalidades muy bajas (ej: 1m) donde el buffer de velas 
-    se queda corto en tiempo.
+    Calcula el estado actual de las sesiones de mercado y su sincronización DST-Aware.
     """
     now_utc = datetime.now(timezone.utc)
     hour_utc = now_utc.hour
+    
+    # Husos Horarios Reales
     chile_tz = pytz.timezone('America/Santiago')
+    ny_tz = pytz.timezone('America/New_York')
+    london_tz = pytz.timezone('Europe/London')
+    
     now_chile = now_utc.astimezone(chile_tz)
+    now_ny = now_utc.astimezone(ny_tz)
+    now_lon = now_utc.astimezone(london_tz)
+    
+    # Extraer horas locales reales
+    ny_hour = now_ny.hour
+    lon_hour = now_lon.hour
+    
     utc_str = now_utc.strftime('%H:%M UTC')
     local_str = now_chile.strftime('%H:%M Chile')
 
-    # Determinar sesión activa
+    # Determinar sesión activa dinámicamente según la HORA LOCAL de cada bolsa
+    # Asia: Consideramos 00:00 - 06:00 UTC
+    # Londres: 08:00 - 16:00 Hora Local (UK)
+    # NY: 08:00 - 16:00 Hora Local (EST/EDT)
     if 0 <= hour_utc < 6:
         session_name = 'ASIA'
         is_killzone = False
-    elif 7 <= hour_utc < 10:
+    elif 8 <= lon_hour < 11:
         session_name = 'LONDON_KILLZONE'
         is_killzone = True
-    elif 10 <= hour_utc < 13:
+    elif 11 <= lon_hour < 16 and ny_hour < 8:
+        # Entre fin de killzone de londres y apertura de NY
         session_name = 'LONDON'
         is_killzone = False
-    elif 13 <= hour_utc < 16:
+    elif 8 <= ny_hour < 11:
         session_name = 'NY_KILLZONE'
         is_killzone = True
-    elif 16 <= hour_utc < 20:
+    elif 11 <= ny_hour < 16:
         session_name = 'NEW_YORK'
         is_killzone = False
     else:
@@ -135,39 +148,64 @@ def build_session_update(df_buffer: list, cached_state: dict = None) -> dict:
         except Exception:
             pass
 
-    # Clonamos el estado cacheado para inyectarle el status dinámico
+    # Calcular las fronteras UTC de DÓNDE cae la sesión hoy para enviarlas al Frontend
+    # Asia siempre es 0 a 6 UTC:
+    asia_start_utc = 0
+    asia_end_utc = 6
+    
+    # Londres (8 - 16 Local). Tenemos que preguntar a pytz qué hora UTC representa las 8 AM en Londres HOY.
+    # Un shortcut es mirar el offset actual de Londres respecto a UTC
+    lon_offset_hours = now_lon.utcoffset().total_seconds() / 3600
+    lon_start_utc = int(8 - lon_offset_hours)
+    lon_end_utc = int(16 - lon_offset_hours)
+
+    # NY (8 - 16 Local).
+    ny_offset_hours = now_ny.utcoffset().total_seconds() / 3600
+    ny_start_utc = int(8 - ny_offset_hours)
+    ny_end_utc = int(16 - ny_offset_hours)
+
     sessions_data = {
-        'asia':   {**cached_state['asia'], 'status': 'CLOSED'},
-        'london': {**cached_state['london'], 'status': 'PENDING'},
-        'ny':     {**cached_state['ny'], 'status': 'PENDING'}
+        'asia':   {
+            **cached_state['asia'], 
+            'status': 'CLOSED',
+            'start_utc': asia_start_utc, 'end_utc': asia_end_utc
+        },
+        'london': {
+            **cached_state['london'], 
+            'status': 'PENDING',
+            'start_utc': lon_start_utc, 'end_utc': lon_end_utc
+        },
+        'ny':     {
+            **cached_state['ny'], 
+            'status': 'PENDING',
+            'start_utc': ny_start_utc, 'end_utc': ny_end_utc
+        }
     }
 
-    # Marcar estado ACTIVE/CLOSED/PENDING de cada sesión según hora UTC individualmente
-    # ASIA (00:00 - 06:00)
+    # Marcar estado ACTIVE/CLOSED/PENDING de cada sesión según sus fronteras UTC dinámicas
+    # ASIA
     if 0 <= hour_utc < 6:
         sessions_data['asia']['status'] = 'ACTIVE'
     elif hour_utc >= 20:
-        # Pre-apertura del día siguiente
         sessions_data['asia']['status'] = 'PENDING'
     else:
         sessions_data['asia']['status'] = 'CLOSED'
 
-    # LONDON (07:00 - 15:00)
-    if hour_utc < 7:
+    # LONDON
+    if hour_utc < lon_start_utc:
         sessions_data['london']['status'] = 'PENDING'
-    elif 7 <= hour_utc < 15:
+    elif lon_start_utc <= hour_utc < lon_end_utc:
         sessions_data['london']['status'] = 'ACTIVE'
     else:
         sessions_data['london']['status'] = 'CLOSED'
 
-    # NEW YORK (13:00 - 20:00)
-    if hour_utc < 13:
+    # NEW YORK
+    if hour_utc < ny_start_utc:
         sessions_data['ny']['status'] = 'PENDING'
-    elif 13 <= hour_utc < 20:
+    elif ny_start_utc <= hour_utc < ny_end_utc:
         sessions_data['ny']['status'] = 'ACTIVE'
     else:
         sessions_data['ny']['status'] = 'CLOSED'
-
 
     return {
         'type': 'session_update',

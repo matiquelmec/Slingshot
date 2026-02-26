@@ -7,10 +7,10 @@ import { useTelemetryStore, SessionData, SessionInfo } from '../../store/telemet
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-const SESSION_META: Record<string, { label: string; flag: string; color: string; glow: string; startUTC: number; endUTC: number }> = {
-    asia: { label: 'Asia', flag: '🌏', color: 'text-orange-400', glow: 'rgba(251,146,60,0.4)', startUTC: 0, endUTC: 6 },
-    london: { label: 'Londres', flag: '🏦', color: 'text-blue-400', glow: 'rgba(96,165,250,0.4)', startUTC: 7, endUTC: 15 },
-    ny: { label: 'Nueva York', flag: '🗽', color: 'text-purple-400', glow: 'rgba(192,132,252,0.4)', startUTC: 13, endUTC: 20 },
+const SESSION_META: Record<string, { label: string; flag: string; color: string; glow: string }> = {
+    asia: { label: 'Asia', flag: '🌏', color: 'text-orange-400', glow: 'rgba(251,146,60,0.4)' },
+    london: { label: 'Londres', flag: '🏦', color: 'text-blue-400', glow: 'rgba(96,165,250,0.4)' },
+    ny: { label: 'Nueva York', flag: '🗽', color: 'text-purple-400', glow: 'rgba(192,132,252,0.4)' },
 };
 
 const SESSION_DISPLAY: Record<string, { label: string; color: string; bg: string }> = {
@@ -34,16 +34,22 @@ function fmt(n: number | null, decimals = 0) {
 }
 
 function formatSessionTimes(startUTC: number, endUTC: number) {
+    // Si no tenemos datos iniciales (undefined safe)
+    if (startUTC === undefined || endUTC === undefined) return '...UTC | ...CL';
+
+    // Normalizar horas (por si endUTC cruza medianoche)
+    const normalizedEndUtc = endUTC >= 24 ? endUTC - 24 : endUTC;
+
     const formatTime = (hour: number) => hour.toString().padStart(2, '0') + ':00';
 
     // Calcular dinámicamente el horario en Chile a partir del UTC actual
     const dStart = new Date();
     dStart.setUTCHours(startUTC, 0, 0, 0);
     const dEnd = new Date();
-    dEnd.setUTCHours(endUTC, 0, 0, 0);
+    dEnd.setUTCHours(normalizedEndUtc, 0, 0, 0);
 
     const fmtChile = new Intl.DateTimeFormat('es-CL', { timeZone: 'America/Santiago', hour: '2-digit', minute: '2-digit', hour12: false });
-    return `${formatTime(startUTC)}-${formatTime(endUTC)} UTC | ${fmtChile.format(dStart)}-${fmtChile.format(dEnd)} CL`;
+    return `${formatTime(startUTC)}-${formatTime(normalizedEndUtc)} UTC | ${fmtChile.format(dStart)}-${fmtChile.format(dEnd)} CL`;
 }
 
 function SweepBadge({ swept, label }: { swept: boolean; label: string }) {
@@ -68,7 +74,7 @@ function SessionRow({ id, info }: { id: string; info: SessionInfo }) {
                         <p className={`text-[8px] font-semibold ${STATUS_STYLE[info.status]}`}>{info.status}</p>
                     </div>
                     <p className="text-[8.5px] text-white/40 mt-0.5 leading-tight font-mono tracking-tighter">
-                        {formatSessionTimes(meta.startUTC, meta.endUTC)}
+                        {formatSessionTimes(info.start_utc, info.end_utc)}
                     </p>
                 </div>
             </div>
