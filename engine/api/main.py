@@ -52,23 +52,26 @@ def build_session_update(df_buffer: list, cached_state: dict = None) -> dict:
     chile_tz = pytz.timezone('America/Santiago')
     ny_tz = pytz.timezone('America/New_York')
     london_tz = pytz.timezone('Europe/London')
+    tokyo_tz = pytz.timezone('Asia/Tokyo')
     
     now_chile = now_utc.astimezone(chile_tz)
     now_ny = now_utc.astimezone(ny_tz)
     now_lon = now_utc.astimezone(london_tz)
+    now_tokyo = now_utc.astimezone(tokyo_tz)
     
     # Extraer horas locales reales
     ny_hour = now_ny.hour
     lon_hour = now_lon.hour
+    tokyo_hour = now_tokyo.hour
     
     utc_str = now_utc.strftime('%H:%M UTC')
     local_str = now_chile.strftime('%H:%M Chile')
 
     # Determinar sesión activa dinámicamente según la HORA LOCAL de cada bolsa
-    # Asia: Consideramos 00:00 - 06:00 UTC
+    # Asia (Tokyo): 09:00 - 15:00 Hora Local (JST)
     # Londres: 08:00 - 16:00 Hora Local (UK)
     # NY: 08:00 - 16:00 Hora Local (EST/EDT)
-    if 0 <= hour_utc < 6:
+    if 9 <= tokyo_hour < 15:
         session_name = 'ASIA'
         is_killzone = False
     elif 8 <= lon_hour < 11:
@@ -149,9 +152,10 @@ def build_session_update(df_buffer: list, cached_state: dict = None) -> dict:
             pass
 
     # Calcular las fronteras UTC de DÓNDE cae la sesión hoy para enviarlas al Frontend
-    # Asia siempre es 0 a 6 UTC:
-    asia_start_utc = 0
-    asia_end_utc = 6
+    # Asia (9 - 15 Local Tokyo). 
+    tokyo_offset_hours = now_tokyo.utcoffset().total_seconds() / 3600
+    asia_start_utc = int(9 - tokyo_offset_hours)
+    asia_end_utc = int(15 - tokyo_offset_hours)
     
     # Londres (8 - 16 Local). Tenemos que preguntar a pytz qué hora UTC representa las 8 AM en Londres HOY.
     # Un shortcut es mirar el offset actual de Londres respecto a UTC
@@ -184,9 +188,9 @@ def build_session_update(df_buffer: list, cached_state: dict = None) -> dict:
 
     # Marcar estado ACTIVE/CLOSED/PENDING de cada sesión según sus fronteras UTC dinámicas
     # ASIA
-    if 0 <= hour_utc < 6:
+    if asia_start_utc <= hour_utc < asia_end_utc:
         sessions_data['asia']['status'] = 'ACTIVE'
-    elif hour_utc >= 20:
+    elif hour_utc >= (asia_end_utc + 12) % 24: # Estimación de pending pre-sesión
         sessions_data['asia']['status'] = 'PENDING'
     else:
         sessions_data['asia']['status'] = 'CLOSED'
