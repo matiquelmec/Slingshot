@@ -37,6 +37,7 @@ export interface TacticalDecision {
     regime: string;
     strategy: string;
     reasoning: string;
+    current_price: number | null;
     nearest_support: number | null;
     nearest_resistance: number | null;
     sma_fast: number | null;
@@ -173,6 +174,7 @@ export const useTelemetryStore = create<TelemetryState>((set, get) => {
                 tacticalDecision: {
                     regime: "ANALIZANDO NUEVO RIESGO...", strategy: "STANDBY",
                     reasoning: `Sincronizando telemetría para ${symbol}.`,
+                    current_price: null,
                     nearest_support: null, nearest_resistance: null,
                     sma_fast: null, sma_slow: null, sma_slow_slope: null,
                     bb_width: null, bb_width_mean: null, dist_to_sma200: null, signals: [],
@@ -264,6 +266,7 @@ export const useTelemetryStore = create<TelemetryState>((set, get) => {
                             regime: d.market_regime ?? 'UNKNOWN',
                             strategy: d.active_strategy ?? 'STANDBY',
                             reasoning: `Régimen: ${d.market_regime}. Soportes mapeados. Dist SMA200: ${d.dist_to_sma200 != null ? (d.dist_to_sma200 * 100).toFixed(2) + '%' : 'N/A'}`,
+                            current_price: d.current_price ?? null,
                             nearest_support: d.nearest_support ?? null,
                             nearest_resistance: d.nearest_resistance ?? null,
                             sma_fast: d.sma_fast ?? null,
@@ -351,7 +354,9 @@ export const useTelemetryStore = create<TelemetryState>((set, get) => {
     };
 
     return {
+        advisor_log: null,
         isConnected: false,
+
         activeSymbol: 'BTCUSDT',
         activeTimeframe: '15m',
         candles: [],
@@ -364,6 +369,7 @@ export const useTelemetryStore = create<TelemetryState>((set, get) => {
             regime: "DESCUBRIENDO...",
             strategy: "STANDBY",
             reasoning: "Inicializando motores de inferencia.",
+            current_price: null,
             nearest_support: null, nearest_resistance: null,
             sma_fast: null, sma_slow: null, sma_slow_slope: null,
             bb_width: null, bb_width_mean: null, dist_to_sma200: null, signals: [],

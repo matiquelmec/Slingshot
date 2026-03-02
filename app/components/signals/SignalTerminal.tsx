@@ -4,6 +4,7 @@ import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Network, Crosshair, TrendingUp, TrendingDown, Target, ShieldAlert, Zap, Activity, Search, BarChart3, Clock, BrainCircuit, Radar } from 'lucide-react';
 import { useTelemetryStore } from '../../store/telemetryStore';
+import MarketContextPanel from './MarketContextPanel';
 
 function TypewriterText({ text, speed = 30 }: { text: string; speed?: number }) {
     const [displayedText, setDisplayedText] = useState('');
@@ -239,6 +240,23 @@ export default function SignalTerminal() {
                     </div>
                 </div>
 
+                {/* MARKET CONTEXT PANEL — visible siempre, incluso sin señales */}
+                <div className="flex-none px-4 pb-3 border-b border-white/5">
+                    <MarketContextPanel
+                        regime={(tacticalDecision as any)?.market_regime ?? (tacticalDecision as any)?.regime ?? null}
+                        activeStrategy={(tacticalDecision as any)?.active_strategy ?? null}
+                        diagnostic={tacticalDecision?.diagnostic ?? null}
+                        currentPrice={(tacticalDecision as any)?.current_price ?? currentPrice ?? null}
+                        nearestSupport={(tacticalDecision as any)?.nearest_support ?? null}
+                        nearestResistance={(tacticalDecision as any)?.nearest_resistance ?? null}
+                        sessionData={sessionData}
+                    />
+
+
+                </div>
+
+
+
                 {/* Status Strip -> Autonomous Advisor (LLM) */}
                 <div className="flex-none bg-black/60 border-t border-b border-white/5 px-4 py-2 flex flex-col justify-center text-[10px] font-mono tracking-widest min-h-[40px]">
                     <div className="flex items-center gap-2 mb-1">
@@ -334,6 +352,52 @@ export default function SignalTerminal() {
                                                     </span>
                                                 ))}
                                             </div>
+
+                                            {/* CONFLUENCE SCORE — fila completa debajo */}
+                                            {sig.confluence && (
+                                                <div className="col-span-12 mt-1.5 border-t border-white/5 pt-1.5 flex flex-col gap-1.5">
+                                                    {/* Score bar + conviction */}
+                                                    <div className="flex items-center gap-3">
+                                                        <div className="flex-1 h-1.5 bg-black/60 rounded-full overflow-hidden border border-white/10">
+                                                            <div
+                                                                className={`h-full rounded-full transition-all duration-700 ${sig.confluence.score >= 70 ? 'bg-neon-green shadow-[0_0_6px_rgba(0,255,65,0.6)]' :
+                                                                    sig.confluence.score >= 50 ? 'bg-neon-cyan shadow-[0_0_6px_rgba(0,229,255,0.6)]' :
+                                                                        sig.confluence.score >= 30 ? 'bg-yellow-400' :
+                                                                            'bg-neon-red'
+                                                                    }`}
+                                                                style={{ width: `${sig.confluence.score}%` }}
+                                                            />
+                                                        </div>
+                                                        <span className={`text-[10px] font-black tracking-widest whitespace-nowrap ${sig.confluence.score >= 70 ? 'text-neon-green' :
+                                                            sig.confluence.score >= 50 ? 'text-neon-cyan' :
+                                                                sig.confluence.score >= 30 ? 'text-yellow-400' :
+                                                                    'text-neon-red'
+                                                            }`}>
+                                                            {sig.confluence.score}/100 {sig.confluence.conviction}
+                                                        </span>
+                                                    </div>
+                                                    {/* Checklist compacto */}
+                                                    <div className="flex flex-wrap gap-1">
+                                                        {sig.confluence.checklist?.map((item: any, i: number) => (
+                                                            <span key={i} className={`px-1.5 py-0.5 text-[8px] font-bold tracking-wider rounded border ${item.status === 'CONFIRMADO'
+                                                                ? 'text-neon-green/90 bg-neon-green/10 border-neon-green/20'
+                                                                : item.status === 'PARCIAL'
+                                                                    ? 'text-yellow-400/90 bg-yellow-400/10 border-yellow-400/20'
+                                                                    : 'text-white/30 bg-white/5 border-white/10'
+                                                                }`} title={item.detail}>
+                                                                {item.status === 'CONFIRMADO' ? '✓' : item.status === 'PARCIAL' ? '◑' : '✗'} {item.factor}
+                                                            </span>
+                                                        ))}
+                                                    </div>
+                                                    {/* Reasoning narrativo */}
+                                                    {sig.confluence.reasoning && (
+                                                        <p className="text-[9px] text-white/40 italic font-mono leading-relaxed pl-1 border-l border-white/10">
+                                                            {sig.confluence.reasoning}
+                                                        </p>
+                                                    )}
+                                                </div>
+                                            )}
+
 
                                         </motion.div>
                                     );

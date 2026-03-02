@@ -1,6 +1,8 @@
 import pandas as pd
 from engine.indicators.regime import RegimeDetector
 from engine.indicators.fibonacci import identify_dynamic_fib_swing
+from engine.filters.time_filter import TimeFilter
+from engine.indicators.volume import confirm_trigger
 
 class TrendFollowingStrategy:
     """
@@ -11,8 +13,7 @@ class TrendFollowingStrategy:
     """
     
     def __init__(self):
-        # RiskManager removed for cleaner logic
-        pass
+        self.time_filter = TimeFilter()
         
     def analyze(self, df: pd.DataFrame) -> pd.DataFrame:
         df = df.copy()
@@ -33,6 +34,12 @@ class TrendFollowingStrategy:
         df['pullback_to_ema50_bull'] = (df['low'] <= df['ema_50']) & (df['close'] > df['ema_50'])
         df['pullback_to_ema50_bear'] = (df['high'] >= df['ema_50']) & (df['close'] < df['ema_50'])
 
+        # 4. Filtro Temporal (KillZone)
+        df['in_killzone'] = df['timestamp'].apply(self.time_filter.is_killzone)
+
+        # 5. Gatillo de Volumen (RVOL)
+        df = confirm_trigger(df, min_rvol=1.2) # Menos estricto que SMC (1.5) para continuación
+
         return df
 
     def find_opportunities(self, df: pd.DataFrame) -> list:
@@ -43,7 +50,7 @@ class TrendFollowingStrategy:
             
             # --- ESTRATEGIA LONG: Pullback en MARKUP ---
             if current.get('market_regime') == 'MARKUP':
-                if current.get('pullback_to_ema50_bull') and current.get('in_golden_pocket'):
+                if current.get('pullback_to_ema50_bull') and current.get('in_golden_pocket') and current.get('in_killzone') and current.get('valid_trigger'):
                     entry = current['close']
                     nearest_structural = current.get('swing_low', current['low'])
                     
@@ -62,7 +69,7 @@ class TrendFollowingStrategy:
             # (No implementamos Fibonacci Bearish estricto en el indicador aún, 
             # pero podríamos usar solo el rechazo de la EMA en Downtrend)
             elif current.get('market_regime') == 'MARKDOWN':
-                if current.get('pullback_to_ema50_bear'):
+                if current.get('pullback_to_ema50_bear') and current.get('in_killzone') and current.get('valid_trigger'):
                     entry = current['close']
                     nearest_structural = current.get('ema_50', current['high'])
                     

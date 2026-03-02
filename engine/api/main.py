@@ -259,6 +259,10 @@ async def websocket_stream_endpoint(websocket: WebSocket, symbol: str, interval:
                 print(f"[{symbol}] SMC Data Inicial enviada con éxito.")
                 
                 # Ejecutar el ruteo táctico con los datos iniciales y MTF
+                # Pasar contexto al ConfluenceManager (sesiones + ML inicial aún vacío)
+                engine_router.set_context(
+                    session_data=initial_session.get('data', {}),
+                )
                 tactical_result = engine_router.process_market_data(
                     df_init.copy(), 
                     asset=symbol.upper(),
@@ -270,6 +274,7 @@ async def websocket_stream_endpoint(websocket: WebSocket, symbol: str, interval:
                     "data": tactical_result
                 })
                 print(f"[{symbol}] Decisión Táctica Inicial (MTF) enviada con éxito.")
+
 
                 # 🤖 ANALISTA AUTÓNOMO (Llamada Inicial Tras Cargar Histórico)
                 try:
@@ -353,6 +358,12 @@ async def websocket_stream_endpoint(websocket: WebSocket, symbol: str, interval:
                         }
                     }
                     await websocket.send_json(payload)
+                    
+                    # 🕒 SESIONES: Actualizar SessionManager en tiempo real (SMC Sweeps)
+                    sm = get_session_manager(symbol)
+                    sm.update(payload['data'])
+                    session_payload = sm.get_current_state()
+                    await websocket.send_json(session_payload)
                     
                     # === ROUTER SMC (Vía Cómputo Lenta, pero en Tiempo Real) ===
                     is_candle_closed = kline.get('x', False)
@@ -453,6 +464,11 @@ async def websocket_stream_endpoint(websocket: WebSocket, symbol: str, interval:
                         # 5. Procesamiento Matemático Final del Cerebro
                         try:
                             # Re-evaluamos con la vela oficialmente cerrada
+                            # Actualizar contexto del ConfluenceManager con datos frescos
+                            engine_router.set_context(
+                                ml_projection=last_ml_prediction,
+                                session_data=session_payload.get('data', {}) if 'session_payload' in locals() else {},
+                            )
                             final_tactical = engine_router.process_market_data(
                                 df_live, 
                                 asset=symbol.upper(), 
@@ -464,6 +480,7 @@ async def websocket_stream_endpoint(websocket: WebSocket, symbol: str, interval:
                                 "data": final_tactical
                             })
                             print(f"[{symbol}] Decisión Táctica Estructural de Cierre emitida.")
+
 
                             # 🔮 GHOST DATA: Filtrar señales por contexto macro (Nivel 1)
                             raw_signals = final_tactical.get('signals', [])

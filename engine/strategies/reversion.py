@@ -1,6 +1,8 @@
 import pandas as pd
 from engine.indicators.regime import RegimeDetector
 from engine.indicators.momentum import apply_criptodamus_suite
+from engine.filters.time_filter import TimeFilter
+from engine.indicators.volume import confirm_trigger
 
 class ReversionStrategy:
     """
@@ -11,8 +13,7 @@ class ReversionStrategy:
     """
     
     def __init__(self):
-        # RiskManager removed for cleaner logic
-        pass
+        self.time_filter = TimeFilter()
         
     def analyze(self, df: pd.DataFrame) -> pd.DataFrame:
         df = df.copy()
@@ -31,6 +32,12 @@ class ReversionStrategy:
         df['ema_50'] = df['close'].ewm(span=50, adjust=False).mean()
         df['dist_to_ema50'] = (df['close'] - df['ema_50']) / df['ema_50']
 
+        # Filtro Temporal (KillZone)
+        df['in_killzone'] = df['timestamp'].apply(self.time_filter.is_killzone)
+
+        # Gatillo de Volumen (RVOL)
+        df = confirm_trigger(df, min_rvol=1.3)
+
         return df
 
     def find_opportunities(self, df: pd.DataFrame) -> list:
@@ -41,7 +48,7 @@ class ReversionStrategy:
             
             # --- ESTRATEGIA LONG: Acumulación (Suelo) ---
             if current.get('market_regime') == 'ACCUMULATION':
-                if current.get('rsi_oversold') and current.get('macd_bullish_cross'):
+                if current.get('rsi_oversold') and current.get('macd_bullish_cross') and current.get('in_killzone') and current.get('valid_trigger'):
                     entry = current['close']
                     nearest_structural = current['low']
                     
@@ -58,7 +65,7 @@ class ReversionStrategy:
                         
             # --- ESTRATEGIA SHORT: Distribución (Techo) ---
             elif current.get('market_regime') == 'DISTRIBUTION':
-                if current.get('rsi_overbought'):
+                if current.get('rsi_overbought') and current.get('in_killzone') and current.get('valid_trigger'):
                     entry = current['close']
                     nearest_structural = current['high']
                     

@@ -12,6 +12,7 @@ from engine.strategies.smc      import PaulPerdicesStrategy     # SMC Francotira
 from engine.strategies.trend    import TrendFollowingStrategy    # Continuación (Markup/Markdown)
 from engine.strategies.reversion import ReversionStrategy        # Reversión a la Media (Acumulación/Distribución)
 from engine.risk.risk_manager import RiskManager                 # Motor de Riesgo Dinámico y Cuantitativo
+from engine.core.confluence import confluence_manager            # Jurado Neural (Institutional Score)
 
 class SlingshotRouter:
     """
@@ -30,6 +31,17 @@ class SlingshotRouter:
         
         # Instanciar el Gestor de Riesgos con capital estándar de fondeo ($1,000 al 1%)
         self.risk_manager = RiskManager(account_balance=1000.0, base_risk_pct=0.01)
+        
+        # Estado compartido para ConfluenceManager (se actualiza en cada llamada)
+        self._last_ml_projection: dict = {}
+        self._last_session_data:  dict = {}
+        
+    def set_context(self, ml_projection: dict = None, session_data: dict = None):
+        """Actualiza el contexto externo (ML + Sesiones) para el evaluador de confluencias."""
+        if ml_projection:
+            self._last_ml_projection = ml_projection
+        if session_data:
+            self._last_session_data = session_data
         
     def process_market_data(
         self, 
@@ -197,13 +209,26 @@ class SlingshotRouter:
                 
                 # Inyectar la matemática pura a la señal antes de despacharla al Frontend
                 sig.update({
-                    "risk_usd": risk_data["risk_amount_usdt"],
-                    "risk_pct": risk_data["risk_pct"],
-                    "leverage": risk_data["leverage"],
-                    "position_size": risk_data["position_size_usdt"], # En el frontend lee 'position_size'
-                    "stop_loss": risk_data["stop_loss"],
-                    "take_profit_3r": risk_data["take_profit"], # Compatibilidad Frontend
+                    "risk_usd":      risk_data["risk_amount_usdt"],
+                    "risk_pct":      risk_data["risk_pct"],
+                    "leverage":      risk_data["leverage"],
+                    "position_size": risk_data["position_size_usdt"],
+                    "stop_loss":     risk_data["stop_loss"],
+                    "take_profit_3r": risk_data["take_profit"],
                 })
+                
+                # 🧠 CONFLUENCE SCORE — Evaluación institucional en tiempo real
+                try:
+                    confluence_result = confluence_manager.evaluate_signal(
+                        df=df,
+                        signal=sig,
+                        ml_projection=self._last_ml_projection,
+                        session_data=self._last_session_data,
+                    )
+                    sig["confluence"] = confluence_result
+                except Exception as e:
+                    print(f"[ROUTER] ConfluenceManager error: {e}")
+                    sig["confluence"] = None
                 
                 result['signals'].append(sig)
                 
