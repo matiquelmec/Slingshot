@@ -291,7 +291,7 @@ def consolidate_mtf_levels(base_levels: dict, macro_levels: dict, timeframe_weig
 
 def extract_smc_coordinates(df: pd.DataFrame) -> dict:
     """
-    Algoritmo de Mitigación Vectorizado:
+    Algoritmo de Mitigación Vectorizado y Optimizado HFT:
     Recorre el DataFrame secuencialmente para rastrear el ciclo de vida de OBs y FVGs.
     Retorna ÚNICAMENTE las zonas que siguen "vivas" (sin mitigar) al final del periodo.
     """
@@ -300,75 +300,76 @@ def extract_smc_coordinates(df: pd.DataFrame) -> dict:
     active_bullish_fvgs = []
     active_bearish_fvgs = []
     
-    # Iteramos sobre el DataFrame para rastrear mitigaciones paso a paso
-    for i, row in df.iterrows():
-        loc = df.index.get_loc(i)
-        current_low = row['low']
-        current_high = row['high']
-        current_ts = row['timestamp'].timestamp()
+    # Extraemos arrays nativos para velocidad extrema (O(N) plano)
+    timestamps = df['timestamp'].values
+    lows = df['low'].values
+    highs = df['high'].values
+    
+    ob_bull = df.get('ob_bullish', pd.Series([False]*len(df))).values
+    ob_bear = df.get('ob_bearish', pd.Series([False]*len(df))).values
+    fvg_bull = df.get('fvg_bullish', pd.Series([False]*len(df))).values
+    fvg_bear = df.get('fvg_bearish', pd.Series([False]*len(df))).values
+    
+    for loc in range(len(df)):
+        current_low = float(lows[loc])
+        current_high = float(highs[loc])
+        ts = timestamps[loc]
+        # pd.Timestamp fallback para velocidad
+        current_ts = ts.timestamp() if hasattr(ts, 'timestamp') else pd.Timestamp(ts).timestamp()
         
         # --- 1. PROCESAR MITIGACIONES DE ZONAS EXISTENTES ---
         
-        # Mitigación FVG Alcista: Para mantener el gráfico extremadamente limpio y preciso,
-        # si el precio cruza más del 50% del gap, lo damos por mitigado y destruido.
+        # Mitigación FVG Alcista (Soporte): Destruído si el precio cae bajo el 50%
         active_bullish_fvgs = [fvg for fvg in active_bullish_fvgs if current_low > (fvg['bottom'] + (fvg['top'] - fvg['bottom']) * 0.5)]
         
-        # Mitigación FVG Bajista: Si el precio sube por encima del 50% del gap, se mitiga.
+        # Mitigación FVG Bajista (Resistencia): Destruído si el precio sube por encima del 50%
         active_bearish_fvgs = [fvg for fvg in active_bearish_fvgs if current_high < (fvg['bottom'] + (fvg['top'] - fvg['bottom']) * 0.5)]
         
-        # Mitigación OB Alcista: Stop loss tocado o bloque mitigado en un 50% (para limpieza de gráfico)
+        # Mitigación OB Alcista: Limpieza de gráfico al 50%
         active_bullish_obs = [ob for ob in active_bullish_obs if current_low > (ob['bottom'] + (ob['top'] - ob['bottom']) * 0.5)]
         
-        # Mitigación OB Bajista: Stop loss tocado o bloque mitigado en un 50%
+        # Mitigación OB Bajista: Limpieza al 50%
         active_bearish_obs = [ob for ob in active_bearish_obs if current_high < (ob['bottom'] + (ob['top'] - ob['bottom']) * 0.5)]
         
-        
         # --- 2. REGISTRAR NUEVAS ZONAS ---
-        
         # (A) Nuevos Order Blocks
-        if row.get('ob_bullish') == True and loc > 0:
-            ob_candle = df.iloc[loc - 1]
+        if ob_bull[loc] and loc > 0:
             active_bullish_obs.append({
-                "time": ob_candle['timestamp'].timestamp(),
-                "top": float(ob_candle['high']),
-                "bottom": float(ob_candle['low']),
+                "time": timestamps[loc - 1].timestamp() if hasattr(timestamps[loc - 1], 'timestamp') else pd.Timestamp(timestamps[loc - 1]).timestamp(),
+                "top": float(highs[loc - 1]),
+                "bottom": float(lows[loc - 1]),
                 "status": "active",
                 "confirmation_time": current_ts
             })
             
-        if row.get('ob_bearish') == True and loc > 0:
-            ob_candle = df.iloc[loc - 1]
+        if ob_bear[loc] and loc > 0:
             active_bearish_obs.append({
-                "time": ob_candle['timestamp'].timestamp(),
-                "top": float(ob_candle['high']),
-                "bottom": float(ob_candle['low']),
+                "time": timestamps[loc - 1].timestamp() if hasattr(timestamps[loc - 1], 'timestamp') else pd.Timestamp(timestamps[loc - 1]).timestamp(),
+                "top": float(highs[loc - 1]),
+                "bottom": float(lows[loc - 1]),
                 "status": "active",
                 "confirmation_time": current_ts
             })
             
         # (B) Nuevos Fair Value Gaps (Requieren 3 velas: C1, C2_imbalance, C3_actual)
-        if row.get('fvg_bullish') == True and loc >= 2:
-            c1 = df.iloc[loc - 2]
-            # Techo del gap = Piso de C3 (actual), Piso del gap = Techo de C1
-            top = float(row['low'])
-            bottom = float(c1['high'])
-            if top > bottom: # Check de seguridad
+        if fvg_bull[loc] and loc >= 2:
+            top = current_low  # Piso de C3 (actual)
+            bottom = float(highs[loc - 2])  # Techo de C1
+            if top > bottom: # Check lógico: Sí hay gap
                 active_bullish_fvgs.append({
-                    "time": c1['timestamp'].timestamp(),
+                    "time": timestamps[loc - 2].timestamp() if hasattr(timestamps[loc - 2], 'timestamp') else pd.Timestamp(timestamps[loc - 2]).timestamp(),
                     "top": top,
                     "bottom": bottom,
                     "status": "active",
                     "confirmation_time": current_ts
                 })
                 
-        if row.get('fvg_bearish') == True and loc >= 2:
-            c1 = df.iloc[loc - 2]
-            # Techo del gap = Piso de C1, Piso del gap = Techo de C3 (actual)
-            top = float(c1['low'])
-            bottom = float(row['high'])
-            if top > bottom: # Check de seguridad
+        if fvg_bear[loc] and loc >= 2:
+            top = float(lows[loc - 2])  # Piso de C1
+            bottom = current_high  # Techo de C3 (actual)
+            if top > bottom: # Check lógico
                 active_bearish_fvgs.append({
-                    "time": c1['timestamp'].timestamp(),
+                    "time": timestamps[loc - 2].timestamp() if hasattr(timestamps[loc - 2], 'timestamp') else pd.Timestamp(timestamps[loc - 2]).timestamp(),
                     "top": top,
                     "bottom": bottom,
                     "status": "active",
