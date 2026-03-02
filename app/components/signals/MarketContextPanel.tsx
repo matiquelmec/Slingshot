@@ -199,6 +199,8 @@ function buildConditions(
         }
 
         case 'MARKDOWN': {
+            const rs = rsiDesc();
+            const volExtreme = vol > (d.volume_mean * 2.5); // Volumen 2.5x
             return [
                 {
                     label: 'Pullback bajista',
@@ -212,11 +214,21 @@ function buildConditions(
                     currentValue: `MACD: ${macdLine?.toFixed(2)}`,
                     meaning: macdDesc(),
                 },
+                {
+                    label: '¿Alerta de Clímax de Ventas?',
+                    status: (oversold && volExtreme) ? 'WARNING' : 'WAITING',
+                    currentValue: `Vol: ${vol.toFixed(0)} | RSI: ${rsi.toFixed(1)}`,
+                    meaning: (oversold && volExtreme)
+                        ? '⚠️ CLÍMAX DETECTADO. El volumen es extremo en zona de sobreventa. Esto suele indicar que las manos fuertes están cerrando cortos y empezando a comprar. No entres SHORT aquí.'
+                        : 'No hay señales de agotamiento masivo todavía. La tendencia tiene espacio.',
+                }
             ];
         }
 
         case 'RANGING': {
             const rp = rangePos();
+            const priceOut = rp && (parseInt(rp.pct) > 105 || parseInt(rp.pct) < -5);
+            const lowVol = vol < (d.volume_mean * 1.2);
             return [
                 {
                     label: 'Ubicación en el Rango',
@@ -229,19 +241,28 @@ function buildConditions(
                         : 'El algoritmo está buscando rebotes confirmados para definir el rango.',
                 },
                 {
-                    label: 'Ruptura con Volumen',
-                    status: 'WAITING',
-                    currentValue: rp ? `Diferencia: $${rp.range.toFixed(2)}` : 'Esperando ruptura...',
-                    meaning: 'Para salir del rango necesitamos una vela con cierre fuera y volumen > 1.5x.',
+                    label: 'Filtro de Ruptura (Fakeout Check)',
+                    status: (priceOut && lowVol) ? 'WARNING' : priceOut ? 'MET' : 'WAITING',
+                    currentValue: priceOut ? 'PRECIO FUERA' : 'DENTRO DE RANGO',
+                    meaning: (priceOut && lowVol)
+                        ? '⚠️ ALERTA DE FAKEOUT. El precio rompió el nivel pero el VOLUMEN es bajo. Es una trampa de liquidez para atrapar a traders minoristas antes de volver al rango.'
+                        : priceOut
+                            ? 'Ruptura con intención detectada. Verificando validación institucional.'
+                            : 'Esperando ruptura. Para entrar, el precio debe cerrar fuera con volumen fuerte.',
                 },
                 {
                     label: 'BB Squeeze (Potencial Ruptura)',
                     status: squeeze ? 'MET' : bbwp < 25 ? 'PARTIAL' : 'WAITING',
                     currentValue: `BBWP: ${bbwp?.toFixed(1)}%`,
-                    meaning: squeeze ? '🔥 Squeeze activo. Ruptura explosiva inminente.' : 'Cargando volatilidad.',
+                    meaning: squeeze
+                        ? '🔥 SQUEEZE CONFIRMADO. Las bandas están comprimidas dentro de los canales. Ruptura inminente.'
+                        : bbwp < 25
+                            ? 'Baja Volatilidad: El precio está en fase de compresión. El "resorte" está ganando energía para el próximo impulso.'
+                            : 'Volatilidad Normal: El mercado tiene espacio para moverse antes de comprimirse de nuevo.',
                 },
             ];
         }
+
 
         default:
             return [
@@ -323,9 +344,9 @@ export default function MarketContextPanel({
                             <StatusDot status={c.status} />
                             <div className="flex flex-col flex-1 min-w-0">
                                 <span className={`text-[9px] font-bold leading-tight ${c.status === 'MET' ? 'text-neon-green/90' :
-                                        c.status === 'PARTIAL' ? 'text-yellow-400/90' :
-                                            c.status === 'WARNING' ? 'text-neon-red/90' :
-                                                'text-white/60'
+                                    c.status === 'PARTIAL' ? 'text-yellow-400/90' :
+                                        c.status === 'WARNING' ? 'text-neon-red/90' :
+                                            'text-white/60'
                                     }`}>{c.label}</span>
                                 <span className="text-[9px] font-mono text-white/40 mt-0.5">{c.currentValue}</span>
                             </div>
