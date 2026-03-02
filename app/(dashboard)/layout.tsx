@@ -12,14 +12,17 @@ import { useTelemetryStore } from '../store/telemetryStore';
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
     const pathname = usePathname();
-    const { isConnected, connect, activeSymbol, activeTimeframe } = useTelemetryStore();
+    const { isConnected, connect } = useTelemetryStore();
+    const hasInitialized = React.useRef(false);
 
-    // Auto-Conexión Global: Garantiza que el sistema se sincronice sin importar en qué página aterrice el usuario
+    // Auto-Conexión Global: Garantiza que el sistema se conecte la primera vez que arranca la app 
     useEffect(() => {
-        if (!isConnected) {
+        if (!hasInitialized.current) {
+            hasInitialized.current = true;
+            const { activeSymbol, activeTimeframe } = useTelemetryStore.getState();
             connect(activeSymbol, activeTimeframe);
         }
-    }, [isConnected, connect, activeSymbol, activeTimeframe]);
+    }, [connect]);
 
     const navItems = [
         { name: 'Overview', href: '/', icon: LayoutDashboard },

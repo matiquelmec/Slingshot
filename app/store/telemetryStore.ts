@@ -149,7 +149,10 @@ export const useTelemetryStore = create<TelemetryState>((set, get) => {
 
         // Clean up existing connection and pending retries
         if (ws) {
-            ws.close();
+            ws.onclose = null; // Cierra la puerta al bucle de reconexión zombie del antiguo socket
+            ws.onerror = null;
+            ws.onmessage = null;
+            ws.close(1000); // 1000 = Normal Closure
             ws = null;
         }
         if (retryTimeout) {
