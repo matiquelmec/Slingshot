@@ -74,7 +74,7 @@ export default function MacroRadar() {
                     <span className="text-[9px] font-bold text-white/30 tracking-wider">FUNDING</span>
                     <div className="flex items-baseline gap-1">
                         <span className={`text-lg font-black ${funding_rate > 0 ? 'text-neon-red' : 'text-neon-green'}`}>
-                            {(funding_rate * 100).toFixed(4)}%
+                            {funding_rate.toFixed(4)}%
                         </span>
                     </div>
                     <span className="text-[8px] font-bold text-white/20 uppercase">8h Avg</span>

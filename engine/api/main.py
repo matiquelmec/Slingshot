@@ -36,7 +36,7 @@ from engine.notifications.telegram import send_signal_async
 from engine.notifications.filter import signal_filter
 
 # 🔮 Datos Fantasma (Nivel 1 - Filtro Macro)
-from engine.indicators.ghost_data import refresh_ghost_data, get_ghost_state, filter_signals_by_macro
+from engine.indicators.ghost_data import refresh_ghost_data, get_ghost_state, filter_signals_by_macro, is_cache_fresh
 
 # 🧠 Drift Monitor (Auto-supervisión del Modelo ML)
 from engine.ml.drift_monitor import drift_monitor
@@ -373,6 +373,31 @@ async def websocket_stream_endpoint(websocket: WebSocket, symbol: str, interval:
                     if current_time - last_pulse_time >= 1.0: # Max 1 actualización por segundo
                         last_pulse_time = current_time
                         
+                        # ✨ RENOVACIÓN DINÁMICA DE GHOST DATA ✨
+                        if not is_cache_fresh():
+                            async def update_and_send_ghost():
+                                try:
+                                    fresh_ghost = await refresh_ghost_data(symbol)
+                                    ghost_payload = {
+                                        "type": "ghost_update",
+                                        "data": {
+                                            "fear_greed_value": fresh_ghost.fear_greed_value,
+                                            "fear_greed_label": fresh_ghost.fear_greed_label,
+                                            "btc_dominance":    fresh_ghost.btc_dominance,
+                                            "funding_rate":      fresh_ghost.funding_rate,
+                                            "macro_bias":        fresh_ghost.macro_bias,
+                                            "block_longs":       fresh_ghost.block_longs,
+                                            "block_shorts":      fresh_ghost.block_shorts,
+                                            "reason":            fresh_ghost.reason,
+                                        }
+                                    }
+                                    await websocket.send_json(ghost_payload)
+                                    print(f"[{symbol}] [DINAMICO] Ghost Data enviado: Bias={fresh_ghost.macro_bias}, F&G={fresh_ghost.fear_greed_value}")
+                                except Exception as e:
+                                    print(f"[GHOST] Error en auto-refresco: {e}")
+                            
+                            asyncio.create_task(update_and_send_ghost())
+
                         # Para la inyección ML necesitamos un DataFrame actualizado
                         # Tomamos el buffer histórico y le sumamos el tick actual efímero
                         current_df_data = [item['data'] for item in live_candles_buffer] + [payload['data']]
