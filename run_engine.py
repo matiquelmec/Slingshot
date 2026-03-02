@@ -9,6 +9,10 @@ Uso:
 import sys
 import os
 
+# Fuerza codificación UTF-8 en Windows para evitar crashes por emojis/símbolos
+os.environ["PYTHONUTF8"] = "1"
+os.environ["PYTHONIOENCODING"] = "utf-8"
+
 # Asegurar que el directorio raíz del proyecto está en el path de Python
 # para que todas las importaciones absolutas del paquete 'engine' funcionen.
 project_root = os.path.dirname(os.path.abspath(__file__))
