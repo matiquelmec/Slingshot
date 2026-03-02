@@ -34,8 +34,7 @@ export default function OverviewPage() {
 
     useEffect(() => {
         setMounted(true);
-        connect('BTCUSDT', '15m');
-    }, [connect]);
+    }, []);
 
     useEffect(() => {
         if (addingSymbol && availableSymbols.length === 0) {

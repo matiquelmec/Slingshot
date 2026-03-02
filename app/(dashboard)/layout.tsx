@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { motion } from 'framer-motion';
@@ -12,7 +12,14 @@ import { useTelemetryStore } from '../store/telemetryStore';
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
     const pathname = usePathname();
-    const { isConnected } = useTelemetryStore();
+    const { isConnected, connect, activeSymbol, activeTimeframe } = useTelemetryStore();
+
+    // Auto-Conexión Global: Garantiza que el sistema se sincronice sin importar en qué página aterrice el usuario
+    useEffect(() => {
+        if (!isConnected) {
+            connect(activeSymbol, activeTimeframe);
+        }
+    }, [isConnected, connect, activeSymbol, activeTimeframe]);
 
     const navItems = [
         { name: 'Overview', href: '/', icon: LayoutDashboard },
