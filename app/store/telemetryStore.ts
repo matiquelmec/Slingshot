@@ -205,7 +205,21 @@ export const useTelemetryStore = create<TelemetryState>((set, get) => {
             try {
                 const data = JSON.parse(event.data);
 
-                if (data.type === 'candle') {
+                if (data.type === 'history') {
+                    // Carga ultrasónica de datos históricos (Batch Processing)
+                    const newCandles = data.data.map((item: any) => ({
+                        time: item.data.timestamp,
+                        open: item.data.open,
+                        high: item.data.high,
+                        low: item.data.low,
+                        close: item.data.close,
+                        volume: item.data.volume
+                    }));
+                    set({
+                        candles: newCandles,
+                        latestPrice: newCandles.length > 0 ? newCandles[newCandles.length - 1].close : null
+                    });
+                } else if (data.type === 'candle') {
                     const newCandle: CandleData = {
                         time: data.data.timestamp,
                         open: data.data.open,

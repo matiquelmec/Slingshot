@@ -149,17 +149,22 @@ async def websocket_stream_endpoint(websocket: WebSocket, symbol: str, interval:
         print(f"[{symbol}] Descargando historial desde Binance REST...")
         try:
             history = await fetch_binance_history(symbol, interval=interval, limit=500)
-            for candle in history:
-                await websocket.send_json(candle)
+            await websocket.send_json({
+                "type": "history",
+                "data": history
+            })
             print(f"[{symbol}] Historial enviado: {len(history)} velas.")
+        except WebSocketDisconnect:
+            raise
         except Exception as e:
             print(f"[{symbol}] No se pudo descargar historial de Binance: {e}. Usando datos locales.")
             # Fallback a Parquet local si Binance no está disponible
             file_path = Path(__file__).parent.parent.parent / "data" / f"{symbol.lower()}_{interval}.parquet"
             if file_path.exists():
                 data = pd.read_parquet(file_path)
+                hist_batch = []
                 for _, row in data.iterrows():
-                    await websocket.send_json({
+                    hist_batch.append({
                         "type": "candle",
                         "data": {
                             "timestamp": row['timestamp'].timestamp(),
@@ -170,7 +175,7 @@ async def websocket_stream_endpoint(websocket: WebSocket, symbol: str, interval:
                             "volume": float(row['volume']),
                         }
                     })
-                    await asyncio.sleep(0.01)  # No bloquear el event loop
+                await websocket.send_json({"type": "history", "data": hist_batch})
         
         # === FASE 1b: Obtener Niveles Macro (MTF) ===
         macro_levels = None
@@ -214,6 +219,8 @@ async def websocket_stream_endpoint(websocket: WebSocket, symbol: str, interval:
             }
             await websocket.send_json(ghost_payload)
             print(f"[{symbol}] Ghost Data enviado: Bias={ghost_state.macro_bias}, F&G={ghost_state.fear_greed_value}")
+        except WebSocketDisconnect:
+            raise
         except Exception as e:
             print(f"[{symbol}] Ghost Data no disponible: {e}. Continuando sin filtro macro.")
             ghost_state = get_ghost_state()  # Usar caché incluso si está stale
@@ -238,6 +245,8 @@ async def websocket_stream_endpoint(websocket: WebSocket, symbol: str, interval:
                 initial_session = sm.get_current_state()
                 await websocket.send_json(initial_session)
                 print(f"[{symbol}] Session Update Inicial enviada: {initial_session['data']['current_session']} | {initial_session['data']['local_time']}")
+            except WebSocketDisconnect:
+                raise
             except Exception as e:
                 print(f"[{symbol}] Error enviando session update inicial: {e}")
 
@@ -288,9 +297,13 @@ async def websocket_stream_endpoint(websocket: WebSocket, symbol: str, interval:
                         "data": advice_text
                     })
                     print(f"[{symbol}] Asesor Autónomo (LLM) informe inicial emitido.")
+                except WebSocketDisconnect:
+                    raise
                 except Exception as e:
                     print(f"[{symbol}] Error ejecutando Asesor Autónomo inicial: {e}")
 
+            except WebSocketDisconnect:
+                raise
             except Exception as e:
                 print(f"[{symbol}] Error procesando SMC Inicial: {e}")
 
@@ -422,6 +435,8 @@ async def websocket_stream_endpoint(websocket: WebSocket, symbol: str, interval:
                                     "type": "tactical_update",
                                     "data": live_tactical
                                 })
+                            except WebSocketDisconnect:
+                                raise
                             except Exception as e:
                                 print(f"[{symbol}] Error hidratando Confluence Matrix en vivo: {e}")
                             
@@ -528,6 +543,8 @@ async def websocket_stream_endpoint(websocket: WebSocket, symbol: str, interval:
                                     ))
                                 else:
                                     print(f"[TELEGRAM] 🔕 Señal bloqueada por anti-spam: {block_reason}")
+                        except WebSocketDisconnect:
+                            raise
                         except Exception as e:
                             print(f"[{symbol}] Error emitiendo decisión táctica: {e}")
 
@@ -537,6 +554,8 @@ async def websocket_stream_endpoint(websocket: WebSocket, symbol: str, interval:
                             session_payload = sm.update(payload['data'], is_closed=True)
                             await websocket.send_json(session_payload)
                             print(f"[{symbol}] Session Update emitido: {session_payload['data']['current_session']} | {session_payload['data']['local_time']}")
+                        except WebSocketDisconnect:
+                            raise
                         except Exception as e:
                             print(f"[{symbol}] Error emitiendo session update: {e}")
                             session_payload = {'data': {'current_session': 'UNKNOWN'}}
@@ -556,6 +575,8 @@ async def websocket_stream_endpoint(websocket: WebSocket, symbol: str, interval:
                                 "data": advice_text
                             })
                             print(f"[{symbol}] Asesor Autónomo (LLM) informe emitido.")
+                        except WebSocketDisconnect:
+                            raise
                         except Exception as e:
                             print(f"[{symbol}] Error ejecutando Asesor Autónomo: {e}")
                     
