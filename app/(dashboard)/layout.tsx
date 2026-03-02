@@ -15,12 +15,20 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     const { isConnected, connect } = useTelemetryStore();
     const hasInitialized = React.useRef(false);
 
-    // Auto-Conexión Global: Garantiza que el sistema se conecte la primera vez que arranca la app 
+    // Auto-Conexión Global con persistencia de moneda (evita reinicios a BTC en F5)
     useEffect(() => {
         if (!hasInitialized.current) {
             hasInitialized.current = true;
+
+            const savedSymbol = typeof window !== 'undefined' ? localStorage.getItem('slingshot_symbol') : null;
+            const savedTimeframe = typeof window !== 'undefined' ? localStorage.getItem('slingshot_timeframe') : null;
+
             const { activeSymbol, activeTimeframe } = useTelemetryStore.getState();
-            connect(activeSymbol, activeTimeframe);
+
+            const finalSymbol = savedSymbol || activeSymbol;
+            const finalTimeframe = (savedTimeframe as any) || activeTimeframe;
+
+            connect(finalSymbol, finalTimeframe);
         }
     }, [connect]);
 

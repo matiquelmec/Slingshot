@@ -400,11 +400,18 @@ export const useTelemetryStore = create<TelemetryState>((set, get) => {
 
         connect: (symbol: string, timeframe?: Timeframe) => {
             const tf = timeframe ?? get().activeTimeframe;
+            if (typeof window !== 'undefined') {
+                localStorage.setItem('slingshot_symbol', symbol);
+                localStorage.setItem('slingshot_timeframe', tf);
+            }
             doConnect(symbol, tf);
         },
 
         setTimeframe: (tf: Timeframe) => {
             const symbol = get().activeSymbol;
+            if (typeof window !== 'undefined') {
+                localStorage.setItem('slingshot_timeframe', tf);
+            }
             doConnect(symbol, tf);
         },
 
