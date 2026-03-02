@@ -362,9 +362,9 @@ export default function TradingChart() {
             smcData.order_blocks.bullish.forEach(ob => {
                 const obSeries = chart.addSeries(BaselineSeries, {
                     baseValue: { type: 'price', price: ob.bottom },
-                    topFillColor1: 'rgba(0, 255, 136, 0.25)',
-                    topFillColor2: 'rgba(0, 255, 136, 0.05)',
-                    topLineColor: 'rgba(0, 255, 136, 0.8)',
+                    topFillColor1: 'rgba(0, 255, 136, 0.50)',
+                    topFillColor2: 'rgba(0, 255, 136, 0.15)',
+                    topLineColor: 'rgba(0, 255, 136, 1.0)',
                     bottomFillColor1: 'transparent',
                     bottomFillColor2: 'transparent',
                     bottomLineColor: 'transparent',
@@ -384,9 +384,9 @@ export default function TradingChart() {
             smcData.order_blocks.bearish.forEach(ob => {
                 const obSeries = chart.addSeries(BaselineSeries, {
                     baseValue: { type: 'price', price: ob.top },
-                    bottomFillColor1: 'rgba(255, 0, 60, 0.25)',
-                    bottomFillColor2: 'rgba(255, 0, 60, 0.05)',
-                    bottomLineColor: 'rgba(255, 0, 60, 0.8)',
+                    bottomFillColor1: 'rgba(255, 0, 60, 0.50)',
+                    bottomFillColor2: 'rgba(255, 0, 60, 0.15)',
+                    bottomLineColor: 'rgba(255, 0, 60, 1.0)',
                     topFillColor1: 'transparent',
                     topFillColor2: 'transparent',
                     topLineColor: 'transparent',
@@ -408,9 +408,9 @@ export default function TradingChart() {
             smcData.fvgs.bullish.forEach(fvg => {
                 const fvgSeries = chart.addSeries(BaselineSeries, {
                     baseValue: { type: 'price', price: fvg.bottom },
-                    topFillColor1: 'rgba(255, 204, 0, 0.20)',
-                    topFillColor2: 'rgba(255, 204, 0, 0.05)',
-                    topLineColor: 'rgba(255, 204, 0, 0.7)',
+                    topFillColor1: 'rgba(255, 204, 0, 0.40)',
+                    topFillColor2: 'rgba(255, 204, 0, 0.10)',
+                    topLineColor: 'rgba(255, 204, 0, 0.9)',
                     bottomFillColor1: 'transparent',
                     bottomFillColor2: 'transparent',
                     bottomLineColor: 'transparent',
@@ -430,9 +430,9 @@ export default function TradingChart() {
             smcData.fvgs.bearish.forEach(fvg => {
                 const fvgSeries = chart.addSeries(BaselineSeries, {
                     baseValue: { type: 'price', price: fvg.top },
-                    bottomFillColor1: 'rgba(255, 204, 0, 0.20)',
-                    bottomFillColor2: 'rgba(255, 204, 0, 0.05)',
-                    bottomLineColor: 'rgba(255, 204, 0, 0.7)',
+                    bottomFillColor1: 'rgba(255, 204, 0, 0.40)',
+                    bottomFillColor2: 'rgba(255, 204, 0, 0.10)',
+                    bottomLineColor: 'rgba(255, 204, 0, 0.9)',
                     topFillColor1: 'transparent',
                     topFillColor2: 'transparent',
                     topLineColor: 'transparent',
