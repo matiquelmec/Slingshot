@@ -161,6 +161,7 @@ def identify_support_resistance(
                 'zone_top':     float(max(cp)),
                 'zone_bottom':  float(min(cp)),
                 'volume_score': round(med_vol / avg_vol, 2),  # 1.0 = promedio
+                'last_touch_idx': int(max(ci)) if ci else 0
             })
         return result
 
@@ -168,17 +169,30 @@ def identify_support_resistance(
     sup_clusters = cluster_levels(lows[valley_indices],  valley_indices,  tolerance_pct)
 
 
-    # ── 4. Detectar si un nivel fue roto en el historial ─────────────────────
-    def was_broken(level_price: float, level_type: str) -> bool:
+    # ── 4. Detectar si un nivel fue roto (Role Reversal) o Aniquilado (Invalidado) ──
+    def check_level_status(level_price: float, level_type: str, last_touch_idx: int) -> tuple[bool, bool]:
         """
-        True si el precio cerró al otro lado del nivel y lo penetró > 0.5×ATR.
-        Solo considera cierres para evitar falsas rupturas por wick.
+        Retorna (is_broken, is_invalidated)
+        - is_broken: cruzó al otro lado con fuerza (Role Reversal) después de formarse.
+        - is_invalidated: fue cruzado de ida y vuelta múltiples veces (chopped through), ya no es S/R.
         """
-        if level_type == 'RESISTANCE':
-            # Resistencia rota si hubo un cierre POR ENCIMA + margen
-            return any(c > level_price + 0.3 * current_atr for c in closes)
-        else:  # SUPPORT
-            return any(c < level_price - 0.3 * current_atr for c in closes)
+        if last_touch_idx >= len(closes): return False, False
+        closes_after = closes[last_touch_idx:]
+        
+        # Filtro de Expiración (Noise Filter): Cortes múltiples eliminan el bloque
+        crosses_up = np.sum((closes_after[:-1] < level_price) & (closes_after[1:] > level_price))
+        crosses_down = np.sum((closes_after[:-1] > level_price) & (closes_after[1:] < level_price))
+        
+        is_invalidated = (crosses_up + crosses_down) >= 3 # 3 cortes lo convierten en ruido, no S/R
+        
+        is_broken = False
+        if not is_invalidated:
+            if level_type == 'RESISTANCE':
+                is_broken = any(c > level_price + 0.3 * current_atr for c in closes_after)
+            else:  # SUPPORT
+                is_broken = any(c < level_price - 0.3 * current_atr for c in closes_after)
+                
+        return is_broken, is_invalidated
 
     # ── 5. Construir lista final con type/origin/strength/is_active ──────────
     def _strength(t: int) -> str:
@@ -189,7 +203,9 @@ def identify_support_resistance(
     all_levels: list[dict] = []
 
     for r in res_clusters:
-        broken = was_broken(r['price'], 'RESISTANCE')
+        broken, invalidated = check_level_status(r['price'], 'RESISTANCE', r['last_touch_idx'])
+        if invalidated: continue # Algoritmo Expirador: Nivel fue perforado mucho, es eliminado
+        
         if not broken:
             # Resistencia válida normal
             all_levels.append({**r, 'type': 'RESISTANCE', 'origin': 'PIVOT',
@@ -200,7 +216,9 @@ def identify_support_resistance(
                                 'strength': _strength(r['touches']), 'is_active': True})
 
     for s in sup_clusters:
-        broken = was_broken(s['price'], 'SUPPORT')
+        broken, invalidated = check_level_status(s['price'], 'SUPPORT', s['last_touch_idx'])
+        if invalidated: continue # Eliminar soportes rotos y perforados
+        
         if not broken:
             all_levels.append({**s, 'type': 'SUPPORT', 'origin': 'PIVOT',
                                 'strength': _strength(s['touches']), 'is_active': True})
