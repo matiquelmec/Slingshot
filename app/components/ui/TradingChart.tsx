@@ -337,60 +337,115 @@ export default function TradingChart() {
     const times = React.useMemo(() => candles.map(c => c.time), [candles.length]);
     const candleCount = candles.length;
 
-    // ── SMC & FVG visualization (Professional Price Lines) ──
-    const smcLinesRef = useRef<any[]>([]);
+    // ── SMC & FVG visualization (Creative Transparent Zones) ──
+    const smcSeriesRef = useRef<ISeriesApi<'Baseline'>[]>([]);
+    const fvgSeriesRef = useRef<ISeriesApi<'Baseline'>[]>([]);
 
     useEffect(() => {
-        if (!chartRef.current || !smcData || !candleSeriesRef.current || candleCount === 0) return;
+        if (!chartRef.current || !smcData || times.length === 0) return;
 
-        // Limpiar Zonas (Líneas) del renderizado anterior
-        smcLinesRef.current.forEach(line => {
-            try { candleSeriesRef.current?.removePriceLine(line); } catch (e) { }
+        const chart = chartRef.current;
+
+        // Limpiar Zonas (Series) del renderizado anterior
+        smcSeriesRef.current.forEach(series => {
+            try { chart.removeSeries(series); } catch (e) { }
         });
-        smcLinesRef.current = [];
+        smcSeriesRef.current = [];
 
-        const addSmcZone = (top: number, bottom: number, colorTop: string, colorBot: string, title: string, style: LineStyle) => {
-            if (!candleSeriesRef.current) return;
-            const topL = candleSeriesRef.current.createPriceLine({
-                price: top,
-                color: colorTop,
-                lineWidth: 1 as any,
-                lineStyle: style,
-                axisLabelVisible: false,
-                title: `${title} Top`
-            });
-            const botL = candleSeriesRef.current.createPriceLine({
-                price: bottom,
-                color: colorBot,
-                lineWidth: 1 as any,
-                lineStyle: style,
-                axisLabelVisible: false,
-                title: `${title} Bot`
-            });
-            smcLinesRef.current.push(topL, botL);
-        };
+        fvgSeriesRef.current.forEach(series => {
+            try { chart.removeSeries(series); } catch (e) { }
+        });
+        fvgSeriesRef.current = [];
 
         if (isEnabled('smc')) {
             // Zonas Verdes (Demand/Support OBs)
             smcData.order_blocks.bullish.forEach(ob => {
-                addSmcZone(ob.top, ob.bottom, 'rgba(0, 255, 136, 0.7)', 'rgba(0, 255, 136, 0.3)', 'OB Bull', LineStyle.Solid);
+                const obSeries = chart.addSeries(BaselineSeries, {
+                    baseValue: { type: 'price', price: ob.bottom },
+                    topFillColor1: 'rgba(0, 255, 136, 0.25)',
+                    topFillColor2: 'rgba(0, 255, 136, 0.05)',
+                    topLineColor: 'rgba(0, 255, 136, 0.8)',
+                    bottomFillColor1: 'transparent',
+                    bottomFillColor2: 'transparent',
+                    bottomLineColor: 'transparent',
+                    lineWidth: 1,
+                    lineStyle: LineStyle.Solid,
+                    priceLineVisible: false,
+                    lastValueVisible: false,
+                    crosshairMarkerVisible: false,
+                });
+
+                const data = times.filter(t => Number(t) >= ob.time).map(time => ({ time, value: ob.top }));
+                obSeries.setData(data as any);
+                smcSeriesRef.current.push(obSeries);
             });
 
             // Zonas Rojas (Supply/Resistance OBs)
             smcData.order_blocks.bearish.forEach(ob => {
-                addSmcZone(ob.top, ob.bottom, 'rgba(255, 0, 60, 0.3)', 'rgba(255, 0, 60, 0.7)', 'OB Bear', LineStyle.Solid);
+                const obSeries = chart.addSeries(BaselineSeries, {
+                    baseValue: { type: 'price', price: ob.top },
+                    bottomFillColor1: 'rgba(255, 0, 60, 0.25)',
+                    bottomFillColor2: 'rgba(255, 0, 60, 0.05)',
+                    bottomLineColor: 'rgba(255, 0, 60, 0.8)',
+                    topFillColor1: 'transparent',
+                    topFillColor2: 'transparent',
+                    topLineColor: 'transparent',
+                    lineWidth: 1,
+                    lineStyle: LineStyle.Solid,
+                    priceLineVisible: false,
+                    lastValueVisible: false,
+                    crosshairMarkerVisible: false,
+                });
+
+                const data = times.filter(t => Number(t) >= ob.time).map(time => ({ time, value: ob.bottom }));
+                obSeries.setData(data as any);
+                smcSeriesRef.current.push(obSeries);
             });
         }
 
         if (isEnabled('fvg')) {
             // Zonas de Liquidez (FVG Alcistas)
             smcData.fvgs.bullish.forEach(fvg => {
-                addSmcZone(fvg.top, fvg.bottom, 'rgba(255, 204, 0, 0.6)', 'rgba(255, 204, 0, 0.6)', 'FVG Bull', LineStyle.SparseDotted);
+                const fvgSeries = chart.addSeries(BaselineSeries, {
+                    baseValue: { type: 'price', price: fvg.bottom },
+                    topFillColor1: 'rgba(255, 204, 0, 0.20)',
+                    topFillColor2: 'rgba(255, 204, 0, 0.05)',
+                    topLineColor: 'rgba(255, 204, 0, 0.7)',
+                    bottomFillColor1: 'transparent',
+                    bottomFillColor2: 'transparent',
+                    bottomLineColor: 'transparent',
+                    lineWidth: 1,
+                    lineStyle: LineStyle.Dashed,
+                    priceLineVisible: false,
+                    lastValueVisible: false,
+                    crosshairMarkerVisible: false,
+                });
+
+                const data = times.filter(t => Number(t) >= fvg.time).map(time => ({ time, value: fvg.top }));
+                fvgSeries.setData(data as any);
+                fvgSeriesRef.current.push(fvgSeries);
             });
 
             // Zonas de Liquidez (FVG Bajistas)
             smcData.fvgs.bearish.forEach(fvg => {
-                addSmcZone(fvg.top, fvg.bottom, 'rgba(255, 204, 0, 0.6)', 'rgba(255, 204, 0, 0.6)', 'FVG Bear', LineStyle.SparseDotted);
+                const fvgSeries = chart.addSeries(BaselineSeries, {
+                    baseValue: { type: 'price', price: fvg.top },
+                    bottomFillColor1: 'rgba(255, 204, 0, 0.20)',
+                    bottomFillColor2: 'rgba(255, 204, 0, 0.05)',
+                    bottomLineColor: 'rgba(255, 204, 0, 0.7)',
+                    topFillColor1: 'transparent',
+                    topFillColor2: 'transparent',
+                    topLineColor: 'transparent',
+                    lineWidth: 1,
+                    lineStyle: LineStyle.Dashed,
+                    priceLineVisible: false,
+                    lastValueVisible: false,
+                    crosshairMarkerVisible: false,
+                });
+
+                const data = times.filter(t => Number(t) >= fvg.time).map(time => ({ time, value: fvg.bottom }));
+                fvgSeries.setData(data as any);
+                fvgSeriesRef.current.push(fvgSeries);
             });
         }
     }, [smcData, indicators, candleCount]);
