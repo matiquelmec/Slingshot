@@ -125,11 +125,12 @@ def identify_support_resistance(
     volumes = df['volume'].values if 'volume' in df.columns else np.ones(len(df))
     avg_vol = float(np.mean(volumes)) if float(np.mean(volumes)) > 0 else 1.0
 
-    # ── 3. Clustering por precio con volume_score ─────────────────────────────
+    # ── 3. Clustering por precio con volume_score y Re-Test Count ─────────────
     def cluster_levels(
         prices: np.ndarray,
         indices: np.ndarray,
-        tol: float
+        tol: float,
+        level_type: str
     ) -> list[dict]:
         if len(prices) == 0:
             return []
@@ -155,18 +156,40 @@ def identify_support_resistance(
         for cp, ci in clusters:
             vol_at_pivots = [float(volumes[i]) for i in ci if i < len(volumes)]
             med_vol = float(np.median(vol_at_pivots)) if vol_at_pivots else avg_vol
+            
+            z_top = float(max(cp))
+            z_bot = float(min(cp))
+            
+            # --- Escáner Humano de Re-Test (True Touches) ---
+            # El ojo humano considera un toque cuando el precio entra en la zona,
+            # no solo si forma un pico matemático estricto.
+            if level_type == 'RESISTANCE':
+                # Vela entra en o perfora ligeramente la zona de resistencia superior
+                in_zone = (highs >= z_bot - 0.1 * current_atr) & (highs <= z_top + 0.4 * current_atr)
+            else:
+                # Vela toca o perfora ligeramente la zona de soporte inferior
+                in_zone = (lows <= z_top + 0.1 * current_atr) & (lows >= z_bot - 0.4 * current_atr)
+            
+            # Agrupar velas consecutivas en zona como 1 solo toque (re-test logical unit)
+            starts = np.sum(np.diff(in_zone.astype(int)) == 1)
+            true_touches = starts + (1 if in_zone[0] else 0)
+            
+            # El último toque real es el último índice donde `in_zone` es True
+            touch_indices = np.where(in_zone)[0]
+            last_touch = int(touch_indices[-1]) if len(touch_indices) > 0 else int(max(ci)) if ci else 0
+
             result.append({
                 'price':        float(np.mean(cp)),
-                'touches':      len(cp),
-                'zone_top':     float(max(cp)),
-                'zone_bottom':  float(min(cp)),
+                'touches':      max(len(cp), true_touches), # Tomamos el maximo entre pivotes core y re-tests
+                'zone_top':     z_top,
+                'zone_bottom':  z_bot,
                 'volume_score': round(med_vol / avg_vol, 2),  # 1.0 = promedio
-                'last_touch_idx': int(max(ci)) if ci else 0
+                'last_touch_idx': last_touch
             })
         return result
 
-    res_clusters = cluster_levels(highs[peak_indices],   peak_indices,   tolerance_pct)
-    sup_clusters = cluster_levels(lows[valley_indices],  valley_indices,  tolerance_pct)
+    res_clusters = cluster_levels(highs[peak_indices],   peak_indices,   tolerance_pct, 'RESISTANCE')
+    sup_clusters = cluster_levels(lows[valley_indices],  valley_indices,  tolerance_pct, 'SUPPORT')
 
 
     # ── 4. Detectar si un nivel fue roto (Role Reversal) o Aniquilado (Invalidado) ──
