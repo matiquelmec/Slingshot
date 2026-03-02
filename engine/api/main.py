@@ -244,7 +244,7 @@ async def websocket_stream_endpoint(websocket: WebSocket, symbol: str, interval:
             # 🧠 DRIFT MONITOR: Establecer distribución de referencia con el historial
             try:
                 fe = FeatureEngineer()
-                df_features = fe.create_features(df_init.copy())
+                df_features = fe.generate_features(df_init.copy())
                 drift_monitor.set_reference(df_features)
             except Exception as e:
                 print(f"[DRIFT] ⚠️  No se pudo establecer referencia: {e}")
@@ -432,7 +432,7 @@ async def websocket_stream_endpoint(websocket: WebSocket, symbol: str, interval:
                         if _candle_close_count % 100 == 0:
                             try:
                                 fe_live = FeatureEngineer()
-                                df_live_features = fe_live.create_features(df_live.copy())
+                                df_live_features = fe_live.generate_features(df_live.copy())
                                 drift_report = drift_monitor.check(df_live_features)
                                 if drift_report and drift_report.alert_triggered:
                                     await websocket.send_json({

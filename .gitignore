@@ -1,7 +1,11 @@
 # 🐍 Python
 __pycache__/
+**/__pycache__/
+.pytest_cache/
+**/.pytest_cache/
 *.py[cod]
 *$py.class
+*.pyc
 .venv/
 env/
 venv/
@@ -33,3 +37,11 @@ bun.lockb
 
 # 📝 Temporary / Output
 *.txt
+
+# 🛠️ IDE & Local Configs
+.cursor/
+.windsurf/
+.claude/
+
+# 🕒 Runtime States
+engine/data/session_state_*.json
