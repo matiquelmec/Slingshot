@@ -69,9 +69,25 @@ def identify_order_blocks(df: pd.DataFrame, threshold: float = 2.0, lookback_str
     df['ob_bullish'] = base_bull_ob & (bullish_sweep | bullish_bos)
     df['ob_bearish'] = base_bear_ob & (bearish_sweep | bearish_bos)
     
-    # 6. Fair Value Gaps (FVG) Filrados SMC God Mode (High-Probability)
-    df['fvg_bullish'] = (df['low'] > df['high'].shift(2)) & df['imbalance_bullish'].shift(1)
-    df['fvg_bearish'] = (df['high'] < df['low'].shift(2)) & df['imbalance_bearish'].shift(1)
+    # 6. Fair Value Gaps (FVG) Filtrados SMC God Mode (High-Probability)
+    # Regla: La mecha de la Vela 3 y la mecha de la Vela 1 no deben tocarse. 
+    # Además, filtramos los "Micro-Gaps" exigiendo que el vacío sea al menos el 15% del cuerpo promedio (avg_body).
+    # Y por seguridad, exigimos que la Vela 3 (actual) tenga un mínimo de intención direccional.
+    
+    # Gap Alcista: El gap vacío se forma entre el 'low' de C3 y el 'high' de C1.
+    bullish_gap_size = df['low'] - df['high'].shift(2)
+    min_gap_required = df['avg_body'] * 0.15 # El gap debe ser al menos 15% del tamaño de las velas recientes
+    
+    df['fvg_bullish'] = (bullish_gap_size > min_gap_required) & \
+                        df['imbalance_bullish'].shift(1) & \
+                        (df['close'] > df['open']) # La vela C3 debe cerrar verde, si cierra todo rojo está invalidando o llenando el gap inmediatamente
+                        
+    # Gap Bajista: El gap vacío se forma entre el 'low' de C1 y el 'high' de C3.
+    bearish_gap_size = df['low'].shift(2) - df['high']
+    
+    df['fvg_bearish'] = (bearish_gap_size > min_gap_required) & \
+                        df['imbalance_bearish'].shift(1) & \
+                        (df['close'] < df['open']) # La vela C3 debe cerrar roja
     
     return df
 
