@@ -15,6 +15,20 @@ import pytz
 # Importar el Enrutador Maestro del Engine
 from engine.main_router import SlingshotRouter
 from engine.api.config import settings
+
+# 🕐 Session Manager (fuente de verdad de sesiones — sin DB, por símbolo)
+from engine.core.session_manager import SessionManager as _SessionManager
+
+# Dict de managers por símbolo para evitar cross-talk entre mercados
+_session_managers: dict[str, _SessionManager] = {}
+
+def get_session_manager(symbol: str) -> _SessionManager:
+    """Retorna el SessionManager específico para cada símbolo."""
+    key = symbol.upper()
+    if key not in _session_managers:
+        _session_managers[key] = _SessionManager(symbol=key)
+    return _session_managers[key]
+
 from engine.api.ws_manager import manager
 
 # 💬 Notificaciones
@@ -41,191 +55,7 @@ from engine.indicators.structure import (
 from engine.api.advisor import generate_tactical_advice
 
 
-def build_session_update(df_buffer: list, cached_state: dict = None) -> dict:
-    """
-    Calcula el estado actual de las sesiones de mercado y su sincronización DST-Aware.
-    """
-    now_utc = datetime.now(timezone.utc)
-    hour_utc = now_utc.hour
-    
-    # Husos Horarios Reales
-    chile_tz = pytz.timezone('America/Santiago')
-    ny_tz = pytz.timezone('America/New_York')
-    london_tz = pytz.timezone('Europe/London')
-    tokyo_tz = pytz.timezone('Asia/Tokyo')
-    
-    now_chile = now_utc.astimezone(chile_tz)
-    now_ny = now_utc.astimezone(ny_tz)
-    now_lon = now_utc.astimezone(london_tz)
-    now_tokyo = now_utc.astimezone(tokyo_tz)
-    
-    # Extraer horas locales reales
-    ny_hour = now_ny.hour
-    lon_hour = now_lon.hour
-    tokyo_hour = now_tokyo.hour
-    
-    utc_str = now_utc.strftime('%H:%M UTC')
-    local_str = now_chile.strftime('%H:%M Chile')
-
-    # Determinar sesión activa dinámicamente según la HORA LOCAL de cada bolsa
-    # Asia (Tokyo): 09:00 - 15:00 Hora Local (JST)
-    # Londres: 08:00 - 16:00 Hora Local (UK)
-    # NY: 08:00 - 16:00 Hora Local (EST/EDT)
-    if 9 <= tokyo_hour < 15:
-        session_name = 'ASIA'
-        is_killzone = False
-    elif 8 <= lon_hour < 11:
-        session_name = 'LONDON_KILLZONE'
-        is_killzone = True
-    elif 11 <= lon_hour < 16 and ny_hour < 8:
-        # Entre fin de killzone de londres y apertura de NY
-        session_name = 'LONDON'
-        is_killzone = False
-    elif 8 <= ny_hour < 11:
-        session_name = 'NY_KILLZONE'
-        is_killzone = True
-    elif 11 <= ny_hour < 16:
-        session_name = 'NEW_YORK'
-        is_killzone = False
-    else:
-        session_name = 'OFF_HOURS'
-        is_killzone = False
-
-    if cached_state is None:
-        cached_state = {
-            'asia':   {'high': None, 'low': None, 'swept_high': False, 'swept_low': False},
-            'london': {'high': None, 'low': None, 'swept_high': False, 'swept_low': False},
-            'ny':     {'high': None, 'low': None, 'swept_high': False, 'swept_low': False},
-            'pdh': None, 'pdl': None,
-            'pdh_swept': False, 'pdl_swept': False,
-            'trading_day': None
-        }
-
-    if df_buffer and len(df_buffer) > 0:
-        try:
-            import pandas as pd
-            from engine.indicators.sessions import map_sessions_liquidity
-            df = pd.DataFrame([item['data'] for item in df_buffer[-250:]])
-            df['timestamp'] = pd.to_datetime(df['timestamp'], unit='s', utc=True)
-            df = map_sessions_liquidity(df)
-            last = df.iloc[-1]
-
-            # Si cruzamos la medianoche UTC, reseamos el caché para un nuevo día
-            current_day = last.get('trading_day')
-            if current_day and cached_state.get('trading_day') != current_day:
-                for sess in ['asia', 'london', 'ny']:
-                    cached_state[sess] = {'high': None, 'low': None, 'swept_high': False, 'swept_low': False}
-                cached_state['pdh'] = None
-                cached_state['pdl'] = None
-                cached_state['pdh_swept'] = False
-                cached_state['pdl_swept'] = False
-                cached_state['trading_day'] = current_day
-
-            # Actualizar Sesión Asia
-            if pd.notna(last.get('asian_high')):
-                cached_state['asia']['high'] = float(last['asian_high'])
-                cached_state['asia']['low'] = float(last['asian_low'])
-                cached_state['asia']['swept_high'] = bool(last.get('sweep_asian_high', False))
-                cached_state['asia']['swept_low'] = bool(last.get('sweep_asian_low', False))
-
-            # Actualizar Sesión Londres
-            if pd.notna(last.get('london_high')):
-                cached_state['london']['high'] = float(last['london_high'])
-                cached_state['london']['low'] = float(last['london_low'])
-                cached_state['london']['swept_high'] = bool(last.get('sweep_london_high', False))
-                cached_state['london']['swept_low'] = bool(last.get('sweep_london_low', False))
-
-            # Actualizar Sesión NY
-            if pd.notna(last.get('ny_high')):
-                cached_state['ny']['high'] = float(last['ny_high'])
-                cached_state['ny']['low'] = float(last['ny_low'])
-                cached_state['ny']['swept_high'] = bool(last.get('sweep_ny_high', False))
-                cached_state['ny']['swept_low'] = bool(last.get('sweep_ny_low', False))
-
-            # Actualizar PDH / PDL
-            if pd.notna(last.get('previous_daily_high')):
-                cached_state['pdh'] = float(last['previous_daily_high'])
-                cached_state['pdl'] = float(last['previous_daily_low'])
-                cached_state['pdh_swept'] = bool(last.get('sweep_pdh', False))
-                cached_state['pdl_swept'] = bool(last.get('sweep_pdl', False))
-        except Exception:
-            pass
-
-    # Calcular las fronteras UTC de DÓNDE cae la sesión hoy para enviarlas al Frontend
-    # Asia (9 - 15 Local Tokyo). 
-    tokyo_offset_hours = now_tokyo.utcoffset().total_seconds() / 3600
-    asia_start_utc = int(9 - tokyo_offset_hours)
-    asia_end_utc = int(15 - tokyo_offset_hours)
-    
-    # Londres (8 - 16 Local). Tenemos que preguntar a pytz qué hora UTC representa las 8 AM en Londres HOY.
-    # Un shortcut es mirar el offset actual de Londres respecto a UTC
-    lon_offset_hours = now_lon.utcoffset().total_seconds() / 3600
-    lon_start_utc = int(8 - lon_offset_hours)
-    lon_end_utc = int(16 - lon_offset_hours)
-
-    # NY (8 - 16 Local).
-    ny_offset_hours = now_ny.utcoffset().total_seconds() / 3600
-    ny_start_utc = int(8 - ny_offset_hours)
-    ny_end_utc = int(16 - ny_offset_hours)
-
-    sessions_data = {
-        'asia':   {
-            **cached_state['asia'], 
-            'status': 'CLOSED',
-            'start_utc': asia_start_utc, 'end_utc': asia_end_utc
-        },
-        'london': {
-            **cached_state['london'], 
-            'status': 'PENDING',
-            'start_utc': lon_start_utc, 'end_utc': lon_end_utc
-        },
-        'ny':     {
-            **cached_state['ny'], 
-            'status': 'PENDING',
-            'start_utc': ny_start_utc, 'end_utc': ny_end_utc
-        }
-    }
-
-    # Marcar estado ACTIVE/CLOSED/PENDING de cada sesión según sus fronteras UTC dinámicas
-    # ASIA
-    if asia_start_utc <= hour_utc < asia_end_utc:
-        sessions_data['asia']['status'] = 'ACTIVE'
-    elif hour_utc >= (asia_end_utc + 12) % 24: # Estimación de pending pre-sesión
-        sessions_data['asia']['status'] = 'PENDING'
-    else:
-        sessions_data['asia']['status'] = 'CLOSED'
-
-    # LONDON
-    if hour_utc < lon_start_utc:
-        sessions_data['london']['status'] = 'PENDING'
-    elif lon_start_utc <= hour_utc < lon_end_utc:
-        sessions_data['london']['status'] = 'ACTIVE'
-    else:
-        sessions_data['london']['status'] = 'CLOSED'
-
-    # NEW YORK
-    if hour_utc < ny_start_utc:
-        sessions_data['ny']['status'] = 'PENDING'
-    elif ny_start_utc <= hour_utc < ny_end_utc:
-        sessions_data['ny']['status'] = 'ACTIVE'
-    else:
-        sessions_data['ny']['status'] = 'CLOSED'
-
-    return {
-        'type': 'session_update',
-        'data': {
-            'current_session': session_name,
-            'current_session_utc': utc_str,
-            'local_time': local_str,
-            'is_killzone': is_killzone,
-            'sessions': sessions_data,
-            'pdh': cached_state['pdh'],
-            'pdl': cached_state['pdl'],
-            'pdh_swept': cached_state['pdh_swept'],
-            'pdl_swept': cached_state['pdl_swept'],
-            '_internal_cache': cached_state
-        }
-    }
+# NOTA: build_session_update() reemplazada por SessionManager (engine/core/session_manager.py)
 
 app = FastAPI(
     title=settings.PROJECT_NAME,
@@ -391,15 +221,25 @@ async def websocket_stream_endpoint(websocket: WebSocket, symbol: str, interval:
         # === FASE 2: Stream en tiempo real desde Binance WebSocket ===
         import websockets as ws_client
         from engine.indicators.structure import identify_order_blocks, extract_smc_coordinates
-        
-        # Inicializar el caché aquí para que sea de ámbito superior y evitar 'UnboundLocalError' si no hay history
-        websocket_session_cache = None
-        
+
+        # Referencia a sesión actual para el Advisor (se llenará tras el bootstrap)
+        initial_session = {'data': {'current_session': 'UNKNOWN'}}
+
         # Generar SMC Inicial con el historial que acabamos de cargar
         if history and len(history) > 0:
             print(f"[{symbol}] Calculando SMC y ML Inicial...")
             df_init = pd.DataFrame([item['data'] for item in history])
             df_init['timestamp'] = pd.to_datetime(df_init['timestamp'], unit='s')
+
+            # ⚡ SESIONES PRIMERO: bootstrap y envío inmediato antes del SMC (que es lento)
+            try:
+                sm = get_session_manager(symbol)
+                sm.bootstrap([item['data'] for item in history])
+                initial_session = sm.get_current_state()
+                await websocket.send_json(initial_session)
+                print(f"[{symbol}] Session Update Inicial enviada: {initial_session['data']['current_session']} | {initial_session['data']['local_time']}")
+            except Exception as e:
+                print(f"[{symbol}] Error enviando session update inicial: {e}")
 
             # 🧠 DRIFT MONITOR: Establecer distribución de referencia con el historial
             try:
@@ -431,17 +271,6 @@ async def websocket_stream_endpoint(websocket: WebSocket, symbol: str, interval:
                 })
                 print(f"[{symbol}] Decisión Táctica Inicial (MTF) enviada con éxito.")
 
-
-                try:
-                    initial_session = build_session_update(history)
-                    # Extraer el cache inicial para que estemos listos en el stream en vivo (con los datos de hace 500 velas)
-                    websocket_session_cache = initial_session['data'].pop('_internal_cache', None)
-                    await websocket.send_json(initial_session)
-                    print(f"[{symbol}] Session Update Inicial enviada: {initial_session['data']['current_session']}")
-                except Exception as e:
-                    print(f"[{symbol}] Error enviando session update inicial: {e}")
-                    initial_session = {'data': {'current_session': 'UNKNOWN'}}
-
                 # 🤖 ANALISTA AUTÓNOMO (Llamada Inicial Tras Cargar Histórico)
                 try:
                     advice_text = generate_tactical_advice(
@@ -472,14 +301,13 @@ async def websocket_stream_endpoint(websocket: WebSocket, symbol: str, interval:
         live_candles_buffer: deque = deque(history[-250:], maxlen=250) if 'history' in locals() and history else deque(maxlen=250)
         
         # Estado de Liquidez en Tiempo Real
+        # Nota: websocket_session_cache eliminado — SessionManager mantiene el estado internamente
         current_liquidity = {"bids": [], "asks": []}
         from engine.indicators.liquidity import detect_liquidity_clusters
         from engine.ml.inference import ml_engine
         
         # Última predicción ML cacheada para no sobrecargar CPU en cada micro-tick
         last_ml_prediction = {"direction": "CALIBRANDO", "probability": 50, "status": "warmup"}
-        
-        # El websocket_session_cache ya fue inicializado y rellenado en la FASE 2
         
         # Control de Throttling para el Fast Path
         last_pulse_time = 0
@@ -661,13 +489,12 @@ async def websocket_stream_endpoint(websocket: WebSocket, symbol: str, interval:
                         except Exception as e:
                             print(f"[{symbol}] Error emitiendo decisión táctica: {e}")
 
-                        # 6. Sesiones de Mercado (Se emite en cada cierre de vela)
+                        # 6. Sesiones de Mercado (Se emite en cada cierre de vela — is_closed=True para guardar en disco)
                         try:
-                            session_payload = build_session_update(live_candles_buffer, websocket_session_cache)
-                            # Extraemos el caché actualizado y lo quitamos del payload de red
-                            websocket_session_cache = session_payload['data'].pop('_internal_cache', websocket_session_cache)
+                            sm = get_session_manager(symbol)
+                            session_payload = sm.update(payload['data'], is_closed=True)
                             await websocket.send_json(session_payload)
-                            print(f"[{symbol}] Session Update emitido: {session_payload['data']['current_session']}")
+                            print(f"[{symbol}] Session Update emitido: {session_payload['data']['current_session']} | {session_payload['data']['local_time']}")
                         except Exception as e:
                             print(f"[{symbol}] Error emitiendo session update: {e}")
                             session_payload = {'data': {'current_session': 'UNKNOWN'}}
