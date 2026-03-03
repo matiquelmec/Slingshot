@@ -12,6 +12,18 @@ import json
 from datetime import datetime, timezone
 import pytz
 
+# ✅ Serializer robusto — resuelve Timestamp / numpy no serializables globalmente
+from engine.api.json_utils import sanitize_for_json, SlingshotJSONEncoder
+
+# Parchar WebSocket.send_json UNA VEZ aquí para que todos los send_json()
+# del módulo usen el encoder correcto de forma transparente.
+_original_send_json = WebSocket.send_json
+async def _safe_send_json(self, data, mode="text"):
+    """Wrapper que sanitiza cualquier tipo no serializable antes de enviar."""
+    clean = sanitize_for_json(data)
+    await _original_send_json(self, clean, mode=mode)
+WebSocket.send_json = _safe_send_json  # type: ignore[method-assign]
+
 # Importar el Enrutador Maestro del Engine
 from engine.main_router import SlingshotRouter
 from engine.api.config import settings
@@ -117,17 +129,38 @@ async def root():
 async def analyze_symbol(symbol: str, timeframe: str = "15m"):
     """
     Endpoint para que el Frontend solicite un análisis instantáneo de un activo.
+    Cold-start inteligente: si no hay parquet local, descarga desde Binance REST
+    y persiste en disco para que el engine pueda operar desde el primer request.
     """
     try:
         file_path = Path(__file__).parent.parent.parent / "data" / f"{symbol.lower()}_{timeframe}.parquet"
-        
+
         if not file_path.exists():
-            return {"error": f"No hay datos locales para {symbol} en {timeframe}"}
-            
-        data = pd.read_parquet(file_path)
+            print(f"[ANALYZE] Cold-start detectado para {symbol} {timeframe}. Descargando desde Binance...")
+            try:
+                raw = await fetch_binance_history(symbol, interval=timeframe, limit=500)
+                if not raw:
+                    return {"error": f"Binance no devolvió datos para {symbol} en {timeframe}"}
+
+                df_bootstrap = pd.DataFrame([item['data'] for item in raw])
+                df_bootstrap['timestamp'] = pd.to_datetime(df_bootstrap['timestamp'], unit='s')
+
+                # Persistir en disco para que las próximas llamadas sean instantáneas
+                file_path.parent.mkdir(parents=True, exist_ok=True)
+                df_bootstrap.to_parquet(file_path, index=False)
+                print(f"[ANALYZE] Bootstrap completado: {len(df_bootstrap)} velas guardadas en {file_path.name}")
+                data = df_bootstrap
+            except Exception as fetch_err:
+                return {
+                    "error": f"No hay datos locales y Binance no está disponible: {fetch_err}",
+                    "hint": "Verifica tu conexión o desactiva el VPN."
+                }
+        else:
+            data = pd.read_parquet(file_path)
+
         result = engine_router.process_market_data(data, asset=symbol.upper(), interval=timeframe)
-        
-        return {"success": True, "data": result}
+        # sanitize_for_json garantiza que el resultado sea 100% serializable
+        return {"success": True, "data": sanitize_for_json(result)}
     except Exception as e:
         import traceback
         return {"success": False, "error": str(e), "trace": traceback.format_exc()}
