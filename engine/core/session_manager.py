@@ -115,6 +115,26 @@ class SessionManager:
         from datetime import timedelta
         yesterday = (now_utc - timedelta(days=1)).date()
 
+        # ── Resetear HIGH/LOW del día actual (preservar prev_*) ──────────
+        # Si el JSON cargado tiene datos de una sesión anterior en un día
+        # distinto, o si queremos recalcular, limpiamos hoy para que
+        # el bootstrap sea siempre la fuente de verdad.
+        if self._state.get("trading_day") != str(today):
+            # Día diferente: rotar prev_* manualmente antes de limpiar
+            for key in ["asia", "london", "ny"]:
+                old_h = self._state[key].get("high")
+                old_l = self._state[key].get("low")
+                if old_h is not None:
+                    self._state[key]["prev_high"] = old_h
+                    self._state[key]["prev_low"]  = old_l
+        # Limpiar high/low de HOY para que el bootstrap recalcule desde cero
+        for key in ["asia", "london", "ny"]:
+            self._state[key]["high"] = None
+            self._state[key]["low"]  = None
+            self._state[key]["swept_high"] = False
+            self._state[key]["swept_low"]  = False
+        self._state["trading_day"] = str(today)
+
         pdh_candidates = []
         pdl_candidates = []
 
