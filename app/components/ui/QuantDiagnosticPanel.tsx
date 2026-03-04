@@ -38,6 +38,7 @@ function SlopeIcon({ slope }: { slope: number | null }) {
 export default function QuantDiagnosticPanel() {
     const { tacticalDecision, latestPrice } = useTelemetryStore();
     const d = tacticalDecision;
+    const diagnostic = d.diagnostic;  // RSI, MACD, BBWP, squeeze_active
 
     const regimeKey = Object.keys(REGIME_META).find(k => d.regime.includes(k)) ?? 'UNKNOWN';
     const regimeMeta = REGIME_META[regimeKey];
@@ -175,10 +176,11 @@ export default function QuantDiagnosticPanel() {
                     </div>
                 </div>
 
-                {/* 3. Indicadores Internos */}
+                {/* 3. Indicadores Internos — Suite Completa */}
                 <div className="bg-white/[0.02] border border-white/5 rounded-xl p-3">
                     <span className="text-[9px] font-bold text-white/40 tracking-[0.2em] block mb-2">INDICADORES INTERNOS</span>
-                    <div className="space-y-2.5">
+                    <div className="space-y-3">
+
                         {/* SMA Alignment */}
                         <div className="flex items-center justify-between">
                             <span className="text-[10px] text-white/50">SMA 50/200</span>
@@ -189,6 +191,7 @@ export default function QuantDiagnosticPanel() {
                                 </span>
                             </div>
                         </div>
+
                         {/* BB Squeeze */}
                         <div>
                             <div className="flex items-center justify-between mb-1">
@@ -205,10 +208,97 @@ export default function QuantDiagnosticPanel() {
                                 />
                             </div>
                         </div>
+
+                        {/* RSI */}
+                        {diagnostic?.rsi != null && (
+                            <div>
+                                <div className="flex items-center justify-between mb-1">
+                                    <span className="text-[10px] text-white/50">RSI (14)</span>
+                                    <div className="flex items-center gap-1.5">
+                                        <span className="text-[10px] font-bold font-mono text-white/70">{diagnostic.rsi.toFixed(1)}</span>
+                                        {diagnostic.rsi_oversold && <span className="text-[8px] font-bold text-neon-green px-1 rounded bg-neon-green/10 border border-neon-green/20">OVERSOLD</span>}
+                                        {diagnostic.rsi_overbought && <span className="text-[8px] font-bold text-neon-red px-1 rounded bg-neon-red/10 border border-neon-red/20">OVERBOUGHT</span>}
+                                        {!diagnostic.rsi_oversold && !diagnostic.rsi_overbought && <span className="text-[8px] text-white/30">NEUTRO</span>}
+                                    </div>
+                                </div>
+                                <div className="h-1.5 w-full bg-black/40 rounded-full overflow-hidden border border-white/5 relative">
+                                    <div className="absolute left-[30%] top-0 bottom-0 w-px bg-white/10 z-10" />
+                                    <div className="absolute left-[70%] top-0 bottom-0 w-px bg-white/10 z-10" />
+                                    <motion.div
+                                        animate={{ width: `${Math.min(100, Math.max(0, diagnostic.rsi))}%` }}
+                                        transition={{ duration: 0.8 }}
+                                        className={`h-full rounded-full ${diagnostic.rsi_oversold ? 'bg-neon-green shadow-[0_0_6px_rgba(0,255,65,0.6)]' : diagnostic.rsi_overbought ? 'bg-neon-red shadow-[0_0_6px_rgba(255,0,60,0.6)]' : 'bg-white/30'}`}
+                                    />
+                                </div>
+                            </div>
+                        )}
+
+                        {/* MACD */}
+                        {diagnostic?.macd_line != null && (
+                            <div className="flex items-center justify-between">
+                                <span className="text-[10px] text-white/50">MACD</span>
+                                <div className="flex items-center gap-2 text-[10px] font-mono">
+                                    <span className={diagnostic.macd_bullish_cross ? 'text-neon-green font-bold' : 'text-white/30'}>
+                                        {diagnostic.macd_bullish_cross ? '↗ CRUCE ALCISTA' : 'Sin cruce'}
+                                    </span>
+                                    <span className="text-white/20">|</span>
+                                    <span className={`font-bold ${(diagnostic.macd_line ?? 0) > 0 ? 'text-neon-green/70' : 'text-neon-red/70'}`}>
+                                        {diagnostic.macd_line?.toFixed(1)}
+                                    </span>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* BBWP — Squeeze Percentile */}
+                        {diagnostic?.bbwp != null && (
+                            <div>
+                                <div className="flex items-center justify-between mb-1">
+                                    <span className="text-[10px] text-white/50">BBWP (Squeeze %ile)</span>
+                                    <span className={`text-[10px] font-bold ${diagnostic.squeeze_active ? 'text-neon-cyan' : 'text-white/40'}`}>
+                                        {diagnostic.bbwp.toFixed(1)}% {diagnostic.squeeze_active ? '⚡ COMPRIMIDO' : 'Expandido'}
+                                    </span>
+                                </div>
+                                <div className="h-1 bg-black/40 rounded-full overflow-hidden">
+                                    <motion.div
+                                        animate={{ width: `${Math.min(100, diagnostic.bbwp)}%` }}
+                                        transition={{ duration: 0.8 }}
+                                        className={`h-full rounded-full ${diagnostic.squeeze_active ? 'bg-neon-cyan shadow-[0_0_6px_rgba(0,229,255,0.6)]' : 'bg-white/20'}`}
+                                    />
+                                </div>
+                            </div>
+                        )}
+
                     </div>
                 </div>
 
-                {/* 4. Estrategia activa */}
+                {/* 4. Fibonacci (si disponible) */}
+                {d.fibonacci && (
+                    <div className="bg-white/[0.02] border border-white/5 rounded-xl p-3">
+                        <span className="text-[9px] font-bold text-white/40 tracking-[0.2em] block mb-2">FIBONACCI DINÁMICO</span>
+                        <div className="space-y-1">
+                            {Object.entries(d.fibonacci.levels ?? {})
+                                .filter(([k]) => ['0.236', '0.382', '0.5', '0.618', '0.786'].includes(k))
+                                .map(([level, price]) => {
+                                    const p = price as number;
+                                    const isGP = level === '0.618' || level === '0.5';
+                                    const isCurrent = latestPrice ? Math.abs(p - latestPrice) / latestPrice < 0.005 : false;
+                                    return (
+                                        <div key={level} className={`flex items-center justify-between rounded px-1.5 py-0.5 ${isCurrent ? 'bg-neon-cyan/10 border border-neon-cyan/20' : ''}`}>
+                                            <span className={`text-[9px] font-bold ${isGP ? 'text-yellow-400' : 'text-white/40'}`}>
+                                                {level} {isGP ? '★GP' : ''}
+                                            </span>
+                                            <span className="text-[9px] font-mono text-white/70">{fmt(p, '$', 0)}</span>
+                                        </div>
+                                    );
+                                })}
+                            <div className="text-[8px] text-white/20 pt-1">
+                                Swing: {fmt(d.fibonacci.swing_low, '$', 0)} → {fmt(d.fibonacci.swing_high, '$', 0)}
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* 5. Estrategia activa */}
                 <div className="bg-white/[0.02] border border-white/5 rounded-xl p-3">
                     <span className="text-[9px] font-bold text-white/40 tracking-[0.2em] block mb-2">ESTRATEGIA ENRUTADA</span>
                     <div className="flex items-center gap-2">
