@@ -55,9 +55,18 @@ export default function SignalTerminal() {
     const [signals, setSignals] = useState<any[]>([]);
 
     useEffect(() => {
-        if (tacticalDecision?.signals) {
-            setSignals([...tacticalDecision.signals].reverse().slice(0, 10));
-        }
+        const incoming = tacticalDecision?.signals;
+        if (!incoming || incoming.length === 0) return; // Sin señales nuevas → no tocar el historial
+
+        setSignals(prev => {
+            // Deduplicar por timestamp+type para no duplicar si el mismo update llega 2 veces
+            const existingKeys = new Set(prev.map((s: any) => `${s.timestamp}-${s.type}`));
+            const newOnes = incoming.filter((s: any) => !existingKeys.has(`${s.timestamp}-${s.type}`));
+            if (newOnes.length === 0) return prev; // Nada nuevo → sin re-render
+
+            // Añadir al inicio (más reciente primero) y limitar a 20
+            return [...newOnes.reverse(), ...prev].slice(0, 20);
+        });
     }, [tacticalDecision?.signals]);
 
     const formatTime = (ts: string) => {
