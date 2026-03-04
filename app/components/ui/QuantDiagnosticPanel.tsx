@@ -249,6 +249,28 @@ export default function QuantDiagnosticPanel() {
                             </div>
                         )}
 
+                        {/* Divergencias Matemáticas */}
+                        {diagnostic != null && (
+                            <div className="flex items-center justify-between">
+                                <span className="text-[10px] text-white/50">Divergencia (P vs RSI)</span>
+                                <div className="flex items-center">
+                                    {diagnostic.bullish_divergence ? (
+                                        <span className="text-[9px] font-bold text-neon-green px-1.5 py-0.5 rounded bg-neon-green/10 border border-neon-green/20 uppercase tracking-widest shadow-[0_0_10px_rgba(0,255,65,0.2)]">
+                                            🔥 DIV Alcista
+                                        </span>
+                                    ) : diagnostic.bearish_divergence ? (
+                                        <span className="text-[9px] font-bold text-neon-red px-1.5 py-0.5 rounded bg-neon-red/10 border border-neon-red/20 uppercase tracking-widest shadow-[0_0_10px_rgba(255,0,60,0.2)]">
+                                            ⚠️ DIV Bajista
+                                        </span>
+                                    ) : (
+                                        <span className="text-[9px] font-bold text-white/30 px-1.5 py-0.5 rounded border border-white/5 uppercase tracking-widest">
+                                            Inactiva
+                                        </span>
+                                    )}
+                                </div>
+                            </div>
+                        )}
+
                         {/* BBWP — Squeeze Percentile */}
                         {diagnostic?.bbwp != null && (
                             <div>

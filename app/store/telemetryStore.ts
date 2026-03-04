@@ -65,6 +65,8 @@ export interface TacticalDecision {
         bbwp: number | null;
         squeeze_active: boolean;
         volume: number;
+        bullish_divergence?: boolean;
+        bearish_divergence?: boolean;
     };
 }
 
