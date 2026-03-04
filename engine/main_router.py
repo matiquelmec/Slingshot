@@ -214,13 +214,31 @@ class SlingshotRouter:
                 )
                 
                 # Inyectar la matemática pura a la señal antes de despacharla al Frontend
+                interval_minutes = {
+                    "1m": 1, "3m": 3, "5m": 5, "15m": 15, "30m": 30,
+                    "1h": 60, "2h": 120, "4h": 240, "8h": 480, "1d": 1440
+                }.get(interval, 15)
+                
+                # Calcular timestamp de expiración (3 velas desde la señal)
+                try:
+                    sig_ts = pd.Timestamp(sig['timestamp'])
+                    expiry_ts = sig_ts + pd.Timedelta(minutes=interval_minutes * risk_data.get("expiry_candles", 3))
+                    expiry_timestamp_str = str(expiry_ts)
+                except Exception:
+                    expiry_timestamp_str = None
+
                 sig.update({
-                    "risk_usd":      risk_data["risk_amount_usdt"],
-                    "risk_pct":      risk_data["risk_pct"],
-                    "leverage":      risk_data["leverage"],
-                    "position_size": risk_data["position_size_usdt"],
-                    "stop_loss":     risk_data["stop_loss"],
-                    "take_profit_3r": risk_data["take_profit"],
+                    "risk_usd":           risk_data["risk_amount_usdt"],
+                    "risk_pct":           risk_data["risk_pct"],
+                    "leverage":           risk_data["leverage"],
+                    "position_size":      risk_data["position_size_usdt"],
+                    "stop_loss":          risk_data["stop_loss"],
+                    "take_profit_3r":     risk_data["take_profit_3r"],
+                    "entry_zone_top":     risk_data["entry_zone_top"],
+                    "entry_zone_bottom":  risk_data["entry_zone_bottom"],
+                    "expiry_candles":     risk_data.get("expiry_candles", 3),
+                    "expiry_timestamp":   expiry_timestamp_str,
+                    "interval_minutes":   interval_minutes,
                 })
                 
                 # 🧠 CONFLUENCE SCORE — Evaluación institucional en tiempo real

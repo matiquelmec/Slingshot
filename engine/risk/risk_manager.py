@@ -99,21 +99,30 @@ class RiskManager:
         # 6. Recalcular Position Size real basado en el leverage clipeado (por si excedió el max)
         actual_position_size = min(position_size_nominal, self.account_balance * leverage)
 
-        # 7. Take Profit Dinámico (Asimetría)
-        # Ratio Riesgo:Beneficio base de 1:2 si no hay un 'target_level'
+        # 7. Take Profit Dinámico (Asimetría mínima 3R)
+        # Standard profesional: mínimo R:R 3:1 (3R)
         risk_distance_abs = abs(current_price - stop_loss_price)
         if str(signal_type).upper() == 'LONG':
-            take_profit_price = target_level if target_level and target_level > current_price else current_price + (risk_distance_abs * 2)
+            tp_3r = current_price + (risk_distance_abs * 3)
+            take_profit_price = target_level if (target_level and target_level > tp_3r) else tp_3r
         else:
-            take_profit_price = target_level if target_level and target_level < current_price else current_price - (risk_distance_abs * 2)
+            tp_3r = current_price - (risk_distance_abs * 3)
+            take_profit_price = target_level if (target_level and target_level < tp_3r) else tp_3r
 
         return {
-            "account_balance": round(self.account_balance, 2),
-            "risk_amount_usdt": round(risk_amount_usdt, 2),
-            "risk_pct": round(actual_risk_pct * 100, 2),
-            "leverage": leverage,
+            "account_balance":   round(self.account_balance, 2),
+            "risk_amount_usdt":  round(risk_amount_usdt, 2),
+            "risk_pct":          round(actual_risk_pct * 100, 2),
+            "leverage":          leverage,
             "position_size_usdt": round(actual_position_size, 2),
-            "entry_price": round(current_price, 2),
-            "stop_loss": round(stop_loss_price, 2),
-            "take_profit": round(take_profit_price, 2)
+            "entry_price":       round(current_price, 2),
+            "stop_loss":         round(stop_loss_price, 2),
+            "take_profit_3r":    round(take_profit_price, 2),
+            # Zona de entrada: rango del OB (1.5x ATR alrededor del precio de entrada)
+            "entry_zone_top":    round(current_price + (fallback_atr * 0.5), 2),
+            "entry_zone_bottom": round(current_price - (fallback_atr * 0.5), 2)
+              if str(signal_type).upper() == 'LONG'
+              else round(current_price - (fallback_atr * 0.5), 2),
+            # Metadatos de expiración para el frontend
+            "expiry_candles":    3,   # La señal es válida por 3 velas (45min en 15m)
         }

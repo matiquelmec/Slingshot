@@ -46,7 +46,7 @@ function TypewriterText({ text, speed = 30 }: { text: string; speed?: number }) 
 
 export default function SignalTerminal() {
     const tacticalDecision = useTelemetryStore(state => state.tacticalDecision);
-    const currentPrice = useTelemetryStore(state => state.latestPrice);
+    const currentPrice_live = useTelemetryStore(state => state.latestPrice);
     const mlProjection = useTelemetryStore(state => state.mlProjection);
     const sessionData = useTelemetryStore(state => state.sessionData);
     const activeTimeframe = useTelemetryStore(state => state.activeTimeframe);
@@ -76,6 +76,90 @@ export default function SignalTerminal() {
         } catch (e) {
             return ts?.split(' ')[1] || ts;
         }
+    };
+
+    // Evalúa el estado de vida de una señal en tiempo real
+    const getSignalLifecycle = (sig: any): {
+        status: 'PENDING' | 'EN_ZONA' | 'EXPIRADA' | 'INVALIDADA';
+        label: string;
+        reason: string;
+        color: string;
+        bgColor: string;
+        countdown?: string;
+    } => {
+        const now = Date.now();
+        const signalType = sig.signal_type || (sig.type?.includes('LONG') ? 'LONG' : 'SHORT');
+        const currentPrice = currentPrice_live;
+        const expiryTs = sig.expiry_timestamp ? new Date(sig.expiry_timestamp).getTime() : null;
+
+        // 1. INVALIDADA por precio: el precio cerró más allá del SL (antes de entrar)
+        if (currentPrice) {
+            if (signalType === 'SHORT' && currentPrice > sig.stop_loss) {
+                return {
+                    status: 'INVALIDADA',
+                    label: '✗ INVALIDADA',
+                    reason: `Precio actual $${currentPrice.toLocaleString()} superó el Stop Loss $${sig.stop_loss?.toLocaleString()} — la tesis bajista quedó rota.`,
+                    color: 'text-neon-red',
+                    bgColor: 'bg-neon-red/5 border-neon-red/20 opacity-50',
+                };
+            }
+            if (signalType === 'LONG' && currentPrice < sig.stop_loss) {
+                return {
+                    status: 'INVALIDADA',
+                    label: '✗ INVALIDADA',
+                    reason: `Precio actual $${currentPrice.toLocaleString()} rompió por debajo del Stop Loss $${sig.stop_loss?.toLocaleString()} — la tesis alcista quedó rota.`,
+                    color: 'text-neon-red',
+                    bgColor: 'bg-neon-red/5 border-neon-red/20 opacity-50',
+                };
+            }
+        }
+
+        // 2. EXPIRADA por tiempo
+        if (expiryTs && now > expiryTs) {
+            const intervalMin = sig.interval_minutes || 15;
+            const n = sig.expiry_candles || 3;
+            return {
+                status: 'EXPIRADA',
+                label: '⏱ EXPIRADA',
+                reason: `Pasaron ${n} velas de ${intervalMin}min (${n * intervalMin}min) sin que el precio llegara a la zona de entrada. Señal descartada.`,
+                color: 'text-white/40',
+                bgColor: 'bg-white/[0.02] border-white/5 opacity-60',
+            };
+        }
+
+        // 3. EN ZONA: precio dentro del rango de entrada
+        if (currentPrice && sig.entry_zone_top && sig.entry_zone_bottom) {
+            if (currentPrice >= sig.entry_zone_bottom && currentPrice <= sig.entry_zone_top) {
+                return {
+                    status: 'EN_ZONA',
+                    label: '⚡ EN ZONA — ENTRY WINDOW',
+                    reason: `Precio actual $${currentPrice.toLocaleString()} está dentro de la zona de entrada ($${sig.entry_zone_bottom?.toLocaleString()} – $${sig.entry_zone_top?.toLocaleString()}). Confirma con volumen antes de ejecutar.`,
+                    color: 'text-neon-cyan',
+                    bgColor: 'bg-neon-cyan/5 border-neon-cyan/30',
+                };
+            }
+        }
+
+        // 4. PENDING: esperando que el precio llegue a la zona
+        const timeLeft = expiryTs ? Math.max(0, Math.floor((expiryTs - now) / 60000)) : null;
+        const intervalMin = sig.interval_minutes || 15;
+        const distToZone = currentPrice && sig.entry_zone_top && sig.entry_zone_bottom
+            ? signalType === 'LONG'
+                ? sig.entry_zone_top - currentPrice
+                : currentPrice - sig.entry_zone_bottom
+            : null;
+        const distText = distToZone != null
+            ? `Precio a $${Math.abs(distToZone).toLocaleString(undefined, { maximumFractionDigits: 0 })} de la zona.`
+            : '';
+
+        return {
+            status: 'PENDING',
+            label: '⏳ PENDIENTE',
+            reason: `Esperando que el precio llegue a la zona de entrada ($${sig.entry_zone_bottom?.toLocaleString()} – $${sig.entry_zone_top?.toLocaleString()}). ${distText}`,
+            color: 'text-yellow-400',
+            bgColor: 'bg-yellow-400/5 border-yellow-400/20',
+            countdown: timeLeft != null ? `Expira en ~${timeLeft}min (${Math.ceil(timeLeft / intervalMin)} velas)` : undefined,
+        };
     };
 
     const getSignalStyle = (type: string) => {
@@ -255,7 +339,7 @@ export default function SignalTerminal() {
                         regime={(tacticalDecision as any)?.market_regime ?? (tacticalDecision as any)?.regime ?? null}
                         activeStrategy={(tacticalDecision as any)?.active_strategy ?? null}
                         diagnostic={tacticalDecision?.diagnostic ?? null}
-                        currentPrice={(tacticalDecision as any)?.current_price ?? currentPrice ?? null}
+                        currentPrice={(tacticalDecision as any)?.current_price ?? currentPrice_live ?? null}
                         nearestSupport={(tacticalDecision as any)?.nearest_support ?? null}
                         nearestResistance={(tacticalDecision as any)?.nearest_resistance ?? null}
                         sessionData={sessionData}
@@ -294,67 +378,81 @@ export default function SignalTerminal() {
                             AWAITING ALGORITHMIC CONFLUENCE
                         </div>
                     ) : (
-                        <div className="flex flex-col gap-1.5 px-2">
+                        <div className="flex flex-col gap-2 px-2">
                             <AnimatePresence>
                                 {signals.map((sig, idx) => {
                                     const style = getSignalStyle(sig.type);
-                                    const isFresh = idx === 0;
+                                    const lifecycle = getSignalLifecycle(sig);
+                                    const isFresh = lifecycle.status === 'EN_ZONA';
 
                                     return (
                                         <motion.div
                                             key={`${sig.timestamp}-${sig.type}`}
-                                            initial={{ opacity: 0, x: -20, backgroundColor: 'rgba(0,229,255,0.2)' }}
-                                            animate={{ opacity: 1, x: 0, backgroundColor: 'rgba(255,255,255,0.02)' }}
-                                            transition={{
-                                                duration: 0.5,
-                                                backgroundColor: { duration: 2, ease: "easeOut" }
-                                            }}
-                                            className={`grid grid-cols-12 gap-4 px-4 py-2.5 rounded border border-white/5 items-center cursor-default hover:bg-white/[0.04] transition-colors relative overflow-hidden group`}
+                                            initial={{ opacity: 0, x: -20 }}
+                                            animate={{ opacity: 1, x: 0 }}
+                                            transition={{ duration: 0.4 }}
+                                            className={`flex flex-col rounded border px-4 py-3 ${lifecycle.bgColor} transition-all`}
                                         >
-                                            {isFresh && (
-                                                <div className="absolute left-0 top-0 bottom-0 w-1 bg-white/20" />
-                                            )}
-
-                                            <div className="col-span-1 font-mono text-[10px] text-white/50">
-                                                {formatTime(sig.timestamp)}
-                                            </div>
-
-                                            <div className="col-span-3 flex items-center gap-2">
-                                                <div className={`flex items-center gap-1.5 px-2 py-0.5 rounded border ${style.bg} ${style.border}`}>
-                                                    {style.icon}
-                                                    <span className={`text-[9px] font-bold tracking-wider ${style.color} ${style.shadow}`}>
-                                                        {sig.type.replace('🟢', '').replace('🔴', '').trim()}
-                                                    </span>
+                                            {/* ── Fila 1: Tiempo + Tipo + Estado ── */}
+                                            <div className="flex items-center justify-between mb-2">
+                                                <div className="flex items-center gap-2">
+                                                    <span className="font-mono text-[10px] text-white/40">{formatTime(sig.timestamp)}</span>
+                                                    <div className={`flex items-center gap-1.5 px-2 py-0.5 rounded border ${style.bg} ${style.border}`}>
+                                                        {style.icon}
+                                                        <span className={`text-[9px] font-bold tracking-wider ${style.color} ${style.shadow}`}>
+                                                            {sig.type.replace('🟢', '').replace('🔴', '').trim()}
+                                                        </span>
+                                                    </div>
                                                 </div>
-                                            </div>
-
-                                            <div className="col-span-2 flex flex-col justify-center">
-                                                <span className="font-mono text-[11px] font-bold text-white/90">
-                                                    ${sig.price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                <span className={`text-[9px] font-bold tracking-widest ${lifecycle.color}`}>
+                                                    {lifecycle.label}
                                                 </span>
                                             </div>
 
-                                            <div className="col-span-3 flex flex-col justify-center gap-0.5">
-                                                <div className="flex items-center gap-2 text-[9px] font-mono">
-                                                    <ShieldAlert size={10} className="text-neon-red/70" />
-                                                    <span className="text-white/80">${sig.stop_loss?.toLocaleString(undefined, { minimumFractionDigits: 2 }) || '---'}</span>
+                                            {/* ── Fila 2: Estado educativo ── */}
+                                            <div className={`text-[9px] font-mono px-2 py-1.5 rounded border border-white/5 bg-black/30 mb-2 ${lifecycle.color} leading-relaxed`}>
+                                                {lifecycle.reason}
+                                                {lifecycle.countdown && (
+                                                    <span className="block mt-0.5 text-white/30">{lifecycle.countdown}</span>
+                                                )}
+                                            </div>
+
+                                            {/* ── Fila 3: Zona de Entrada + Precios clave ── */}
+                                            <div className="grid grid-cols-3 gap-2 text-[9px] font-mono mb-2">
+                                                <div className="flex flex-col gap-0.5 bg-white/[0.02] rounded px-2 py-1 border border-white/5">
+                                                    <span className="text-white/30 text-[8px] tracking-widest">ZONA ENTRADA</span>
+                                                    {sig.entry_zone_top && sig.entry_zone_bottom ? (
+                                                        <span className="text-white/80 font-bold">${sig.entry_zone_bottom.toLocaleString(undefined, { maximumFractionDigits: 0 })} – ${sig.entry_zone_top.toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>
+                                                    ) : (
+                                                        <span className="text-white/60 font-bold">${sig.price?.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                                                    )}
                                                 </div>
-                                                <div className="flex items-center gap-2 text-[9px] font-mono">
-                                                    <Target size={10} className="text-neon-green/70" />
-                                                    <span className="text-white/80">${sig.take_profit_3r?.toLocaleString(undefined, { minimumFractionDigits: 2 }) || '---'}</span>
+                                                <div className="flex flex-col gap-0.5 bg-neon-red/5 rounded px-2 py-1 border border-neon-red/10">
+                                                    <span className="text-neon-red/50 text-[8px] tracking-widest">⛔ STOP LOSS</span>
+                                                    <span className="text-neon-red/90 font-bold">${sig.stop_loss?.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                                                </div>
+                                                <div className="flex flex-col gap-0.5 bg-neon-green/5 rounded px-2 py-1 border border-neon-green/10">
+                                                    <span className="text-neon-green/50 text-[8px] tracking-widest">🎯 TARGET 3R</span>
+                                                    <span className="text-neon-green/90 font-bold">${sig.take_profit_3r?.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
                                                 </div>
                                             </div>
 
-                                            <div className="col-span-3 flex items-center flex-wrap gap-1">
+                                            {/* ── Fila 4: Risk Management ── */}
+                                            <div className="flex items-center flex-wrap gap-1 mb-2">
                                                 <span className="px-1.5 py-0.5 text-[8px] font-bold tracking-wider text-neon-cyan/80 bg-neon-cyan/10 border border-neon-cyan/20 rounded">
                                                     RISK: {sig.risk_pct ? `${sig.risk_pct}%` : 'N/A'} (${sig.risk_usd || 'N/A'})
                                                 </span>
-                                                <span className="px-1.5 py-0.5 text-[8px] font-bold tracking-wider text-[#d4af37] bg-[#d4af37]/10 border border-[#d4af37]/20 rounded tracking-widest">
+                                                <span className="px-1.5 py-0.5 text-[8px] font-bold tracking-wider text-[#d4af37] bg-[#d4af37]/10 border border-[#d4af37]/20 rounded">
                                                     {sig.leverage ? `${sig.leverage}x` : '1x'} LEV
                                                 </span>
                                                 <span className="px-1.5 py-0.5 text-[8px] font-bold tracking-wider text-white/70 bg-white/10 border border-white/20 rounded">
                                                     SIZE: ${sig.position_size || '---'}
                                                 </span>
+                                                {sig.expiry_candles && (
+                                                    <span className="px-1.5 py-0.5 text-[8px] font-bold tracking-wider text-white/30 bg-white/5 border border-white/10 rounded">
+                                                        VÁLIDA {sig.expiry_candles} velas ({(sig.expiry_candles * (sig.interval_minutes || 15))}min)
+                                                    </span>
+                                                )}
                                                 {sig.trigger?.split('+').map((badge: string, i: number) => (
                                                     <span key={i} className="px-1.5 py-0.5 text-[8px] font-bold tracking-wider text-white/40 bg-white/5 border border-white/10 rounded">
                                                         {badge.trim()}
@@ -362,10 +460,9 @@ export default function SignalTerminal() {
                                                 ))}
                                             </div>
 
-                                            {/* CONFLUENCE SCORE — fila completa debajo */}
+                                            {/* ── Fila 5: Confluence Score ── */}
                                             {sig.confluence && (
-                                                <div className="col-span-12 mt-1.5 border-t border-white/5 pt-1.5 flex flex-col gap-1.5">
-                                                    {/* Score bar + conviction */}
+                                                <div className="border-t border-white/5 pt-2 flex flex-col gap-1.5">
                                                     <div className="flex items-center gap-3">
                                                         <div className="flex-1 h-1.5 bg-black/60 rounded-full overflow-hidden border border-white/10">
                                                             <div
@@ -385,7 +482,6 @@ export default function SignalTerminal() {
                                                             {sig.confluence.score}/100 {sig.confluence.conviction}
                                                         </span>
                                                     </div>
-                                                    {/* Checklist compacto */}
                                                     <div className="flex flex-wrap gap-1">
                                                         {sig.confluence.checklist?.map((item: any, i: number) => (
                                                             <span key={i} className={`px-1.5 py-0.5 text-[8px] font-bold tracking-wider rounded border ${item.status === 'CONFIRMADO'
@@ -398,7 +494,6 @@ export default function SignalTerminal() {
                                                             </span>
                                                         ))}
                                                     </div>
-                                                    {/* Reasoning narrativo */}
                                                     {sig.confluence.reasoning && (
                                                         <p className="text-[9px] text-white/40 italic font-mono leading-relaxed pl-1 border-l border-white/10">
                                                             {sig.confluence.reasoning}
@@ -406,8 +501,6 @@ export default function SignalTerminal() {
                                                     )}
                                                 </div>
                                             )}
-
-
                                         </motion.div>
                                     );
                                 })}
