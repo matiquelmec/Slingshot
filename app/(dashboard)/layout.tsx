@@ -1,36 +1,48 @@
 'use client';
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import {
     Crosshair, Radio, Database, ShieldCheck,
-    LayoutDashboard, Activity, Terminal, BarChart2
+    LayoutDashboard, Activity, Terminal, BarChart2, LogOut, User
 } from 'lucide-react';
 import { useTelemetryStore } from '../store/telemetryStore';
+import { createClient } from '@/lib/supabase/client';
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
     const pathname = usePathname();
+    const router = useRouter();
     const { isConnected, connect } = useTelemetryStore();
     const hasInitialized = React.useRef(false);
+    const [userEmail, setUserEmail] = useState<string | null>(null);
 
     // Auto-Conexión Global con persistencia de moneda (evita reinicios a BTC en F5)
     useEffect(() => {
         if (!hasInitialized.current) {
             hasInitialized.current = true;
-
             const savedSymbol = typeof window !== 'undefined' ? localStorage.getItem('slingshot_symbol') : null;
             const savedTimeframe = typeof window !== 'undefined' ? localStorage.getItem('slingshot_timeframe') : null;
-
             const { activeSymbol, activeTimeframe } = useTelemetryStore.getState();
-
-            const finalSymbol = savedSymbol || activeSymbol;
-            const finalTimeframe = (savedTimeframe as any) || activeTimeframe;
-
-            connect(finalSymbol, finalTimeframe);
+            connect(savedSymbol || activeSymbol, (savedTimeframe as any) || activeTimeframe);
         }
     }, [connect]);
+
+    // Obtener usuario autenticado
+    useEffect(() => {
+        const supabase = createClient();
+        supabase.auth.getUser().then(({ data }) => {
+            setUserEmail(data.user?.email ?? null);
+        });
+    }, []);
+
+    const handleLogout = async () => {
+        const supabase = createClient();
+        await supabase.auth.signOut();
+        router.push('/login');
+        router.refresh();
+    };
 
     const navItems = [
         { name: 'Overview', href: '/', icon: LayoutDashboard },
@@ -67,7 +79,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                     </div>
                 </div>
 
-                <div className="flex items-center space-x-8 text-xs font-bold tracking-wider">
+                <div className="flex items-center space-x-5 text-xs font-bold tracking-wider">
                     <div className="flex items-center gap-2.5 text-white/40">
                         <Radio size={14} className={isConnected ? "text-neon-green" : "text-white/20 animate-pulse"} />
                         <span>DATOS: <span className={isConnected ? "text-neon-green" : "text-white/20"}>{isConnected ? 'LIVE SYNC' : 'WAITING'}</span></span>
@@ -76,9 +88,27 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                         <Database size={14} />
                         <span>CACHE: <span className="text-blue-400 drop-shadow-[0_0_5px_rgba(96,165,250,0.5)]">REDIS OK</span></span>
                     </div>
-                    <div className="flex items-center gap-2.5 bg-neon-green/10 px-4 py-1.5 rounded-full border border-neon-green/20">
+                    <div className="flex items-center gap-2.5 bg-neon-green/10 px-3 py-1.5 rounded-full border border-neon-green/20">
                         <ShieldCheck size={14} className="text-neon-green" />
                         <span className="text-neon-green drop-shadow-[0_0_8px_rgba(0,255,65,0.8)]">SYSTEM ONLINE</span>
+                    </div>
+
+                    {/* Usuario + Logout */}
+                    <div className="flex items-center gap-2 border-l border-white/10 pl-5">
+                        {userEmail && (
+                            <div className="flex items-center gap-1.5 text-white/30">
+                                <User size={12} />
+                                <span className="text-[10px] tracking-wide max-w-[140px] truncate">{userEmail}</span>
+                            </div>
+                        )}
+                        <button
+                            id="btn-logout"
+                            onClick={handleLogout}
+                            title="Cerrar sesión"
+                            className="flex items-center gap-1.5 text-white/30 hover:text-red-400 transition-colors px-2 py-1 rounded-lg hover:bg-red-400/10"
+                        >
+                            <LogOut size={13} />
+                        </button>
                     </div>
                 </div>
             </motion.header>
