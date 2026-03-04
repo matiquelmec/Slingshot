@@ -11,7 +11,8 @@ import {
     CandlestickSeries,
     LineSeries,
     HistogramSeries,
-    BaselineSeries
+    BaselineSeries,
+    createSeriesMarkers
 } from 'lightweight-charts';
 import { useTelemetryStore, CandleData } from '../../store/telemetryStore';
 import { useIndicatorsStore } from '../../store/indicatorsStore';
@@ -110,6 +111,8 @@ export default function TradingChart() {
     const macdSigRef = useRef<ISeriesApi<'Line'> | null>(null);
     const macdHistRef = useRef<ISeriesApi<'Histogram'> | null>(null);
 
+    const markersSeriesRef = useRef<any>(null);
+
     const { candles, isConnected, smcData, liquidityHeatmap, tacticalDecision, sessionData } = useTelemetryStore();
     const { indicators } = useIndicatorsStore();
 
@@ -146,6 +149,9 @@ export default function TradingChart() {
             borderVisible: false,
             wickUpColor: '#00FF41', wickDownColor: '#FF003C',
         });
+
+        // Markers Plugin Reference
+        markersSeriesRef.current = null;
 
         // EMA 20
         ema20Ref.current = chart.addSeries(LineSeries, {
@@ -232,12 +238,43 @@ export default function TradingChart() {
             return;
         }
 
-        // Sanitización defensiva: Ordenar por tiempo y eliminar duplicados (última línea de defensa)
+        // ─ Sanitización defensiva: Ordenar por tiempo y eliminar duplicados (última línea de defensa) ─
         const sortedCandles = [...candles]
             .sort((a, b) => Number(a.time) - Number(b.time))
             .filter((c, i, arr) => i === 0 || c.time !== arr[i - 1].time);
 
         candleSeriesRef.current.setData(sortedCandles as any);
+
+        // 🎯 INYECTAR MARCADORES DE DIVERGENCIA EN EL GRÁFICO PRINCIPAL 🎯
+        const markers: any[] = [];
+        sortedCandles.forEach(c => {
+            if (c.bullish_div) {
+                markers.push({
+                    time: c.time,
+                    position: 'belowBar',
+                    color: '#00FF41', // Verde Neón Institucional
+                    shape: 'arrowUp',
+                    text: 'BULL DIV',
+                    size: 1.5,
+                });
+            }
+            if (c.bearish_div) {
+                markers.push({
+                    time: c.time,
+                    position: 'aboveBar',
+                    color: '#FF003C', // Rojo Neón Institucional
+                    shape: 'arrowDown',
+                    text: 'BEAR DIV',
+                    size: 1.5,
+                });
+            }
+        });
+
+        if (!markersSeriesRef.current) {
+            markersSeriesRef.current = createSeriesMarkers(candleSeriesRef.current, markers);
+        } else {
+            markersSeriesRef.current.setMarkers(markers);
+        }
 
         if (sortedCandles.length < 5) return;
 

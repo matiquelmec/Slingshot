@@ -72,6 +72,97 @@ def calculate_bbwp(df: pd.DataFrame, period=252, basis_period=20) -> pd.DataFram
     
     return df
 
+def detect_divergences(df: pd.DataFrame, window: int = 40) -> pd.DataFrame:
+    """
+    Detector Matemático de Divergencias Institucionales.
+    Busca desincronizaciones entre Pivotes de Precio y Pivotes de RSI.
+    """
+    df = df.copy()
+    
+    # Iniciar columnas en falso
+    df['bullish_div'] = False
+    df['bearish_div'] = False
+    
+    if len(df) < window + 5 or 'rsi' not in df.columns:
+        return df
+        
+    lows = df['low'].values
+    highs = df['high'].values
+    rsi = df['rsi'].values
+    
+    bull_divs = np.zeros(len(df), dtype=bool)
+    bear_divs = np.zeros(len(df), dtype=bool)
+    
+    # Parámetros geométricos para un 'Pivot' válido
+    left_bars = 4
+    right_bars = 2
+    
+    for i in range(left_bars + right_bars, len(df)):
+        pivot_idx = i - right_bars
+        
+        # --- 1. Buscar Pivot Lows (Suelos locales) ---
+        is_pivot_low = True
+        for j in range(pivot_idx - left_bars, pivot_idx + right_bars + 1):
+            if j != pivot_idx and lows[j] <= lows[pivot_idx]:
+                is_pivot_low = False
+                break
+                
+        if is_pivot_low:
+            # Encontramos un suelo actual. Buscar el suelo anterior en la ventana temporal.
+            prev_pivot_idx = -1
+            for k in range(pivot_idx - 1, max(0, pivot_idx - window), -1):
+                is_prev = True
+                for j in range(k - left_bars, k + right_bars + 1):
+                    if j < 0 or j >= len(df): continue
+                    if j != k and lows[j] <= lows[k]:
+                        is_prev = False
+                        break
+                if is_prev:
+                    prev_pivot_idx = k
+                    break
+                    
+            if prev_pivot_idx != -1:
+                # Comprobar lógica Bullish Divergence
+                # Precio hace un mínimo MÁS BAJO (Lower Low)
+                # RSI hace un mínimo MÁS ALTO (Higher Low)
+                if lows[pivot_idx] < lows[prev_pivot_idx] and rsi[pivot_idx] > rsi[prev_pivot_idx]:
+                    # RSI debe estar tenso (cerca de sobreventa) para dar un entry institucional
+                    if rsi[pivot_idx] < 45:
+                        bull_divs[i] = True # Se confirma la señal en la vela viva 'i' (2 barras después del pivot)
+
+        # --- 2. Buscar Pivot Highs (Techos locales) ---
+        is_pivot_high = True
+        for j in range(pivot_idx - left_bars, pivot_idx + right_bars + 1):
+            if j != pivot_idx and highs[j] >= highs[pivot_idx]:
+                is_pivot_high = False
+                break
+                
+        if is_pivot_high:
+            prev_pivot_idx = -1
+            for k in range(pivot_idx - 1, max(0, pivot_idx - window), -1):
+                is_prev = True
+                for j in range(k - left_bars, k + right_bars + 1):
+                    if j < 0 or j >= len(df): continue
+                    if j != k and highs[j] >= highs[k]:
+                        is_prev = False
+                        break
+                if is_prev:
+                    prev_pivot_idx = k
+                    break
+                    
+            if prev_pivot_idx != -1:
+                # Comprobar lógica Bearish Divergence
+                # Precio hace un máximo MÁS ALTO (Higher High)
+                # RSI hace un máximo MÁS BAJO (Lower High)
+                if highs[pivot_idx] > highs[prev_pivot_idx] and rsi[pivot_idx] < rsi[prev_pivot_idx]:
+                    # RSI debe estar tenso (cerca de sobrecompra)
+                    if rsi[pivot_idx] > 55:
+                        bear_divs[i] = True
+
+    df['bullish_div'] = bull_divs
+    df['bearish_div'] = bear_divs
+    return df
+
 def apply_criptodamus_suite(df: pd.DataFrame) -> pd.DataFrame:
     """Aplica todos los indicadores clásicos heredados."""
     df = calculate_rsi(df)
@@ -80,6 +171,9 @@ def apply_criptodamus_suite(df: pd.DataFrame) -> pd.DataFrame:
     # Adaptar ventana BBWP al intradía (en lugar de 252 velas diarias, usamos ≈ 2 días de velas de 15m)
     # 2 días * 24 horas * 4 velas/hora = 192 velas
     df = calculate_bbwp(df, period=192)
+    
+    # Motor Avanzado: Divergencias RSI
+    df = detect_divergences(df)
     
     return df
 
@@ -96,9 +190,11 @@ if __name__ == "__main__":
         # (Para testear rápido, solo buscaremos RSI Sobrevendido + Squeeze activo)
         golden_setup = analyzed_data[analyzed_data['rsi_oversold'] & analyzed_data['squeeze_active']]
         
-        print(f"🧬 Herencia de Criptodamus Integrada (RSI, MACD, BBWP)")
+        print(f"🧬 Herencia de Criptodamus Integrada (RSI, MACD, BBWP, DIVERGENCIAS)")
         print(f"Total de velas analizadas: {len(data)}")
         print(f"🔋 Zonas de Squeeze (Compresión Extrema BBWP < 20): {analyzed_data['squeeze_active'].sum()}")
         print(f"💎 Setups 'Golden' (RSI < 30 + Compresión): {len(golden_setup)} velas")
+        print(f"⚠️  Divergencias Alcistas Detectadas: {analyzed_data['bullish_div'].sum()}")
+        print(f"⚠️  Divergencias Bajistas Detectadas: {analyzed_data['bearish_div'].sum()}")
     else:
         print("Data file not found.")

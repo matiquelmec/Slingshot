@@ -7,6 +7,8 @@ export interface CandleData {
     low: number;
     close: number;
     volume: number;
+    bullish_div?: boolean; // 🎯 Divergencia Matemática Oculta
+    bearish_div?: boolean; // 🎯 Divergencia Matemática Oculta
 }
 
 export type Timeframe = '1m' | '3m' | '5m' | '15m' | '30m' | '1h' | '2h' | '4h' | '8h' | '1d' | '1w' | '1M';
@@ -242,7 +244,9 @@ export const useTelemetryStore = create<TelemetryState>((set, get) => {
                         high: item.data.high,
                         low: item.data.low,
                         close: item.data.close,
-                        volume: item.data.volume
+                        volume: item.data.volume,
+                        bullish_div: item.data.bullish_div,
+                        bearish_div: item.data.bearish_div
                     }));
                     set({
                         candles: newCandles,
@@ -255,7 +259,9 @@ export const useTelemetryStore = create<TelemetryState>((set, get) => {
                         high: data.data.high,
                         low: data.data.low,
                         close: data.data.close,
-                        volume: data.data.volume
+                        volume: data.data.volume,
+                        bullish_div: data.data.bullish_div,
+                        bearish_div: data.data.bearish_div
                     };
 
                     set((state) => {

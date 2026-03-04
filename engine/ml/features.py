@@ -25,8 +25,14 @@ class FeatureEngineer:
         """
         df = df.copy()
         
-        # 1. Inyectar suite base de TA (RSI, MACD, BBWP)
+        # 1. Inyectar suite base de TA (RSI, MACD, BBWP, Divergencias)
         df = apply_criptodamus_suite(df)
+        
+        # Convertir divergencias booleanas a numéricas (1/0) para el ML
+        if 'bullish_div' in df.columns:
+            df['bullish_div'] = df['bullish_div'].astype(int)
+        if 'bearish_div' in df.columns:
+            df['bearish_div'] = df['bearish_div'].astype(int)
         
         # 1.5 Inyectar Smart Money Concepts (El "Cerebro" Institucional)
         from engine.indicators.structure import identify_order_blocks

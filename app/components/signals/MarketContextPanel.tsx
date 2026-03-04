@@ -81,6 +81,8 @@ function buildConditions(
     const vol = d?.volume ?? 0;
     const oversold = d?.rsi_oversold ?? false;
     const overbought = d?.rsi_overbought ?? false;
+    const bullDiv = d?.bullish_divergence ?? false;
+    const bearDiv = d?.bearish_divergence ?? false;
 
     // RSI helper
     const rsiDesc = () => {
@@ -153,6 +155,12 @@ function buildConditions(
                     currentValue: `BBWP: ${bbwp?.toFixed(1)}% — ${squeeze ? '🔥 COMPRIMIDO' : 'Expandido'}`,
                     meaning: squeeze ? 'Compresión extrema. Explosión inminente.' : 'Baja volatilidad. Esperando carga de energía.',
                 },
+                {
+                    label: bullDiv ? '🔥 Divergencia Alcista (Price vs RSI)' : 'Divergencias Cuantitativas',
+                    status: bullDiv ? 'MET' : 'WAITING',
+                    currentValue: bullDiv ? 'DIVERGENCIA ALCISTA DETECTADA' : 'Ninguna divergencia detectada.',
+                    meaning: bullDiv ? 'El precio hizo un mínimo más bajo, pero el momentum institucional (RSI) subió. Fuerte señal de trampa bajista inminente a reversión alcista.' : 'El momentum acompaña al precio de manera lineal sin generar disparidades.',
+                },
             ];
         }
 
@@ -177,6 +185,12 @@ function buildConditions(
                     currentValue: `MACD: ${macdLine?.toFixed(2)}`,
                     meaning: macdDesc(),
                 },
+                {
+                    label: bearDiv ? '⚠️ Divergencia Bajista (Price vs RSI)' : 'Divergencias Cuantitativas',
+                    status: bearDiv ? 'WARNING' : 'WAITING',
+                    currentValue: bearDiv ? 'DIVERGENCIA BAJISTA DETECTADA' : 'Ninguna divergencia detectada.',
+                    meaning: bearDiv ? 'El precio hizo un máximo más alto, pero el momentum (RSI) cayó. Alerta temprana de debilidad y posible corrección profunda.' : 'Subida saludable soportada por el momentum.',
+                },
             ];
         }
 
@@ -194,6 +208,12 @@ function buildConditions(
                     status: 'WAITING',
                     currentValue: resistance ? `Barrera: $${resistance.toFixed(2)}` : 'Buscando techo...',
                     meaning: 'Buscamos que el precio supere un máximo previo y luego sea rechazado.',
+                },
+                {
+                    label: bearDiv ? '⚠️ Divergencia Bajista (Distribución Oculta)' : 'Divergencias Estructurales',
+                    status: bearDiv ? 'MET' : 'WAITING',
+                    currentValue: bearDiv ? 'DIVERGENCIA BAJISTA DETECTADA' : 'Estructura lineal normal.',
+                    meaning: bearDiv ? 'El rally actual carece de fuerza de compra real. Las manos fuertes están vendiendo agresivamente en la subida.' : 'Distribución algorítmica sin alertas ocultas inmediatas.',
                 },
             ];
         }
@@ -221,7 +241,13 @@ function buildConditions(
                     meaning: (oversold && volExtreme)
                         ? '⚠️ CLÍMAX DETECTADO. El volumen es extremo en zona de sobreventa. Esto suele indicar que las manos fuertes están cerrando cortos y empezando a comprar. No entres SHORT aquí.'
                         : 'No hay señales de agotamiento masivo todavía. La tendencia tiene espacio.',
-                }
+                },
+                {
+                    label: bullDiv ? '🔥 Divergencia Alcista en Caída' : 'Divergencia de Momentum',
+                    status: bullDiv ? 'MET' : 'WAITING',
+                    currentValue: bullDiv ? 'DIVERGENCIA ALCISTA DETECTADA' : 'Ninguna anomalía detectada.',
+                    meaning: bullDiv ? 'La presión vendedora se secó. El precio cae por inercia pero el momentum institucional ya es alcista.' : 'Las métricas caen al unísono con el precio.',
+                },
             ];
         }
 
@@ -259,6 +285,12 @@ function buildConditions(
                         : bbwp < 25
                             ? 'Baja Volatilidad: El precio está en fase de compresión. El "resorte" está ganando energía para el próximo impulso.'
                             : 'Volatilidad Normal: El mercado tiene espacio para moverse antes de comprimirse de nuevo.',
+                },
+                {
+                    label: 'Divergencia Cuantitativa Activa',
+                    status: bullDiv ? 'MET' : bearDiv ? 'WARNING' : 'WAITING',
+                    currentValue: bullDiv ? 'ALCISTA DETECTADA 🔥' : bearDiv ? 'BAJISTA DETECTADA ⚠️' : 'Ninguna anomalía en este lateral.',
+                    meaning: bullDiv ? 'Posible Wyckoff Spring inminente (manipulación a la baja antes de volar).' : bearDiv ? 'Posible Upthrust inminente (trampa alcista y caída).' : 'El volumen y RSI están neutrales en este bloque.',
                 },
             ];
         }

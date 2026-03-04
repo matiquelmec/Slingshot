@@ -27,6 +27,8 @@ def generate_tactical_advice(tactical_data: dict, current_session: str, ml_proje
     bbwp = diag.get('bbwp', 0)
     squeeze = "ACTIVE" if diag.get('squeeze_active') else "INACTIVE"
     in_killzone = "SÍ (Volumen Institucional Alto)" if diag.get('in_killzone', False) else "NO (Volumen Minorista/Lento)"
+    bull_div = "PRESENTE" if diag.get('bullish_divergence') else "NO"
+    bear_div = "PRESENTE" if diag.get('bearish_divergence') else "NO"
     
     # Extraer data de Estructura (SMC / Soportes)
     smc = tactical_data.get('smc', {})
@@ -58,6 +60,7 @@ def generate_tactical_advice(tactical_data: dict, current_session: str, ml_proje
     - Sesión Activa: {current_session} | Dentro de KillZone: {in_killzone}
     - Régimen Wyckoff: {regime} | Estrategia Seleccionada: {strategy}
     - RSI: {rsi:.1f} | MACD Estado: {macd_cross} | Volatilidad (BBWP): {bbwp:.1f}% (Squeeze: {squeeze})
+    - Divergencias Ocultas: Alcista ({bull_div}) / Bajista ({bear_div})
     
     NIVELES CLAVE Y ESTRUCTURA (SMC):
     - Soporte Más Cercano: ${support} | Resistencia Más Cercana: ${resistance}

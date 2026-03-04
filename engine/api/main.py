@@ -209,6 +209,8 @@ async def websocket_stream_endpoint(websocket: WebSocket, symbol: str, interval:
                             "low": float(row['low']),
                             "close": float(row['close']),
                             "volume": float(row['volume']),
+                            "bullish_div": bool(row.get('bullish_div', False)),
+                            "bearish_div": bool(row.get('bearish_div', False)),
                         }
                     })
                 await websocket.send_json({"type": "history", "data": hist_batch})
@@ -364,6 +366,11 @@ async def websocket_stream_endpoint(websocket: WebSocket, symbol: str, interval:
         # Control de Throttling para el Fast Path
         last_pulse_time = 0
         
+        # Filtros Profesionales ML (Histéresis + EMA)
+        ema_ml_prob = 50.0
+        ml_smoothing_alpha = 0.2
+        current_ml_direction = "ANALIZANDO"
+        
         # Contador de cierres de vela — variable local (no atributo dinámico del WebSocket)
         candle_close_count = 0
         
@@ -455,7 +462,38 @@ async def websocket_stream_endpoint(websocket: WebSocket, symbol: str, interval:
                             
                             # Realizamos la inferencia XGBoost
                             # (Es lo suficientemente rápido para correr 1 vez por segundo)
-                            last_ml_prediction = ml_engine.predict_live(df_live_tick)
+                            raw_prediction = ml_engine.predict_live(df_live_tick)
+                            
+                            # ✨ FILTRO PROFESIONAL: Suavizado EMA + Histéresis ✨
+                            if raw_prediction.get("status") == "active":
+                                raw_prob = raw_prediction.get("probability", 50)
+                                raw_dir = raw_prediction.get("direction", "ANALIZANDO")
+                                
+                                # Convertir a probabilidad absoluta alcista (0-100)
+                                prob_bullish_raw = raw_prob if raw_dir == "ALCISTA" else (100 - raw_prob)
+                                
+                                # 1. Aplicar Suavizado Exponencial (EMA)
+                                ema_ml_prob = (prob_bullish_raw * ml_smoothing_alpha) + (ema_ml_prob * (1 - ml_smoothing_alpha))
+                                
+                                # 2. Aplicar Histéresis (Inercia de Estado)
+                                if ema_ml_prob >= 55.0:
+                                    current_ml_direction = "ALCISTA"
+                                elif ema_ml_prob <= 45.0:
+                                    current_ml_direction = "BAJISTA"
+                                elif current_ml_direction == "ANALIZANDO":
+                                    current_ml_direction = "NEUTRAL"
+                                    
+                                # Reconstruir la predicción filtrada
+                                filtered_confidence = ema_ml_prob if current_ml_direction == "ALCISTA" else (100 - ema_ml_prob)
+                                
+                                last_ml_prediction = {
+                                    "direction": current_ml_direction,
+                                    "probability": int(filtered_confidence),
+                                    "status": raw_prediction["status"],
+                                    "reason": raw_prediction["reason"]
+                                }
+                            else:
+                                last_ml_prediction = raw_prediction
                             
                             # ✨ NUEVO: HFT Confluence Matrix 
                             # Ejecutamos el router maestro en el Fast Path para hidratar la UI en tiempo real

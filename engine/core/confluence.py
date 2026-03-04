@@ -133,12 +133,23 @@ class ConfluenceManager:
         squeeze = bool(current.get('squeeze_active', False))
 
         mom_pts = (5 if rsi_ok else 0) + (5 if macd_ok else 0) + (5 if squeeze else 0)
+        
+        # 4.5 BONO CUANTITATIVO: Divergencias (peso extra masivo +15)
+        bull_div = bool(current.get('bullish_div', False))
+        bear_div = bool(current.get('bearish_div', False))
+        div_aligned = (is_long and bull_div) or (not is_long and bear_div)
+        
+        if div_aligned:
+            mom_pts += 15
+            total_weight += 15 # Aumentamos el peso total para no desbalancear el ratio, pero la divergencia casi "asegura" la nota
+            
         score += mom_pts
 
         tags = ' + '.join(filter(None, [
             'RSI extremo' if rsi_ok else '',
             'MACD cross'  if macd_ok else '',
-            'BB Squeeze'  if squeeze else ''
+            'BB Squeeze'  if squeeze else '',
+            '🎯 DIVERGENCIA' if div_aligned else ''
         ]))
 
         if mom_pts >= 10:
@@ -216,7 +227,7 @@ class ConfluenceManager:
             "ESPECULATIVA"    if final_score >= 30 else
             "ALTO RIESGO"
         )
-        reasoning = self._build_reasoning(final_score, conviction, is_long, regime, has_ob, rvol, in_kz, sweep_detected)
+        reasoning = self._build_reasoning(final_score, conviction, is_long, regime, has_ob, rvol, in_kz, sweep_detected, div_aligned)
 
         return {
             "score":      final_score,
@@ -228,13 +239,15 @@ class ConfluenceManager:
 
     def _build_reasoning(
         self, score: int, conviction: str, is_long: bool,
-        regime: str, has_ob: bool, rvol: float, in_kz: bool, sweep: bool
+        regime: str, has_ob: bool, rvol: float, in_kz: bool, sweep: bool, div_aligned: bool
     ) -> str:
         direction = "LONG" if is_long else "SHORT"
         msg = f"Señal {direction} de naturaleza {conviction} ({score}/100). "
         msg += f"Régimen actual: {regime}. "
         if has_ob:
             msg += "Respaldada por un Order Block institucional. "
+        if div_aligned:
+            msg += "🔥 POTENCIADA POR DIVERGENCIA CUANTITATIVA (Price vs Momentum). "
         if rvol >= 1.5:
             msg += f"Flujo de capital significativo detectado ({rvol:.1f}x). "
         if sweep:

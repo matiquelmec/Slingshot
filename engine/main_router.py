@@ -98,6 +98,8 @@ class SlingshotRouter:
                 "rsi": float(df['rsi'].iloc[-1]) if 'rsi' in df.columns and pd.notna(df['rsi'].iloc[-1]) else None,
                 "rsi_oversold": bool(df['rsi_oversold'].iloc[-1]) if 'rsi_oversold' in df.columns else False,
                 "rsi_overbought": bool(df['rsi_overbought'].iloc[-1]) if 'rsi_overbought' in df.columns else False,
+                "bullish_divergence": bool(df['bullish_div'].iloc[-1]) if 'bullish_div' in df.columns else False,
+                "bearish_divergence": bool(df['bearish_div'].iloc[-1]) if 'bearish_div' in df.columns else False,
                 "macd_line": float(df['macd_line'].iloc[-1]) if 'macd_line' in df.columns and pd.notna(df['macd_line'].iloc[-1]) else None,
                 "macd_signal": float(df['macd_signal'].iloc[-1]) if 'macd_signal' in df.columns and pd.notna(df['macd_signal'].iloc[-1]) else None,
                 "macd_bullish_cross": bool(df['macd_bullish_cross'].iloc[-1]) if 'macd_bullish_cross' in df.columns else False,
