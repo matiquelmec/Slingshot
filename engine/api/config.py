@@ -29,6 +29,10 @@ class Settings(BaseSettings):
     MAX_RISK_PCT: float = 0.01
     MIN_RR: float = 3.0
 
+    # Telegram Bot
+    TELEGRAM_BOT_TOKEN: str = ""
+    TELEGRAM_CHAT_ID: str = ""
+
     model_config = SettingsConfigDict(env_file=_ENV_FILE, extra="ignore")
 
 settings = Settings()

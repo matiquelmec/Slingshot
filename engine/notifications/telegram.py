@@ -2,13 +2,13 @@
 Capa 6: Sistema de Notificaciones — Bot de Telegram.
 Envía alertas ricas en formato Markdown cuando Slingshot genera señales reales.
 """
-import os
 import httpx
 import asyncio
 from datetime import datetime
+from engine.api.config import settings
 
-TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN', '')
-TELEGRAM_CHAT_ID = os.getenv('TELEGRAM_CHAT_ID', '')
+TELEGRAM_BOT_TOKEN = settings.TELEGRAM_BOT_TOKEN
+TELEGRAM_CHAT_ID   = settings.TELEGRAM_CHAT_ID
 
 # URL base de la Telegram Bot API
 _BASE_URL = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}"

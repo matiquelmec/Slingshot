@@ -1,16 +1,17 @@
-import sys
-from pathlib import Path
-sys.path.append(str(Path(__file__).parent.parent.parent))
-
 from collections import deque
+from pathlib import Path
+import asyncio
+import time
+import json
+import random
+
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
-import asyncio
 import httpx
 import pandas as pd
-import json
 from datetime import datetime, timezone
 import pytz
+import websockets as ws_client
 
 # ✅ Serializer robusto — resuelve Timestamp / numpy no serializables globalmente
 from engine.api.json_utils import sanitize_for_json, SlingshotJSONEncoder
@@ -28,7 +29,7 @@ WebSocket.send_json = _safe_send_json  # type: ignore[method-assign]
 from engine.main_router import SlingshotRouter
 from engine.api.config import settings
 
-# 🕐 Session Manager (fuente de verdad de sesiones — sin DB, por símbolo)
+# 🔐 Session Manager (fuente de verdad de sesiones — sin DB, por símbolo)
 from engine.core.session_manager import SessionManager as _SessionManager
 
 # Dict de managers por símbolo para evitar cross-talk entre mercados
@@ -44,7 +45,7 @@ def get_session_manager(symbol: str) -> _SessionManager:
 from engine.api.ws_manager import manager
 
 # 💬 Notificaciones
-from engine.notifications.telegram import send_signal_async
+from engine.notifications.telegram import send_signal_async, send_drift_alert_async
 from engine.notifications.filter import signal_filter
 
 # 🔮 Datos Fantasma (Nivel 1 - Filtro Macro)
@@ -53,15 +54,17 @@ from engine.indicators.ghost_data import refresh_ghost_data, get_ghost_state, fi
 # 🧠 Drift Monitor (Auto-supervisión del Modelo ML)
 from engine.ml.drift_monitor import drift_monitor
 from engine.ml.features import FeatureEngineer
+from engine.ml.inference import ml_engine
 
 # 🏗️ Estructura e Indicadores
 from engine.indicators.structure import (
-    identify_support_resistance, 
-    get_key_levels, 
-    identify_order_blocks, 
+    identify_support_resistance,
+    get_key_levels,
+    identify_order_blocks,
     extract_smc_coordinates,
     consolidate_mtf_levels
 )
+from engine.indicators.liquidity import detect_liquidity_clusters
 
 # 🧙‍♂️ Asesor Cuantitativo (LLM)
 from engine.api.advisor import generate_tactical_advice
@@ -354,16 +357,15 @@ async def websocket_stream_endpoint(websocket: WebSocket, symbol: str, interval:
         # Estado de Liquidez en Tiempo Real
         # Nota: websocket_session_cache eliminado — SessionManager mantiene el estado internamente
         current_liquidity = {"bids": [], "asks": []}
-        from engine.indicators.liquidity import detect_liquidity_clusters
-        from engine.ml.inference import ml_engine
         
         # Última predicción ML cacheada para no sobrecargar CPU en cada micro-tick
         last_ml_prediction = {"direction": "CALIBRANDO", "probability": 50, "status": "warmup"}
         
         # Control de Throttling para el Fast Path
         last_pulse_time = 0
-        import time
-        import random
+        
+        # Contador de cierres de vela — variable local (no atributo dinámico del WebSocket)
+        candle_close_count = 0
         
         async with ws_client.connect(binance_url) as binance_ws:
             print(f"[{symbol}] Stream Multiplexado en tiempo real ACTIVO.")
@@ -499,10 +501,8 @@ async def websocket_stream_endpoint(websocket: WebSocket, symbol: str, interval:
                         df_live['timestamp'] = pd.to_datetime(df_live['timestamp'], unit='s')
 
                         # 🧠 DRIFT MONITOR: Ejecutar cada 100 cierres de vela (≈ 25h en 15m)
-                        _candle_close_count = getattr(websocket, '_candle_count', 0) + 1
-                        websocket._candle_count = _candle_close_count  # type: ignore[attr-defined]
-
-                        if _candle_close_count % 100 == 0:
+                        candle_close_count += 1
+                        if candle_close_count % 100 == 0:
                             try:
                                 fe_live = FeatureEngineer()
                                 df_live_features = fe_live.generate_features(df_live.copy())
@@ -594,24 +594,26 @@ async def websocket_stream_endpoint(websocket: WebSocket, symbol: str, interval:
                             session_payload = {'data': {'current_session': 'UNKNOWN'}}
                             
                         # 7. 🧠 ANALISTA AUTÓNOMO (LLM - Gemini)
-                        # Se ejecuta al final de la cascada de la vela para tener todo el contexto (Sesión y Táctica)
-                        try:
-                            # 1. Llamada bloqueante pero rápida a Gemini (idealmente a futuro usar versión async)
-                            advice_text = generate_tactical_advice(
-                                tactical_data=final_tactical,
-                                current_session=session_payload['data'].get('current_session', 'UNKNOWN'),
-                                ml_projection=last_ml_prediction
-                            )
-                            # 2. Emitir el consejo al FrontEnd
-                            await websocket.send_json({
-                                "type": "advisor_update",
-                                "data": advice_text
-                            })
-                            print(f"[{symbol}] Asesor Autónomo (LLM) informe emitido.")
-                        except WebSocketDisconnect:
-                            raise
-                        except Exception as e:
-                            print(f"[{symbol}] Error ejecutando Asesor Autónomo: {e}")
+                        # Se ejecuta al final de la cascada de la vela para tener todo el contexto.
+                        # Envuelto en create_task() para NO bloquear el event loop (~1-2s de latencia Gemini).
+                        async def _emit_advisor(ws, tactical, sess, ml_pred):
+                            try:
+                                advice_text = generate_tactical_advice(
+                                    tactical_data=tactical,
+                                    current_session=sess['data'].get('current_session', 'UNKNOWN'),
+                                    ml_projection=ml_pred
+                                )
+                                await ws.send_json({"type": "advisor_update", "data": advice_text})
+                                print(f"[{symbol}] Asesor Autónomo (LLM) informe emitido.")
+                            except WebSocketDisconnect:
+                                pass
+                            except Exception as e:
+                                print(f"[{symbol}] Error ejecutando Asesor Autónomo: {e}")
+                        asyncio.create_task(_emit_advisor(
+                            websocket, final_tactical,
+                            session_payload if 'session_payload' in locals() else {'data': {}},
+                            last_ml_prediction
+                        ))
                     
                 except asyncio.TimeoutError:
                     # Keepalive: si en 30s no llega nada, verificamos si el cliente sigue vivo
