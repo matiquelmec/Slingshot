@@ -253,7 +253,7 @@ export default function QuantDiagnosticPanel() {
                         {diagnostic?.bbwp != null && (
                             <div>
                                 <div className="flex items-center justify-between mb-1">
-                                    <span className="text-[10px] text-white/50">BBWP (Squeeze %ile)</span>
+                                    <span className="text-[10px] text-white/50">BBWP — Compresión BB</span>
                                     <span className={`text-[10px] font-bold ${diagnostic.squeeze_active ? 'text-neon-cyan' : 'text-white/40'}`}>
                                         {diagnostic.bbwp.toFixed(1)}% {diagnostic.squeeze_active ? '⚡ COMPRIMIDO' : 'Expandido'}
                                     </span>

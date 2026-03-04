@@ -33,7 +33,11 @@ _TOKYO_TZ  = pytz.timezone("Asia/Tokyo")
 
 
 def _empty_session() -> dict:
-    return {"high": None, "low": None, "swept_high": False, "swept_low": False}
+    return {
+        "high": None, "low": None,
+        "swept_high": False, "swept_low": False,
+        "prev_high": None, "prev_low": None,   # niveles del día anterior como referencia
+    }
 
 
 def _empty_state(trading_day: str = "") -> dict:
@@ -99,23 +103,25 @@ class SessionManager:
     # ──────────────────────────────────────────────────────────────────────
     def bootstrap(self, history: list[dict]):
         """
-        Procesa un lote de velas históricas para reconstruir los niveles
-        de sesión del día actual y del día anterior.
-
-        Args:
-            history: Lista de dicts con formato {"timestamp": float, "open", "high", "low", "close", "volume"}
+        Procesa velas históricas para reconstruir niveles de sesión.
+        Procesa AMBOS días (hoy y ayer) para tener prev_high/prev_low
+        disponibles en todos los símbolos desde el primer tick.
         """
         if not history:
             return
 
         now_utc = datetime.now(timezone.utc)
         today   = now_utc.date()
-        # Día anterior (para PDH/PDL)
         from datetime import timedelta
         yesterday = (now_utc - timedelta(days=1)).date()
 
         pdh_candidates = []
         pdl_candidates = []
+
+        # Acumuladores para los niveles prev (día anterior por sesión)
+        prev = {"asia": {"high": None, "low": None},
+                "london": {"high": None, "low": None},
+                "ny":     {"high": None, "low": None}}
 
         for candle in history:
             ts    = datetime.fromtimestamp(candle["timestamp"], tz=timezone.utc)
@@ -123,45 +129,62 @@ class SessionManager:
             high  = float(candle["high"])
             low   = float(candle["low"])
 
-            # Niveles del DÍA ANTERIOR → se convierten en PDH/PDL de hoy
-            if day == yesterday:
-                pdh_candidates.append(high)
-                pdl_candidates.append(low)
-
-            # Solo procesar velas de HOY para las sesiones
-            if day != today:
-                continue
-
             ny_hour  = ts.astimezone(_NY_TZ).hour
             lon_hour = ts.astimezone(_LONDON_TZ).hour
             utc_hour = ts.hour
 
-            # Asia: 00:00–06:00 UTC (proxy Tokyo)
+            # Velas de AYER → prev_high/prev_low por sesión + PDH/PDL
+            if day == yesterday:
+                pdh_candidates.append(high)
+                pdl_candidates.append(low)
+
+                if 0 <= utc_hour < 6:
+                    p = prev["asia"]
+                    p["high"] = max(p["high"], high) if p["high"] is not None else high
+                    p["low"]  = min(p["low"],  low)  if p["low"]  is not None else low
+                if 8 <= lon_hour < 16:
+                    p = prev["london"]
+                    p["high"] = max(p["high"], high) if p["high"] is not None else high
+                    p["low"]  = min(p["low"],  low)  if p["low"]  is not None else low
+                if 8 <= ny_hour < 16:
+                    p = prev["ny"]
+                    p["high"] = max(p["high"], high) if p["high"] is not None else high
+                    p["low"]  = min(p["low"],  low)  if p["low"]  is not None else low
+
+            # Velas de HOY → sesión actual
+            if day != today:
+                continue
+
             if 0 <= utc_hour < 6:
                 s = self._state["asia"]
                 s["high"] = max(s["high"], high) if s["high"] is not None else high
                 s["low"]  = min(s["low"],  low)  if s["low"]  is not None else low
 
-            # Londres: 08:00–16:00 hora local UK
             if 8 <= lon_hour < 16:
                 s = self._state["london"]
                 s["high"] = max(s["high"], high) if s["high"] is not None else high
                 s["low"]  = min(s["low"],  low)  if s["low"]  is not None else low
 
-            # Nueva York: 08:00–16:00 hora local NY (NYSE)
             if 8 <= ny_hour < 16:
                 s = self._state["ny"]
                 s["high"] = max(s["high"], high) if s["high"] is not None else high
                 s["low"]  = min(s["low"],  low)  if s["low"]  is not None else low
 
-        # Aplicar PDH/PDL solo si tenemos datos del día anterior
+        # Aplicar PDH/PDL
         if pdh_candidates:
             self._state["pdh"] = max(pdh_candidates)
             self._state["pdl"] = min(pdl_candidates)
 
+        # Aplicar prev_high/prev_low a cada sesión (referencia del día anterior)
+        for key in ["asia", "london", "ny"]:
+            if prev[key]["high"] is not None:
+                self._state[key]["prev_high"] = prev[key]["high"]
+                self._state[key]["prev_low"]  = prev[key]["low"]
+
         self._state["trading_day"] = str(today)
         self._save()
-        print(f"[SessionManager] ✅ Bootstrap completado: día={today} | PDH={self._state['pdh']} | PDL={self._state['pdl']}")
+        print(f"[SessionManager] ✅ Bootstrap OK: día={today} | PDH={self._state['pdh']} | "
+              f"London prev={self._state['london'].get('prev_high')} | NY prev={self._state['ny'].get('prev_high')}")
 
     # ──────────────────────────────────────────────────────────────────────
     # UPDATE (Tick a Tick)
@@ -183,19 +206,25 @@ class SessionManager:
         # ── Rotación de Día ──────────────────────────────────────────────
         if str(today) != self._state.get("trading_day"):
             print(f"[SessionManager] 🗓  Nuevo día: {today}. Rotando PDH/PDL...")
-            # Lo que fue hoy se convierte en "ayer" (PDH/PDL)
             old_asia   = self._state.get("asia",   {})
             old_london = self._state.get("london", {})
             old_ny     = self._state.get("ny",     {})
 
-            # Buscamos el High/Low del día completo para PDH/PDL
             highs = [v for v in [old_asia.get("high"), old_london.get("high"), old_ny.get("high")] if v is not None]
             lows  = [v for v in [old_asia.get("low"),  old_london.get("low"),  old_ny.get("low")]  if v is not None]
 
-            self._state = _empty_state(str(today))
+            new_state = _empty_state(str(today))
             if highs:
-                self._state["pdh"] = max(highs)
-                self._state["pdl"] = min(lows)
+                new_state["pdh"] = max(highs)
+                new_state["pdl"] = min(lows)
+            # Rotar prev_high/prev_low: lo de hoy pasa a ser el "anterior" del nuevo día
+            for key in ["asia", "london", "ny"]:
+                old = self._state.get(key, {})
+                if old.get("high") is not None:
+                    new_state[key]["prev_high"] = old["high"]
+                    new_state[key]["prev_low"]  = old["low"]
+
+            self._state = new_state
             self._save()
 
         # ── Actualizar niveles de la sesión activa ────────────────────────

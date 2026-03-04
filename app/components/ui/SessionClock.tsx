@@ -61,8 +61,16 @@ function SweepBadge({ swept, label }: { swept: boolean; label: string }) {
     );
 }
 
-function SessionRow({ id, info }: { id: string; info: SessionInfo }) {
+function SessionRow({ id, info }: { id: string; info: SessionInfo & { prev_high?: number | null; prev_low?: number | null } }) {
     const meta = SESSION_META[id];
+    const isPending = info.status === 'PENDING';
+    const isClosed = info.status === 'CLOSED';
+
+    // Si hoy no hay dato de sesión (aún no abrió o ya cerró sin datos), usar prev del día anterior
+    const showPrev = (info.high == null) && (isPending || isClosed) && (info.prev_high != null);
+    const displayHigh = info.high ?? (showPrev ? info.prev_high! : null);
+    const displayLow = info.low ?? (showPrev ? info.prev_low! : null);
+
     return (
         <div className={`grid grid-cols-[1fr_auto_auto_auto] items-center gap-3 py-2 px-3 rounded-lg border transition-colors ${info.status === 'ACTIVE' ? 'bg-white/[0.04] border-white/10' : 'bg-transparent border-transparent'}`}>
             {/* Sesión */}
@@ -82,14 +90,20 @@ function SessionRow({ id, info }: { id: string; info: SessionInfo }) {
             {/* HIGH */}
             <div className="text-right">
                 <p className="text-[9px] text-white/30 font-bold tracking-wider mb-0.5">HIGH</p>
-                <p className="text-[11px] font-bold text-neon-green/80 font-mono">{fmt(info.high, 0)}</p>
+                <p className={`text-[11px] font-bold font-mono ${showPrev ? 'text-white/30' : 'text-neon-green/80'}`}>
+                    {fmt(displayHigh, 0)}
+                </p>
+                {showPrev && <p className="text-[7px] text-white/20 tracking-wider">ayer</p>}
                 <SweepBadge swept={info.swept_high} label="H" />
             </div>
 
             {/* LOW */}
             <div className="text-right">
                 <p className="text-[9px] text-white/30 font-bold tracking-wider mb-0.5">LOW</p>
-                <p className="text-[11px] font-bold text-neon-red/80 font-mono">{fmt(info.low, 0)}</p>
+                <p className={`text-[11px] font-bold font-mono ${showPrev ? 'text-white/30' : 'text-neon-red/80'}`}>
+                    {fmt(displayLow, 0)}
+                </p>
+                {showPrev && <p className="text-[7px] text-white/20 tracking-wider">ayer</p>}
                 <SweepBadge swept={info.swept_low} label="L" />
             </div>
 
