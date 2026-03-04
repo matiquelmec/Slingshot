@@ -153,7 +153,20 @@ export const useTelemetryStore = create<TelemetryState>((set, get) => {
     const _loadSignalHistory = (): any[] => {
         try {
             const raw = localStorage.getItem('slingshot_signal_history');
-            return raw ? JSON.parse(raw) : [];
+            if (!raw) return [];
+            const parsed = JSON.parse(raw);
+            // Helper to ensure timezone-naive strings are parsed as UTC
+            const getUtcTime = (ts: string) => {
+                if (ts.includes('Z') || ts.includes('+')) return new Date(ts).getTime();
+                return new Date(ts.replace(' ', 'T') + 'Z').getTime();
+            };
+
+            // GARBAGE COLLECTOR: Eliminar 'Zombies' cacheados de más de 2 horas
+            const now = Date.now();
+            return parsed.filter((s: any) => {
+                const age = now - getUtcTime(s.timestamp);
+                return age < 2 * 60 * 60 * 1000;
+            });
         } catch {
             return [];
         }
@@ -166,10 +179,25 @@ export const useTelemetryStore = create<TelemetryState>((set, get) => {
     };
 
     const _mergeSignals = (prev: any[], incoming: any[]): any[] => {
-        const existingKeys = new Set(prev.map((s: any) => `${s.timestamp}-${s.type}`));
+        // Helper to ensure timezone-naive strings are parsed as UTC
+        const getUtcTime = (ts: string) => {
+            if (ts.includes('Z') || ts.includes('+')) return new Date(ts).getTime();
+            return new Date(ts.replace(' ', 'T') + 'Z').getTime();
+        };
+
+        // GARBAGE COLLECTOR: Al fusionar nuevas señales, borramos las que tengan más de 2 horas
+        const now = Date.now();
+        const activePrev = prev.filter((s: any) => {
+            const age = now - getUtcTime(s.timestamp);
+            return age < 2 * 60 * 60 * 1000; // 2 horas max caching
+        });
+
+        const existingKeys = new Set(activePrev.map((s: any) => `${s.timestamp}-${s.type}`));
         const newOnes = incoming.filter((s: any) => !existingKeys.has(`${s.timestamp}-${s.type}`));
-        if (newOnes.length === 0) return prev;
-        const merged = [...newOnes.reverse(), ...prev].slice(0, 50);
+
+        if (newOnes.length === 0 && activePrev.length === prev.length) return prev;
+
+        const merged = [...newOnes.reverse(), ...activePrev].slice(0, 50);
         _saveSignalHistory(merged);
         return merged;
     };

@@ -39,7 +39,23 @@ class ConfluenceManager:
         ml_projection = ml_projection or {}
         session_data  = session_data  or {}
 
-        current   = df.iloc[-1]
+        # ─────────────────────────────────────────────────────────────
+        # CORRECCIÓN DE TEMPORAL LEAK: Buscar la vela exacta de la señal
+        # ─────────────────────────────────────────────────────────────
+        try:
+            sig_ts = pd.to_datetime(signal.get('timestamp'))
+            current_df = df[df['timestamp'] == sig_ts]
+            if not current_df.empty:
+                current = current_df.iloc[0]
+                candle_idx = current_df.index[0]
+                idx_pos = df.index.get_loc(candle_idx) if type(candle_idx) != int else candle_idx
+                vol_mean = df['volume'].iloc[max(0, idx_pos-20):max(1, idx_pos)].mean()
+            else:
+                current = df.iloc[-1]
+                vol_mean = df['volume'].iloc[-21:-1].mean()
+        except Exception:
+            current   = df.iloc[-1]
+            vol_mean = df['volume'].iloc[-21:-1].mean()
         sig_type  = signal.get('type', '').upper()
         is_long   = 'LONG' in sig_type
 
@@ -102,11 +118,9 @@ class ConfluenceManager:
         vol_weight = 15
         total_weight += vol_weight
 
-        # Calcular RVOL dinámicamente: vol actual / vol medio (20 velas)
+        # Calcular RVOL dinámicamente: vol actual / vol medio (20 velas previas al momento de la señal)
         try:
-            vol_series = df['volume']
-            vol_mean   = vol_series.iloc[-21:-1].mean()
-            rvol       = float(current.get('volume', 0)) / vol_mean if vol_mean > 0 else 1.0
+            rvol = float(current.get('volume', 0)) / vol_mean if vol_mean > 0 else 1.0
         except Exception:
             rvol = 1.0
 

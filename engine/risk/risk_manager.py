@@ -31,35 +31,102 @@ class RiskManager:
             return 0.5   # Ruido de mercado: Riesgo defensivo 0.5%
         return 1.0
 
-    def calculate_structural_sl(self, current_price: float, signal_type: str, nearest_level: float, atr_value: float) -> float:
+    def calculate_structural_sl_tp(
+        self, 
+        current_price: float, 
+        signal_type: str, 
+        key_levels: list, 
+        smc_data: dict, 
+        atr_value: float
+    ) -> dict:
         """
-        Calcula el Stop Loss geográfico con ATR padding para absorber Wicks corporativos.
+        [NIVEL INSTITUCIONAL 2026] 
+        Escanea el mapa topográfico de liquidez para ubicar:
+        1. Stop Loss: Protegido por Order Blocks defensivos + S/R cercanos + ATR Padding.
+        2. Take Profit: Asimétrico, apuntando al siguiente muro de liquidez (mínimo antes de la colisión).
+        3. Validación de Risk:Reward: Evalúa si vale la pena tomar el trade geográficamente.
         """
-        padding = atr_value * 1.5 # Colchón de 1.5x el rango verdadero promedio
+        padding = atr_value * 1.5 # Colchón de seguridad
+        
+        # 1. Agrupar defensas (lo que protege mi SL) y objetivos (lo que frena mi TP)
+        bullish_defenses = [] # Soportes y OBs alcistas
+        bearish_defenses = [] # Resistencias y OBs bajistas
+        
+        if key_levels:
+            bullish_defenses.extend([lvl['price'] for lvl in key_levels if lvl['type'] == 'Support'])
+            bearish_defenses.extend([lvl['price'] for lvl in key_levels if lvl['type'] == 'Resistance'])
+            
+        if smc_data:
+            if smc_data.get('order_blocks'):
+                bullish_defenses.extend([ob['bottom'] for ob in smc_data['order_blocks'].get('bullish', [])])
+                bearish_defenses.extend([ob['top'] for ob in smc_data['order_blocks'].get('bearish', [])])
+            if smc_data.get('fvgs'):
+                bullish_defenses.extend([fvg['bottom'] for fvg in smc_data['fvgs'].get('bullish', [])])
+                bearish_defenses.extend([fvg['top'] for fvg in smc_data['fvgs'].get('bearish', [])])
+                
+        # Ordenar (Soportes de mayor a menor, Resistencias de menor a mayor)
+        bullish_defenses = sorted([d for d in bullish_defenses if d < current_price], reverse=True)
+        bearish_defenses = sorted([d for d in bearish_defenses if d > current_price])
 
         if str(signal_type).upper() == 'LONG':
-            # Si es LONG, el SL va por debajo del soporte más cercano menos el padding
-            if nearest_level and nearest_level < current_price:
-                return nearest_level - padding
-            else:
-                return current_price - (atr_value * 2) # Fallback rígido
-
+            # --- STOP LOSS LONG ---
+            # Busco el soporte u OB Bullish más cercano debajo del precio
+            valid_defense = bullish_defenses[0] if bullish_defenses else (current_price - atr_value * 2)
+            # Para evitar SL absurdamente pegaditos si el precio es exactamente el soporte
+            if (current_price - valid_defense) < (atr_value * 0.5):
+                valid_defense = current_price - (atr_value * 1.5)
+            stop_loss = valid_defense - padding
+            
+            # --- TAKE PROFIT LONG ---
+            # Busco la resistencia u OB Bearish más cercano arriba del precio
+            # Ignoramos muros que estén a menos de 1 ATR de distancia
+            valid_targets = [t for t in bearish_defenses if (t - current_price) > atr_value]
+            first_wall = valid_targets[0] if valid_targets else (current_price + atr_value * 5)
+            
+            # El Take Profit se pone "Ligeramente antes" del muro para garantizar lenado (Frontrunning)
+            take_profit = first_wall - (atr_value * 0.2)
+            
         elif str(signal_type).upper() == 'SHORT':
-            # Si es SHORT, el SL va por encima de la resistencia más cercana más el padding
-            if nearest_level and nearest_level > current_price:
-                return nearest_level + padding
-            else:
-                return current_price + (atr_value * 2) # Fallback rígido
-                
-        return current_price * 0.99 # Fallback de emergencia
+            # --- STOP LOSS SHORT ---
+            # Busco la resistencia u OB Bearish más cercano arriba del precio
+            valid_defense = bearish_defenses[0] if bearish_defenses else (current_price + atr_value * 2)
+            if (valid_defense - current_price) < (atr_value * 0.5):
+                valid_defense = current_price + (atr_value * 1.5)
+            stop_loss = valid_defense + padding
+            
+            # --- TAKE PROFIT SHORT ---
+            # Busco el soporte u OB Bullish más cercano debajo del precio
+            valid_targets = [t for t in bullish_defenses if (current_price - t) > atr_value]
+            first_wall = valid_targets[0] if valid_targets else (current_price - atr_value * 5)
+            
+            # El TP se pone ligeramente por encima del muro de soporte
+            take_profit = first_wall + (atr_value * 0.2)
+            
+        else:
+            stop_loss = current_price * 0.99
+            take_profit = current_price * 1.01
+
+        # 3. Validación de Geometría del Trade (Risk:Reward)
+        risk = abs(current_price - stop_loss)
+        reward = abs(take_profit - current_price)
+        
+        # Evitar división por cero
+        risk = risk if risk > 0 else 0.0001
+        structural_rr = reward / risk
+        
+        # Si la estructura natural nos da > 3R, excelente.
+        # Pero a veces la estructura da 1.5R. En sistemas rígidos forzamos 3R, 
+        # pero para que el bot no se coma walls, recalcularemos más abajo si vale la pena.
+
+        return stop_loss, take_profit, structural_rr
 
     def calculate_position(
         self, 
         current_price: float, 
         signal_type: str, 
         market_regime: str, 
-        nearest_structural_level: float = None,
-        target_level: float = None,
+        key_levels: list = None,
+        smc_data: dict = None,
         atr_value: float = 0.0
     ) -> dict:
         """
@@ -70,12 +137,14 @@ class RiskManager:
         actual_risk_pct = self.base_risk_pct * multiplier
         risk_amount_usdt = self.account_balance * actual_risk_pct
 
-        # 2. Definir Stop Loss Geográfico (ATR Padding)
+        # 2. Definir Stop Loss Geográfico y TP Estructural 
         fallback_atr = atr_value if atr_value and atr_value > 0 else (current_price * 0.005)
-        stop_loss_price = self.calculate_structural_sl(
+        
+        stop_loss_price, take_profit_price, structural_rr = self.calculate_structural_sl_tp(
             current_price=current_price, 
             signal_type=signal_type, 
-            nearest_level=nearest_structural_level, 
+            key_levels=key_levels,
+            smc_data=smc_data,
             atr_value=fallback_atr
         )
 
@@ -89,7 +158,6 @@ class RiskManager:
         position_size_nominal = risk_amount_usdt / sl_distance_pct
 
         # 5. Apalancamiento Requerido
-        # Cuánto de mi cuenta necesito comprometer prestado para alcanzar esa posición nominal
         required_leverage = position_size_nominal / self.account_balance
         
         # Ceil & Clamp al apalancamiento operativo de exchange
@@ -99,15 +167,11 @@ class RiskManager:
         # 6. Recalcular Position Size real basado en el leverage clipeado (por si excedió el max)
         actual_position_size = min(position_size_nominal, self.account_balance * leverage)
 
-        # 7. Take Profit Dinámico (Asimetría mínima 3R)
-        # Standard profesional: mínimo R:R 3:1 (3R)
-        risk_distance_abs = abs(current_price - stop_loss_price)
-        if str(signal_type).upper() == 'LONG':
-            tp_3r = current_price + (risk_distance_abs * 3)
-            take_profit_price = target_level if (target_level and target_level > tp_3r) else tp_3r
-        else:
-            tp_3r = current_price - (risk_distance_abs * 3)
-            take_profit_price = target_level if (target_level and target_level < tp_3r) else tp_3r
+        # 7. Quality Check del Trade Institucional:
+        # Si la geografía natural me da menos de 2.0R, es un trade subóptimo (mucho riesgo, poco premio real).
+        # En vez de matar el TP ciegamente a 3R, mantenemos el TP en la muralla, 
+        # pero avisamos al frontend que este trade no cumple asimetría pura.
+        trade_quality = "A+" if structural_rr >= 2.5 else ("B" if structural_rr >= 1.5 else "C (Low Reward)")
 
         return {
             "account_balance":   round(self.account_balance, 2),

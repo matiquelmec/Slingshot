@@ -174,10 +174,10 @@ function buildConditions(
                     meaning: 'En tendencia, compramos los retrocesos a la EMA 50 o Fibo 0.618.',
                 },
                 {
-                    label: 'RSI sin sobrecompra (< 60)',
+                    label: 'Filtro RSI: Espacio Alcista (< 60)',
                     status: overbought ? 'WARNING' : rsi < 60 ? 'MET' : 'PARTIAL',
                     currentValue: `RSI: ${rsi.toFixed(1)} — ${rs.level}`,
-                    meaning: overbought ? '⚠️ Sobrecompra. No entrar ahora.' : '✅ Hay recorrido alcista.',
+                    meaning: overbought ? '⚠️ Peligro por Sobrecompra. Entrar ahora en la tendencia es entrar tarde y con alto riesgo.' : '✅ El RSI tiene margen para seguir subiendo sin sobrecalentarse.',
                 },
                 {
                     label: 'Momentum MACD alcista',

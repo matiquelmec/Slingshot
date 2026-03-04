@@ -204,14 +204,22 @@ class SlingshotRouter:
 
             
         # Extraer el backlog de señales históricas recientes para que la UI no se vacíe
+        result['signals'] = [] # Reiniciar SIEMPRE la lista de señales exportadas por este tick
         if opportunities:
             for sig in opportunities[-10:]:  # Mantener las últimas 10 señales históricas
                 # ✅ FASE 4: CÁLCULO DE RIESGO GEOGRÁFICO Y CUANTITATIVO
+                # Le pasamos al motor el mapa geográfico total: key_levels y df_ob (ya extraídos arriba)
+                try:
+                    smc_map = smc # Del bloque 2a extract_smc_coordinates
+                except NameError:
+                    smc_map = {'order_blocks': {'bullish': [], 'bearish': []}, 'fvgs': {'bullish': [], 'bearish': []}}
+
                 risk_data = self.risk_manager.calculate_position(
                     current_price=sig['price'],
                     signal_type=sig.get('signal_type', 'LONG'),
                     market_regime=sig.get('regime', 'RANGING'),
-                    nearest_structural_level=sig.get('nearest_structural_level', None),
+                    key_levels=result.get("key_levels", []),
+                    smc_data=smc_map,
                     atr_value=sig.get('atr_value', 0.0)
                 )
                 
@@ -256,7 +264,52 @@ class SlingshotRouter:
                     print(f"[ROUTER] ConfluenceManager error: {e}")
                     sig["confluence"] = None
                 
-                result['signals'].append(sig)
+                # REGLA INSTITUCIONAL: Solo enviamos al Dashboard las señales VIVAS.
+                # Para ser viva, no debe haber expirado ni haber tocado SL/TP desde que nació.
+                is_alive = True
+                try:
+                    # Normalizar a UTC para evitar errores de zonas horarias (Temporal Leak 2)
+                    ahora = pd.to_datetime(df['timestamp'].iloc[-1], utc=True)
+                    
+                    if expiry_timestamp_str:
+                        expira = pd.to_datetime(expiry_timestamp_str, utc=True)
+                        if ahora > expira:
+                            is_alive = False
+
+                    if is_alive:
+                        # AUDITORÍA DE CAMINO HISTÓRICO (Path Traversal)
+                        sig_time = pd.to_datetime(sig.get('timestamp'), utc=True)
+                        is_long = 'LONG' in str(sig.get('type', '')).upper()
+                        sl = float(sig.get('stop_loss', 0))
+                        tp = float(sig.get('take_profit_3r', 0))
+                        
+                        # Extraer solo lo que pasó desde la señal hasta este segundo
+                        df_path = df[pd.to_datetime(df['timestamp'], utc=True) >= sig_time]
+                        
+                        if not df_path.empty and sl > 0 and tp > 0:
+                            # Evaluar la ruta vela por vela cronológicamente
+                            for _, path_row in df_path.iterrows():
+                                if is_long:
+                                    if path_row['low'] <= sl or path_row['high'] >= tp:
+                                        is_alive = False
+                                        break
+                                else:
+                                    if path_row['high'] >= sl or path_row['low'] <= tp:
+                                        is_alive = False
+                                        break
+                            
+                            if is_long:
+                                if min_price <= sl or max_price >= tp:
+                                    is_alive = False
+                            else:
+                                if max_price >= sl or min_price <= tp:
+                                    is_alive = False
+                                    
+                except Exception as e:
+                    print(f"[ROUTER] Lifecycle Error: {e}")
+                    
+                if is_alive:
+                    result['signals'].append(sig)
                 
             if result['signals']:
                 last_sig = result['signals'][-1]

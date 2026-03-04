@@ -58,7 +58,6 @@ class ReversionStrategy:
                         "signal_type":"LONG",
                         "regime":    current.get('market_regime'),
                         "price":     entry,
-                        "nearest_structural_level": nearest_structural,
                         "trigger":   "RSI < 30 + MACD Bull Cross",
                         "atr_value": current.get('atr_value', 0.0)
                     })
@@ -75,7 +74,6 @@ class ReversionStrategy:
                         "signal_type":"SHORT",
                         "regime":    current.get('market_regime'),
                         "price":     entry,
-                        "nearest_structural_level": nearest_structural,
                         "trigger":   "RSI > 70 in Zone Ceiling",
                         "atr_value": current.get('atr_value', 0.0)
                     })

@@ -60,7 +60,6 @@ class TrendFollowingStrategy:
                         "signal_type":"LONG",
                         "regime":    current.get('market_regime'),
                         "price":     entry,
-                        "nearest_structural_level": nearest_structural,
                         "trigger":   "EMA 50 + Fibo 0.618 Confluencia",
                         "atr_value": current.get('atr_value', 0.0)
                     })
@@ -79,7 +78,6 @@ class TrendFollowingStrategy:
                         "signal_type":"SHORT",
                         "regime":    current.get('market_regime'),
                         "price":     entry,
-                        "nearest_structural_level": nearest_structural,
                         "trigger":   "Rechazo de EMA 50 en Downtrend",
                         "atr_value": current.get('atr_value', 0.0)
                     })
