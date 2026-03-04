@@ -52,22 +52,7 @@ export default function SignalTerminal() {
     const activeTimeframe = useTelemetryStore(state => state.activeTimeframe);
     const advisorLog = useTelemetryStore(state => state.advisor_log);
 
-    const [signals, setSignals] = useState<any[]>([]);
-
-    useEffect(() => {
-        const incoming = tacticalDecision?.signals;
-        if (!incoming || incoming.length === 0) return; // Sin señales nuevas → no tocar el historial
-
-        setSignals(prev => {
-            // Deduplicar por timestamp+type para no duplicar si el mismo update llega 2 veces
-            const existingKeys = new Set(prev.map((s: any) => `${s.timestamp}-${s.type}`));
-            const newOnes = incoming.filter((s: any) => !existingKeys.has(`${s.timestamp}-${s.type}`));
-            if (newOnes.length === 0) return prev; // Nada nuevo → sin re-render
-
-            // Añadir al inicio (más reciente primero) y limitar a 20
-            return [...newOnes.reverse(), ...prev].slice(0, 20);
-        });
-    }, [tacticalDecision?.signals]);
+    const signalHistory = useTelemetryStore(state => state.signalHistory);
 
     const formatTime = (ts: string) => {
         try {
@@ -220,7 +205,7 @@ export default function SignalTerminal() {
                 </div>
                 <div className="flex items-center gap-4 text-[10px] font-bold tracking-widest text-white/40">
                     <span className="flex items-center gap-1.5"><Network size={12} className="text-neon-cyan/60" /> REAL-TIME</span>
-                    <span>{signals.length} ACTIVE SIGNALS</span>
+                    <span>{signalHistory.length} ACTIVE SIGNALS</span>
                 </div>
             </div>
 
@@ -372,7 +357,7 @@ export default function SignalTerminal() {
 
                 {/* 2. HISTORICAL SIGNAL SCROLL (HFT Actions) */}
                 <div className="flex-1 overflow-y-auto custom-scrollbar p-2">
-                    {signals.length === 0 ? (
+                    {signalHistory.length === 0 ? (
                         <div className="h-full flex items-center justify-center text-white/10 text-[10px] font-mono italic tracking-widest flex-col gap-2 relative">
                             <div className="absolute inset-0 bg-gradient-to-t from-transparent to-white/[0.01] pointer-events-none" />
                             AWAITING ALGORITHMIC CONFLUENCE
@@ -380,7 +365,7 @@ export default function SignalTerminal() {
                     ) : (
                         <div className="flex flex-col gap-2 px-2">
                             <AnimatePresence>
-                                {signals.map((sig, idx) => {
+                                {signalHistory.map((sig, idx) => {
                                     const style = getSignalStyle(sig.type);
                                     const lifecycle = getSignalLifecycle(sig);
                                     const isFresh = lifecycle.status === 'EN_ZONA';

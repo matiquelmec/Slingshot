@@ -132,7 +132,8 @@ interface TelemetryState {
     smcData: SMCDataPayload | null;
     sessionData: SessionData | null;
     ghostData: GhostData | null;
-    activeConnectionId: string | null; // ID único para matar condiciones de carrera
+    signalHistory: any[];   // ← Historial persistente de señales (sobrevive HMR y navegación)
+    activeConnectionId: string | null;
     connect: (symbol: string, timeframe?: Timeframe) => void;
     disconnect: () => void;
     setTimeframe: (tf: Timeframe) => void;
@@ -143,6 +144,31 @@ export const useTelemetryStore = create<TelemetryState>((set, get) => {
     let retryCount = 0;
     let retryTimeout: ReturnType<typeof setTimeout> | null = null;
     const MAX_RETRIES = 5;
+
+    // Cargar historial de señales desde localStorage al iniciar
+    const _loadSignalHistory = (): any[] => {
+        try {
+            const raw = localStorage.getItem('slingshot_signal_history');
+            return raw ? JSON.parse(raw) : [];
+        } catch {
+            return [];
+        }
+    };
+
+    const _saveSignalHistory = (history: any[]) => {
+        try {
+            localStorage.setItem('slingshot_signal_history', JSON.stringify(history));
+        } catch { /* quota exceeded — ignorar */ }
+    };
+
+    const _mergeSignals = (prev: any[], incoming: any[]): any[] => {
+        const existingKeys = new Set(prev.map((s: any) => `${s.timestamp}-${s.type}`));
+        const newOnes = incoming.filter((s: any) => !existingKeys.has(`${s.timestamp}-${s.type}`));
+        if (newOnes.length === 0) return prev;
+        const merged = [...newOnes.reverse(), ...prev].slice(0, 50);
+        _saveSignalHistory(merged);
+        return merged;
+    };
 
     const doConnect = (symbol: string, timeframe: Timeframe, isRetry = false) => {
         const connectionId = Math.random().toString(36).substring(7);
@@ -278,25 +304,32 @@ export const useTelemetryStore = create<TelemetryState>((set, get) => {
                     });
                 } else if (data.type === 'tactical_update') {
                     const d = data.data;
-                    set({
-                        tacticalDecision: {
-                            regime: d.market_regime ?? 'UNKNOWN',
-                            strategy: d.active_strategy ?? 'STANDBY',
-                            reasoning: `Régimen: ${d.market_regime}. Soportes mapeados. Dist SMA200: ${d.dist_to_sma200 != null ? (d.dist_to_sma200 * 100).toFixed(2) + '%' : 'N/A'}`,
-                            current_price: d.current_price ?? null,
-                            nearest_support: d.nearest_support ?? null,
-                            nearest_resistance: d.nearest_resistance ?? null,
-                            sma_fast: d.sma_fast ?? null,
-                            sma_slow: d.sma_slow ?? null,
-                            sma_slow_slope: d.sma_slow_slope ?? null,
-                            bb_width: d.bb_width ?? null,
-                            bb_width_mean: d.bb_width_mean ?? null,
-                            dist_to_sma200: d.dist_to_sma200 ?? null,
-                            signals: d.signals ?? [],
-                            key_levels: d.key_levels ?? { resistances: [], supports: [] },
-                            fibonacci: d.fibonacci ?? undefined,
-                            diagnostic: d.diagnostic ?? undefined,
-                        }
+                    const incomingSignals: any[] = d.signals ?? [];
+                    set((state) => {
+                        const newHistory = incomingSignals.length > 0
+                            ? _mergeSignals(state.signalHistory, incomingSignals)
+                            : state.signalHistory;
+                        return {
+                            tacticalDecision: {
+                                regime: d.market_regime ?? 'UNKNOWN',
+                                strategy: d.active_strategy ?? 'STANDBY',
+                                reasoning: `Régimen: ${d.market_regime}. Soportes mapeados. Dist SMA200: ${d.dist_to_sma200 != null ? (d.dist_to_sma200 * 100).toFixed(2) + '%' : 'N/A'}`,
+                                current_price: d.current_price ?? null,
+                                nearest_support: d.nearest_support ?? null,
+                                nearest_resistance: d.nearest_resistance ?? null,
+                                sma_fast: d.sma_fast ?? null,
+                                sma_slow: d.sma_slow ?? null,
+                                sma_slow_slope: d.sma_slow_slope ?? null,
+                                bb_width: d.bb_width ?? null,
+                                bb_width_mean: d.bb_width_mean ?? null,
+                                dist_to_sma200: d.dist_to_sma200 ?? null,
+                                signals: incomingSignals,
+                                key_levels: d.key_levels ?? { resistances: [], supports: [] },
+                                fibonacci: d.fibonacci ?? undefined,
+                                diagnostic: d.diagnostic ?? undefined,
+                            },
+                            signalHistory: newHistory,
+                        };
                     });
                 } else if (data.type === 'advisor_update') {
                     set({ advisor_log: data.data });
@@ -396,6 +429,7 @@ export const useTelemetryStore = create<TelemetryState>((set, get) => {
         sessionData: null,
         ghostData: null,
         liquidityHeatmap: null,
+        signalHistory: typeof window !== 'undefined' ? _loadSignalHistory() : [],
         activeConnectionId: null,
 
         connect: (symbol: string, timeframe?: Timeframe) => {
