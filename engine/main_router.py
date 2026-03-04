@@ -14,6 +14,9 @@ from engine.strategies.reversion import ReversionStrategy        # Reversión a 
 from engine.risk.risk_manager import RiskManager                 # Motor de Riesgo Dinámico y Cuantitativo
 from engine.core.confluence import confluence_manager            # Jurado Neural (Institutional Score)
 
+# Configuración centralizada — lee ACCOUNT_BALANCE y MAX_RISK_PCT desde .env
+from engine.api.config import settings
+
 class SlingshotRouter:
     """
     El Cerebro Supremo de SLINGSHOT (Capa 2 -> Capa 3).
@@ -29,8 +32,11 @@ class SlingshotRouter:
         self.strat_trend = TrendFollowingStrategy()
         self.strat_reversion = ReversionStrategy()
         
-        # Instanciar el Gestor de Riesgos con capital estándar de fondeo ($1,000 al 1%)
-        self.risk_manager = RiskManager(account_balance=1000.0, base_risk_pct=0.01)
+        # RiskManager lee balance y riesgo desde .env (ya no hardcodeado)
+        self.risk_manager = RiskManager(
+            account_balance=settings.ACCOUNT_BALANCE,
+            base_risk_pct=settings.MAX_RISK_PCT
+        )
         
         # Estado compartido para ConfluenceManager (se actualiza en cada llamada)
         self._last_ml_projection: dict = {}
