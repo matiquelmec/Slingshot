@@ -141,10 +141,10 @@ El Objetivo (Mercado) ──► Zonas Institucionales / Liquidez / Metales Preci
 
 | Componente | Tecnología | Motivo |
 |-----------|-----------|--------|
-| **Deploy Engine + Workers** | Railway | Background processes 24/7, auto-restart |
-| **Deploy Frontend** | Vercel | Edge Network, deploy automático |
+| **Deploy Engine + Workers** | Render (Background Workers) | Workers 24/7, auto-restart, escalado por servicio |
+| **Deploy Frontend** | Vercel | Edge Network, deploy automático desde GitHub |
 | **DB + Auth** | Supabase | PostgreSQL gestionado, RLS, Auth incluida |
-| **Cache + Pub/Sub** | Upstash Redis | Serverless Redis, free tier generoso |
+| **Cache + Pub/Sub** | Upstash Redis | Serverless Redis, free tier generoso, latencia <1ms |
 | **Monitoring** | Sentry (Python + TS) | Errores en producción tiempo real |
 | **ML Training** | Google Colab (GPU) | Zero coste local para entrenar modelos |
 | **Reloj del sistema** | UTC Estricto | Prevención de bugs temporales cross-timezone |
@@ -294,7 +294,7 @@ slingshot/
 ├── 📁 docs/
 │   └── BLUEPRINT_MAESTRO.md          # ← ESTÁS AQUÍ
 │
-├── 📄 railway.toml                   # ⭐ PENDIENTE: Multi-service deploy config
+├── 📄 render.yaml                    # ⭐ PENDIENTE: Multi-service deploy config (Render)
 ├── 📄 requirements.txt               # Python dependencies
 ├── 📄 package.json
 ├── 📄 .env.example
@@ -352,7 +352,7 @@ slingshot/
 ### FASE 4 — Producción y Monetización (Semana 7): "El Disparo"
 > Objetivo: Sistema deployado 24/7, monitoreado y facturando.
 
-- [ ] `railway.toml` con definición de servicios (engine worker + api gateway)
+- [ ] `render.yaml` con definición de servicios (engine workers + api gateway como Background Workers)
 - [ ] GitHub Actions CI/CD — tests automáticos en cada push a main
 - [ ] Sentry integration (Python + TypeScript)
 - [ ] Stripe webhooks para gestión de suscripciones
@@ -360,7 +360,7 @@ slingshot/
 - [ ] Documentación técnica (auto-generada desde FastAPI OpenAPI)
 - [ ] `README.md` público con onboarding para usuarios
 
-**✅ Entregable:** Sistema en producción Railway + Vercel, con usuarios reales pagando.
+**✅ Entregable:** Sistema en producción Render + Vercel + Supabase, con usuarios reales pagando.
 
 ---
 
@@ -375,8 +375,8 @@ slingshot/
 | **Autenticación** | Sin auth (WS abierto) | JWT + Supabase Auth |
 | **Multi-tenancy** | No existe | Sí (watchlist, tiers, portfolio) |
 | **Monetización** | No | Stripe + Subscription tiers |
-| **Deploy** | Solo local | Railway + Vercel (24/7) |
-| **Monitoring** | `print()` / console.log | Sentry + Railway Metrics |
+| **Deploy** | Solo local | Render + Vercel (24/7) |
+| **Monitoring** | `print()` / console.log | Sentry + Render Metrics |
 | **Contrato de módulos** | Dicts sin tipado | Pydantic V2 BaseModels |
 | **Backtesting** | Sin integrar | Motor batch + UI |
 | **Alertas Telegram** | Global o manual | Por usuario + watchlist |
@@ -412,3 +412,30 @@ Estas piezas están por encima de lo planificado originalmente y **no deben toca
 ---
 
 *SLINGSHOT v2.0 — "David no le falló a Goliat por accidente. Fue el resultado de datos, práctica y la arquitectura correcta para el momento correcto."*
+
+---
+
+## 📌 DECISIONES DE INFRAESTRUCTURA JUSTIFICADAS
+
+### ¿Por qué Render y no Railway?
+
+| Criterio | Render | Railway |
+|---|---|---|
+| **Background Workers** | ✅ Tipo nativo en la UI | ✅ También soportado |
+| **Free Tier** | ✅ 750h/mes de compute | ✅ $5 crédito inicial |
+| **Auto-deploy desde GitHub** | ✅ Nativo | ✅ Nativo |
+| **Escalado Worker Independiente** | ✅ Cada servicio escala por separado | ✅ Similar |
+| **Estabilidad histórica** | ✅ Más maduro (2019) | ⚠️ Más joven (2020) |
+| **Comunidad Python** | ✅ FastAPI docs lo recomiendan | ✅ También soporte bueno |
+| **render.yaml** | ✅ Infrastructure-as-Code nativo | ✅ railway.toml equivalente |
+
+**Veredicto:** Render es la elección correcta. Más maduro, free tier más claro, y es el recomendado oficial en la documentación de FastAPI para deploy de production workers Python.
+
+### Stack de infra definitivo:
+```
+Render     → Engine Workers (Python) + API Gateway (FastAPI)
+Vercel     → Frontend (Next.js 15)
+Supabase   → Auth + PostgreSQL + Storage
+Upstash    → Redis Pub/Sub (serverless, sin gestionar infra)
+Sentry     → Error monitoring (Python + TypeScript)
+```
