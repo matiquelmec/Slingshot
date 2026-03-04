@@ -56,8 +56,8 @@ def identify_dynamic_fib_swing(df: pd.DataFrame, window: int = 40) -> pd.DataFra
     # diff = Swing High - Swing Low
     diff = df['swing_high'] - df['swing_low']
     
-    # Golden Pocket (0.618 - 0.66) para Pullbacks Alcistas (Buscando soporte después de subir)
-    df['fib_gp_top'] = df['swing_high'] - (diff * 0.618)
+    # Zona de Recompra Paul Predice (0.5 - 0.66) para Pullbacks Alcistas (Buscando soporte después de subir)
+    df['fib_gp_top'] = df['swing_high'] - (diff * 0.5)
     df['fib_gp_bottom'] = df['swing_high'] - (diff * 0.66)
     
     # Detectar si el precio de cierre actual está dentro de esa franja mágica

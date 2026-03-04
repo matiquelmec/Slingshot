@@ -156,51 +156,60 @@ class SlingshotRouter:
             result["fibonacci"] = None
         
         # 3. ENRUTAMIENTO INTELIGENTE (El 'Switch' Maestro)
-        if current_regime == 'ACCUMULATION':
-            # Buscamos LONGs: RSI sobrevendido en soporte + OBs alcistas
-            result["active_strategy"] = "ReversionStrategy (Longs on Floor)"
-            analyzed_df = self.strat_reversion.analyze(df)
-            opportunities = self.strat_reversion.find_opportunities(analyzed_df)
-            
-        elif current_regime in ['MARKUP', 'MARKDOWN']:
-            # Tendencia clara: seguimos el impulso con pullbacks a EMA + Fibonacci
-            result["active_strategy"] = "TrendFollowingStrategy (Pullbacks + Fibo)"
-            analyzed_df = self.strat_trend.analyze(df)
-            opportunities = self.strat_trend.find_opportunities(analyzed_df)
-            
-        elif current_regime == 'DISTRIBUTION':
-            # FIX: En distribución ejecutamos AMBAS estrategias:
-            # → SMC detecta cacerías de liquidez en techos (SHORTs institucionales)
-            # → ReversionStrategy detecta RSI sobrecomprado (SHORTs de reversión)
-            # Ambas confirman la misma hipótesis bajista desde ángulos distintos.
-            result["active_strategy"] = "Dual: SMC (Liquidity Sweeps) + ReversionStrategy (SHORT on Ceiling)"
-            
-            analyzed_smc = self.strat_smc.analyze(df)
-            opps_smc = self.strat_smc.find_opportunities(analyzed_smc)
-            
-            analyzed_rev = self.strat_reversion.analyze(df)
-            opps_rev = self.strat_reversion.find_opportunities(analyzed_rev)
-            
-            # Combinar y deduplicar (filtrar solo SHORTs de ReversionStrategy en DISTRIBUTION)
-            opps_rev_short = [o for o in opps_rev if 'SHORT' in str(o.get('type', '')).upper()]
-            opportunities = opps_smc + opps_rev_short
-            # Ordenar por timestamp descendente
-            try:
-                opportunities = sorted(opportunities, key=lambda x: x.get('timestamp', ''), reverse=True)
-            except Exception:
-                pass
-
-            print(f"[ROUTER] DISTRIBUTION: SMC={len(opps_smc)} opps, Reversion SHORT={len(opps_rev_short)} opps")
-            
-        elif current_regime == 'RANGING':
-            # Rango medio sin extensión extrema — aguardamos ruptura
-            result["active_strategy"] = "Standby (Awaiting Breakout)"
-            opportunities = []
-            
+        is_precious_metal = asset.upper() in ["PAXGUSDT", "XAGUSDT", "XAUUSDT", "GOLD", "SILVER"]
+        
+        if is_precious_metal:
+            # 🪙 RUTEO EXCLUSIVO: Metales Preciosos usan solo Paul Predice
+            if current_regime in ['MARKUP', 'MARKDOWN']:
+                result["active_strategy"] = "Paul Predice (Metales Preciosos)"
+                analyzed_df = self.strat_trend.analyze(df)
+                opportunities = self.strat_trend.find_opportunities(analyzed_df)
+            else:
+                result["active_strategy"] = "Standby (Esperando Tendencia para Paul Predice)"
+                opportunities = []
+                
         else:
-            # UNKNOWN (Falta historial para medias móviles o comportamiento anómalo)
-            result["active_strategy"] = "STANDBY (Calibrating moving averages...)"
-            opportunities = []
+            # 💎 RUTEO CRIPTO: Todo el arsenal disponible
+            if current_regime == 'ACCUMULATION':
+                # Buscamos LONGs: RSI sobrevendido en soporte + OBs alcistas
+                result["active_strategy"] = "ReversionStrategy (Longs on Floor)"
+                analyzed_df = self.strat_reversion.analyze(df)
+                opportunities = self.strat_reversion.find_opportunities(analyzed_df)
+                
+            elif current_regime in ['MARKUP', 'MARKDOWN']:
+                # Tendencia clara: seguimos el impulso con pullbacks a EMA + Fibonacci
+                result["active_strategy"] = "TrendFollowingStrategy (Pullbacks + Fibo)"
+                analyzed_df = self.strat_trend.analyze(df)
+                opportunities = self.strat_trend.find_opportunities(analyzed_df)
+                
+            elif current_regime == 'DISTRIBUTION':
+                # En distribución ejecutamos AMBAS estrategias
+                result["active_strategy"] = "Dual: SMC (Liquidity Sweeps) + ReversionStrategy (SHORT on Ceiling)"
+                
+                analyzed_smc = self.strat_smc.analyze(df)
+                opps_smc = self.strat_smc.find_opportunities(analyzed_smc)
+                
+                analyzed_rev = self.strat_reversion.analyze(df)
+                opps_rev = self.strat_reversion.find_opportunities(analyzed_rev)
+                
+                # Combinar y deduplicar (filtrar solo SHORTs de ReversionStrategy)
+                opps_rev_short = [o for o in opps_rev if 'SHORT' in str(o.get('type', '')).upper()]
+                opportunities = opps_smc + opps_rev_short
+                
+                try:
+                    opportunities = sorted(opportunities, key=lambda x: x.get('timestamp', ''), reverse=True)
+                except Exception:
+                    pass
+                
+            elif current_regime == 'RANGING':
+                # Rango medio sin extensión extrema — aguardamos ruptura
+                result["active_strategy"] = "Standby (Awaiting Breakout)"
+                opportunities = []
+                
+            else:
+                # UNKNOWN
+                result["active_strategy"] = "STANDBY (Calibrating moving averages...)"
+                opportunities = []
 
             
         # Extraer el backlog de señales históricas recientes para que la UI no se vacíe

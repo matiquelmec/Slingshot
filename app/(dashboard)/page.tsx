@@ -11,8 +11,8 @@ const SessionClock = dynamic(() => import('../components/ui/SessionClock'), { ss
 const MacroRadar = dynamic(() => import('../components/ui/MacroRadar'), { ssr: false });
 
 const DEFAULT_WATCHLIST = [
-    'BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'BNBUSDT', 'XRPUSDT',
-    'DOGEUSDT', 'AVAXUSDT', 'ADAUSDT', 'LINKUSDT', 'DOTUSDT'
+    'BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'BNBUSDT', 'PAXGUSDT',
+    'XRPUSDT', 'DOGEUSDT', 'AVAXUSDT', 'ADAUSDT', 'LINKUSDT'
 ];
 
 export default function OverviewPage() {

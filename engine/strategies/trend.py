@@ -8,8 +8,8 @@ class TrendFollowingStrategy:
     """
     Estrategia 2: Trend Following (Continuación).
     Operativa en: MARKUP (Alcista Fuerte) y MARKDOWN (Bajista Fuerte).
-    Lógica Criptodamus (Mejora Entradas): Retroceso (Pullback) a la EMA 50 
-    que confluye con el Golden Pocket 0.618 de Fibonacci.
+    Lógica Paul Predice (Mejora Entradas): Retroceso (Pullback) a la EMA 50 
+    que confluye con la Zona de Compra (0.5 - 0.66) de Fibonacci.
     """
     
     def __init__(self):
@@ -50,35 +50,40 @@ class TrendFollowingStrategy:
             
             # --- ESTRATEGIA LONG: Pullback en MARKUP ---
             if current.get('market_regime') == 'MARKUP':
-                if current.get('pullback_to_ema50_bull') and current.get('in_golden_pocket') and current.get('in_killzone') and current.get('valid_trigger'):
+                if (current.get('pullback_to_ema50_bull') and 
+                    current.get('in_golden_pocket') and 
+                    current.get('in_killzone') and 
+                    current.get('valid_trigger') and 
+                    current.get('bullish_div', False)): # REQUISITO ESTRICTO PAUL PREDICE: Divergencia alcista
                     entry = current['close']
                     nearest_structural = current.get('swing_low', current['low'])
                     
                     opportunities.append({
                         "timestamp": current['timestamp'],
-                        "type":      "LONG 🟢 (TREND PULLBACK)",
+                        "type":      "LONG 🟢 (PAUL PREDICE)",
                         "signal_type":"LONG",
                         "regime":    current.get('market_regime'),
                         "price":     entry,
-                        "trigger":   "EMA 50 + Fibo 0.618 Confluencia",
+                        "trigger":   "Fibo 0.5-0.66 + EMA 50 + Divergencia Alcista",
                         "atr_value": current.get('atr_value', 0.0)
                     })
                         
             # --- ESTRATEGIA SHORT: Pullback en MARKDOWN ---
-            # (No implementamos Fibonacci Bearish estricto en el indicador aún, 
-            # pero podríamos usar solo el rechazo de la EMA en Downtrend)
             elif current.get('market_regime') == 'MARKDOWN':
-                if current.get('pullback_to_ema50_bear') and current.get('in_killzone') and current.get('valid_trigger'):
+                if (current.get('pullback_to_ema50_bear') and 
+                    current.get('in_killzone') and 
+                    current.get('valid_trigger') and
+                    current.get('bearish_div', False)): # REQUISITO ESTRICTO PAUL PREDICE: Divergencia bajista
                     entry = current['close']
                     nearest_structural = current.get('ema_50', current['high'])
                     
                     opportunities.append({
                         "timestamp": current['timestamp'],
-                        "type":      "SHORT 🔴 (TREND PULLBACK)",
+                        "type":      "SHORT 🔴 (PAUL PREDICE)",
                         "signal_type":"SHORT",
                         "regime":    current.get('market_regime'),
                         "price":     entry,
-                        "trigger":   "Rechazo de EMA 50 en Downtrend",
+                        "trigger":   "Rechazo EMA 50 + Divergencia Bajista",
                         "atr_value": current.get('atr_value', 0.0)
                     })
                         
