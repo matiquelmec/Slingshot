@@ -215,6 +215,17 @@ class SlingshotRouter:
         # Extraer el backlog de señales históricas recientes para que la UI no se vacíe
         result['signals'] = [] # Reiniciar SIEMPRE la lista de señales exportadas por este tick
         if opportunities:
+            
+            # PRE-CACHE para mejorar Performance de "Path Traversal"
+            try:
+                # Asegurar timestamp puro para Vectorización
+                df_time_vector = pd.to_datetime(df['timestamp'], utc=True)
+                df_low_vector = df['low'].values
+                df_high_vector = df['high'].values
+                current_time_utc = df_time_vector.iloc[-1]
+            except Exception:
+                current_time_utc = None
+            
             for sig in opportunities[-10:]:  # Mantener las últimas 10 señales históricas
                 # ✅ FASE 4: CÁLCULO DE RIESGO GEOGRÁFICO Y CUANTITATIVO
                 # Le pasamos al motor el mapa geográfico total: key_levels y df_ob (ya extraídos arriba)
@@ -276,40 +287,43 @@ class SlingshotRouter:
                 # REGLA INSTITUCIONAL: Solo enviamos al Dashboard las señales VIVAS.
                 # Para ser viva, no debe haber expirado ni haber tocado SL/TP desde que nació.
                 is_alive = True
-                try:
-                    # Normalizar a UTC para evitar errores de zonas horarias (Temporal Leak 2)
-                    ahora = pd.to_datetime(df['timestamp'].iloc[-1], utc=True)
-                    
+                
+                # ===================================================================
+                # OPTIMIZACIÓN: Verificación de Muerte Vectorizada (sin iterrows)
+                # ===================================================================
+                if current_time_utc is not None:
                     if expiry_timestamp_str:
                         expira = pd.to_datetime(expiry_timestamp_str, utc=True)
-                        if ahora > expira:
+                        if current_time_utc > expira:
                             is_alive = False
 
                     if is_alive:
-                        # AUDITORÍA DE CAMINO HISTÓRICO (Path Traversal)
-                        sig_time = pd.to_datetime(sig.get('timestamp'), utc=True)
-                        is_long = 'LONG' in str(sig.get('type', '')).upper()
-                        sl = float(sig.get('stop_loss', 0))
-                        tp = float(sig.get('take_profit_3r', 0))
-                        
-                        # Extraer solo lo que pasó desde la señal hasta este segundo
-                        df_path = df[pd.to_datetime(df['timestamp'], utc=True) >= sig_time]
-                        
-                        if not df_path.empty and sl > 0 and tp > 0:
-                            # Evaluar la ruta vela por vela cronológicamente
-                            for _, path_row in df_path.iterrows():
-                                if is_long:
-                                    if path_row['low'] <= sl or path_row['high'] >= tp:
-                                        is_alive = False
-                                        break
-                                else:
-                                    if path_row['high'] >= sl or path_row['low'] <= tp:
-                                        is_alive = False
-                                        break
-                                        
-                except Exception as e:
-                    print(f"[ROUTER] Lifecycle Error: {e}")
-                    
+                        try:
+                            # Filtro Numpy/Pandas Vectorizado (Mucho más rápido que iterrows)
+                            sig_time = pd.to_datetime(sig.get('timestamp'), utc=True)
+                            is_long = 'LONG' in str(sig.get('type', '')).upper()
+                            sl = float(sig.get('stop_loss', 0))
+                            tp = float(sig.get('take_profit_3r', 0))
+
+                            if sl > 0 and tp > 0:
+                                # Máscara para obtener solo tiempos pasados desde la señal
+                                path_mask = df_time_vector >= sig_time
+                                
+                                if path_mask.any():
+                                    path_lows = df_low_vector[path_mask]
+                                    path_highs = df_high_vector[path_mask]
+                                    
+                                    if is_long:
+                                        # ¿En algún momento el lower_wick perforó el SL, o el upper_wick coronó el TP?
+                                        if (path_lows <= sl).any() or (path_highs >= tp).any():
+                                            is_alive = False
+                                    else:
+                                        # En SHORT: Perforación de techo es SL, perforación de piso es TP
+                                        if (path_highs >= sl).any() or (path_lows <= tp).any():
+                                            is_alive = False
+                        except Exception as e:
+                            print(f"[ROUTER] Path Traversal Opt Error: {e}")
+                            
                 if is_alive:
                     result['signals'].append(sig)
                 
