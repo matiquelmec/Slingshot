@@ -13,8 +13,13 @@ export async function updateSession(request: NextRequest) {
                     return request.cookies.getAll()
                 },
                 setAll(cookiesToSet) {
-                    cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value))
+                    // Paso 1: escribir en el request (para que esté disponible en el handler)
+                    cookiesToSet.forEach(({ name, value }) =>
+                        request.cookies.set(name, value)
+                    )
+                    // Paso 2: crear nueva respuesta con el request actualizado
                     supabaseResponse = NextResponse.next({ request })
+                    // Paso 3: escribir los cookies en la respuesta final
                     cookiesToSet.forEach(({ name, value, options }) =>
                         supabaseResponse.cookies.set(name, value, options)
                     )
@@ -23,22 +28,28 @@ export async function updateSession(request: NextRequest) {
         }
     )
 
-    // Refrescar la sesión del usuario — IMPORTANTE: no remover esta llamada.
+    // IMPORTANTE: No agregar lógica entre createServerClient y getUser,
+    // ya que puede causar bugs difíciles de depurar.
     const { data: { user } } = await supabase.auth.getUser()
 
-    // Rutas públicas que no requieren autenticación
-    const publicRoutes = ['/login', '/register', '/auth/callback']
-    const isPublicRoute = publicRoutes.some(route => request.nextUrl.pathname.startsWith(route))
+    // Rutas públicas (sin auth requerida)
+    const pathname = request.nextUrl.pathname
+    const isPublicRoute =
+        pathname.startsWith('/login') ||
+        pathname.startsWith('/register') ||
+        pathname.startsWith('/auth/') ||   // cubre /auth/callback y cualquier sub-ruta
+        pathname.startsWith('/_next') ||
+        pathname === '/favicon.ico'
 
-    // Si no hay usuario y la ruta no es pública → redirigir a /login
+    // Sin usuario + ruta protegida → login
     if (!user && !isPublicRoute) {
         const url = request.nextUrl.clone()
         url.pathname = '/login'
         return NextResponse.redirect(url)
     }
 
-    // Si hay usuario y está intentando acceder a login/register → redirigir al dashboard
-    if (user && (request.nextUrl.pathname === '/login' || request.nextUrl.pathname === '/register')) {
+    // Con usuario + intentando ir a login/register → dashboard
+    if (user && (pathname === '/login' || pathname === '/register')) {
         const url = request.nextUrl.clone()
         url.pathname = '/'
         return NextResponse.redirect(url)
