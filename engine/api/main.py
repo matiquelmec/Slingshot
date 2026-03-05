@@ -81,7 +81,11 @@ app = FastAPI(
 # Configuración de CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.CORS_ORIGINS,
+    allow_origins=[
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+        "http://localhost:3001"
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -324,21 +328,26 @@ async def websocket_stream_endpoint(websocket: WebSocket, symbol: str, interval:
 
 
                 # 🤖 ANALISTA AUTÓNOMO (Llamada Inicial Tras Cargar Histórico)
-                try:
-                    advice_text = generate_tactical_advice(
-                        tactical_data=tactical_result,
-                        current_session=initial_session['data'].get('current_session', 'UNKNOWN'),
-                        ml_projection=None # Sin cálculo inicial de ML, se llenará en el loop
-                    )
-                    await websocket.send_json({
-                        "type": "advisor_update",
-                        "data": advice_text
-                    })
-                    print(f"[{symbol}] Asesor Autónomo (LLM) informe inicial emitido.")
-                except WebSocketDisconnect:
-                    raise
-                except Exception as e:
-                    print(f"[{symbol}] Error ejecutando Asesor Autónomo inicial: {e}")
+                async def _emit_advisor_initial(ws, tactical, sess_name, ml_pred):
+                    try:
+                        advice_text = await generate_tactical_advice(
+                            tactical_data=tactical,
+                            current_session=sess_name,
+                            ml_projection=ml_pred
+                        )
+                        await ws.send_json({"type": "advisor_update", "data": advice_text})
+                        print(f"[{symbol}] Asesor Autónomo (LLM) informe inicial emitido.")
+                    except asyncio.CancelledError:
+                        pass
+                    except Exception as e:
+                        print(f"[{symbol}] Error ejecutando Asesor Autónomo inicial: {e}")
+                
+                asyncio.create_task(_emit_advisor_initial(
+                    websocket, 
+                    tactical_result,
+                    initial_session['data'].get('current_session', 'UNKNOWN'),
+                    None
+                ))
 
             except WebSocketDisconnect:
                 raise
@@ -353,8 +362,8 @@ async def websocket_stream_endpoint(websocket: WebSocket, symbol: str, interval:
         print(f"[{symbol}] Conectando al stream multiplexado en tiempo real: {binance_url}")
         
         # Buffer en memoria para los recálculos en vivo
-        # ✅ FIX: Usar deque(maxlen=250) en lugar de list.pop(0) que era O(n)
-        live_candles_buffer: deque = deque(history[-250:], maxlen=250) if 'history' in locals() and history else deque(maxlen=250)
+        # ✅ FIX: Usar deque(maxlen=500) para mayor precisión matemática en MACD/EMA/RSI
+        live_candles_buffer: deque = deque(history[-500:], maxlen=500) if 'history' in locals() and history else deque(maxlen=500)
         
         # Estado de Liquidez en Tiempo Real
         # Nota: websocket_session_cache eliminado — SessionManager mantiene el estado internamente
@@ -633,10 +642,10 @@ async def websocket_stream_endpoint(websocket: WebSocket, symbol: str, interval:
                             
                         # 7. 🧠 ANALISTA AUTÓNOMO (LLM - Gemini)
                         # Se ejecuta al final de la cascada de la vela para tener todo el contexto.
-                        # Envuelto en create_task() para NO bloquear el event loop (~1-2s de latencia Gemini).
+                        # Envuelto en un task asíncrono para NO bloquear el event loop.
                         async def _emit_advisor(ws, tactical, sess, ml_pred):
                             try:
-                                advice_text = generate_tactical_advice(
+                                advice_text = await generate_tactical_advice(
                                     tactical_data=tactical,
                                     current_session=sess['data'].get('current_session', 'UNKNOWN'),
                                     ml_projection=ml_pred

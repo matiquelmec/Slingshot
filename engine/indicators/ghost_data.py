@@ -106,13 +106,13 @@ async def _fetch_funding_rate(symbol: str = "BTCUSDT") -> float:
     try:
         async with httpx.AsyncClient(timeout=8.0) as client:
             r = await client.get(
-                f"https://fapi.binance.com/fapi/v1/fundingRate",
-                params={"symbol": symbol.upper(), "limit": 1}
+                f"https://fapi.binance.com/fapi/v1/premiumIndex",
+                params={"symbol": symbol.upper()}
             )
             r.raise_for_status()
             data = r.json()
-            if data:
-                return float(data[-1]["fundingRate"]) * 100  # → porcentaje
+            if data and "lastFundingRate" in data:
+                return float(data["lastFundingRate"]) * 100  # → porcentaje
             return 0.0
     except Exception as e:
         print(f"[GHOST] ⚠️  Funding Rate fetch error: {e}")
@@ -208,6 +208,10 @@ async def refresh_ghost_data(symbol: str = "BTCUSDT") -> GhostState:
     # Calcular sesgo macro
     bias, block_longs, block_shorts, reason = _compute_bias(fng_val, btcd, funding)
 
+    # Si todo falla horriblemente, permitir un retry rápido (30s) en lugar de 15 min
+    is_failed = funding == 0.0 and btcd == 50.0 and fng_val == 50
+    cache_time = time.time() if not is_failed else time.time() - _TTL_SECONDS + 30
+
     # Actualizar caché global
     _cache = GhostState(
         fear_greed_value = fng_val,
@@ -219,7 +223,7 @@ async def refresh_ghost_data(symbol: str = "BTCUSDT") -> GhostState:
         block_longs      = block_longs,
         block_shorts     = block_shorts,
         reason           = reason,
-        last_updated     = time.time(),
+        last_updated     = cache_time,
         is_stale         = False,
     )
 

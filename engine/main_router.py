@@ -306,14 +306,7 @@ class SlingshotRouter:
                                     if path_row['high'] >= sl or path_row['low'] <= tp:
                                         is_alive = False
                                         break
-                            
-                            if is_long:
-                                if min_price <= sl or max_price >= tp:
-                                    is_alive = False
-                            else:
-                                if max_price >= sl or min_price <= tp:
-                                    is_alive = False
-                                    
+                                        
                 except Exception as e:
                     print(f"[ROUTER] Lifecycle Error: {e}")
                     

@@ -10,9 +10,9 @@ else:
     model = None
     print("⚠️ [ADVISOR] GEMINI_API_KEY no encontrada. El Asesor Autónomo estará deshabilitado.")
 
-def generate_tactical_advice(tactical_data: dict, current_session: str, ml_projection: dict = None) -> str:
+async def generate_tactical_advice(tactical_data: dict, current_session: str, ml_projection: dict = None) -> str:
     """
-    Genera un consejo cuantitativo breve usando Gemini LLM basado en la data de la Matriz de Confluencia.
+    Genera un consejo cuantitativo breve usando Gemini LLM de forma asíncrona.
     """
     if not model:
         return "ADVISOR LOG: SYSTEM_OFFLINE (Missing API Key). Awaiting manual override."
@@ -84,7 +84,7 @@ def generate_tactical_advice(tactical_data: dict, current_session: str, ml_proje
     """
 
     try:
-        response = model.generate_content(
+        response = await model.generate_content_async(
             prompt,
             generation_config=genai.types.GenerationConfig(
                 temperature=0.0

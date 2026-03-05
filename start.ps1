@@ -33,7 +33,7 @@ Write-Host "  [1/2] Iniciando Backend  (http://localhost:8000)..." -ForegroundCo
 Start-Process powershell -ArgumentList `
     "-ExecutionPolicy", "Bypass", `
     "-NoExit", `
-    "-Command", "cd '$PSScriptRoot'; . .\.venv\Scripts\Activate.ps1; python run_engine.py"
+    "-Command", "Set-Location -LiteralPath '$PSScriptRoot'; . .\.venv\Scripts\Activate.ps1; python -m uvicorn engine.api.main:app --host 0.0.0.0 --port 8000 --reload"
 
 # Esperar 3s para dar tiempo al backend de levantar antes del frontend
 Start-Sleep -Seconds 3
@@ -45,7 +45,7 @@ Write-Host "  [2/2] Iniciando Frontend (http://localhost:3000)..." -ForegroundCo
 Start-Process powershell -ArgumentList `
     "-ExecutionPolicy", "Bypass", `
     "-NoExit", `
-    "-Command", "cd '$PSScriptRoot'; npx next dev"
+    "-Command", "Set-Location -LiteralPath '$PSScriptRoot'; node .\node_modules\next\dist\bin\next dev"
 
 Write-Host ""
 Write-Host "  OK - Slingshot Gen 1 iniciado correctamente" -ForegroundColor Green
