@@ -13,6 +13,7 @@ const REGIME_META: Record<string, { color: string; bg: string; glow: string; lab
     ACCUMULATION: { color: 'text-yellow-400', bg: 'bg-yellow-400/10 border-yellow-400/30', glow: 'rgba(250,204,21,0.3)', label: 'ACUMULACIÓN' },
     DISTRIBUTION: { color: 'text-orange-400', bg: 'bg-orange-400/10 border-orange-400/30', glow: 'rgba(251,146,60,0.3)', label: 'DISTRIBUCIÓN' },
     RANGING: { color: 'text-neon-cyan', bg: 'bg-neon-cyan/10 border-neon-cyan/30', glow: 'rgba(0,229,255,0.3)', label: 'RANGING' },
+    CHOPPY: { color: 'text-purple-400', bg: 'bg-purple-400/10 border-purple-400/30', glow: 'rgba(192,132,252,0.3)', label: 'CHOPPY (TRANSICIÓN)' },
     UNKNOWN: { color: 'text-white/40', bg: 'bg-white/5 border-white/10', glow: 'transparent', label: 'CALIBRANDO' },
 };
 
@@ -324,9 +325,19 @@ export default function QuantDiagnosticPanel() {
                 <div className="bg-white/[0.02] border border-white/5 rounded-xl p-3">
                     <span className="text-[9px] font-bold text-white/40 tracking-[0.2em] block mb-2">ESTRATEGIA ENRUTADA</span>
                     <div className="flex items-center gap-2">
-                        <span className={`h-2 w-2 rounded-full flex-shrink-0 ${d.strategy !== 'STANDBY' ? 'bg-neon-green shadow-[0_0_8px_rgba(0,255,65,0.8)]' : 'bg-white/20'}`} />
-                        <span className="text-[10px] text-white/80 font-bold leading-snug">{d.strategy}</span>
+                        <span className={`h-2 w-2 rounded-full flex-shrink-0 ${d.strategy && !d.strategy.toUpperCase().includes('STANDBY') ? 'bg-neon-green shadow-[0_0_8px_rgba(0,255,65,0.8)]' : 'bg-yellow-400/70 shadow-[0_0_8px_rgba(250,204,21,0.5)]'}`} />
+                        <span className={`text-[10px] font-bold leading-snug ${d.strategy && d.strategy.toUpperCase().includes('STANDBY') ? 'text-yellow-400/90' : 'text-white/80'}`}>{d.strategy}</span>
                     </div>
+
+                    {/* Explicación institucional del Standby por Choppiness */}
+                    {d.strategy?.includes('Choppiness') && (
+                        <div className="mt-2 bg-purple-400/10 border border-purple-400/20 rounded p-2 flex items-start gap-1.5">
+                            <AlertTriangle size={10} className="text-purple-400 mt-0.5 flex-shrink-0" />
+                            <p className="text-[8.5px] text-purple-400/80 leading-tight">
+                                Acción de precio sucia. Volatilidad sin tendencia clara (Medias grandes desalineadas). El motor pausa operativas para proteger capital institucional.
+                            </p>
+                        </div>
+                    )}
                     {d.signals.length > 0 && (
                         <div className="mt-2 pt-2 border-t border-white/5">
                             <div className="flex items-center gap-1 mb-1">

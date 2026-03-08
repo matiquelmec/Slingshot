@@ -206,8 +206,13 @@ class SlingshotRouter:
                 result["active_strategy"] = "Standby (Awaiting Breakout)"
                 opportunities = []
                 
+            elif current_regime == 'CHOPPY':
+                # Alta volatilidad pero sin tendencia clara en las medias móviles
+                result["active_strategy"] = "Standby (Market Transition / Choppiness)"
+                opportunities = []
+                
             else:
-                # UNKNOWN
+                # UNKNOWN (Probablemente la data sea insuficiente < 200 velas)
                 result["active_strategy"] = "STANDBY (Calibrating moving averages...)"
                 opportunities = []
 

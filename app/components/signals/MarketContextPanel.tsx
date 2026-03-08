@@ -49,6 +49,12 @@ const REGIME_META: Record<string, { color: string; border: string; icon: React.R
         label: 'RANGO — STANDBY',
         explanation: 'Equilibrio temporal entre oferta y demanda. El precio oscila sin una ruptura direccional. Hipótesis directriz: Esperar expansión de volumen o cazar barridas de liquidez.',
     },
+    CHOPPY: {
+        color: 'text-purple-400', border: 'border-purple-400/30', accent: 'bg-purple-400',
+        icon: <Pause size={14} className="text-purple-400" />,
+        label: 'CHOPPY (TRANSICIÓN VOLÁTIL)',
+        explanation: 'Acción de precio sucia y volátil. Las medias móviles están desalineadas. El mercado está decidiendo dirección. Hipótesis directriz: Standby táctico para proteger capital.',
+    },
     UNKNOWN: {
         color: 'text-white/40', border: 'border-white/10', accent: 'bg-white/20',
         icon: <Eye size={14} className="text-white/40" />,

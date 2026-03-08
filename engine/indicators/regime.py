@@ -87,9 +87,13 @@ class RegimeDetector:
         mask_distrib = is_consolidation & is_high_price & ~mask_markup & ~mask_markdown & ~mask_accum
         df.loc[mask_distrib, 'market_regime'] = 'DISTRIBUTION'
         
-        # 5. RANGING: Consolidación media sin extensión extrema (lo que sobra)
+        # 5. RANGING: Consolidación media sin extensión extrema (lo que sobra de consolidación)
         mask_ranging = is_consolidation & ~mask_markup & ~mask_markdown & ~mask_accum & ~mask_distrib
         df.loc[mask_ranging, 'market_regime'] = 'RANGING'
+        
+        # 6. CHOPPY: Alta volatilidad pero sin tendencia clara (SMA slope desalineado)
+        mask_choppy = ~is_consolidation & ~mask_markup & ~mask_markdown
+        df.loc[mask_choppy, 'market_regime'] = 'CHOPPY'
         
         return df
 

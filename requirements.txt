@@ -1,4 +1,4 @@
-# Slingshot v1.0 — Backend Dependencies
+# Slingshot v2.0 — Backend Dependencies
 fastapi>=0.111.0
 uvicorn[standard]>=0.30.0
 websockets>=12.0
@@ -14,3 +14,5 @@ pydantic-settings>=2.0.0
 google-generativeai>=0.8.0
 pandas-ta>=0.3.14b
 pyarrow>=14.0.0
+# 🗄️ Supabase (DB + Auth backend)
+supabase>=2.4.0
