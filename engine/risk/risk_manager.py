@@ -53,8 +53,14 @@ class RiskManager:
         bearish_defenses = [] # Resistencias y OBs bajistas
         
         if key_levels:
-            bullish_defenses.extend([lvl['price'] for lvl in key_levels if lvl['type'] == 'Support'])
-            bearish_defenses.extend([lvl['price'] for lvl in key_levels if lvl['type'] == 'Resistance'])
+            if isinstance(key_levels, dict):
+                # Caso: Diccionario estructurado (Salida directa de get_key_levels)
+                bullish_defenses.extend([lvl['price'] for lvl in key_levels.get('supports', [])])
+                bearish_defenses.extend([lvl['price'] for lvl in key_levels.get('resistances', [])])
+            elif isinstance(key_levels, list):
+                # Caso: Lista plana de niveles
+                bullish_defenses.extend([lvl['price'] for lvl in key_levels if str(lvl.get('type', '')).upper() == 'SUPPORT'])
+                bearish_defenses.extend([lvl['price'] for lvl in key_levels if str(lvl.get('type', '')).upper() == 'RESISTANCE'])
             
         if smc_data:
             if smc_data.get('order_blocks'):

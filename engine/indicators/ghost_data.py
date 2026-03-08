@@ -250,34 +250,37 @@ def get_ghost_state() -> GhostState:
     return _cache
 
 
-def filter_signals_by_macro(signals: list[dict], ghost: GhostState) -> list[dict]:
+def filter_signals_by_macro(signals: list[dict], ghost: GhostState) -> tuple[list[dict], list[dict]]:
     """
-    Elimina señales que van en contra del contexto macro.
-
-    Si ghost.block_longs=True → descarta todas las señales LONG.
-    Si ghost.block_shorts=True → descarta todas las señales SHORT.
-
-    Retorna la lista filtrada (puede estar vacía).
+    Clasifica las señales según el contexto macro.
+    Retorna: (lista_aprobadas, lista_bloqueadas)
     """
     if not signals or ghost.is_stale:
-        return signals  # Sin datos macro, no bloqueamos nada (fail-open)
+        return signals, []  # Sin datos macro, no bloqueamos nada (fail-open)
 
-    filtered = []
+    approved = []
+    blocked = []
+    
     for sig in signals:
         sig_type = sig.get("type", "").upper()
         is_long  = "LONG"  in sig_type
         is_short = "SHORT" in sig_type
 
+        reason = None
         if is_long and ghost.block_longs:
-            print(f"[GHOST] 🚫 Señal LONG bloqueada por macro: {ghost.reason}")
-            continue
-        if is_short and ghost.block_shorts:
-            print(f"[GHOST] 🚫 Señal SHORT bloqueada por macro: {ghost.reason}")
+            reason = f"LONG bloqueada por macro: {ghost.reason}"
+        elif is_short and ghost.block_shorts:
+            reason = f"SHORT bloqueada por macro: {ghost.reason}"
+
+        if reason:
+            print(f"[GHOST] 🚫 {reason}")
+            sig["blocked_reason"] = reason
+            blocked.append(sig)
             continue
 
-        filtered.append(sig)
+        approved.append(sig)
 
-    return filtered
+    return approved, blocked
 
 
 # ── Test rápido ───────────────────────────────────────────────────────────────

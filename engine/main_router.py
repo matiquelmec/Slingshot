@@ -336,8 +336,8 @@ class SlingshotRouter:
                 last_sig = result['signals'][-1]
                 print(f"[ROUTER] ✅ Backlog cargado | Última Señal: {last_sig['type']} @ ${last_sig['price']:.2f} | Leverage: {last_sig.get('leverage')}x")
             
-            if not result['signals']:
-                print(f"[ROUTER] ℹ️ {len(opportunities)} oportunidades históricas analizadas, cero válidas al final.")
+            # if not result['signals']:
+            #     print(f"[ROUTER] ℹ️ {len(opportunities)} oportunidades históricas analizadas, cero válidas al final.")
                 
         return result
 

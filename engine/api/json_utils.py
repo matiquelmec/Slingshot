@@ -31,57 +31,14 @@ class SlingshotJSONEncoder(json.JSONEncoder):
     """
 
     def default(self, obj: Any) -> Any:  # noqa: ANN401
-        # ── pandas Timestamp ──────────────────────────────────────────────────
-        if isinstance(obj, pd.Timestamp):
-            return obj.isoformat()
-
-        # ── numpy datetime64 ─────────────────────────────────────────────────
-        if isinstance(obj, np.datetime64):
-            return pd.Timestamp(obj).isoformat()
-
-        # ── Python datetime / date ────────────────────────────────────────────
-        if isinstance(obj, datetime):
-            return obj.isoformat()
-        if isinstance(obj, date):
-            return obj.isoformat()
-
-        # ── numpy integers ────────────────────────────────────────────────────
-        if isinstance(obj, (np.integer,)):
-            return int(obj)
-
-        # ── numpy floats (incluyendo nan/inf) ─────────────────────────────────
-        if isinstance(obj, (np.floating,)):
-            val = float(obj)
-            if math.isnan(val) or math.isinf(val):
-                return None  # JSON no soporta NaN/Inf nativamente
-            return val
-
-        # ── numpy bool ────────────────────────────────────────────────────────
-        if isinstance(obj, np.bool_):
-            return bool(obj)
-
-        # ── numpy arrays → list ───────────────────────────────────────────────
-        if isinstance(obj, np.ndarray):
-            return obj.tolist()
-
-        # ── Decimal ───────────────────────────────────────────────────────────
-        if isinstance(obj, Decimal):
-            return float(obj)
-
-        # ── Sets → list ───────────────────────────────────────────────────────
-        if isinstance(obj, set):
-            return list(obj)
-
-        # ── Objetos con .item() (numpy scalars genéricos) ─────────────────────
-        if hasattr(obj, "item"):
-            return obj.item()
-
-        # ── Fallback: intentar __dict__ ───────────────────────────────────────
-        if hasattr(obj, "__dict__"):
-            return obj.__dict__
-
-        # Dejar que el padre lance el TypeError informativo
-        return super().default(obj)
+        try:
+            return sanitize_for_json(obj)
+        except Exception:
+            # Si sanitize_for_json falla por algo extremo, dejar que el padre intente lo último
+            try:
+                return super().default(obj)
+            except TypeError:
+                return str(obj) # Fallback final absoluto: stringizar para no tirar el pipeline
 
 
 def safe_dumps(obj: Any, **kwargs) -> str:
@@ -148,17 +105,27 @@ def sanitize_for_json(obj: Any) -> Any:
     if isinstance(obj, Decimal):
         return float(obj)
 
+    # Fallback paranoico por nombre de tipo (Robusto contra recargas de módulos o mismatches)
+    type_name = type(obj).__name__
+    if type_name in ['Timestamp', 'datetime64', 'datetime', 'date']:
+        try:
+            return obj.isoformat()
+        except AttributeError:
+            return str(obj)
+
+    if type_name in ['int32', 'int64', 'long']:
+        return int(obj)
+    
+    if type_name in ['float32', 'float64', 'decimal']:
+        return float(obj)
+
     # dict → recorrer valores
     if isinstance(obj, dict):
-        return {k: sanitize_for_json(v) for k, v in obj.items()}
+        return {str(k): sanitize_for_json(v) for k, v in obj.items()}
 
     # list / tuple / set → recorrer elementos
     if isinstance(obj, (list, tuple, set)):
         return [sanitize_for_json(item) for item in obj]
 
-    # Objetos con .item() (numpy scalars genéricos)
-    if hasattr(obj, "item"):
-        return sanitize_for_json(obj.item())
-
-    # Fallback: convertir a string para no perder info
+    # Fallback final: stringizar
     return str(obj)

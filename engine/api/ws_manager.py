@@ -153,13 +153,14 @@ class SymbolBroadcaster:
 
     async def _broadcast(self, message: dict):
         """Envía un mensaje a TODOS los suscriptores activos y cachea el estado clave."""
-        msg_type = message.get("type", "")
-        if msg_type == "ghost_update":     self._last_ghost    = message
-        elif msg_type == "smc_data":       self._last_smc      = message
-        elif msg_type == "tactical_update":self._last_tactical = message
-        elif msg_type == "session_update": self._last_session  = message
-        
         clean = sanitize_for_json(message)
+        
+        msg_type = clean.get("type", "")
+        if msg_type == "ghost_update":     self._last_ghost    = clean
+        elif msg_type == "smc_data":       self._last_smc      = clean
+        elif msg_type == "tactical_update":self._last_tactical = clean
+        elif msg_type == "session_update": self._last_session  = clean
+        
         dead  = []
         async with self._lock:
             clients = dict(self._subscribers)
@@ -229,8 +230,8 @@ class SymbolBroadcaster:
         # 1. Historial de velas
         try:
             history = await fetch_binance_history(self.symbol, self.interval, limit=500)
-            self._history = history
-            self._live_buffer = deque(history[-500:], maxlen=500)
+            self._history = sanitize_for_json(history)
+            self._live_buffer = deque(self._history[-500:], maxlen=500)
             await self._broadcast({"type": "history", "data": history})
             print(f"[BROADCASTER] {self._key} → {len(history)} velas enviadas.")
         except Exception as e:
@@ -418,6 +419,7 @@ class SymbolBroadcaster:
                                 await self._handle_signals(live_tactical)
                         except Exception as e:
                             print(f"[BROADCASTER] {self._key} → Fast Path pipeline error: {e}")
+                            traceback.print_exc()
 
                     # Neural Pulse
                     await self._broadcast({
@@ -489,12 +491,9 @@ class SymbolBroadcaster:
             return
 
         ghost = get_ghost_state()
-        approved = filter_signals_by_macro(raw_signals, ghost)
-
-        blocked = len(raw_signals) - len(approved)
-        if blocked > 0:
-            print(f"[BROADCASTER] {self._key} → 🚫 {blocked} señal(es) bloqueada(s) por filtro macro: {ghost.macro_bias}")
-
+        approved, blocked_sigs = filter_signals_by_macro(raw_signals, ghost)
+        
+        # ──────── PROCESAR APROBADAS ────────
         for sig in approved:
             # Telegram
             ok_to_send, reason = signal_filter.should_send(self.symbol, sig)
@@ -506,39 +505,53 @@ class SymbolBroadcaster:
                 ))
             else:
                 print(f"[BROADCASTER] {self._key} → 🔕 Telegram bloqueado: {reason}")
+            
+            # Supabase — persistir señal como 'ACTIVE'
+            asyncio.create_task(self._persist_signal(sig, tactical, status="ACTIVE"))
 
-            # Supabase — persistir señal
-            asyncio.create_task(self._persist_signal(sig, tactical))
+        # ──────── PROCESAR BLOQUEADAS (Auditoría) ────────
+        for sig in blocked_sigs:
+            # Supabase — persistir señal como 'BLOCKED'
+            asyncio.create_task(self._persist_signal(sig, tactical, status="BLOCKED"))
 
-    async def _persist_signal(self, sig: dict, tactical: dict):
+    async def _persist_signal(self, sig: dict, tactical: dict, status: str = "ACTIVE"):
         """Inserta la señal en public.signal_events con service_role key."""
         if not supabase_service:
             return
+        
+        ghost = get_ghost_state()
         try:
             data = {
                 "asset":            self.symbol,
                 "interval":         self.interval,
-                "signal_type":      sig.get("signal_type", sig.get("type", "LONG")).upper().replace("LONG_ENTRY", "LONG").replace("SHORT_ENTRY", "SHORT"),
+                "signal_type":      sig.get("signal_type", sig.get("type", "LONG")).upper(),
                 "entry_price":      float(sig.get("price", 0)),
                 "stop_loss":        float(sig.get("stop_loss", 0)),
                 "take_profit":      float(sig.get("take_profit_3r", 0)),
                 "confluence_score": float(sig.get("confluence", {}).get("total_score", 0)) if sig.get("confluence") else None,
-                "regime":           tactical.get("market_regime"),
-                "strategy":         tactical.get("active_strategy"),
-                "trigger":          sig.get("trigger"),
-                "status":           "ACTIVE",
+                "regime":           tactical.get("market_regime", "UNKNOWN"),
+                "strategy":         tactical.get("active_strategy", "N/A"),
+                "trigger":          sig.get("trigger", "N/A"),
+                "status":           status,
+                "metadata": {
+                    "reasoning": tactical.get("confluence", {}).get("reasoning", ""),
+                    "blocked_reason": sig.get("blocked_reason"),
+                    "ghost_bias": ghost.macro_bias,
+                    "fear_greed": ghost.fear_greed_value
+                }
             }
-            # Asegurar que signal_type sea 'LONG' o 'SHORT'
-            if "LONG" in data["signal_type"]:
-                data["signal_type"] = "LONG"
-            elif "SHORT" in data["signal_type"]:
-                data["signal_type"] = "SHORT"
-            else:
-                return  # señal inválida, no persistir
+            # Normalización de tipo
+            if "LONG" in data["signal_type"]: data["signal_type"] = "LONG"
+            elif "SHORT" in data["signal_type"]: data["signal_type"] = "SHORT"
+            else: return
+
+            # Saneamiento final anti-Timestamp
+            data = sanitize_for_json(data)
 
             result = supabase_service.table("signal_events").insert(data).execute()
             if result.data:
-                print(f"[SUPABASE] ✅ Señal persistida: {data['signal_type']} {self.symbol} @ ${data['entry_price']:.2f}")
+                icon = "✅" if status == "ACTIVE" else "🚫"
+                print(f"[SUPABASE] {icon} Señal ({status}) persistida: {data['signal_type']} {self.symbol} @ ${data['entry_price']:.2f}")
         except Exception as e:
             print(f"[SUPABASE] ⚠️ Error al persistir señal: {e}")
 
