@@ -40,7 +40,10 @@ class TimeFilter:
         in_london = self.london_open <= t <= self.london_close
         in_ny = self.ny_open <= t <= self.ny_close
         
-        return in_london or in_ny
+        # MODO DESARROLLO: Retornamos True siempre para ver señales en vivo 24/7
+        # En producción (institucional), descomentar la línea de abajo y comentar el 'return True'
+        # return in_london or in_ny
+        return True
         
     def filter_dataframe(self, df: pd.DataFrame) -> pd.DataFrame:
         """

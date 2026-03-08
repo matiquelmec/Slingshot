@@ -49,6 +49,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         { name: 'Signal Terminal', href: '/signals', icon: Terminal },
         { name: 'Trading Chart', href: '/chart', icon: BarChart2 },
         { name: 'Liquidity Heatmap', href: '/heatmap', icon: Activity },
+        { name: 'Audit History', href: '/history', icon: Database },
     ];
 
     return (

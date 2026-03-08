@@ -48,7 +48,12 @@ class ReversionStrategy:
             
             # --- ESTRATEGIA LONG: Acumulación (Suelo) ---
             if current.get('market_regime') == 'ACCUMULATION':
-                if current.get('rsi_oversold') and current.get('macd_bullish_cross') and current.get('in_killzone') and current.get('valid_trigger'):
+                # Filtro Criptodamus: RSI Sobrevendido + Cruce MACD + Divergencia Alcista Confirmada
+                if (current.get('rsi_oversold') and 
+                    current.get('macd_bullish_cross') and 
+                    current.get('bullish_div', False) and
+                    current.get('in_killzone') and 
+                    current.get('valid_trigger')):
                     entry = current['close']
                     nearest_structural = current['low']
                     

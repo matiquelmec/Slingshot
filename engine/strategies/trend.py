@@ -30,7 +30,11 @@ class TrendFollowingStrategy:
         # 2. Fibonacci Swing y Golden Pocket
         df = identify_dynamic_fib_swing(df, window=60)
 
-        # 3. Pullback a las EMAs
+        # 3. Momentum Suite (RSI, MACD y lo más importante: Divergencias)
+        from engine.indicators.momentum import apply_criptodamus_suite
+        df = apply_criptodamus_suite(df)
+
+        # 4. Pullback a las EMAs
         df['pullback_to_ema50_bull'] = (df['low'] <= df['ema_50']) & (df['close'] > df['ema_50'])
         df['pullback_to_ema50_bear'] = (df['high'] >= df['ema_50']) & (df['close'] < df['ema_50'])
 

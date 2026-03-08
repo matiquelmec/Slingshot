@@ -411,6 +411,11 @@ class SymbolBroadcaster:
                                 macro_levels=self._macro_levels
                             )
                             await self._broadcast({"type": "tactical_update", "data": live_tactical})
+                            
+                            # 🚀 PERSISTENCIA EN TIEMPO REAL (Fast Path)
+                            # Si el router genera una nueva señal viva en este tick, la guardamos.
+                            if live_tactical.get("signals"):
+                                await self._handle_signals(live_tactical)
                         except Exception as e:
                             print(f"[BROADCASTER] {self._key} → Fast Path pipeline error: {e}")
 
