@@ -87,10 +87,11 @@ class SymbolBroadcaster:
       - Se destruye cuando el último cliente desconecta
     """
 
-    def __init__(self, symbol: str, interval: str):
-        self.symbol   = symbol.upper()
-        self.interval = interval
-        self._key     = f"{self.symbol}:{self.interval}"
+    def __init__(self, symbol: str, interval: str, persistent: bool = False):
+        self.symbol     = symbol.upper()
+        self.interval   = interval
+        self.persistent = persistent
+        self._key       = f"{self.symbol}:{self.interval}"
 
         # Suscriptores: client_id → asyncio.Queue
         self._subscribers: Dict[str, asyncio.Queue] = {}
@@ -116,6 +117,7 @@ class SymbolBroadcaster:
         self._last_smc       = None
         self._last_tactical  = None
         self._last_session   = None
+        self._last_advisor   = None
 
         print(f"[BROADCASTER] ✅ Creado: {self._key}")
 
@@ -136,6 +138,7 @@ class SymbolBroadcaster:
         if self._last_smc:      await queue.put(self._last_smc)
         if self._last_tactical: await queue.put(self._last_tactical)
         if self._last_session:  await queue.put(self._last_session)
+        if self._last_advisor:  await queue.put(self._last_advisor)
 
         return queue
 
@@ -145,6 +148,32 @@ class SymbolBroadcaster:
             self._subscribers.pop(client_id, None)
             count = len(self._subscribers)
         print(f"[BROADCASTER] {self._key} → -cliente {client_id[:6]} (total: {count})")
+
+    @property
+    def latest_price(self) -> float:
+        """Retorna el último precio de cierre conocido."""
+        if self._history:
+            last = self._history[-1]
+            if "data" in last:
+                return float(last["data"].get("close", 0.0))
+        return 0.0
+
+    @property
+    def change_24h(self) -> float:
+        """
+        Calcula el cambio porcentual de las últimas 24 horas.
+        Para 15m, 24h = 96 velas.
+        """
+        if not self._history or len(self._history) < 96:
+            # Fallback: si no hay suficiente historia, calculamos con lo que haya
+            if len(self._history) < 2: return 0.0
+            first = float(self._history[0]["data"].get("open", 0.0))
+        else:
+            first = float(self._history[-96]["data"].get("open", 0.0))
+            
+        last = self.latest_price
+        if first == 0: return 0.0
+        return round(((last - first) / first) * 100, 2)
 
     def subscriber_count(self) -> int:
         return len(self._subscribers)
@@ -160,6 +189,7 @@ class SymbolBroadcaster:
         elif msg_type == "smc_data":       self._last_smc      = clean
         elif msg_type == "tactical_update":self._last_tactical = clean
         elif msg_type == "session_update": self._last_session  = clean
+        elif msg_type == "advisor_update": self._last_advisor  = clean
         
         dead  = []
         async with self._lock:
@@ -269,6 +299,7 @@ class SymbolBroadcaster:
                 "block_longs":      ghost.block_longs,
                 "block_shorts":     ghost.block_shorts,
                 "reason":           ghost.reason,
+                "last_updated":     ghost.last_updated,
             }})
         except Exception as e:
             print(f"[BROADCASTER] {self._key} → Ghost Data no disponible: {e}")
@@ -547,6 +578,9 @@ class SymbolBroadcaster:
 
             # Saneamiento final anti-Timestamp
             data = sanitize_for_json(data)
+            
+            # temporal: eliminamos metadata si no existe la columna (prevención de crash)
+            data.pop("metadata", None)
 
             result = supabase_service.table("signal_events").insert(data).execute()
             if result.data:
@@ -557,17 +591,30 @@ class SymbolBroadcaster:
 
     async def _emit_advisor(self, tactical: dict, session_state: dict):
         """Llama al LLM Advisor y broadcast el resultado."""
+        print(f"[BROADCASTER] 🧠 Iniciando análisis LLM para {self.symbol}...")
         try:
-            advice = await generate_tactical_advice(
-                tactical_data=tactical,
-                current_session=session_state.get("data", {}).get("current_session", "UNKNOWN"),
-                ml_projection=self._last_ml
-            )
+            # Enviar estado de 'Cargando' explícito si es necesario (opcional)
+            # await self._broadcast({"type": "advisor_update", "data": "ANALIZANDO... ⚡"})
+
+            # Timeout de 20 segundos para no colgar el worker
+            advice = await asyncio.wait_for(
+                generate_tactical_advice(self.symbol, 
+                    tactical_data=tactical,
+                    current_session=session_state.get("data", {}).get("current_session", "UNKNOWN"),
+                    ml_projection=self._last_ml
+                ),
+                timeout=20.0
+            ) 
+            print(f"[BROADCASTER] ✅ Análisis LLM completado para {self.symbol}")
             await self._broadcast({"type": "advisor_update", "data": advice})
+        except asyncio.TimeoutError:
+            print(f"[BROADCASTER] ⚠️ Timeout en LLM Advisor ({self.symbol})")
+            await self._broadcast({"type": "advisor_update", "data": "ADVISOR LOG: LLM_TIMEOUT. El motor de inferencia está saturado. Reintentando en la próxima vela."})
         except asyncio.CancelledError:
             pass
         except Exception as e:
-            print(f"[BROADCASTER] {self._key} → Advisor error: {e}")
+            print(f"[BROADCASTER] ❌ {self._key} → Advisor error: {e}")
+            traceback.print_exc()
 
     async def _refresh_ghost(self):
         """Refresca Ghost Data y broadcast."""
@@ -582,6 +629,7 @@ class SymbolBroadcaster:
                 "block_longs":      ghost.block_longs,
                 "block_shorts":     ghost.block_shorts,
                 "reason":           ghost.reason,
+                "last_updated":     ghost.last_updated,
             }})
         except Exception as e:
             print(f"[BROADCASTER] {self._key} → Ghost refresh error: {e}")
@@ -613,7 +661,7 @@ class BroadcasterRegistry:
         self._broadcasters: Dict[str, SymbolBroadcaster] = {}
         self._lock = asyncio.Lock()
 
-    async def get_or_create(self, symbol: str, interval: str) -> tuple[SymbolBroadcaster, str]:
+    async def get_or_create(self, symbol: str, interval: str, persistent: bool = False) -> tuple[SymbolBroadcaster, str]:
         """
         Retorna el broadcaster para symbol:interval, creándolo si no existe.
         También retorna el client_id único para este suscriptor.
@@ -623,11 +671,16 @@ class BroadcasterRegistry:
 
         async with self._lock:
             if key not in self._broadcasters:
-                broadcaster = SymbolBroadcaster(symbol, interval)
+                broadcaster = SymbolBroadcaster(symbol, interval, persistent=persistent)
                 self._broadcasters[key] = broadcaster
                 await broadcaster.start()
                 print(f"[REGISTRY] ✅ Nuevo broadcaster: {key}")
             else:
+                # Si ya existía pero no era persistente y ahora se pide persistencia (ej: por orquestador)
+                if persistent and not self._broadcasters[key].persistent:
+                    self._broadcasters[key].persistent = True
+                    print(f"[REGISTRY] 💎 Broadcaster {key} elevado a PERSISTENTE")
+                    
                 print(f"[REGISTRY] ♻️  Reutilizando broadcaster: {key} ({self._broadcasters[key].subscriber_count()} clientes activos)")
 
         return self._broadcasters[key], client_id
@@ -644,10 +697,14 @@ class BroadcasterRegistry:
 
             await broadcaster.unsubscribe(client_id)
 
-            if broadcaster.subscriber_count() == 0:
+            # 🚀 REGLA DE PERSISTENCIA: Los del Radar (persistent=True) NUNCA se eliminan.
+            # Los que pide el usuario por el Dashboard (persistent=False) sí.
+            if broadcaster.subscriber_count() == 0 and not broadcaster.persistent:
                 await broadcaster.stop()
                 del self._broadcasters[key]
                 print(f"[REGISTRY] 🗑️  Broadcaster eliminado (sin clientes): {key}")
+            elif broadcaster.subscriber_count() == 0 and broadcaster.persistent:
+                print(f"[REGISTRY] 🛡️  Broadcaster {key} mantenido en segundo plano (PERSISTENTE)")
 
     def status(self) -> dict:
         """Retorna el estado del registry para el endpoint /health."""

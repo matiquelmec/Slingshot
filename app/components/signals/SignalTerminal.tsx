@@ -1,8 +1,9 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect } from 'react';
 import { AnimatePresence } from 'framer-motion';
 import { Network } from 'lucide-react';
+import { useSearchParams } from 'next/navigation';
 
 // Store & Types
 import { useTelemetryStore } from '../../store/telemetryStore';
@@ -15,6 +16,9 @@ import AutonomousAdvisor from './AutonomousAdvisor';
 import SignalCardItem from './SignalCardItem';
 
 export default function SignalTerminal() {
+    const searchParams = useSearchParams();
+    const connect = useTelemetryStore(state => state.connect);
+    const activeSymbol = useTelemetryStore(state => state.activeSymbol);
     // ─── Suscripciones al Store (Granulares) ───
 
     // ⚠️ Se actualiza ~10 veces por segundo en volatilidad extrema
@@ -27,6 +31,14 @@ export default function SignalTerminal() {
     const sessionData = useTelemetryStore(state => state.sessionData as SessionData);
     const activeTimeframe = useTelemetryStore(state => state.activeTimeframe);
     const advisorLog = useTelemetryStore(state => state.advisor_log);
+
+    // ─── Sync con URL ───
+    useEffect(() => {
+        const symbol = searchParams.get('symbol');
+        if (symbol && symbol !== activeSymbol) {
+            connect(symbol);
+        }
+    }, [searchParams, activeSymbol, connect]);
 
     return (
         <div className="flex flex-col h-full bg-[#03070E]/80 backdrop-blur-2xl border-t border-white/10 overflow-hidden relative">
@@ -90,7 +102,7 @@ export default function SignalTerminal() {
                                 {signalHistory.map((sig) => (
                                     <SignalCardItem
                                         key={`${sig.timestamp}-${sig.type}`}
-                                        signal={sig as any} // 'any' forcast while data complies strictly with type `Signal`
+                                        signal={sig}
                                         currentPrice={currentPrice_live}
                                     />
                                 ))}

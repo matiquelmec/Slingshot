@@ -1,4 +1,6 @@
 import { create } from 'zustand';
+import { Signal, NeuralLog, KeyLevel, TacticalDecision, SessionData, SMCDataPayload, GhostData } from '../types/signal';
+
 
 export interface CandleData {
     time: number | string;
@@ -13,114 +15,9 @@ export interface CandleData {
 
 export type Timeframe = '1m' | '3m' | '5m' | '15m' | '30m' | '1h' | '2h' | '4h' | '8h' | '1d' | '1w' | '1M';
 
-export interface NeuralLog {
-    id: string;
-    timestamp: string;
-    type: 'SYSTEM' | 'SENSOR' | 'ALERT';
-    message: string;
-}
+// Las interfaces NeuralLog, KeyLevel, TacticalDecision, SessionInfo, SessionData, OrderBlockData, SMCDataPayload y GhostData 
+// han sido movidas a ../types/signal.ts para centralizar la lógica de tipos.
 
-export interface KeyLevel {
-    price: number;
-    touches: number;
-    zone_top: number;
-    zone_bottom: number;
-    type: 'SUPPORT' | 'RESISTANCE';
-    origin: 'PIVOT' | 'ROLE_REVERSAL';
-    strength: 'WEAK' | 'MODERATE' | 'STRONG';
-    is_active: boolean;
-    ob_confluence: boolean;
-    volume_score: number;
-    mtf_confluence: boolean;
-    mtf_score: number;
-}
-
-export interface TacticalDecision {
-    regime: string;
-    strategy: string;
-    reasoning: string;
-    current_price: number | null;
-    nearest_support: number | null;
-    nearest_resistance: number | null;
-    sma_fast: number | null;
-    sma_slow: number | null;
-    sma_slow_slope: number | null;
-    bb_width: number | null;
-    bb_width_mean: number | null;
-    dist_to_sma200: number | null;
-    signals: any[];
-    key_levels: { resistances: KeyLevel[]; supports: KeyLevel[] };
-    fibonacci?: {
-        swing_high: number;
-        swing_low: number;
-        levels: Record<string, number>;
-    };
-    diagnostic?: {
-        rsi: number | null;
-        rsi_oversold: boolean;
-        rsi_overbought: boolean;
-        macd_line: number | null;
-        macd_signal: number | null;
-        macd_bullish_cross: boolean;
-        bbwp: number | null;
-        squeeze_active: boolean;
-        volume: number;
-        bullish_divergence?: boolean;
-        bearish_divergence?: boolean;
-    };
-}
-
-export interface SessionInfo {
-    high: number | null;
-    low: number | null;
-    status: 'ACTIVE' | 'CLOSED' | 'PENDING';
-    swept_high: boolean;
-    swept_low: boolean;
-    start_utc: number;
-    end_utc: number;
-}
-
-export interface SessionData {
-    current_session: string;
-    current_session_utc: string;
-    local_time: string;
-    is_killzone: boolean;
-    sessions: { asia: SessionInfo; london: SessionInfo; ny: SessionInfo; };
-    pdh: number | null;
-    pdl: number | null;
-    pdh_swept: boolean;
-    pdl_swept: boolean;
-}
-
-export interface OrderBlockData {
-    time: number;
-    top: number;
-    bottom: number;
-    status: string;
-    confirmation_time: number;
-}
-
-export interface SMCDataPayload {
-    order_blocks: {
-        bullish: OrderBlockData[];
-        bearish: OrderBlockData[];
-    };
-    fvgs: {
-        bullish: OrderBlockData[];
-        bearish: OrderBlockData[];
-    };
-}
-
-export interface GhostData {
-    fear_greed_value: number;
-    fear_greed_label: string;
-    btc_dominance: number;
-    funding_rate: number;
-    macro_bias: 'BULLISH' | 'BEARISH' | 'NEUTRAL' | 'BLOCK_LONGS' | 'BLOCK_SHORTS' | 'CONFLICTED';
-    block_longs: boolean;
-    block_shorts: boolean;
-    reason: string;
-}
 
 interface TelemetryState {
     advisor_log: string | null;
@@ -136,7 +33,7 @@ interface TelemetryState {
     smcData: SMCDataPayload | null;
     sessionData: SessionData | null;
     ghostData: GhostData | null;
-    signalHistory: any[];   // ← Historial persistente de señales (sobrevive HMR y navegación)
+    signalHistory: Signal[];   // ← Historial persistente de señales (sobrevive HMR y navegación)
     activeConnectionId: string | null;
     connect: (symbol: string, timeframe?: Timeframe) => void;
     disconnect: () => void;
@@ -150,7 +47,7 @@ export const useTelemetryStore = create<TelemetryState>((set, get) => {
     const MAX_RETRIES = 5;
 
     // Cargar historial de señales desde localStorage al iniciar
-    const _loadSignalHistory = (): any[] => {
+    const _loadSignalHistory = (): Signal[] => {
         try {
             const raw = localStorage.getItem('slingshot_signal_history');
             if (!raw) return [];
@@ -163,7 +60,7 @@ export const useTelemetryStore = create<TelemetryState>((set, get) => {
 
             // GARBAGE COLLECTOR: Eliminar 'Zombies' cacheados de más de 2 horas
             const now = Date.now();
-            return parsed.filter((s: any) => {
+            return parsed.filter((s: Signal) => {
                 const age = now - getUtcTime(s.timestamp);
                 return age < 2 * 60 * 60 * 1000;
             });
@@ -172,13 +69,13 @@ export const useTelemetryStore = create<TelemetryState>((set, get) => {
         }
     };
 
-    const _saveSignalHistory = (history: any[]) => {
+    const _saveSignalHistory = (history: Signal[]) => {
         try {
             localStorage.setItem('slingshot_signal_history', JSON.stringify(history));
         } catch { /* quota exceeded — ignorar */ }
     };
 
-    const _mergeSignals = (prev: any[], incoming: any[]): any[] => {
+    const _mergeSignals = (prev: Signal[], incoming: Signal[]): Signal[] => {
         // Helper to ensure timezone-naive strings are parsed as UTC
         const getUtcTime = (ts: string) => {
             if (ts.includes('Z') || ts.includes('+')) return new Date(ts).getTime();
@@ -187,13 +84,13 @@ export const useTelemetryStore = create<TelemetryState>((set, get) => {
 
         // GARBAGE COLLECTOR: Al fusionar nuevas señales, borramos las que tengan más de 2 horas
         const now = Date.now();
-        const activePrev = prev.filter((s: any) => {
+        const activePrev = prev.filter((s: Signal) => {
             const age = now - getUtcTime(s.timestamp);
             return age < 2 * 60 * 60 * 1000; // 2 horas max caching
         });
 
-        const existingKeys = new Set(activePrev.map((s: any) => `${s.timestamp}-${s.type}`));
-        const newOnes = incoming.filter((s: any) => !existingKeys.has(`${s.timestamp}-${s.type}`));
+        const existingKeys = new Set(activePrev.map((s: Signal) => `${s.timestamp}-${s.type}`));
+        const newOnes = incoming.filter((s: Signal) => !existingKeys.has(`${s.timestamp}-${s.type}`));
 
         if (newOnes.length === 0 && activePrev.length === prev.length) return prev;
 
@@ -340,7 +237,7 @@ export const useTelemetryStore = create<TelemetryState>((set, get) => {
                     });
                 } else if (data.type === 'tactical_update') {
                     const d = data.data;
-                    const incomingSignals: any[] = d.signals ?? [];
+                    const incomingSignals: Signal[] = d.signals ?? [];
                     set((state) => {
                         const newHistory = incomingSignals.length > 0
                             ? _mergeSignals(state.signalHistory, incomingSignals)
