@@ -254,6 +254,7 @@ export const useTelemetryStore = create<TelemetryState>((set, get) => {
                     const allIncoming = [...incomingActive, ...incomingInvalid];
 
                     set((state) => {
+                        console.log(`[ZUSTAND] ${get().activeSymbol} tactical_update received. Incoming active: ${incomingActive.length}, Invalid: ${incomingInvalid.length}`);
                         const newHistory = allIncoming.length > 0
                             ? _mergeSignals(state.signalHistory, allIncoming)
                             : state.signalHistory;

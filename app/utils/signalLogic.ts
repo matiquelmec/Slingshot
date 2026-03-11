@@ -360,13 +360,44 @@ export function buildConditions(
             ];
         }
 
+        case 'CHOPPY': {
+            const highVol = bbwp > 80;
+            return [
+                {
+                    label: 'Calculando: Estructura de Volatilidad',
+                    status: highVol ? 'WARNING' : bbwp < 30 ? 'MET' : 'WAITING',
+                    currentValue: `BBWP: ${bbwp.toFixed(1)}%`,
+                    meaning: highVol 
+                        ? '⚠️ Volatilidad extrema sin dirección clara. Acción de precio peligrosa (Whipsawing).' 
+                        : bbwp < 30 
+                            ? '✅ El ruido disminuye. Posible formación inminente de un Rango o Tendencia.' 
+                            : 'Fase ruidosa de indecisión del mercado.',
+                },
+                {
+                    label: 'Monitoreando: Alineamiento de Momentum (MACD)',
+                    status: macd_bullish_cross ? 'PARTIAL' : macd_line < macd_signal ? 'PARTIAL' : 'WAITING',
+                    currentValue: `MACD Line: ${macd_line.toFixed(2)}`,
+                    meaning: macd_bullish_cross 
+                        ? 'Ligera presión compradora subyacente. Sin confirmación estructural.' 
+                        : 'El Momentum carece de fluidez direccional. Entrecruzamiento frecuente (Ranging falso).',
+                },
+                {
+                    label: 'Buscando: Anomalías Estructurales',
+                    status: (bullish_divergence || bearish_divergence) ? 'MET' : 'WAITING',
+                    currentValue: bullish_divergence ? 'RSI ALCISTA DETECTADO 🔥' : bearish_divergence ? 'RSI BAJISTA DETECTADO ⚠️' : 'Sin desequilibrios (Ruido aleatorio).',
+                    meaning: 'En mercados Choppy, las únicas señales fiables provienen de divergencias estructurales mayores o "Sweeps" a la liquidez límite.',
+                },
+            ];
+        }
+
+        case 'UNKNOWN':
         default:
             return [
                 {
-                    label: 'Analizando flujos institucionales',
+                    label: 'Calibrando Red Neural (Warming Up)',
                     status: 'WAITING',
-                    currentValue: 'Sincronizando...',
-                    meaning: 'Buscando patrones en la formación de precio (Price Action).',
+                    currentValue: 'Sincronizando telemetría inicial...',
+                    meaning: 'El motor está ingiriendo el historial de velas para determinar el Régimen Institucional de Wyckoff con certidumbre algorítmica.',
                 },
             ];
     }

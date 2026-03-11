@@ -78,10 +78,17 @@ export default function RadarFeed() {
         };
     }, []);
 
-    const filteredSignals = signals.filter(s =>
-        s.asset.toLowerCase().includes(filter.toLowerCase()) ||
-        s.signal_type.toLowerCase().includes(filter.toLowerCase())
-    );
+    // Filtro combinado de búsqueda y Garbage Collector de señales antiguas (Stale Signals)
+    const filteredSignals = signals.filter(s => {
+        const matchesSearch = s.asset.toLowerCase().includes(filter.toLowerCase()) || 
+                              s.signal_type.toLowerCase().includes(filter.toLowerCase());
+                              
+        // Filtramos señales que lleven más de 12 horas activas (Stuck in Database)
+        const ageMs = Date.now() - new Date(s.created_at).getTime();
+        const isFresh = ageMs < 12 * 60 * 60 * 1000; 
+
+        return matchesSearch && isFresh;
+    });
 
     const handleDeepDive = (signal: RadarSignal) => {
         // Guardamos en localStorage para que el Dashboard lo redireccione al activo correcto

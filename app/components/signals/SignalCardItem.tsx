@@ -99,7 +99,7 @@ const SignalCardItem: React.FC<SignalCardItemProps> = ({ signal, currentPrice })
                         VÁLIDA {signal.expiry_candles} velas ({(signal.expiry_candles * (signal.interval_minutes || 15))}min)
                     </span>
                 )}
-                {signal.trigger?.split('+').map((badge: string, i: number) => (
+                {(signal.trigger || '').split('+').filter(Boolean).map((badge: string, i: number) => (
                     <span key={i} className="px-1.5 py-0.5 text-[8px] font-bold tracking-wider text-white/40 bg-white/5 border border-white/10 rounded">
                         {badge.trim()}
                     </span>
@@ -128,7 +128,7 @@ const SignalCardItem: React.FC<SignalCardItemProps> = ({ signal, currentPrice })
                         </span>
                     </div>
                     <div className="flex flex-wrap gap-1">
-                        {signal.confluence.checklist?.map((item, i) => (
+                        {signal.confluence?.checklist?.map((item, i) => (
                             <span key={i} className={`px-1.5 py-0.5 text-[8px] font-bold tracking-wider rounded border ${item.status === 'CONFIRMADO' ? 'text-neon-green/90 bg-neon-green/10 border-neon-green/20' :
                                 item.status === 'PARCIAL' ? 'text-yellow-400/90 bg-yellow-400/10 border-yellow-400/20' :
                                     'text-white/30 bg-white/5 border-white/10'
