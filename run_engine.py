@@ -22,10 +22,11 @@ if project_root not in sys.path:
 import uvicorn
 
 if __name__ == "__main__":
-    print("[SLINGSHOT ENGINE] Iniciando en http://0.0.0.0:8000")
+    port = int(os.environ.get("PORT", 8000))
+    print(f"[SLINGSHOT ENGINE] Iniciando en http://0.0.0.0:{port}")
     uvicorn.run(
         "engine.api.main:app",
         host="0.0.0.0",
-        port=8000,
+        port=port,
         reload=False # Desactivar reload para mayor estabilidad
     )
