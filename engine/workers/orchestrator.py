@@ -13,7 +13,10 @@ class SlingshotOrchestrator:
     para subir el market_states a Supabase.
     """
     def __init__(self, radar_assets: List[str] = None):
-        self.radar_assets = radar_assets or ["BTCUSDT", "ETHUSDT", "SOLUSDT", "PAXGUSDT"]
+        import os
+        env_assets = os.environ.get("RADAR_ASSETS", "BTCUSDT")
+        default_assets = [s.strip() for s in env_assets.split(",") if s.strip()]
+        self.radar_assets = radar_assets or default_assets
         self.intervals = ["15m"] # Por simplicidad inicial mantener 15m
         self._running_workers: Dict[str, subprocess.Popen] = {}
         self._stop_event = asyncio.Event()
