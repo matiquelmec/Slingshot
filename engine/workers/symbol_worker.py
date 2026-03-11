@@ -651,15 +651,14 @@ class SymbolWorker:
                     last = lookback.data[0]
                     last_status = str(last["status"]).upper()
                     
-                    # 1. ESCENARIO: EVOLUCIÓN (Sigue activa o sigue bloqueada)
+                    # 1. ESCENARIO: EVOLUCION (Sigue activa o sigue bloqueada)
                     if (last_status == "ACTIVE" and status == "ACTIVE") or \
-                       (last_status == "BLOCKED" and status == "BLOCKED"):
+                       (last_status == "BLOCKED_BY_MACRO" and status == "BLOCKED_BY_MACRO"):
                         
                         price_diff = abs(data["entry_price"] - last["entry_price"]) / last["entry_price"] if last["entry_price"] > 0 else 1.0
                         
-                        # Si el precio es similar (< 0.5%), actualizamos la existente para no llenar la DB
-                        if price_diff < 0.005: 
-                            print(f"[AUDIT] 🧬 Evolucionando Tesis ({self.symbol}) - Status: {status}...")
+                        if price_diff < 0.005:
+                            print(f"[AUDIT] Evolucionando Tesis ({self.symbol}) - Status: {status}...")
                             upd_data = {
                                 "entry_price": data["entry_price"],
                                 "stop_loss": data["stop_loss"],
@@ -674,9 +673,9 @@ class SymbolWorker:
                                     supabase_service.table("signal_events").update(upd_data).eq("id", last["id"]).execute()
                             return
 
-                    # 2. ESCENARIO: CIERRE (De Activa a cualquier otro estado muerto)
+                    # 2. ESCENARIO: CIERRE (De Activa a cualquier estado muerto)
                     elif last_status == "ACTIVE" and status != "ACTIVE":
-                        print(f"[AUDIT] 🏁 Cerrando señal activa en {self.symbol}. Motivo: {status}")
+                        print(f"[AUDIT] Cerrando senal activa en {self.symbol}. Motivo: {status}")
                         upd_data = {"status": status, "metadata": data.get("metadata")}
                         try:
                             supabase_service.table("signal_events").update(upd_data).eq("id", last["id"]).execute()
@@ -685,6 +684,14 @@ class SymbolWorker:
                                 if "metadata" in upd_data: del upd_data["metadata"]
                                 supabase_service.table("signal_events").update(upd_data).eq("id", last["id"]).execute()
                         return
+
+                    # 3. ESCENARIO: DEDUPLICACION (Senal historica ya registrada)
+                    # Cuando el fast-path reprocesa señales del backlog con el mismo precio,
+                    # simplemente ignoramos sin insertar duplicado.
+                    else:
+                        price_diff = abs(data["entry_price"] - last["entry_price"]) / last["entry_price"] if last["entry_price"] > 0 else 1.0
+                        if price_diff < 0.005:
+                            return  # Mismo precio, ya registrada - silenciar duplicado
 
             except Exception as e:
                 print(f"[AUDIT] ⚠️ Error en motor de ciclo de vida (No bloqueante): {e}")

@@ -135,19 +135,20 @@ class SlingshotOrchestrator:
             except Exception as e:
                 print(f"[ORCHESTRATOR] Error parseando Redis state para {symbol}: {e}")
 
-        if not states: return
-
+        # Siempre limpiar activos huerfanos, aunque Redis este frio al arrancar
         try:
             from engine.api.supabase_client import supabase_service
             if supabase_service:
-                supabase_service.table("market_states").upsert(states, on_conflict="asset").execute()
-                
-                if active_symbols:
-                    all_db = supabase_service.table("market_states").select("asset").execute()
-                    if all_db.data:
-                        to_delete = [row["asset"] for row in all_db.data if row["asset"] not in active_symbols]
-                        if to_delete:
-                            supabase_service.table("market_states").delete().in_("asset", to_delete).execute()
+                if states:
+                    supabase_service.table("market_states").upsert(states, on_conflict="asset").execute()
+
+                # Eliminar activos que ya no estan siendo monitoreados
+                all_db = supabase_service.table("market_states").select("asset").execute()
+                if all_db.data:
+                    to_delete = [row["asset"] for row in all_db.data if row["asset"] not in active_symbols]
+                    if to_delete:
+                        print(f"[ORCHESTRATOR] Limpiando activos huerfanos: {to_delete}")
+                        supabase_service.table("market_states").delete().in_("asset", to_delete).execute()
         except Exception as e:
             print(f"[ORCHESTRATOR] Error sincronizando Radar en Supabase: {e}")
 
