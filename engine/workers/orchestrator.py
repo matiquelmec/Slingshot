@@ -75,11 +75,30 @@ class SlingshotOrchestrator:
 
     async def sync_user_watchlists(self):
         """
-        ARQUITECTURA: La watchlist personal es solo para el frontend (precio en tiempo real via WS).
-        El backend NO lanza workers de señales para activos personales — solo para RADAR_ASSETS.
-        Esta funcion se mantiene como stub para no romper el ciclo principal.
+        Sincroniza activos de la watchlist del usuario.
+        Para evitar que Render colapse, solo lanzamos workers hasta MAX_WORKERS.
+        Damos prioridad a los assets en RADAR_ASSETS.
         """
-        pass  # Workers de señales: solo para BTCUSDT y PAXGUSDT (definidos en RADAR_ASSETS)
+        try:
+            # En Render Free/Starter, MAX_WORKERS debería ser 2 o 3 máximo (BTC + PAXG + 1 extra)
+            max_workers = int(os.environ.get("MAX_WORKERS", 3))
+            
+            from engine.api.supabase_client import supabase_service
+            if not supabase_service: return
+
+            # Obtener activos que el usuario quiere analizar
+            response = supabase_service.table("user_watchlists").select("asset").execute()
+            if response.data:
+                all_watchlist_assets = {item['asset'] for item in response.data}
+                
+                # Intentar lanzar workers para la watchlist si hay espacio
+                for symbol in all_watchlist_assets:
+                    key = f"{symbol}:15m"
+                    if not self.is_running(key) and len(self.get_running_keys()) < max_workers:
+                        print(f"[ORCHESTRATOR] Activando analisis adicional para {symbol} (Respetando limite MAX_WORKERS={max_workers})")
+                        self._spawn_worker(symbol, "15m")
+        except Exception as e:
+            print(f"[ORCHESTRATOR] Error sincronizando Watchlists: {e}")
 
     async def push_market_states(self):
         active_symbols = set()
@@ -88,21 +107,20 @@ class SlingshotOrchestrator:
             if ":15m" not in key: continue 
             symbol = key.split(":")[0]
             active_symbols.add(symbol)
-            state_key = f"slingshot:state:{symbol}:15m"
             
+            # FILTRO CRITICO: Solo los assets de RADAR_ASSETS van al Radar Center
+            if symbol not in self.radar_assets:
+                continue
+
+            state_key = f"slingshot:state:{symbol}:15m"
             try:
                 state_json = await self.redis_pool.get(state_key)
                 if not state_json: continue
                 state = json.loads(state_json)
-                
                 history_json = await self.redis_pool.get(f"{state_key}:history")
                 history = json.loads(history_json) if history_json else []
-                
-                tactical_upd = state.get("tactical_update") or {}
-                tactical = tactical_upd.get("data", {})
-                
-                ghost_upd = state.get("ghost_update") or {}
-                ghost = ghost_upd.get("data", {})
+                tactical = (state.get("tactical_update") or {}).get("data", {})
+                ghost = (state.get("ghost_update") or {}).get("data", {})
                 
                 latest_price = 0.0
                 change_24h = 0.0
@@ -113,34 +131,32 @@ class SlingshotOrchestrator:
                         if first_price > 0:
                             change_24h = round(((latest_price - first_price) / first_price) * 100, 2)
 
-                db_state = {
+                states.append({
                     "asset": symbol,
                     "price": latest_price,
                     "change_24h": change_24h,
-                    "regime": tactical.get("market_regime", "UNKNOWN") if tactical else "ANALIZANDO",
-                    "macro_bias": ghost.get("macro_bias", "NEUTRAL") if ghost else "NEUTRAL",
+                    "regime": tactical.get("market_regime", "ANALIZANDO"),
+                    "macro_bias": ghost.get("macro_bias", "NEUTRAL"),
                     "last_updated": "now()"
-                }
-                states.append(db_state)
-            except Exception as e:
-                print(f"[ORCHESTRATOR] Error parseando Redis state para {symbol}: {e}")
+                })
+            except Exception:
+                pass
 
-        # Siempre limpiar activos huerfanos, aunque Redis este frio al arrancar
+        # Persistencia y Limpieza de huérfanos
         try:
             from engine.api.supabase_client import supabase_service
             if supabase_service:
                 if states:
                     supabase_service.table("market_states").upsert(states, on_conflict="asset").execute()
-
-                # Eliminar activos que ya no estan siendo monitoreados
+                
+                # En el Radar solo queremos los oficiales
                 all_db = supabase_service.table("market_states").select("asset").execute()
                 if all_db.data:
-                    to_delete = [row["asset"] for row in all_db.data if row["asset"] not in active_symbols]
+                    to_delete = [row["asset"] for row in all_db.data if row["asset"] not in self.radar_assets]
                     if to_delete:
-                        print(f"[ORCHESTRATOR] Limpiando activos huerfanos: {to_delete}")
                         supabase_service.table("market_states").delete().in_("asset", to_delete).execute()
-        except Exception as e:
-            print(f"[ORCHESTRATOR] Error sincronizando Radar en Supabase: {e}")
+        except Exception:
+            pass
 
     async def audit_health(self):
         if self.worker_mode == "process":
