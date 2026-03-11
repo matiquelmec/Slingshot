@@ -108,8 +108,11 @@ class SlingshotOrchestrator:
                 history_json = await self.redis_pool.get(f"{state_key}:history")
                 history = json.loads(history_json) if history_json else []
                 
-                tactical = state.get("tactical_update", {}).get("data", {})
-                ghost = state.get("ghost_update", {}).get("data", {})
+                tactical_upd = state.get("tactical_update") or {}
+                tactical = tactical_upd.get("data", {})
+                
+                ghost_upd = state.get("ghost_update") or {}
+                ghost = ghost_upd.get("data", {})
                 
                 latest_price = 0.0
                 change_24h = 0.0
