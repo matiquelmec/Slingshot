@@ -19,11 +19,35 @@ export default function SignalTerminal() {
     const searchParams = useSearchParams();
     const connect = useTelemetryStore(state => state.connect);
     const activeSymbol = useTelemetryStore(state => state.activeSymbol);
-    // ─── Suscripciones al Store (Granulares) ───
-
     // ⚠️ Se actualiza ~10 veces por segundo en volatilidad extrema
     const currentPrice_live = useTelemetryStore(state => state.latestPrice);
-    const signalHistory = useTelemetryStore(state => state.signalHistory);
+    const signalHistoryRaw = useTelemetryStore(state => state.signalHistory);
+
+    // 🛡️ MALLA DE EVENTOS "ALIVE": Misma lógica que el Radar (con 10 min de gracia)
+    const signalHistory = React.useMemo(() => {
+        const now = Date.now();
+        const getUtcTime = (ts: string) => {
+            if (ts.includes('Z') || ts.includes('+')) return new Date(ts).getTime();
+            return new Date(ts.replace(' ', 'T') + 'Z').getTime();
+        };
+
+        return signalHistoryRaw
+            .filter(sig => sig.asset === activeSymbol)
+            .filter(sig => {
+                const status = sig.status?.toUpperCase() || 'ACTIVE';
+                const ageMs = now - getUtcTime(sig.timestamp);
+
+                // 1. Si está VIVA o BLOQUEADA, se mantiene (mientras sea de hoy/12h)
+                if (['ACTIVE', 'BLOCKED_BY_MACRO'].includes(status)) {
+                    return ageMs < 12 * 60 * 60 * 1000;
+                }
+
+                // 2. Si es una señal "MUERTA" (TP, SL, EXPIRED, MISSED)
+                // Le damos 10 MINUTOS de gracia para que el terminal sea profesional y veas el resultado.
+                // Después de eso, autolimpieza para no saturar.
+                return ageMs < 10 * 60 * 1000;
+            });
+    }, [signalHistoryRaw, activeSymbol]);
 
     // ✅ Se actualizan estáticamente / 1 vez cada cierre de vela (15 min)
     const tacticalDecision = useTelemetryStore(state => state.tacticalDecision as TacticalDecision);

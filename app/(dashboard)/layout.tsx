@@ -46,6 +46,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
     const navItems = [
         { name: 'Overview', href: '/', icon: LayoutDashboard },
+        { name: 'Radar Center', href: '/radar', icon: Radio },
         { name: 'Signal Terminal', href: '/signals', icon: Terminal },
         { name: 'Trading Chart', href: '/chart', icon: BarChart2 },
         { name: 'Liquidity Heatmap', href: '/heatmap', icon: Activity },

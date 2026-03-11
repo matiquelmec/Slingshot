@@ -25,6 +25,8 @@ from engine.api.json_utils import sanitize_for_json, SlingshotJSONEncoder
 from engine.api.ws_manager import registry, fetch_binance_history
 from engine.main_router import SlingshotRouter
 from engine.indicators.structure import identify_support_resistance, get_key_levels
+from engine.workers.orchestrator import orchestrator
+import asyncio
 
 # Parchar WebSocket.send_json para usar el encoder robusto globalmente
 _original_send_json = WebSocket.send_json
@@ -55,6 +57,26 @@ app.add_middleware(
 
 # Router one-shot para análisis REST (no WebSocket)
 _one_shot_router = SlingshotRouter()
+
+
+# ── Lifespan / Startup ───────────────────────────────────────────────────────
+
+@app.on_event("startup")
+async def startup_event():
+    """
+    Se ejecuta al arrancar el servidor. Inicia el Radar (Watchlist VIP).
+    """
+    # Lanzamos el orquestador en una tarea de fondo para no bloquear el arranque de la API
+    asyncio.create_task(orchestrator.start())
+    print("[SLINGSHOT] 📡 Radar Center activado en segundo plano.")
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    """
+    Se ejecuta al apagar el servidor. Cierra conexiones limpiamente.
+    """
+    orchestrator.stop()
+    print("[SLINGSHOT] 🔌 Radar Center apagado.")
 
 
 # ── Health & Status ───────────────────────────────────────────────────────────

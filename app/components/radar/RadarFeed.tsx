@@ -27,11 +27,12 @@ export default function RadarFeed() {
     useEffect(() => {
         const supabase = createClient();
 
-        // 1. Fetch initial signals from the last 24h
+        // 1. Fetch initial signals (Only relevant ones for the Radar)
         const fetchSignals = async () => {
             const { data, error } = await supabase
                 .from('signal_events')
                 .select('*')
+                .in('status', ['ACTIVE', 'BLOCKED_BY_MACRO']) // Filtro de Clase Mundial
                 .order('created_at', { ascending: false })
                 .limit(20);
 
@@ -43,18 +44,32 @@ export default function RadarFeed() {
 
         fetchSignals();
 
-        // 2. Subscribe to REALTIME updates for new signals
+        // 2. Subscribe to REALTIME updates (INSERT, UPDATE, DELETE)
         const channel = supabase
-            .channel('radar_signals')
+            .channel('radar_signals_v2')
             .on('postgres_changes', {
-                event: 'INSERT',
+                event: '*', // Escuchar TODO
                 schema: 'public',
                 table: 'signal_events'
             }, (payload) => {
-                const newSignal = payload.new as RadarSignal;
-                // Reproducir un sonido sutil de alerta (opcional/institucional)
-                // update state
-                setSignals(prev => [newSignal, ...prev].slice(0, 50));
+                if (payload.eventType === 'INSERT') {
+                    const newSig = payload.new as RadarSignal;
+                    if (['ACTIVE', 'BLOCKED_BY_MACRO'].includes(newSig.status)) {
+                        setSignals(prev => [newSig, ...prev].slice(0, 50));
+                    }
+                } else if (payload.eventType === 'UPDATE') {
+                    const updatedSig = payload.new as RadarSignal;
+
+                    // Si ya no es relevante (ej: murió), lo eliminamos de la vista
+                    if (!['ACTIVE', 'BLOCKED_BY_MACRO'].includes(updatedSig.status)) {
+                        setSignals(prev => prev.filter(s => s.id !== updatedSig.id));
+                    } else {
+                        // Si sigue siendo relevante pero cambió algo (ej: precio entrada en evolución)
+                        setSignals(prev => prev.map(s => s.id === updatedSig.id ? updatedSig : s));
+                    }
+                } else if (payload.eventType === 'DELETE') {
+                    setSignals(prev => prev.filter(s => s.id !== payload.old.id));
+                }
             })
             .subscribe();
 
@@ -118,7 +133,7 @@ export default function RadarFeed() {
                         <AnimatePresence initial={false}>
                             {filteredSignals.map((signal) => {
                                 const isLong = signal.signal_type.toUpperCase().includes('LONG');
-                                const score = signal.confluence_score || signal.confluence?.total_score || 0;
+                                const score = signal.confluence_score || signal.confluence?.score || signal.confluence?.total_score || 0;
                                 const isBlocked = signal.status === 'BLOCKED_BY_MACRO';
 
                                 return (

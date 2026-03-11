@@ -142,6 +142,13 @@ export function buildConditions(
         volume, rsi_oversold, rsi_overbought, bullish_divergence, bearish_divergence, volume_mean = 0
     } = diag;
 
+    // Helper de precisión dinámica para precios ultra-bajos (PEPE, FLOKI, etc)
+    const fP = (v: number | null) => {
+        if (v == null) return '—';
+        const dp = v < 0.0001 ? 10 : v < 0.01 ? 8 : 2;
+        return '$' + v.toLocaleString('en-US', { minimumFractionDigits: dp, maximumFractionDigits: dp });
+    };
+
 
     // RSI helper
     const rsiDesc = () => {
@@ -153,12 +160,18 @@ export function buildConditions(
         return { level: 'Sobrecompra extrema', note: 'Zona de euforia minorista. Vendedores institucionales activos.' };
     };
 
-    // MACD helper
+    // MACD helper (Precision extrema para Coins de bajo precio)
     const macdDesc = () => {
-        const diff = (macd_line - macd_signal).toFixed(2);
-        if (macd_bullish_cross) return `Línea MACD (${macd_line.toFixed(2)}) > Señal (${macd_signal.toFixed(2)}). Alcista validado.`;
-        if (macd_line > macd_signal) return `Línea MACD (${macd_line.toFixed(2)}) conserva ventaja sobre Señal.`;
-        return `Línea MACD (${macd_line.toFixed(2)}) < Señal (${macd_signal.toFixed(2)}). Déficit: ${diff}.`;
+        const fM = (v: number) => {
+            if (v === 0) return '0.00';
+            const absV = Math.abs(v);
+            const dp = absV < 0.000001 ? 10 : absV < 0.001 ? 8 : 4;
+            return v.toFixed(dp);
+        };
+        const diff = fM(macd_line - macd_signal);
+        if (macd_bullish_cross) return `Línea MACD (${fM(macd_line)}) > Señal (${fM(macd_signal)}). Alcista validado.`;
+        if (macd_line > macd_signal) return `Línea MACD (${fM(macd_line)}) conserva ventaja sobre Señal.`;
+        return `Línea MACD (${fM(macd_line)}) < Señal (${fM(macd_signal)}). Déficit: ${diff}.`;
     };
 
     // Rango helper (Fallback al profile de Sesión)
@@ -193,7 +206,7 @@ export function buildConditions(
                 {
                     label: 'Buscando: OB alcista en soporte',
                     status: 'WAITING',
-                    currentValue: support ? `Soporte: $${support.toFixed(2)}` : 'Buscando zona de interés...',
+                    currentValue: support ? `Soporte: ${fP(support)}` : 'Buscando zona de interés...',
                     meaning: 'Order Block: Zona donde quedó liquidez e intencionalidad pendiente.',
                 },
                 {
@@ -223,7 +236,7 @@ export function buildConditions(
                 {
                     label: 'Objetivo: Retroceso (Pullback) y Confluencia',
                     status: 'WAITING',
-                    currentValue: support ? `Soportes EMA: $${support.toFixed(2)}` : 'Esperando corrección...',
+                    currentValue: support ? `Soportes EMA: ${fP(support)}` : 'Esperando corrección...',
                     meaning: 'En tendencia, compramos retrocesos hacia la EMA 50 o el Fibo 0.5 - 0.618.',
                 },
                 {
@@ -259,7 +272,7 @@ export function buildConditions(
                 {
                     label: 'Buscando: Barrida de liquidez institucional',
                     status: 'WAITING',
-                    currentValue: resistance ? `Umbral a romper: $${resistance.toFixed(2)}` : 'Mapeando techo...',
+                    currentValue: resistance ? `Umbral a romper: ${fP(resistance)}` : 'Mapeando techo...',
                     meaning: 'Buscamos que el precio supere un máximo previo temporalmente para atrapar liquidez (Sweep).',
                 },
                 {
@@ -277,7 +290,7 @@ export function buildConditions(
                 {
                     label: 'Objetivo: Pullback Bajista a la EMA 50',
                     status: 'WAITING',
-                    currentValue: resistance ? `Resistencia EMA: $${resistance.toFixed(2)}` : 'Esperando rebote temporal...',
+                    currentValue: resistance ? `Resistencia EMA: ${fP(resistance)}` : 'Esperando rebote temporal...',
                     meaning: 'En tendencia bajista, se busca operar en corto (SHORT) en los rebotes a la EMA 50.',
                 },
                 {
@@ -312,7 +325,7 @@ export function buildConditions(
                     label: 'Calculando: Ubicación geométrica en el lateral',
                     status: rp ? 'PARTIAL' : 'WAITING',
                     currentValue: rp
-                        ? `${rp.pct}% (entre $${rp.s?.toFixed(2)} y $${rp.r?.toFixed(2)})`
+                        ? `${rp.pct}% (entre ${fP(rp.s)} y ${fP(rp.r)})`
                         : 'Mapeando rangos vigentes...',
                     meaning: rp
                         ? `Posición actual: ${rp.pct}% del bloque. ${parseInt(rp.pct) < 30 ? 'Zona Soporte (LONG)' : parseInt(rp.pct) > 70 ? 'Zona Techo (SHORT)' : 'Zona Media (Riesgo)'}`

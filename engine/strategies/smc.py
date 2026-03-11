@@ -55,11 +55,8 @@ class PaulPerdicesStrategy:
         return df
 
     def find_opportunities(self, df: pd.DataFrame) -> list:
-        """
-        Escanea el dataframe procesado buscando la Tormenta Perfecta.
-        Solo opera en KillZones con OB + Sweep + RVOL confirmado.
-        """
         opportunities = []
+        last_signal_idx = {"LONG": -20, "SHORT": -20}
 
         for i in range(1, len(df)):
             current = df.iloc[i]
@@ -82,38 +79,38 @@ class PaulPerdicesStrategy:
             if current.get('market_regime') in ('MARKUP', 'ACCUMULATION'):
                 has_ob_bull = current.get('ob_bullish', False)
                 if in_killzone and has_ob_bull and swept_liq and has_volume:
-                    entry  = current['close']
-                    nearest_structural = current['low']
-                    
-                    opportunities.append({
-                        "timestamp":        current['timestamp'],
-                        "type":             "LONG 🟢 (SMC FRANCOTIRADOR)",
-                        "signal_type":      "LONG",
-                        "regime":           current.get('market_regime'),
-                        "price":            entry,
-                        "trigger":          "KillZone + OB Alcista + Sweep Liquidez + RVOL",
-                        "rsi":              round(current.get('rsi', 0), 2),
-                        "is_squeeze":       current.get('squeeze_active', False),
-                        "atr_value":        current.get('atr_value', 0.0)
-                    })
+                    if i - last_signal_idx["LONG"] > 10:
+                        entry  = current['close']
+                        opportunities.append({
+                            "timestamp":        current['timestamp'],
+                            "type":             "LONG 🟢 (SMC FRANCOTIRADOR)",
+                            "signal_type":      "LONG",
+                            "regime":           current.get('market_regime'),
+                            "price":            entry,
+                            "trigger":          "KillZone + OB Alcista + Sweep Liquidez + RVOL",
+                            "rsi":              round(current.get('rsi', 0), 2),
+                            "is_squeeze":       current.get('squeeze_active', False),
+                            "atr_value":        current.get('atr_value', 0.0)
+                        })
+                        last_signal_idx["LONG"] = i
 
             # ── SHORT: DISTRIBUTION con barrida alcista → caída ─────────
             elif current.get('market_regime') == 'DISTRIBUTION':
                 has_ob_bear = current.get('ob_bearish', False)
                 if in_killzone and has_ob_bear and swept_high and has_volume:
-                    entry  = current['close']
-                    nearest_structural = current['high']
-                    
-                    opportunities.append({
-                        "timestamp":        current['timestamp'],
-                        "type":             "SHORT 🔴 (SMC FRANCOTIRADOR)",
-                        "signal_type":      "SHORT",
-                        "regime":           current.get('market_regime'),
-                        "price":            entry,
-                        "trigger":          "KillZone + OB Bajista + Sweep Liquidez + RVOL",
-                        "rsi":              round(current.get('rsi', 0), 2),
-                        "is_squeeze":       current.get('squeeze_active', False),
-                        "atr_value":        current.get('atr_value', 0.0)
-                    })
+                    if i - last_signal_idx["SHORT"] > 10:
+                        entry  = current['close']
+                        opportunities.append({
+                            "timestamp":        current['timestamp'],
+                            "type":             "SHORT 🔴 (SMC FRANCOTIRADOR)",
+                            "signal_type":      "SHORT",
+                            "regime":           current.get('market_regime'),
+                            "price":            entry,
+                            "trigger":          "KillZone + OB Bajista + Sweep Liquidez + RVOL",
+                            "rsi":              round(current.get('rsi', 0), 2),
+                            "is_squeeze":       current.get('squeeze_active', False),
+                            "atr_value":        current.get('atr_value', 0.0)
+                        })
+                        last_signal_idx["SHORT"] = i
 
         return opportunities

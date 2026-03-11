@@ -16,6 +16,7 @@ import {
 } from 'lightweight-charts';
 import { useTelemetryStore, CandleData } from '../../store/telemetryStore';
 import { useIndicatorsStore } from '../../store/indicatorsStore';
+import { formatPrice } from '@/lib/utils';
 
 // ─── Indicator Math ──────────────────────────────────────────────────────────
 
@@ -242,6 +243,19 @@ export default function TradingChart() {
         const sortedCandles = [...candles]
             .sort((a, b) => Number(a.time) - Number(b.time))
             .filter((c, i, arr) => i === 0 || c.time !== arr[i - 1].time);
+
+        const firstPrice = sortedCandles[0]?.close ?? 0;
+        const isHighPrecision = firstPrice < 1;
+        const precision = isHighPrecision ? 8 : 2;
+        const minMove = isHighPrecision ? 0.00000001 : 0.01;
+
+        candleSeriesRef.current.applyOptions({
+            priceFormat: {
+                type: 'price',
+                precision: precision,
+                minMove: minMove,
+            },
+        });
 
         candleSeriesRef.current.setData(sortedCandles as any);
 
@@ -512,7 +526,7 @@ export default function TradingChart() {
                 lineWidth: 1, // Línea fina
                 lineStyle: LineStyle.Solid,
                 axisLabelVisible: false, // Ocultar etiqueta en el eje Y para no molestar
-                title: `BID: ${bid.volume.toFixed(2)} Vol`
+                title: `BID: ${formatPrice(bid.price)} (${bid.volume.toFixed(2)} Vol)`
             });
             if (line) liquidityLinesRef.current.push(line);
         });
@@ -526,7 +540,7 @@ export default function TradingChart() {
                 lineWidth: 1, // Línea fina
                 lineStyle: LineStyle.Solid,
                 axisLabelVisible: false, // Ocultar etiqueta en el eje Y
-                title: `ASK: ${ask.volume.toFixed(2)} Vol`
+                title: `ASK: ${formatPrice(ask.price)} (${ask.volume.toFixed(2)} Vol)`
             });
             if (line) liquidityLinesRef.current.push(line);
         });
@@ -550,7 +564,8 @@ export default function TradingChart() {
             if (!price || !series) return;
             const line = series.createPriceLine({
                 price, color, lineWidth: width as any, lineStyle: style,
-                axisLabelVisible: true, title
+                axisLabelVisible: true,
+                title: `${title} (${formatPrice(price)})`
             });
             if (line) srLinesRef.current.push({ line, series });
         };

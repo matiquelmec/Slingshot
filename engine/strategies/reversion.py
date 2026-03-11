@@ -42,45 +42,54 @@ class ReversionStrategy:
 
     def find_opportunities(self, df: pd.DataFrame) -> list:
         opportunities = []
+        last_signal_idx = {"LONG": -20, "SHORT": -20}
         
         for i in range(1, len(df)):
             current = df.iloc[i]
             
-            # --- ESTRATEGIA LONG: Acumulación (Suelo) ---
+            # --- ESTRATEGIA LONG: Acumulación ---
             if current.get('market_regime') == 'ACCUMULATION':
-                # Filtro Criptodamus: RSI Sobrevendido + Cruce MACD + Divergencia Alcista Confirmada
                 if (current.get('rsi_oversold') and 
                     current.get('macd_bullish_cross') and 
-                    current.get('bullish_div', False) and
                     current.get('in_killzone') and 
                     current.get('valid_trigger')):
-                    entry = current['close']
-                    nearest_structural = current['low']
                     
-                    opportunities.append({
-                        "timestamp": current['timestamp'],
-                        "type":      "LONG 🟢 (REVERSION IN ACCUMULATION)",
-                        "signal_type":"LONG",
-                        "regime":    current.get('market_regime'),
-                        "price":     entry,
-                        "trigger":   "RSI < 30 + MACD Bull Cross",
-                        "atr_value": current.get('atr_value', 0.0)
-                    })
+                    if i - last_signal_idx["LONG"] > 10:
+                        entry = current['close']
+                        has_div = current.get('bullish_div', False)
                         
-            # --- ESTRATEGIA SHORT: Distribución (Techo) ---
+                        opportunities.append({
+                            "timestamp": current['timestamp'],
+                            "type":      "LONG 🟢 (REVERSION IN ACCUMULATION)",
+                            "signal_type":"LONG",
+                            "regime":    current.get('market_regime'),
+                            "price":     entry,
+                            "trigger":   "RSI < 30 + MACD Bull Cross" + (" + Divergencia" if has_div else ""),
+                            "atr_value": current.get('atr_value', 0.0),
+                            "has_divergence": has_div
+                        })
+                        last_signal_idx["LONG"] = i
+                        
+            # --- ESTRATEGIA SHORT: Distribución ---
             elif current.get('market_regime') == 'DISTRIBUTION':
-                if current.get('rsi_overbought') and current.get('in_killzone') and current.get('valid_trigger'):
-                    entry = current['close']
-                    nearest_structural = current['high']
+                if (current.get('rsi_overbought') and 
+                    current.get('in_killzone') and 
+                    current.get('valid_trigger')):
                     
-                    opportunities.append({
-                        "timestamp": current['timestamp'],
-                        "type":      "SHORT 🔴 (REVERSION IN DISTRIBUTION)",
-                        "signal_type":"SHORT",
-                        "regime":    current.get('market_regime'),
-                        "price":     entry,
-                        "trigger":   "RSI > 70 in Zone Ceiling",
-                        "atr_value": current.get('atr_value', 0.0)
-                    })
+                    if i - last_signal_idx["SHORT"] > 10:
+                        entry = current['close']
+                        has_div = current.get('bearish_div', False)
+                        
+                        opportunities.append({
+                            "timestamp": current['timestamp'],
+                            "type":      "SHORT 🔴 (REVERSION IN DISTRIBUTION)",
+                            "signal_type":"SHORT",
+                            "regime":    current.get('market_regime'),
+                            "price":     entry,
+                            "trigger":   "RSI > 70 in Zone Ceiling" + (" + Divergencia" if has_div else ""),
+                            "atr_value": current.get('atr_value', 0.0),
+                            "has_divergence": has_div
+                        })
+                        last_signal_idx["SHORT"] = i
                         
         return opportunities

@@ -193,6 +193,6 @@ class RiskManager:
             "entry_zone_bottom": round(current_price - (fallback_atr * 0.5), 2)
               if str(signal_type).upper() == 'LONG'
               else round(current_price - (fallback_atr * 0.5), 2),
-            # Metadatos de expiración para el frontend
-            "expiry_candles":    3,   # La señal es válida por 3 velas (45min en 15m)
+            # Metadatos Institucionales 2026: Validación Estructural Activa
+            "validation_mode":  "STRUCTURAL_INTEGRITY", 
         }

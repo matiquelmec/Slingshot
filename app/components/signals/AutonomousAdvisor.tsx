@@ -62,9 +62,9 @@ const AutonomousAdvisor: React.FC<AutonomousAdvisorProps> = ({ advisorLog, strat
             </div>
             <div className="text-white/70 leading-relaxed italic ml-4 border-l border-white/10 pl-2">
                 {advisorLog ? (
-                    <TypewriterText text={advisorLog} speed={30} />
+                    <TypewriterText text={advisorLog} speed={10} />
                 ) : (
-                    <span className="text-white/30 animate-pulse">Awaiting candle close for tactical AI briefing...</span>
+                    <span className="text-white/30 animate-pulse">ANALYZING MARKET CONFLUENCE... (Awaiting Inference Node)</span>
                 )}
             </div>
         </div>

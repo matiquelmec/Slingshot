@@ -54,12 +54,30 @@ class GhostState:
 
 
 # ── Cache en memoria ─────────────────────────────────────────────────────────
-_cache: GhostState = GhostState()
-_TTL_SECONDS = 900   # 15 minutos — igual a 1 vela de 15m
+# Separamos el macro (global) del funding (por activo) para que al cambiar de moneda
+# en el frontend se actualice solo el funding sin re-descargar todo lo macro.
+_macro_cache = {
+    "fng_val": 50,
+    "fng_label": "Neutral",
+    "btcd": 50.0,
+    "last_updated": 0.0
+}
+_funding_cache = {} # symbol -> {"rate": float, "last_updated": float}
+
+_refresh_lock = asyncio.Lock()
+_TTL_SECONDS = 300   # 5 minutos para mayor dinamismo
 
 
-def is_cache_fresh() -> bool:
-    return (time.time() - _cache.last_updated) < _TTL_SECONDS
+def is_cache_fresh(symbol: str = "BTCUSDT") -> bool:
+    """Verifica si tanto el macro como el funding del símbolo están frescos."""
+    now = time.time()
+    macro_ok = (now - _macro_cache["last_updated"]) < _TTL_SECONDS
+    
+    symbol = symbol.upper()
+    funding = _funding_cache.get(symbol)
+    funding_ok = funding and (now - funding["last_updated"]) < _TTL_SECONDS
+    
+    return macro_ok and funding_ok
 
 
 # ── Fetchers individuales ─────────────────────────────────────────────────────
@@ -77,7 +95,7 @@ async def _fetch_fear_greed() -> tuple[int, str]:
             return int(data["value"]), data["value_classification"]
     except Exception as e:
         print(f"[GHOST] ⚠️  Fear & Greed fetch error: {e}")
-        return 50, "Neutral"
+        return None
 
 
 async def _fetch_btc_dominance() -> float:
@@ -93,7 +111,7 @@ async def _fetch_btc_dominance() -> float:
             return round(float(pct), 2)
     except Exception as e:
         print(f"[GHOST] ⚠️  BTC Dominance fetch error: {e}")
-        return 50.0
+        return None
 
 
 async def _fetch_funding_rate(symbol: str = "BTCUSDT") -> float:
@@ -103,11 +121,21 @@ async def _fetch_funding_rate(symbol: str = "BTCUSDT") -> float:
     Positivo = longs pagan a shorts (mercado alcista agotándose).
     Negativo = shorts pagan a longs (pánico / venta masiva).
     """
+    # ── Mapeo de Símbolos Institucionales (Binance 1000x contracts) ──
+    # Muchos memes en futuros se transan en lotes de 1000
+    MEME_MAP = ["PEPE", "SHIB", "FLOKI", "BONK", "SATS", "RATS", "XEC", "LUNC"]
+    
+    target_symbol = symbol.upper().replace("USDT", "").replace("USDC", "")
+    if target_symbol in MEME_MAP:
+        search_symbol = f"1000{target_symbol}USDT"
+    else:
+        search_symbol = symbol.upper()
+
     try:
         async with httpx.AsyncClient(timeout=8.0) as client:
             r = await client.get(
                 f"https://fapi.binance.com/fapi/v1/premiumIndex",
-                params={"symbol": symbol.upper()}
+                params={"symbol": search_symbol}
             )
             r.raise_for_status()
             data = r.json()
@@ -115,27 +143,13 @@ async def _fetch_funding_rate(symbol: str = "BTCUSDT") -> float:
                 return float(data["lastFundingRate"]) * 100  # → porcentaje
             return 0.0
     except Exception as e:
-        print(f"[GHOST] ⚠️  Funding Rate fetch error: {e}")
-        return 0.0
+        print(f"[GHOST] ⚠️  Funding Rate fetch error ({symbol}): {e}")
+        return None
 
 
 # ── Lógica de filtrado macro ──────────────────────────────────────────────────
 def _compute_bias(fng: int, btcd: float, funding: float) -> tuple[str, bool, bool, str]:
-    """
-    Determina el sesgo macro y si se deben bloquear señales LONG o SHORT.
-
-    Reglas de bloqueo (Paul Perdices "Ghost Filter"):
-    ┌──────────────────────────────────────────────────────────────────────────┐
-    │  BLOQUEAR LONGS si:                                                      │
-    │   → Fear & Greed < 20 (Miedo Extremo) Y Funding < -0.05% (panic shorts) │
-    │   → Fear & Greed < 25 Y BTC Dominance > 60% (fuga a BTC, alts sangran)  │
-    │                                                                          │
-    │  BLOQUEAR SHORTS si:                                                     │
-    │   → Fear & Greed > 80 (Codicia Extrema) Y Funding > +0.10% (euforia)    │
-    │                                                                          │
-    │  Fuera de eso: NEUTRAL / señal contextual                                │
-    └──────────────────────────────────────────────────────────────────────────┘
-    """
+    """ Determina el sesgo macro basándose en F&G, BTCD y Funding. """
     reasons = []
     block_longs = False
     block_shorts = False
@@ -162,115 +176,139 @@ def _compute_bias(fng: int, btcd: float, funding: float) -> tuple[str, bool, boo
     elif not block_longs and not block_shorts:
         if fng >= 60 and funding > 0 and btcd < 55:
             bias = "BULLISH"
-            reasons.append(f"Contexto macro favorable: F&G={fng}, Funding={funding:.3f}%, BTCD={btcd}%")
+            reasons.append(f"Contexto macro favorable (F&G={fng}, Funding={funding:.3f}%)")
         elif fng <= 35:
             bias = "BEARISH"
-            reasons.append(f"Contexto macro pesimista: F&G={fng}")
+            reasons.append(f"Contexto macro pesimista (F&G={fng})")
         else:
             bias = "NEUTRAL"
-            reasons.append(f"Contexto macro neutro: F&G={fng}, Funding={funding:.3f}%, BTCD={btcd}%")
+            reasons.append(f"Contexto macro neutro (F&G={fng})")
     else:
         bias = "CONFLICTED"
-        reasons.append("Señales macro contrapuestas — operar con cautela extrema")
+        reasons.append("Señales macro contrapuestas")
 
-    reason_str = " | ".join(reasons) if reasons else "Condiciones macro normales."
+    reason_str = " | ".join(reasons) if reasons else "Condiciones normales."
     return bias, block_longs, block_shorts, reason_str
 
 
 # ── Función principal de actualización ───────────────────────────────────────
 async def refresh_ghost_data(symbol: str = "BTCUSDT") -> GhostState:
     """
-    Descarga todos los datos fantasma en paralelo y actualiza el caché global.
-    Solo hace requests si el caché está vencido (TTL = 15 min).
+    Descarga datos macro (global) y funding (específico) en paralelo.
+    Solo descarga lo que está vencido.
     """
-    global _cache
+    global _macro_cache, _funding_cache
+    symbol = symbol.upper()
 
-    if is_cache_fresh():
-        return _cache  # Devolver caché sin nuevas peticiones
+    async with _refresh_lock:
+        now = time.time()
+        macro_stale = (now - _macro_cache["last_updated"]) >= _TTL_SECONDS
+        funding_stale = (now - _funding_cache.get(symbol, {}).get("last_updated", 0)) >= _TTL_SECONDS
 
-    print(f"[GHOST] 🔄 Actualizando datos fantasma (caché vencido)...")
+        if not macro_stale and not funding_stale:
+            return get_ghost_state(symbol)
 
-    # Fetch paralelo de las 3 fuentes independientes
-    results = await asyncio.gather(
-        _fetch_fear_greed(),
-        _fetch_btc_dominance(),
-        _fetch_funding_rate(symbol),
-        return_exceptions=True
+        # 1. Preparar tareas de fetch
+        tasks = []
+        if macro_stale:
+            tasks.append(_fetch_fear_greed())    # 0
+            tasks.append(_fetch_btc_dominance()) # 1
+        else:
+            tasks.append(asyncio.sleep(0)) # placeholder
+            tasks.append(asyncio.sleep(0)) # placeholder
+
+        if funding_stale:
+            tasks.append(_fetch_funding_rate(symbol)) # 2
+        else:
+            tasks.append(asyncio.sleep(0)) # placeholder
+
+        print(f"[GHOST] 🔄 Refresh: Macro={macro_stale}, Funding({symbol})={funding_stale}")
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+
+        # 2. Procesar resultados Macro
+        if macro_stale and not isinstance(results[0], Exception) and results[0] is not None:
+            _macro_cache["fng_val"], _macro_cache["fng_label"] = results[0]
+            _macro_cache["last_updated"] = now
+        
+        if macro_stale and not isinstance(results[1], Exception) and results[1] is not None:
+            _macro_cache["btcd"] = results[1]
+            _macro_cache["last_updated"] = now
+
+        # 3. Procesar resultados Funding
+        if funding_stale and not isinstance(results[2], Exception) and results[2] is not None:
+            _funding_cache[symbol] = {
+                "rate": results[2],
+                "last_updated": now
+            }
+
+        return get_ghost_state(symbol)
+
+
+def get_ghost_state(symbol: str = "BTCUSDT") -> GhostState:
+    """
+    Devuelve el estado macro proyectado para un símbolo específico.
+    Combina el macro global con el funding rate local.
+    """
+    symbol = symbol.upper()
+    funding = _funding_cache.get(symbol, {"rate": 0.0, "last_updated": 0.0})
+    
+    bias, b_longs, b_shorts, reason = _compute_bias(
+        _macro_cache["fng_val"],
+        _macro_cache["btcd"],
+        funding["rate"]
     )
 
-    # Manejar posibles errores por fuente con fallbacks seguros
-    fng_tuple = results[0] if not isinstance(results[0], Exception) else (50, "Neutral")
-    btcd      = results[1] if not isinstance(results[1], Exception) else 50.0
-    funding   = results[2] if not isinstance(results[2], Exception) else 0.0
-
-    fng_val, fng_label = fng_tuple
-
-    # Calcular sesgo macro
-    bias, block_longs, block_shorts, reason = _compute_bias(fng_val, btcd, funding)
-
-    # Si todo falla horriblemente, permitir un retry rápido (30s) en lugar de 15 min
-    is_failed = funding == 0.0 and btcd == 50.0 and fng_val == 50
-    cache_time = time.time() if not is_failed else time.time() - _TTL_SECONDS + 30
-
-    # Actualizar caché global
-    _cache = GhostState(
-        fear_greed_value = fng_val,
-        fear_greed_label = fng_label,
-        btc_dominance    = btcd,
-        funding_rate     = funding,
+    return GhostState(
+        fear_greed_value = _macro_cache["fng_val"],
+        fear_greed_label = _macro_cache["fng_label"],
+        btc_dominance    = _macro_cache["btcd"],
+        funding_rate     = funding["rate"],
         funding_symbol   = symbol,
         macro_bias       = bias,
-        block_longs      = block_longs,
-        block_shorts     = block_shorts,
+        block_longs      = b_longs,
+        block_shorts     = b_shorts,
         reason           = reason,
-        last_updated     = cache_time,
-        is_stale         = False,
+        last_updated     = max(_macro_cache["last_updated"], funding["last_updated"]),
+        is_stale         = (time.time() - _macro_cache["last_updated"]) >= _TTL_SECONDS
     )
-
-    print(
-        f"[GHOST] ✅ F&G={fng_val} ({fng_label}) | BTCD={btcd}% | "
-        f"Funding={funding:.4f}% | Bias={bias}"
-    )
-    if block_longs:
-        print(f"[GHOST] 🚫 BLOQUEANDO señales LONG: {reason}")
-    if block_shorts:
-        print(f"[GHOST] 🚫 BLOQUEANDO señales SHORT: {reason}")
-
-    return _cache
-
-
-
-def get_ghost_state() -> GhostState:
-    """
-    Devuelve el último estado conocido del caché (síncrono).
-    Usar en el pipeline síncrono de main_router.py.
-    Si el caché está stale, igual devuelve el último valor conocido
-    (el refresh async se dispara aparte en api/main.py).
-    """
-    return _cache
 
 
 def filter_signals_by_macro(signals: list[dict], ghost: GhostState) -> tuple[list[dict], list[dict]]:
     """
-    Clasifica las señales según el contexto macro.
-    Retorna: (lista_aprobadas, lista_bloqueadas)
+    Clasifica las señales según el contexto macro y la fase de Wyckoff.
+    Implementa el filtro 'Contrarian' de Warren Buffett / Paul Perdices.
     """
     if not signals or ghost.is_stale:
-        return signals, []  # Sin datos macro, no bloqueamos nada (fail-open)
+        return signals, []
 
     approved = []
     blocked = []
     
     for sig in signals:
         sig_type = sig.get("type", "").upper()
+        regime   = sig.get("regime", "UNKNOWN").upper()
         is_long  = "LONG"  in sig_type
         is_short = "SHORT" in sig_type
 
+        # 🚀 REGLA DE TRADER PRO: Miedo Extremo en Acumulación es OPORTUNIDAD, no bloqueo.
+        is_contrarian_opportunity = (is_long and regime == "ACCUMULATION") or (is_short and regime == "DISTRIBUTION")
+
         reason = None
         if is_long and ghost.block_longs:
-            reason = f"LONG bloqueada por macro: {ghost.reason}"
+            if is_contrarian_opportunity:
+                print(f"[GHOST] ✅ OPORTUNIDAD CONTRARIAN detectada en {regime} (bypass macro)")
+                sig["is_contrarian"] = True
+                sig["macro_note"] = "Aprobado por lógica de Acumulación/Suicidio Retail (Buffett Mode)"
+            else:
+                reason = f"LONG bloqueada por macro (Mercado en caída libre): {ghost.reason}"
+                
         elif is_short and ghost.block_shorts:
-            reason = f"SHORT bloqueada por macro: {ghost.reason}"
+            if is_contrarian_opportunity:
+                print(f"[GHOST] ✅ OPORTUNIDAD CONTRARIAN detectada en {regime} (bypass macro)")
+                sig["is_contrarian"] = True
+                sig["macro_note"] = "Aprobado por lógica de Distribución / Euforia Iracional"
+            else:
+                reason = f"SHORT bloqueada por macro (Fase de euforia parabólica): {ghost.reason}"
 
         if reason:
             print(f"[GHOST] 🚫 {reason}")

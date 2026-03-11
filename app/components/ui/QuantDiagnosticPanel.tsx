@@ -4,6 +4,7 @@ import React from 'react';
 import { motion } from 'framer-motion';
 import { Cpu, TrendingUp, TrendingDown, Minus, AlertTriangle, Target } from 'lucide-react';
 import { useTelemetryStore } from '../../store/telemetryStore';
+import { formatPrice, getPrecision } from '@/lib/utils';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -17,10 +18,7 @@ const REGIME_META: Record<string, { color: string; bg: string; glow: string; lab
     UNKNOWN: { color: 'text-white/40', bg: 'bg-white/5 border-white/10', glow: 'transparent', label: 'CALIBRANDO' },
 };
 
-function fmt(val: number | null, prefix = '$', dp = 0): string {
-    if (val == null) return '—';
-    return prefix + val.toLocaleString('en-US', { minimumFractionDigits: dp, maximumFractionDigits: dp });
-}
+const fmt = (val: number | null, prefix = '$', dp?: number) => formatPrice(val, prefix, dp);
 
 function pct(val: number | null): string {
     if (val == null) return '—';
@@ -136,7 +134,7 @@ export default function QuantDiagnosticPanel() {
                         {latestPrice && (
                             <div className="flex items-center justify-between border-y border-white/5 py-1 my-1">
                                 <span className="text-[9px] text-white/30">PRECIO ACTUAL</span>
-                                <span className="text-[10px] font-bold text-neon-cyan/70 font-mono">{fmt(latestPrice, '$', 2)}</span>
+                                <span className="text-[10px] font-bold text-neon-cyan/70 font-mono">{fmt(latestPrice)}</span>
                             </div>
                         )}
 
@@ -244,7 +242,7 @@ export default function QuantDiagnosticPanel() {
                                     </span>
                                     <span className="text-white/20">|</span>
                                     <span className={`font-bold ${(diagnostic.macd_line ?? 0) > 0 ? 'text-neon-green/70' : 'text-neon-red/70'}`}>
-                                        {diagnostic.macd_line?.toFixed(1)}
+                                        {fmt(diagnostic.macd_line, '', getPrecision(diagnostic.macd_line))}
                                     </span>
                                 </div>
                             </div>
@@ -310,12 +308,12 @@ export default function QuantDiagnosticPanel() {
                                             <span className={`text-[9px] font-bold ${isGP ? 'text-yellow-400' : 'text-white/40'}`}>
                                                 {level} {isGP ? '★GP' : ''}
                                             </span>
-                                            <span className="text-[9px] font-mono text-white/70">{fmt(p, '$', 0)}</span>
+                                            <span className="text-[9px] font-mono text-white/70">{fmt(p)}</span>
                                         </div>
                                     );
                                 })}
                             <div className="text-[8px] text-white/20 pt-1">
-                                Swing: {fmt(d.fibonacci.swing_low, '$', 0)} → {fmt(d.fibonacci.swing_high, '$', 0)}
+                                Swing: {fmt(d.fibonacci.swing_low)} → {fmt(d.fibonacci.swing_high)}
                             </div>
                         </div>
                     </div>

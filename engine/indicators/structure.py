@@ -76,11 +76,14 @@ def identify_order_blocks(df: pd.DataFrame, threshold: float = 2.0, lookback_str
     
     # Gap Alcista: El gap vacío se forma entre el 'low' de C3 y el 'high' de C1.
     bullish_gap_size = df['low'] - df['high'].shift(2)
-    min_gap_required = df['avg_body'] * 0.15 # El gap debe ser al menos 15% del tamaño de las velas recientes
+    
+    # 💎 UMBRAL DINÁMICO: Si el threshold es bajo (Metales), bajamos el rigor de los GAPs (8% vs 15%)
+    gap_sensitivity = 0.15 if threshold >= 2.0 else 0.08
+    min_gap_required = df['avg_body'] * gap_sensitivity
     
     df['fvg_bullish'] = (bullish_gap_size > min_gap_required) & \
                         df['imbalance_bullish'].shift(1) & \
-                        (df['close'] > df['open']) # La vela C3 debe cerrar verde, si cierra todo rojo está invalidando o llenando el gap inmediatamente
+                        (df['close'] > df['open']) # La vela C3 debe cerrar verde
                         
     # Gap Bajista: El gap vacío se forma entre el 'low' de C1 y el 'high' de C3.
     bearish_gap_size = df['low'].shift(2) - df['high']

@@ -109,12 +109,21 @@ class SlingshotRouter:
             },
             "active_strategy": None,
             "signals": [],
+            "invalidated_signals": [], # Nueva lista para auditoría de clase mundial
         }
+
+        # [AUDIT] Telemetría de Régimen
+        print(f"[ROUTER-AUDIT] 🔍 {asset} | Régimen: {current_regime} | Precio: ${result['current_price']:.2f}")
 
         # 2a. Fusión OB + S/R: detectar confluencias ANTES de serializar key_levels
         try:
             atr_val = df.attrs.get('atr_value', float(df['close'].iloc[-1]) * 0.003)
-            df_ob   = identify_order_blocks(df)
+            
+            # 💎 SENSIBILIDAD ADAPTIVA: El oro requiere umbrales menores (1.6x cuerpo vs 2.0x en BTC)
+            is_metal = asset.upper() in ["PAXGUSDT", "XAGUSDT", "XAUUSDT", "GOLD", "SILVER"]
+            smc_threshold = 1.6 if is_metal else 2.0
+            
+            df_ob   = identify_order_blocks(df, threshold=smc_threshold)
             smc     = extract_smc_coordinates(df_ob)
             
             # Separar zonas alcistas y bajistas para confluencia pura
@@ -154,6 +163,12 @@ class SlingshotRouter:
             result["fibonacci"] = get_current_fibonacci_levels(df)
         except Exception:
             result["fibonacci"] = None
+            
+        # 2d. Inyectar SMC Data para el Asesor y UI
+        try:
+            result["smc"] = smc # De la linea 118
+        except NameError:
+            result["smc"] = None
         
         # 3. ENRUTAMIENTO INTELIGENTE (El 'Switch' Maestro)
         is_precious_metal = asset.upper() in ["PAXGUSDT", "XAGUSDT", "XAUUSDT", "GOLD", "SILVER"]
@@ -216,6 +231,14 @@ class SlingshotRouter:
                 result["active_strategy"] = "STANDBY (Calibrating moving averages...)"
                 opportunities = []
 
+        # [AUDIT] Telemetría de Oportunidades
+        if opportunities:
+            print(f"[ROUTER-AUDIT] 🎯 {asset} detectó {len(opportunities)} oportunidades brutas en el historial.")
+        else:
+            # Si no hay oportunidades, queremos saberlo
+            if current_regime not in ['RANGING', 'CHOPPY']:
+                print(f"[ROUTER-AUDIT] ⚪ {asset} sin oportunidades para la estrategia {result['active_strategy']}")
+
             
         # Extraer el backlog de señales históricas recientes para que la UI no se vacíe
         result['signals'] = [] # Reiniciar SIEMPRE la lista de señales exportadas por este tick
@@ -263,6 +286,7 @@ class SlingshotRouter:
                     expiry_timestamp_str = None
 
                 sig.update({
+                    "asset":              asset,
                     "risk_usd":           risk_data["risk_amount_usdt"],
                     "risk_pct":           risk_data["risk_pct"],
                     "leverage":           risk_data["leverage"],
@@ -289,52 +313,81 @@ class SlingshotRouter:
                     print(f"[ROUTER] ConfluenceManager error: {e}")
                     sig["confluence"] = None
                 
-                # REGLA INSTITUCIONAL: Solo enviamos al Dashboard las señales VIVAS.
-                # Para ser viva, no debe haber expirado ni haber tocado SL/TP desde que nació.
+                # 🧠 REGLA DE CLASE MUNDIAL: Integridad Técnica vs Reloj
+                # Una señal profesional no muere por tiempo, muere porque la tesis se invalida.
                 is_alive = True
+                death_reason = None
                 
-                # ===================================================================
-                # OPTIMIZACIÓN: Verificación de Muerte Vectorizada (sin iterrows)
-                # ===================================================================
                 if current_time_utc is not None:
-                    if expiry_timestamp_str:
-                        expira = pd.to_datetime(expiry_timestamp_str, utc=True)
-                        if current_time_utc > expira:
-                            is_alive = False
-
-                    if is_alive:
-                        try:
-                            # Filtro Numpy/Pandas Vectorizado (Mucho más rápido que iterrows)
-                            sig_time = pd.to_datetime(sig.get('timestamp'), utc=True)
-                            is_long = 'LONG' in str(sig.get('type', '')).upper()
-                            sl = float(sig.get('stop_loss', 0))
-                            tp = float(sig.get('take_profit_3r', 0))
-
-                            if sl > 0 and tp > 0:
-                                # Máscara para obtener solo tiempos pasados desde la señal
-                                path_mask = df_time_vector >= sig_time
+                    try:
+                        sig_time = pd.to_datetime(sig.get('timestamp'), utc=True)
+                        is_long = 'LONG' in str(sig.get('type', '')).upper()
+                        sl = float(sig.get('stop_loss', 0))
+                        tp = float(sig.get('take_profit_3r', 0))
+                        entry_top = float(sig.get('entry_zone_top', sig['price']))
+                        entry_bottom = float(sig.get('entry_zone_bottom', sig['price']))
+                        
+                        # 1. VERIFICACIÓN DE LÍMITES (SL/TP)
+                        if sl > 0 and tp > 0:
+                            path_mask = df_time_vector >= sig_time
+                            if path_mask.any():
+                                path_lows = df_low_vector[path_mask]
+                                path_highs = df_high_vector[path_mask]
                                 
-                                if path_mask.any():
-                                    path_lows = df_low_vector[path_mask]
-                                    path_highs = df_high_vector[path_mask]
-                                    
-                                    if is_long:
-                                        # ¿En algún momento el lower_wick perforó el SL, o el upper_wick coronó el TP?
-                                        if (path_lows <= sl).any() or (path_highs >= tp).any():
-                                            is_alive = False
-                                    else:
-                                        # En SHORT: Perforación de techo es SL, perforación de piso es TP
-                                        if (path_highs >= sl).any() or (path_lows <= tp).any():
-                                            is_alive = False
-                        except Exception as e:
-                            print(f"[ROUTER] Path Traversal Opt Error: {e}")
-                            
+                                if is_long:
+                                    if (path_lows <= sl).any():
+                                        is_alive = False
+                                        death_reason = "STOP LOSS HIT (Estructura Violada)"
+                                    elif (path_highs >= tp).any():
+                                        is_alive = False
+                                        death_reason = "TAKE PROFIT HIT (Objetivo Cumplido)"
+                                else: # SHORT
+                                    if (path_highs >= sl).any():
+                                        is_alive = False
+                                        death_reason = "STOP LOSS HIT (Estructura Violada)"
+                                    elif (path_lows <= tp).any():
+                                        is_alive = False
+                                        death_reason = "TAKE PROFIT HIT (Objetivo Cumplido)"
+
+                        # 2. VERIFICACIÓN DE OPORTUNIDAD (Escape de Zona)
+                        if is_alive:
+                            current_price = result['current_price']
+                            # Si el precio se aleja un 1% de la zona de entrada sin haber activado, 
+                            # la oportunidad se "escapó" (Chase Prevention).
+                            if is_long and current_price > entry_top * 1.01:
+                                is_alive = False
+                                death_reason = "MISSED (Precio escapó de la zona)"
+                            elif not is_long and current_price < entry_bottom * 0.99:
+                                is_alive = False
+                                death_reason = "MISSED (Precio escapó de la zona)"
+                                
+                        # 3. VERIFICACIÓN DE RÉGIMEN (Inconsistencia de Tesis)
+                        # Si la señal era LONG en MARKUP, pero el régimen cambia a CRASH/DISTRIBUTION,
+                        # la tesis de "continuación" ya no es de clase mundial.
+                        if is_alive:
+                            if is_long and current_regime in ['DISTRIBUTION', 'MARKDOWN']:
+                                is_alive = False
+                                death_reason = "INVAL_REGIME (Contexto de mercado cambió)"
+                            elif not is_long and current_regime in ['ACCUMULATION', 'MARKUP']:
+                                is_alive = False
+                                death_reason = "INVAL_REGIME (Contexto de mercado cambió)"
+
+                    except Exception as e:
+                        print(f"[ROUTER] World-Class Validation Error: {e}")
+
                 if is_alive:
                     result['signals'].append(sig)
+                else:
+                    sig['death_reason'] = death_reason
+                    result['invalidated_signals'].append(sig)
+                    print(f"[ROUTER-AUDIT] 💀 Señal invalidada: {death_reason} | {asset} @ ${sig.get('price'):.2f}")
                 
             if result['signals']:
                 last_sig = result['signals'][-1]
                 print(f"[ROUTER] ✅ Backlog cargado | Última Señal: {last_sig['type']} @ ${last_sig['price']:.2f} | Leverage: {last_sig.get('leverage')}x")
+            else:
+                if opportunities:
+                    print(f"[ROUTER-AUDIT] ⚠️ {asset}: {len(opportunities)} señales encontradas pero TODAS están muertas/invalidadas.")
             
             # if not result['signals']:
             #     print(f"[ROUTER] ℹ️ {len(opportunities)} oportunidades históricas analizadas, cero válidas al final.")

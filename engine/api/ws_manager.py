@@ -118,6 +118,10 @@ class SymbolBroadcaster:
         self._last_tactical  = None
         self._last_session   = None
         self._last_advisor   = None
+        
+        # Anti-Spam Firewall
+        self._last_signals_sent = {} # (tipo) -> {"price": float, "ts": float}
+        self._signal_cooldown = 300  # 5 minutos entre señales del mismo tipo
 
         print(f"[BROADCASTER] ✅ Creado: {self._key}")
 
@@ -327,7 +331,11 @@ class SymbolBroadcaster:
 
             # SMC inicial
             try:
-                df_ob = identify_order_blocks(df_init)
+                # 💎 Sensibilidad Adaptativa para PAXG/Metales
+                is_metal = self.symbol.upper() in ["PAXGUSDT", "XAGUSDT", "XAUUSDT", "GOLD", "SILVER"]
+                smc_threshold = 1.6 if is_metal else 2.0
+                
+                df_ob = identify_order_blocks(df_init, threshold=smc_threshold)
                 smc   = extract_smc_coordinates(df_ob)
                 await self._broadcast({"type": "smc_data", "data": smc})
             except Exception as e:
@@ -340,7 +348,38 @@ class SymbolBroadcaster:
                     df_init.copy(), asset=self.symbol, interval=self.interval,
                     macro_levels=self._macro_levels
                 )
+                
+                # 🔄 Sincronización con DB: Buscar señales actualmente activas en Supabase
+                try:
+                    from engine.api.supabase_client import supabase_service
+                    if supabase_service:
+                        active_db = supabase_service.table("signal_events").select("*")\
+                            .eq("asset", self.symbol)\
+                            .eq("status", "ACTIVE")\
+                            .execute()
+                        
+                        if active_db.data:
+                            # Fusionar preservando las más recientes encontradas por el router
+                            # Nota: Estandarizamos campos de DB -> Motor/UI
+                            db_sigs = active_db.data
+                            existing_ids = {str(s.get('id')) for s in tactical.get('signals', [])}
+
+                            for s in db_sigs:
+                                # Mapeo de nombres Supabase -> Motor
+                                if "signal_type" in s and "type" not in s: s["type"] = s["signal_type"]
+                                if "entry_price" in s and "price" not in s: s["price"] = s["entry_price"]
+                                if "take_profit" in s and "take_profit_3r" not in s: s["take_profit_3r"] = s["take_profit"]
+                                if "created_at" in s and "timestamp" not in s: s["timestamp"] = s["created_at"]
+                                
+                                if str(s.get('id')) not in existing_ids:
+                                    tactical['signals'].append(s)
+                except Exception as e_db:
+                    print(f"[BROADCASTER] ⚠️ Error sincronizando señales activas de DB: {e_db}")
+
                 await self._broadcast({"type": "tactical_update", "data": tactical})
+
+                # 🚀 Sincronizar señales encontradas con la DB
+                await self._handle_signals(tactical)
 
                 # LLM Advisor inicial (no bloqueante)
                 asyncio.create_task(self._emit_advisor(tactical, self._session_manager.get_current_state()))
@@ -406,7 +445,7 @@ class SymbolBroadcaster:
                     self._last_pulse_ts = now
 
                     # Ghost Data auto-refresh si el caché está vencido
-                    if not is_cache_fresh():
+                    if not is_cache_fresh(self.symbol):
                         asyncio.create_task(self._refresh_ghost())
 
                     # ML Inference (XGBoost, <50ms)
@@ -479,7 +518,11 @@ class SymbolBroadcaster:
 
                     # SMC actualizado
                     try:
-                        df_ob = identify_order_blocks(df_live)
+                        # 💎 Sensibilidad Adaptativa para PAXG/Metales
+                        is_metal = self.symbol.upper() in ["PAXGUSDT", "XAGUSDT", "XAUUSDT", "GOLD", "SILVER"]
+                        smc_threshold = 1.6 if is_metal else 2.0
+                        
+                        df_ob = identify_order_blocks(df_live, threshold=smc_threshold)
                         smc   = extract_smc_coordinates(df_ob)
                         await self._broadcast({"type": "smc_data", "data": smc})
                     except Exception as e:
@@ -516,17 +559,48 @@ class SymbolBroadcaster:
     # ── Handlers auxiliares ───────────────────────────────────────────────────
 
     async def _handle_signals(self, tactical: dict):
-        """Filtra por macro, notifica por Telegram y persiste en Supabase."""
+        """Filtra, de-duplica y persiste señales en Supabase + Telegram (Signal Firewall)."""
         raw_signals = tactical.get("signals", [])
-        if not raw_signals:
-            return
-
-        ghost = get_ghost_state()
+        inv_signals = tactical.get("invalidated_signals", []) # 💀 Auditoría de muerte
+        
+        ghost = get_ghost_state(self.symbol)
+        
+        # 1. Procesar Señales VIVAS
         approved, blocked_sigs = filter_signals_by_macro(raw_signals, ghost)
         
-        # ──────── PROCESAR APROBADAS ────────
-        for sig in approved:
-            # Telegram
+        # [ANTI-SPAM] Solo procesamos la señal más reciente de cada tipo para evitar ráfagas de historial
+        def filter_latest_only(sigs):
+            latest = {}
+            for s in sigs:
+                stype = str(s.get("type", "LONG")).upper()
+                latest[stype] = s
+            return list(latest.values())
+
+        prospects_active = filter_latest_only(approved)
+        prospects_blocked = filter_latest_only(blocked_sigs)
+
+        now = time.time()
+
+        # Procesamiento SECUENCIAL para evitar condiciones de carrera en Supabase
+        for sig in prospects_active:
+            sig_type = str(sig.get("type", "LONG")).upper()
+            price = float(sig.get("price", 0))
+            confluence = float(sig.get("confluence", {}).get("score", 0)) if sig.get("confluence") else 0
+
+            if confluence < 15.0: continue
+
+            # Cooldown local (10 minutos para el mismo precio)
+            last = self._last_signals_sent.get(sig_type)
+            if last:
+                price_diff_pct = abs(price - last["price"]) / last["price"] if last["price"] > 0 else 1.0
+                time_passed = now - last["ts"]
+                if price_diff_pct < 0.001 and time_passed < 600:
+                    continue
+
+            print(f"[AUDIT] 🚀 Procesando señal {sig_type} para {self.symbol} (Confluencia: {confluence:.1f}%)")
+            self._last_signals_sent[sig_type] = {"price": price, "ts": now}
+
+            # Telegram (Solo si es fresca)
             ok_to_send, reason = signal_filter.should_send(self.symbol, sig)
             if ok_to_send:
                 asyncio.create_task(send_signal_async(
@@ -534,60 +608,121 @@ class SymbolBroadcaster:
                     regime=tactical.get("market_regime", "UNKNOWN"),
                     strategy=tactical.get("active_strategy", "N/A")
                 ))
-            else:
-                print(f"[BROADCASTER] {self._key} → 🔕 Telegram bloqueado: {reason}")
-            
-            # Supabase — persistir señal como 'ACTIVE'
-            asyncio.create_task(self._persist_signal(sig, tactical, status="ACTIVE"))
 
-        # ──────── PROCESAR BLOQUEADAS (Auditoría) ────────
-        for sig in blocked_sigs:
-            # Supabase — persistir señal como 'BLOCKED'
-            asyncio.create_task(self._persist_signal(sig, tactical, status="BLOCKED"))
+            # Supabase (AWAIT crítico para el motor de evolución)
+            await self._persist_signal(sig, tactical, status="ACTIVE")
+        
+        for sig in prospects_blocked:
+            await self._persist_signal(sig, tactical, status="BLOCKED")
+
+        # 2. Procesar Señales MUERTAS (Solo la más relevante)
+        latest_inv = filter_latest_only(inv_signals)
+        for sig in latest_inv:
+            confluence = float(sig.get("confluence", {}).get("score", 0)) if sig.get("confluence") else 0
+            if confluence >= 15.0:
+                death_status = str(sig.get('death_reason', 'INVALIDATED')).replace(" ", "_").upper()
+                await self._persist_signal(sig, tactical, status=death_status)
 
     async def _persist_signal(self, sig: dict, tactical: dict, status: str = "ACTIVE"):
-        """Inserta la señal en public.signal_events con service_role key."""
+        """Inserta la señal en public.signal_events con service_role key y fallback resiliente."""
         if not supabase_service:
+            print("[SUPABASE] ⚠️ Cliente no disponible para persistencia.")
             return
-        
-        ghost = get_ghost_state()
+
         try:
+            ghost = get_ghost_state(self.symbol)
             data = {
-                "asset":            self.symbol,
-                "interval":         self.interval,
-                "signal_type":      sig.get("signal_type", sig.get("type", "LONG")).upper(),
-                "entry_price":      float(sig.get("price", 0)),
-                "stop_loss":        float(sig.get("stop_loss", 0)),
-                "take_profit":      float(sig.get("take_profit_3r", 0)),
-                "confluence_score": float(sig.get("confluence", {}).get("total_score", 0)) if sig.get("confluence") else None,
-                "regime":           tactical.get("market_regime", "UNKNOWN"),
-                "strategy":         tactical.get("active_strategy", "N/A"),
-                "trigger":          sig.get("trigger", "N/A"),
-                "status":           status,
+                "asset": self.symbol,
+                "interval": "15m",
+                "signal_type": str(sig.get("type", sig.get("signal_type", "LONG"))).upper(),
+                "entry_price": float(sig.get("price", sig.get("entry_price", 0))),
+                "stop_loss": float(sig.get("stop_loss", 0)),
+                "take_profit": float(sig.get("take_profit_3r", sig.get("take_profit", 0))),
+                "confluence_score": float((sig.get("confluence") or {}).get("score", sig.get("confluence_score", 0))),
+                "regime": tactical.get("market_regime", "UNKNOWN"),
+                "strategy": tactical.get("active_strategy", "N/A"),
+                "trigger": sig.get("trigger", "GENERIC_SIGNAL"),
+                "status": status,
                 "metadata": {
                     "reasoning": tactical.get("confluence", {}).get("reasoning", ""),
                     "blocked_reason": sig.get("blocked_reason"),
                     "ghost_bias": ghost.macro_bias,
-                    "fear_greed": ghost.fear_greed_value
+                    "fear_greed": ghost.fear_greed_value,
+                    "death_reason": sig.get("death_reason")
                 }
             }
+
             # Normalización de tipo
             if "LONG" in data["signal_type"]: data["signal_type"] = "LONG"
             elif "SHORT" in data["signal_type"]: data["signal_type"] = "SHORT"
-            else: return
 
-            # Saneamiento final anti-Timestamp
-            data = sanitize_for_json(data)
-            
-            # temporal: eliminamos metadata si no existe la columna (prevención de crash)
-            data.pop("metadata", None)
+            # [AUDIT-SUPABASE] 🕵️ Motor de Ciclo de Vida de Señal (Evolución y Cierre)
+            try:
+                lookback = supabase_service.table("signal_events").select("id, status, entry_price")\
+                    .eq("asset", self.symbol)\
+                    .eq("signal_type", data["signal_type"])\
+                    .order("created_at", desc=True).limit(1).execute()
+                
+                if lookback.data:
+                    last = lookback.data[0]
+                    last_status = str(last["status"]).upper()
+                    
+                    # 1. ESCENARIO: EVOLUCIÓN (Sigue activa o sigue bloqueada)
+                    if (last_status == "ACTIVE" and status == "ACTIVE") or \
+                       (last_status == "BLOCKED" and status == "BLOCKED"):
+                        
+                        price_diff = abs(data["entry_price"] - last["entry_price"]) / last["entry_price"] if last["entry_price"] > 0 else 1.0
+                        
+                        # Si el precio es similar (< 0.5%), actualizamos la existente para no llenar la DB
+                        if price_diff < 0.005: 
+                            print(f"[AUDIT] 🧬 Evolucionando Tesis ({self.symbol}) - Status: {status}...")
+                            upd_data = {
+                                "entry_price": data["entry_price"],
+                                "stop_loss": data["stop_loss"],
+                                "take_profit": data["take_profit"],
+                                "metadata": data.get("metadata")
+                            }
+                            try:
+                                supabase_service.table("signal_events").update(upd_data).eq("id", last["id"]).execute()
+                            except Exception as e_upd:
+                                if "metadata" in str(e_upd) or "PGRST204" in str(e_upd):
+                                    if "metadata" in upd_data: del upd_data["metadata"]
+                                    supabase_service.table("signal_events").update(upd_data).eq("id", last["id"]).execute()
+                            return
 
-            result = supabase_service.table("signal_events").insert(data).execute()
-            if result.data:
-                icon = "✅" if status == "ACTIVE" else "🚫"
-                print(f"[SUPABASE] {icon} Señal ({status}) persistida: {data['signal_type']} {self.symbol} @ ${data['entry_price']:.2f}")
+                    # 2. ESCENARIO: CIERRE (De Activa a cualquier otro estado muerto)
+                    elif last_status == "ACTIVE" and status != "ACTIVE":
+                        print(f"[AUDIT] 🏁 Cerrando señal activa en {self.symbol}. Motivo: {status}")
+                        upd_data = {"status": status, "metadata": data.get("metadata")}
+                        try:
+                            supabase_service.table("signal_events").update(upd_data).eq("id", last["id"]).execute()
+                        except Exception as e_upd:
+                            if "metadata" in str(e_upd) or "PGRST204" in str(e_upd):
+                                if "metadata" in upd_data: del upd_data["metadata"]
+                                supabase_service.table("signal_events").update(upd_data).eq("id", last["id"]).execute()
+                        return
+
+            except Exception as e:
+                print(f"[AUDIT] ⚠️ Error en motor de ciclo de vida (No bloqueante): {e}")
+
+            # [AUDIT-SUPABASE] 🚀 Inserción de Nueva Señal (Solo si no hubo evolución/cierre previo)
+            try:
+                print(f"[AUDIT] 🆕 Creando nueva entrada de señal para {self.symbol} (Status: {status})")
+                result = supabase_service.table("signal_events").insert(data).execute()
+                if result.data:
+                    print(f"[AUDIT] 💎 EXITO: Nueva señal persistida con ID: {result.data[0].get('id')}")
+            except Exception as e_inner:
+                # 🛑 FALLBACK: Migration 003 (Columna metadata)
+                error_str = str(e_inner)
+                if "metadata" in error_str or "PGRST204" in error_str:
+                    print(f"[AUDIT] ⚠️ Reintentando sin 'metadata' por posible falta de columna en DB...")
+                    if "metadata" in data: del data["metadata"]
+                    supabase_service.table("signal_events").insert(data).execute()
+                else:
+                    raise e_inner
+
         except Exception as e:
-            print(f"[SUPABASE] ⚠️ Error al persistir señal: {e}")
+            print(f"[SUPABASE] 🔴 Error CRÍTICO al persistir señal en {self.symbol}: {e}")
 
     async def _emit_advisor(self, tactical: dict, session_state: dict):
         """Llama al LLM Advisor y broadcast el resultado."""
@@ -712,6 +847,12 @@ class BroadcasterRegistry:
             key: {"subscribers": b.subscriber_count()}
             for key, b in self._broadcasters.items()
         }
+
+    async def broadcast_global(self, message: dict):
+        """Envía un mensaje a TODOS los broadcasters activos del sistema."""
+        async with self._lock:
+            for b in self._broadcasters.values():
+                await b._broadcast(message)
 
 
 # Instancia global — importada por main.py

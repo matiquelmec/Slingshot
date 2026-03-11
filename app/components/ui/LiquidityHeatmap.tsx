@@ -4,6 +4,7 @@ import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Layers, ArrowDown, ArrowUp, Zap } from 'lucide-react';
 import { useTelemetryStore } from '../../store/telemetryStore';
+import { formatPrice } from '@/lib/utils';
 
 export default function LiquidityHeatmap() {
     const { liquidityHeatmap, latestPrice } = useTelemetryStore();
@@ -114,7 +115,7 @@ export default function LiquidityHeatmap() {
                                     <span className="text-[10px] text-white/70 font-mono z-10">{ask.volume.toFixed(2)} Vol</span>
                                     <div className="flex items-center gap-2 z-10">
                                         {distPct && <span className="text-[8px] text-neon-red/50">+{distPct}%</span>}
-                                        <span className="text-[11px] font-bold text-neon-red font-mono">${ask.price.toLocaleString('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}</span>
+                                        <span className="text-[11px] font-bold text-neon-red font-mono">{formatPrice(ask.price)}</span>
                                     </div>
                                 </div>
                             </div>
@@ -124,7 +125,7 @@ export default function LiquidityHeatmap() {
 
                 {/* Separador Precio Actual */}
                 <div className="py-1 border-y border-white/5 flex items-center justify-center my-1 bg-white/[0.02]">
-                    <span className="text-[9px] text-white/40 tracking-[0.2em]">{latestPrice ? `$${latestPrice.toLocaleString()}` : 'SPREAD'}</span>
+                    <span className="text-[9px] text-white/40 tracking-[0.2em]">{latestPrice ? formatPrice(latestPrice) : 'SPREAD'}</span>
                 </div>
 
                 {/* Zonas de Compra (Bids) - Ordenadas de mayor a menor precio */}
@@ -147,7 +148,7 @@ export default function LiquidityHeatmap() {
                                 />
                                 <div className="absolute inset-0 flex items-center justify-between px-2">
                                     <div className="flex items-center gap-2 z-10">
-                                        <span className="text-[11px] font-bold text-neon-green font-mono">${bid.price.toLocaleString('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}</span>
+                                        <span className="text-[11px] font-bold text-neon-green font-mono">{formatPrice(bid.price)}</span>
                                         {distPct && <span className="text-[8px] text-neon-green/50">-{distPct}%</span>}
                                     </div>
                                     <span className="text-[10px] text-white/70 font-mono z-10">{bid.volume.toFixed(2)} Vol</span>

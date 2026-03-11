@@ -127,5 +127,8 @@ def sanitize_for_json(obj: Any) -> Any:
     if isinstance(obj, (list, tuple, set)):
         return [sanitize_for_json(item) for item in obj]
 
-    # Fallback final: stringizar
-    return str(obj)
+    # Fallback final absoluto para evitar tirar el pipeline: stringizar
+    try:
+        return str(obj)
+    except:
+        return "[NON-SERIALIZABLE]"

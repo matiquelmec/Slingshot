@@ -35,6 +35,8 @@ export interface Signal {
     confluence_score?: number;
     regime?: string;
     atr_value?: number;
+    asset?: string;
+    status?: string;
 }
 
 export interface QuantDiagnostic {

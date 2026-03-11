@@ -19,7 +19,7 @@ export interface UserProfile {
 
 const DEFAULT_TIER: UserTier = {
     tier: 'free',
-    max_watchlist: 3,
+    max_watchlist: 5,
     telegram_alerts: false,
     api_access: false,
     valid_until: null,

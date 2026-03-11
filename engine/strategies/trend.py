@@ -48,6 +48,7 @@ class TrendFollowingStrategy:
 
     def find_opportunities(self, df: pd.DataFrame) -> list:
         opportunities = []
+        last_signal_idx = {"LONG": -20, "SHORT": -20} # Cooldown de 10-20 velas
         
         for i in range(1, len(df)):
             current = df.iloc[i]
@@ -57,38 +58,44 @@ class TrendFollowingStrategy:
                 if (current.get('pullback_to_ema50_bull') and 
                     current.get('in_golden_pocket') and 
                     current.get('in_killzone') and 
-                    current.get('valid_trigger') and 
-                    current.get('bullish_div', False)): # REQUISITO ESTRICTO PAUL PREDICE: Divergencia alcista
-                    entry = current['close']
-                    nearest_structural = current.get('swing_low', current['low'])
+                    current.get('valid_trigger')):
                     
-                    opportunities.append({
-                        "timestamp": current['timestamp'],
-                        "type":      "LONG 🟢 (PAUL PREDICE)",
-                        "signal_type":"LONG",
-                        "regime":    current.get('market_regime'),
-                        "price":     entry,
-                        "trigger":   "Fibo 0.5-0.66 + EMA 50 + Divergencia Alcista",
-                        "atr_value": current.get('atr_value', 0.0)
-                    })
+                    if i - last_signal_idx["LONG"] > 10: # Cooldown activo
+                        entry = current['close']
+                        has_div = current.get('bullish_div', False)
+                        
+                        opportunities.append({
+                            "timestamp": current['timestamp'],
+                            "type":      "LONG 🟢 (PAUL PREDICE)",
+                            "signal_type":"LONG",
+                            "regime":    current.get('market_regime'),
+                            "price":     entry,
+                            "trigger":   "Fibo 0.5-0.66 + EMA 50" + (" + Divergencia" if has_div else ""),
+                            "atr_value": current.get('atr_value', 0.0),
+                            "has_divergence": has_div
+                        })
+                        last_signal_idx["LONG"] = i
                         
             # --- ESTRATEGIA SHORT: Pullback en MARKDOWN ---
             elif current.get('market_regime') == 'MARKDOWN':
                 if (current.get('pullback_to_ema50_bear') and 
                     current.get('in_killzone') and 
-                    current.get('valid_trigger') and
-                    current.get('bearish_div', False)): # REQUISITO ESTRICTO PAUL PREDICE: Divergencia bajista
-                    entry = current['close']
-                    nearest_structural = current.get('ema_50', current['high'])
+                    current.get('valid_trigger')):
                     
-                    opportunities.append({
-                        "timestamp": current['timestamp'],
-                        "type":      "SHORT 🔴 (PAUL PREDICE)",
-                        "signal_type":"SHORT",
-                        "regime":    current.get('market_regime'),
-                        "price":     entry,
-                        "trigger":   "Rechazo EMA 50 + Divergencia Bajista",
-                        "atr_value": current.get('atr_value', 0.0)
-                    })
+                    if i - last_signal_idx["SHORT"] > 10: # Cooldown activo
+                        entry = current['close']
+                        has_div = current.get('bearish_div', False)
+                        
+                        opportunities.append({
+                            "timestamp": current['timestamp'],
+                            "type":      "SHORT 🔴 (PAUL PREDICE)",
+                            "signal_type":"SHORT",
+                            "regime":    current.get('market_regime'),
+                            "price":     entry,
+                            "trigger":   "Rechazo EMA 50" + (" + Divergencia" if has_div else ""),
+                            "atr_value": current.get('atr_value', 0.0),
+                            "has_divergence": has_div
+                        })
+                        last_signal_idx["SHORT"] = i
                         
         return opportunities

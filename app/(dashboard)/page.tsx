@@ -87,25 +87,82 @@ export default function OverviewPage() {
             .order('created_at', { ascending: true });
 
         if (!error && data) {
-            // Auto-Seed: Si es un usuario nuevo con lista vacía, agregar el activo actual por defecto
-            if (data.length === 0 && user && activeSymbol) {
-                const { data: newData, error: insertError } = await supabase
-                    .from('user_watchlists')
-                    .insert({ user_id: user.id, asset: activeSymbol, interval: activeTimeframe, alerts_enabled: true })
-                    .select('id, asset, interval, alerts_enabled')
-                    .single();
+            let currentWatchlist = [...data] as WatchlistEntry[];
 
-                if (!insertError && newData) {
-                    setWatchlist([newData as WatchlistEntry]);
+            // 🛠️ LOGICA DE AUTOSIEMBRA MEJORADA (Anti-duplicados con UPSERT)
+            if (currentWatchlist.length === 0 && user) {
+                const defaultAssets = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'PAXGUSDT'];
+                // Si venimos del Radar con otro activo que no esté en los defaults, lo añadimos si hay espacio
+                if (activeSymbol && !defaultAssets.includes(activeSymbol) && defaultAssets.length < user.tier.max_watchlist) {
+                    defaultAssets.push(activeSymbol);
+                }
+
+                const entriesToUpsert = defaultAssets.map(asset => ({
+                    user_id: user.id,
+                    asset: asset,
+                    interval: activeTimeframe,
+                    alerts_enabled: true
+                }));
+
+                const { data: upsertedData } = await supabase
+                    .from('user_watchlists')
+                    .upsert(entriesToUpsert, { onConflict: 'user_id,asset,interval' })
+                    .select('id, asset, interval, alerts_enabled');
+
+                if (upsertedData) {
+                    setWatchlist(upsertedData as WatchlistEntry[]);
                     setWatchlistLoading(false);
                     return;
                 }
             }
 
-            setWatchlist(data as WatchlistEntry[]);
-            // Auto-conectar al primer activo de la lista (si lo hay) si no tenemos ninguno activo
-            if (data.length > 0 && !activeSymbol) {
-                connect(data[0].asset, data[0].interval as Timeframe);
+            // Si el usuario viene del Radar con un activo que NO está en su lista, 
+            // lo añadimos automáticamente via UPSERT (solo si hay espacio en su tier)
+            if (activeSymbol && user && !currentWatchlist.find(w => w.asset === activeSymbol)) {
+                if (currentWatchlist.length < user.tier.max_watchlist) {
+                    const { data: autoData } = await supabase
+                        .from('user_watchlists')
+                        .upsert({
+                            user_id: user.id,
+                            asset: activeSymbol,
+                            interval: activeTimeframe,
+                            alerts_enabled: true
+                        }, { onConflict: 'user_id,asset,interval' })
+                        .select('id, asset, interval, alerts_enabled')
+                        .single();
+
+                    if (autoData) {
+                        if (!currentWatchlist.find(w => w.id === autoData.id)) {
+                            currentWatchlist.push(autoData as WatchlistEntry);
+                        }
+                    }
+                } else {
+                    // Si el tier está lleno, solo conectamos pero no guardamos en DB
+                    setTierLimitReached(true);
+                }
+            }
+
+            const sortWatchlist = (list: WatchlistEntry[]) => {
+                const priority: Record<string, number> = {
+                    'BTCUSDT': 1,
+                    'ETHUSDT': 2,
+                    'SOLUSDT': 3,
+                    'PAXGUSDT': 4
+                };
+                return [...list].sort((a, b) => {
+                    const scoreA = priority[a.asset] || 999;
+                    const scoreB = priority[b.asset] || 999;
+                    if (scoreA !== scoreB) return scoreA - scoreB;
+                    return a.asset.localeCompare(b.asset);
+                });
+            };
+
+            setWatchlist(sortWatchlist(currentWatchlist));
+
+            // Auto-conectar al primer activo si no hay uno activo
+            if (currentWatchlist.length > 0 && !activeSymbol) {
+                const sorted = sortWatchlist(currentWatchlist);
+                connect(sorted[0].asset, sorted[0].interval as Timeframe);
             }
         }
         setWatchlistLoading(false);
@@ -152,7 +209,12 @@ export default function OverviewPage() {
         const supabase = createClient();
         const { data, error } = await supabase
             .from('user_watchlists')
-            .insert({ user_id: user.id, asset: sym, interval: activeTimeframe, alerts_enabled: true })
+            .upsert({
+                user_id: user.id,
+                asset: sym,
+                interval: activeTimeframe,
+                alerts_enabled: true
+            }, { onConflict: 'user_id,asset,interval' })
             .select('id, asset, interval, alerts_enabled')
             .single();
 
@@ -170,8 +232,11 @@ export default function OverviewPage() {
         setFilteredSymbols([]);
     }, [newSymbol, user, watchlist, activeTimeframe]);
 
+    const CORE_ASSETS = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'PAXGUSDT'];
+
     const handleRemoveSymbol = useCallback(async (entry: WatchlistEntry) => {
         if (entry.asset === activeSymbol) return; // no eliminar el activo activo
+        if (CORE_ASSETS.includes(entry.asset)) return; // No eliminar los activos core
 
         const supabase = createClient();
         const { error } = await supabase
@@ -182,7 +247,7 @@ export default function OverviewPage() {
         if (!error) {
             setWatchlist(prev => prev.filter(w => w.id !== entry.id));
         }
-    }, [activeSymbol]);
+    }, [activeSymbol, CORE_ASSETS]);
 
     const handleSymbolClick = useCallback((entry: WatchlistEntry) => {
         if (entry.asset !== activeSymbol) {
@@ -318,10 +383,12 @@ export default function OverviewPage() {
                                         <div className="flex items-center gap-2">
                                             {isActive && latestPrice && (
                                                 <span className="text-neon-green font-bold text-[10px] tracking-wider">
-                                                    ${latestPrice.toLocaleString('en-US', { maximumFractionDigits: 2 })}
+                                                    ${latestPrice.toLocaleString('en-US', {
+                                                        maximumFractionDigits: latestPrice < 1 ? 8 : 2
+                                                    })}
                                                 </span>
                                             )}
-                                            {!isActive && (
+                                            {!isActive && !CORE_ASSETS.includes(entry.asset) && (
                                                 <button
                                                     onClick={e => { e.stopPropagation(); handleRemoveSymbol(entry); }}
                                                     className="opacity-0 group-hover:opacity-100 transition-opacity text-white/20 hover:text-red-400"

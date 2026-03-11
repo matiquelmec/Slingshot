@@ -37,6 +37,7 @@ bun.lockb
 
 # 📝 Temporary / Output
 *.txt
+tmp/
 
 # 🛠️ IDE & Local Configs
 .cursor/

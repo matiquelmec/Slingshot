@@ -89,12 +89,24 @@ export const useTelemetryStore = create<TelemetryState>((set, get) => {
             return age < 2 * 60 * 60 * 1000; // 2 horas max caching
         });
 
-        const existingKeys = new Set(activePrev.map((s: Signal) => `${s.timestamp}-${s.type}`));
-        const newOnes = incoming.filter((s: Signal) => !existingKeys.has(`${s.timestamp}-${s.type}`));
+        // Usamos un Map para manejar actualizaciones eficientes por clave única
+        const historyMap = new Map(activePrev.map(s => {
+            const normalizedTs = s.timestamp.split('.')[0]; // Quitamos microsegundos
+            return [`${s.asset}-${normalizedTs}-${s.type}`, s];
+        }));
 
-        if (newOnes.length === 0 && activePrev.length === prev.length) return prev;
+        incoming.forEach(s => {
+            const normalizedTs = s.timestamp.split('.')[0];
+            const key = `${s.asset}-${normalizedTs}-${s.type}`;
+            // Si ya existe, actualizamos sus niveles (Evolución de tesis)
+            // Si es nueva, la agregamos
+            historyMap.set(key, s);
+        });
 
-        const merged = [...newOnes.reverse(), ...activePrev].slice(0, 50);
+        const merged = Array.from(historyMap.values())
+            .sort((a, b) => getUtcTime(b.timestamp) - getUtcTime(a.timestamp))
+            .slice(0, 50);
+
         _saveSignalHistory(merged);
         return merged;
     };
@@ -237,10 +249,13 @@ export const useTelemetryStore = create<TelemetryState>((set, get) => {
                     });
                 } else if (data.type === 'tactical_update') {
                     const d = data.data;
-                    const incomingSignals: Signal[] = d.signals ?? [];
+                    const incomingActive = d.signals ?? [];
+                    const incomingInvalid = d.invalidated_signals ?? [];
+                    const allIncoming = [...incomingActive, ...incomingInvalid];
+
                     set((state) => {
-                        const newHistory = incomingSignals.length > 0
-                            ? _mergeSignals(state.signalHistory, incomingSignals)
+                        const newHistory = allIncoming.length > 0
+                            ? _mergeSignals(state.signalHistory, allIncoming)
                             : state.signalHistory;
                         return {
                             tacticalDecision: {
@@ -256,7 +271,7 @@ export const useTelemetryStore = create<TelemetryState>((set, get) => {
                                 bb_width: d.bb_width ?? null,
                                 bb_width_mean: d.bb_width_mean ?? null,
                                 dist_to_sma200: d.dist_to_sma200 ?? null,
-                                signals: incomingSignals,
+                                signals: allIncoming,
                                 key_levels: d.key_levels ?? { resistances: [], supports: [] },
                                 fibonacci: d.fibonacci ?? undefined,
                                 diagnostic: d.diagnostic ?? undefined,

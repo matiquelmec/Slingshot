@@ -3,6 +3,7 @@
 import React from 'react';
 import { Network, BarChart3, Radar, BrainCircuit, Clock } from 'lucide-react';
 import { MLProjection, SessionData, TacticalDecision } from '../../types/signal';
+import { formatPrice } from '@/lib/utils';
 
 interface DiagnosticGridProps {
     tacticalDecision: TacticalDecision | null;
@@ -47,11 +48,11 @@ const DiagnosticGridModule: React.FC<DiagnosticGridProps> = ({
                 <div className="flex flex-col gap-1 text-[10px] font-mono">
                     <div className="flex items-center justify-between">
                         <span className="text-white/40">RESIST:</span>
-                        <span className="text-green-400/80">${tacticalDecision?.nearest_resistance?.toLocaleString(undefined, { minimumFractionDigits: 2 }) || '---'}</span>
+                        <span className="text-green-400/80">{formatPrice(tacticalDecision?.nearest_resistance ?? null)}</span>
                     </div>
                     <div className="flex items-center justify-between">
                         <span className="text-white/40">SUPPORT:</span>
-                        <span className="text-red-400/80">${tacticalDecision?.nearest_support?.toLocaleString(undefined, { minimumFractionDigits: 2 }) || '---'}</span>
+                        <span className="text-red-400/80">{formatPrice(tacticalDecision?.nearest_support ?? null)}</span>
                     </div>
                 </div>
             </div>

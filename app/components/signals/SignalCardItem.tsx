@@ -4,6 +4,7 @@ import React, { useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { Signal } from '../../types/signal';
 import { getSignalLifecycle, getSignalStyle } from '../../utils/signalLogic';
+import { formatPrice } from '@/lib/utils';
 
 interface SignalCardItemProps {
     signal: Signal;
@@ -66,19 +67,19 @@ const SignalCardItem: React.FC<SignalCardItemProps> = ({ signal, currentPrice })
                     <span className="text-white/30 text-[8px] tracking-widest">ZONA ENTRADA</span>
                     {signal.entry_zone_top && signal.entry_zone_bottom ? (
                         <span className="text-white/80 font-bold">
-                            ${signal.entry_zone_bottom.toLocaleString(undefined, { maximumFractionDigits: 0 })} – ${signal.entry_zone_top.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                            {formatPrice(signal.entry_zone_bottom)} – {formatPrice(signal.entry_zone_top)}
                         </span>
                     ) : (
-                        <span className="text-white/60 font-bold">${signal.price?.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                        <span className="text-white/60 font-bold">{formatPrice(signal.price)}</span>
                     )}
                 </div>
                 <div className="flex flex-col gap-0.5 bg-neon-red/5 rounded px-2 py-1 border border-neon-red/10">
                     <span className="text-neon-red/50 text-[8px] tracking-widest">⛔ STOP LOSS</span>
-                    <span className="text-neon-red/90 font-bold">${signal.stop_loss?.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                    <span className="text-neon-red/90 font-bold">{formatPrice(signal.stop_loss)}</span>
                 </div>
                 <div className="flex flex-col gap-0.5 bg-neon-green/5 rounded px-2 py-1 border border-neon-green/10">
                     <span className="text-neon-green/50 text-[8px] tracking-widest">🎯 TARGET 3R</span>
-                    <span className="text-neon-green/90 font-bold">${signal.take_profit_3r?.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                    <span className="text-neon-green/90 font-bold">{formatPrice(signal.take_profit_3r)}</span>
                 </div>
             </div>
 
@@ -112,15 +113,15 @@ const SignalCardItem: React.FC<SignalCardItemProps> = ({ signal, currentPrice })
                         <div className="flex-1 h-1.5 bg-black/60 rounded-full overflow-hidden border border-white/10">
                             <div
                                 className={`h-full rounded-full transition-all duration-700 ${signal.confluence.score >= 70 ? 'bg-neon-green shadow-[0_0_6px_rgba(0,255,65,0.6)]' :
-                                        signal.confluence.score >= 50 ? 'bg-neon-cyan shadow-[0_0_6px_rgba(0,229,255,0.6)]' :
-                                            signal.confluence.score >= 30 ? 'bg-yellow-400' : 'bg-neon-red'
+                                    signal.confluence.score >= 50 ? 'bg-neon-cyan shadow-[0_0_6px_rgba(0,229,255,0.6)]' :
+                                        signal.confluence.score >= 30 ? 'bg-yellow-400' : 'bg-neon-red'
                                     }`}
                                 style={{ width: `${signal.confluence.score}%` }}
                             />
                         </div>
                         <span className={`text-[10px] font-black tracking-widest whitespace-nowrap ${signal.confluence.score >= 70 ? 'text-neon-green' :
-                                signal.confluence.score >= 50 ? 'text-neon-cyan' :
-                                    signal.confluence.score >= 30 ? 'text-yellow-400' : 'text-neon-red'
+                            signal.confluence.score >= 50 ? 'text-neon-cyan' :
+                                signal.confluence.score >= 30 ? 'text-yellow-400' : 'text-neon-red'
                             }`}
                         >
                             {signal.confluence.score}/100 {signal.confluence.conviction}
@@ -129,8 +130,8 @@ const SignalCardItem: React.FC<SignalCardItemProps> = ({ signal, currentPrice })
                     <div className="flex flex-wrap gap-1">
                         {signal.confluence.checklist?.map((item, i) => (
                             <span key={i} className={`px-1.5 py-0.5 text-[8px] font-bold tracking-wider rounded border ${item.status === 'CONFIRMADO' ? 'text-neon-green/90 bg-neon-green/10 border-neon-green/20' :
-                                    item.status === 'PARCIAL' ? 'text-yellow-400/90 bg-yellow-400/10 border-yellow-400/20' :
-                                        'text-white/30 bg-white/5 border-white/10'
+                                item.status === 'PARCIAL' ? 'text-yellow-400/90 bg-yellow-400/10 border-yellow-400/20' :
+                                    'text-white/30 bg-white/5 border-white/10'
                                 }`} title={item.detail}>
                                 {item.status === 'CONFIRMADO' ? '✓' : item.status === 'PARCIAL' ? '◑' : '✗'} {item.factor}
                             </span>

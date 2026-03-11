@@ -69,36 +69,55 @@ async def generate_tactical_advice(asset: str, tactical_data: dict, current_sess
     fibo = tactical_data.get('fibonacci', {}) or {}
     fibo_lvl = fibo.get('current_level') or 'N/A'
     
+    # Extraer data de señales generadas en este tick
+    active_signals = tactical_data.get('signals', [])
+    inv_signals = tactical_data.get('invalidated_signals', [])
+    
+    sigs_desc = ""
+    if active_signals:
+        sigs_desc = "SEÑALES ACTIVAS GENERADAS POR EL ROUTER:\n" + "\n".join([
+            f"- {s.get('type', 'UNKNOWN')} @ ${f_p(s.get('price', s.get('entry_price', 0)))} (Conf: {s.get('confluence', {}).get('score', 0)}%)" 
+            for s in active_signals
+        ])
+    else:
+        sigs_desc = "NO SE HAN GENERADO SEÑALES NUEVAS EN ESTE TICK (Esperando confluencia)."
+
+    inv_sigs_desc = ""
+    if inv_signals:
+        inv_sigs_desc = "SEÑALES RECIENTEMENTE INVALIDADAS/MUERTAS:\n" + "\n".join([
+            f"- {s.get('type', 'UNKNOWN')} (@ ${f_p(s.get('price', s.get('entry_price', 0)))}) CAUSA: {s.get('death_reason', 'Desconocida')}" 
+            for s in inv_signals
+        ])
+
     # Definir R:R dinámico basado en la estrategia
     # Reversion = Más defensivo (1:2) | Trend/SMC = Más agresivo (1:3 o superior)
     recommended_rr = "1:2" if "REVERSION" in strategy else "1:3"
 
     prompt = f"""
-    Eres el 'Asesor Cuantitativo Institucional' del sistema Slingshot.
-    Tu trabajo es leer los datos en crudo de la Matriz de Confluencia HFT y emitir UN (1) resumen táctico analítico de máximo 3 oraciones.
+    Eres el 'Asesor Cuantitativo Institucional' del sistema Slingshot. 
+    Tu misión es explicar la lógica del motor técnico, NO contradecirla ni inventar datos.
     
-    ESTADO ACTUAL DEL MERCADO ({asset}):
-    - Sesión Activa: {current_session} | Dentro de KillZone: {in_killzone}
-    - Régimen Wyckoff: {regime} | Estrategia Seleccionada: {strategy}
-    - RSI: {rsi:.1f} | MACD Estado: {macd_cross} | Volatilidad (BBWP): {bbwp:.1f}% (Squeeze: {squeeze})
-    - Divergencias Ocultas: Alcista ({bull_div}) / Bajista ({bear_div})
+    DATOS DEL MOTOR EN TIEMPO REAL ({asset}):
+    - Régimen Wyckoff (LA VERDAD ABSOLUTA): {regime}
+    - Estrategia del Router: {strategy} | KillZone: {in_killzone}
+    - Proyección IA XGBoost (PROHIBIDO ALTERAR): {ml_dir} ({ml_prob}%)
+    - RSI: {rsi:.1f} | MACD: {macd_cross} | BBWP: {bbwp:.1f}%
     
-    NIVELES CLAVE Y ESTRUCTURA (SMC):
-    - Soporte Más Cercano: ${support} | Resistencia Más Cercana: ${resistance}
-    - Nivel Fibonacci Actual: {fibo_lvl}
-    - Liquidez Institucional: {obs_bullish + fvgs_bullish} zonas de Demanda (Alcistas) y {obs_bearish + fvgs_bearish} zonas de Oferta (Bajistas).
+    ESTADO DE SEÑALES (GROUND TRUTH):
+    {sigs_desc}
+    {inv_sigs_desc}
     
-    INTELIGENCIA ARTIFICIAL MECÁNICA (XGBoost):
-    - Proyección Algorítmica Probabilística: {ml_dir} ({ml_prob}%)
-    
-    REGLAS ESTRICTAS PARA TU RESPUESTA:
-    1. DEBES devolver ÚNICAMENTE el texto final, ortografía PERFECTA, sin errores tipográficos simulados, sin markdown.
-    2. El tono debe ser frío, militar, ultra-preciso, analítico y en MAYÚSCULAS PURAS.
-    3. Si las métricas (SMC, RSI, ML) convergen, emite una directiva clara (ej: "DESPLEGAR LARGOS").
-    4. Si hay contradicción grave, recomienda "ESPERAR CONFIRMACIÓN" o "MANTENERSE AL MARGEN".
-    5. No menciones los nombres de los indicadores si no aportan valor clave.
-    6. JAMÁS dejes la frase cortada a medias. Termina tu análisis limpiamente.
-    7. AL FINAL de tu mensaje, DEBES incluir obligatoriamente la recomendación de Ratio Riesgo/Beneficio dinámico adjunta en el formato [R:R TGT {recommended_rr}]
+    NIVELES CLAVE:
+    - Soporte: ${support} | Resistencia: ${resistance} | Fibo: {fibo_lvl}
+    - Liquidez SMC: {obs_bullish + fvgs_bullish} zonas Bull / {obs_bearish + fvgs_bearish} zonas Bear.
+
+    REGLAS DE ORO DE CLASE MUNDIAL:
+    1. PRIORIDAD DE RÉGIMEN: Si el Régimen es MARKDOWN, tu sesgo DEBE ser bajista. Si es MARKUP, alcista. No recomiendes LARGOS en MARKDOWN a menos que haya una divergencia alcista extrema y el motor haya generado una señal LONG.
+    2. ZERO HALLUCINATION: No inventes porcentajes. Si el motor dice {ml_prob}%, usa ese número exacto o no menciones porcentajes.
+    3. TONO: Militar, gélido, técnico, MAYÚSCULAS.
+    4. MÁXIMO 3 ORACIONES. No cortes la frase.
+    5. Solo recomienda acción si el motor generó SEÑALES ACTIVAS. Si no hay señales, recomienda ESPERAR.
+    7. AL FINAL de tu mensaje, DEBES incluir obligatoriamente el Ratio Riesgo/Beneficio adjunto en el formato [R:R TGT {recommended_rr}]
 
     Ejemplo de respuesta ideal:
     MÁXIMA CONFLUENCIA ALCISTA DETECTADA EN LONDRES KILLZONE. PRECIO APOYADO SOBRE DEMANDA INSTITUCIONAL CON IA PROYECTANDO 62% DE PROBABILIDAD. DESPLEGAR ÓRDENES LARGAS APUNTANDO A LA RESISTENCIA MÁS CERCANA. [R:R TGT 1:3]
