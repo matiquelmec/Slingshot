@@ -308,12 +308,12 @@ slingshot/
 ### FASE 1 — Multi-Tenancy Foundation (Semana 1-2): "La Identidad"
 > Objetivo: Añadir usuarios reales sin romper nada. Additive-only.
 
-- [ ] Crear tablas Supabase (signal_events, user_watchlists, subscription_tiers, user_trades)
-- [ ] Añadir Supabase Auth al frontend (`/login`, `/register`)
-- [ ] Middleware Next.js para proteger rutas del dashboard (redirect si sin JWT)
-- [ ] Persistir señales en `signal_events` al generarlas (el engine no cambia)
-- [ ] Context global de usuario con Zustand + Supabase session
-- [ ] Watchlist personal: usuario elige qué activos monitorear
+- [x] Crear tablas Supabase (signal_events, user_watchlists, subscription_tiers, user_trades)
+- [x] Añadir Supabase Auth al frontend (`/login`, `/register`)
+- [x] Middleware Next.js para proteger rutas del dashboard (redirect si sin JWT)
+- [x] Persistir señales en `signal_events` al generarlas (el engine no cambia)
+- [x] Context global de usuario con Zustand + Supabase session
+- [x] Watchlist personal: usuario elige qué activos monitorear
 
 **✅ Entregable:** Sistema funcionando con login real. Señales guardadas permanentemente.
 
@@ -325,9 +325,9 @@ slingshot/
 - [ ] Crear `engine/workers/symbol_worker.py` — Worker autónomo por símbolo
 - [ ] Integrar Upstash Redis (Pub/Sub channel por símbolo)
 - [ ] Refactorizar `websocket_stream_endpoint` → solo subscribe Redis + fan-out al usuario
-- [ ] Crear `engine/workers/orchestrator.py` — inicia/detiene workers según demanda
+- [x] Crear `engine/workers/orchestrator.py` — inicia/detiene workers según demanda
 - [ ] Verificación JWT en cada nueva conexión WebSocket
-- [ ] `main.py` queda en ≤200 líneas (solo orquestación)
+- [x] `main.py` queda en ≤200 líneas (solo orquestación)
 - [ ] Tests de integración: Worker → Redis → Gateway → Cliente
 
 **✅ Entregable:** 1000+ usuarios simultáneos en el mismo activo sin degradación de CPU.

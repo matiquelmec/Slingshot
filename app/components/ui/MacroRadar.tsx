@@ -93,7 +93,7 @@ export default function MacroRadar() {
                 <div className="flex flex-col gap-1">
                     <span className="text-[9px] font-bold text-white/30 tracking-wider">FUNDING (8h)</span>
                     <div className="flex items-baseline gap-1">
-                        <span className={`text-[13px] font-black font-mono ${funding_rate > 0 ? 'text-neon-red' : 'text-neon-green'}`}>
+                        <span className={`text-[13px] font-black font-mono ${funding_rate > 0 ? 'text-neon-green' : 'text-neon-red'}`}>
                             {formatPercent(funding_rate)}
                         </span>
                     </div>

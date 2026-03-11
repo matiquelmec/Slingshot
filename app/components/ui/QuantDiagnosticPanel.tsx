@@ -336,15 +336,7 @@ export default function QuantDiagnosticPanel() {
                             </p>
                         </div>
                     )}
-                    {d.signals.length > 0 && (
-                        <div className="mt-2 pt-2 border-t border-white/5">
-                            <div className="flex items-center gap-1 mb-1">
-                                <Target size={10} className="text-yellow-400" />
-                                <span className="text-[9px] font-bold text-yellow-400">SEÑAL RECIENTE</span>
-                            </div>
-                            <p className="text-[10px] text-white/60 font-mono">{d.signals[d.signals.length - 1]?.type ?? ''}</p>
-                        </div>
-                    )}
+
                 </div>
 
             </div>

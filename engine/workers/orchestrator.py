@@ -1,59 +1,52 @@
 import asyncio
-from typing import List, Dict, Optional
-from engine.api.ws_manager import registry
-from engine.indicators.ghost_data import refresh_ghost_data, is_cache_fresh
-import time
+import subprocess
+import sys
+import json
+import redis.asyncio as redis
+from typing import List, Dict
+from engine.api.config import settings
 
 class SlingshotOrchestrator:
     """
     EL DIRECTOR DE ORQUESTA (Nivel 4).
-    Responsable de mantener vivos los procesos de análisis para los activos VIP del Radar.
-    Asegura que Slingshot analice y persista señales 24/7 sin depender de la UI.
+    Lanza los procesos (workers) usando subprocess y lee de Redis
+    para subir el market_states a Supabase.
     """
-    
     def __init__(self, radar_assets: List[str] = None):
-        # Canasta Institucional por defecto
         self.radar_assets = radar_assets or ["BTCUSDT", "ETHUSDT", "SOLUSDT", "PAXGUSDT"]
-        self.intervals = ["15m", "4h"] # Vigilancia Dual-Horizon
-        self._running_broadcasters = {}
+        self.intervals = ["15m"] # Por simplicidad inicial mantener 15m
+        self._running_workers: Dict[str, subprocess.Popen] = {}
         self._stop_event = asyncio.Event()
+        self.redis_pool = redis.from_url(settings.REDIS_URL, decode_responses=True)
 
     async def start(self):
-        """
-        Inicia el monitoreo persistente de todos los activos del Radar en múltiples temporalidades.
-        """
-        print(f"📡 [ORCHESTRATOR] 🚀 Iniciando Radar Multi-Temporal (15m + 4h)...")
+        print(f"📡 [ORCHESTRATOR] 🚀 Iniciando Orquestador Multi-Proceso...")
         
         for symbol in self.radar_assets:
             for interval in self.intervals:
-                try:
-                    key = f"{symbol}:{interval}"
-                    broadcaster, _ = await registry.get_or_create(
-                        symbol=symbol, 
-                        interval=interval, 
-                        persistent=True
-                    )
-                    self._running_broadcasters[key] = broadcaster
-                    print(f"📡 [ORCHESTRATOR] ✅ Radar activo para {key}")
-                    await asyncio.sleep(0.3) # Delay suave para Binance
-                except Exception as e:
-                    print(f"📡 [ORCHESTRATOR] ❌ Error activando radar para {symbol}:{interval}: {e}")
+                self._spawn_worker(symbol, interval)
 
         print(f"📡 [ORCHESTRATOR] 🛡️  Sistema de vigilancia 24/7 desplegado con éxito.")
         
-        # Mantener la tarea viva para auditoría y HEARTBEAT
         while not self._stop_event.is_set():
-            await self.sync_user_watchlists() # <--- Sincronizar con lo que pidan los usuarios
+            await self.sync_user_watchlists()
             await self.audit_health()
-            await self.heartbeat_ghost()      # <--- Mantener Ghost Data fresco globalmente
-            await self.push_market_states()   # <--- Sincronización con UI Radar
-            await asyncio.sleep(15) 
+            await self.push_market_states()
+            await asyncio.sleep(15)
+
+    def _spawn_worker(self, symbol: str, interval: str):
+        key = f"{symbol}:{interval}"
+        if key in self._running_workers:
+            # Check if alive
+            if self._running_workers[key].poll() is None:
+                return
+                
+        print(f"📡 [ORCHESTRATOR] ⚙️  Lanzando proceso Worker para {key}...")
+        # Lanza el worker en un proceso de SO independiente, liberando a FastAPI
+        proc = subprocess.Popen([sys.executable, "-m", "engine.workers.symbol_worker", symbol, "--interval", interval])
+        self._running_workers[key] = proc
 
     async def sync_user_watchlists(self):
-        """
-        Consulta la DB para ver qué otros activos están pidiendo los usuarios 
-        y los suma a la orquesta en la temporalidad base (15m).
-        """
         try:
             from engine.api.supabase_client import supabase_service
             if not supabase_service: return
@@ -63,38 +56,47 @@ class SlingshotOrchestrator:
                 all_watchlist_assets = {item['asset'] for item in response.data}
                 
                 for symbol in all_watchlist_assets:
-                    # Los activos de usuario siempre se chequean mínimo en 15m
-                    key = f"{symbol}:15m"
-                    if key not in self._running_broadcasters:
-                        print(f"📡 [ORCHESTRATOR] ✨ Nuevo activo detectado en Watchlist: {symbol}. Lanzando motor 24/7...")
-                        try:
-                            broadcaster, _ = await registry.get_or_create(symbol=symbol, interval="15m", persistent=True)
-                            self._running_broadcasters[key] = broadcaster
-                        except Exception as e:
-                            print(f"📡 [ORCHESTRATOR] ❌ Error activando motor para {symbol}: {e}")
+                    self._spawn_worker(symbol, "15m")
         except Exception as e:
             print(f"📡 [ORCHESTRATOR] ⚠️ Error sincronizando Watchlists: {e}")
 
     async def push_market_states(self):
-        """
-        Sube el estado de los hilos a Supabase.
-        Para el Radar principal del usuario, priorizamos 15m.
-        """
         states = []
-        for key, b in self._running_broadcasters.items():
-            # Solo enviamos al Dashboard Radar los de 15m para no saturar la UI de inicio
+        for key in list(self._running_workers.keys()):
             if ":15m" not in key: continue 
-            
             symbol = key.split(":")[0]
-            state = {
-                "asset": symbol,
-                "price": b.latest_price or 0.0,
-                "change_24h": b.change_24h,
-                "regime": b._last_tactical.get("market_regime", "UNKNOWN") if b._last_tactical else "ANALIZANDO",
-                "macro_bias": b._last_ghost.get("macro_bias", "NEUTRAL") if b._last_ghost else "NEUTRAL",
-                "last_updated": "now()"
-            }
-            states.append(state)
+            state_key = f"slingshot:state:{symbol}:15m"
+            
+            try:
+                state_json = await self.redis_pool.get(state_key)
+                if not state_json: continue
+                state = json.loads(state_json)
+                
+                history = state.get("history", [])
+                tactical = state.get("tactical_update", {}).get("data", {})
+                ghost = state.get("ghost_update", {}).get("data", {})
+                
+                # Calculate change_24h basado en Redis History
+                latest_price = 0.0
+                change_24h = 0.0
+                if history:
+                    latest_price = float(history[-1].get("data", {}).get("close", 0))
+                    if len(history) >= 96:
+                        first_price = float(history[-96].get("data", {}).get("open", 0))
+                        if first_price > 0:
+                            change_24h = round(((latest_price - first_price) / first_price) * 100, 2)
+
+                db_state = {
+                    "asset": symbol,
+                    "price": latest_price,
+                    "change_24h": change_24h,
+                    "regime": tactical.get("market_regime", "UNKNOWN") if tactical else "ANALIZANDO",
+                    "macro_bias": ghost.get("macro_bias", "NEUTRAL") if ghost else "NEUTRAL",
+                    "last_updated": "now()"
+                }
+                states.append(db_state)
+            except Exception as e:
+                print(f"📡 [ORCHESTRATOR] ⚠️ Error parseando Redis state para {symbol}: {e}")
 
         if not states: return
 
@@ -103,34 +105,31 @@ class SlingshotOrchestrator:
             if supabase_service:
                 supabase_service.table("market_states").upsert(states, on_conflict="asset").execute()
         except Exception as e:
-            print(f"📡 [ORCHESTRATOR] ⚠️ Error sincronizando Radar: {e}")
+            print(f"📡 [ORCHESTRATOR] ⚠️ Error sincronizando Radar en Supabase: {e}")
 
     async def audit_health(self):
-        """Reconexión automática de hilos caídos."""
-        for key, broadcaster in list(self._running_broadcasters.items()):
-            if not broadcaster._task or broadcaster._task.done():
-                print(f"📡 [ORCHESTRATOR] ⚠️ {key} mudo. Reiniciando...")
+        for key, proc in list(self._running_workers.items()):
+            if proc.poll() is not None:
+                print(f"📡 [ORCHESTRATOR] ⚠️ {key} DIED (Exit code {proc.returncode}). Reiniciando...")
                 symbol, interval = key.split(":")
-                await registry.get_or_create(symbol, interval, persistent=True)
-
-    async def heartbeat_ghost(self):
-        """
-        Corazón macro: refresca los datos globales cada vez que expiran
-        y los emite a todos los broadcasters activos.
-        """
-        if not is_cache_fresh("BTCUSDT"):
-            print("📡 [ORCHESTRATOR] 👻 Refrescando Ghost Data Global...")
-            try:
-                # El orquestador solo mantiene el caché macro caliente en segundo plano.
-                # Ya no emitimos globalmente para no sobrecargar de mensajes repetitivos
-                # y para no 'pisar' el funding rate específico de cada activo con el de BTC.
-                await refresh_ghost_data("BTCUSDT")
-                print("📡 [ORCHESTRATOR] ✅ Caché Macro Global actualizado.")
-            except Exception as e:
-                print(f"📡 [ORCHESTRATOR] ⚠️ Error en heartbeat_ghost: {e}")
+                self._spawn_worker(symbol, interval)
 
     def stop(self):
         self._stop_event.set()
+        for key, proc in self._running_workers.items():
+            print(f"📡 [ORCHESTRATOR] 🛑 Matando worker {key}...")
+            proc.terminate()
 
-# Instancia global para ser lanzada desde main.py
-orchestrator = SlingshotOrchestrator()
+async def run_orchestrator():
+    orchestrator = SlingshotOrchestrator()
+    try:
+        await orchestrator.start()
+    except KeyboardInterrupt:
+        pass
+    finally:
+        orchestrator.stop()
+
+if __name__ == "__main__":
+    if sys.platform == 'win32':
+        asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+    asyncio.run(run_orchestrator())

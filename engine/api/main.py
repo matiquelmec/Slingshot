@@ -12,20 +12,14 @@ Endpoints:
 
 Tamaño objetivo: ≤200 líneas. ✅
 """
-
 from pathlib import Path
-
-import httpx
-import pandas as pd
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Query
 from fastapi.middleware.cors import CORSMiddleware
 
 from engine.api.config import settings
-from engine.api.json_utils import sanitize_for_json, SlingshotJSONEncoder
-from engine.api.ws_manager import registry, fetch_binance_history
-from engine.main_router import SlingshotRouter
-from engine.indicators.structure import identify_support_resistance, get_key_levels
-from engine.workers.orchestrator import orchestrator
+from engine.api.json_utils import sanitize_for_json
+from engine.api.ws_manager import registry
+from engine.workers.orchestrator import SlingshotOrchestrator
 import asyncio
 
 # Parchar WebSocket.send_json para usar el encoder robusto globalmente
@@ -34,6 +28,8 @@ async def _safe_send_json(self, data, mode="text"):
     clean = sanitize_for_json(data)
     await _original_send_json(self, clean, mode=mode)
 WebSocket.send_json = _safe_send_json  # type: ignore[method-assign]
+
+global_orchestrator = SlingshotOrchestrator()
 
 # ── FastAPI app ───────────────────────────────────────────────────────────────
 
@@ -55,29 +51,21 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Router one-shot para análisis REST (no WebSocket)
-_one_shot_router = SlingshotRouter()
-
+# Router one-shot para análisis REST (eliminado por arquitectura Pub/Sub)
 
 # ── Lifespan / Startup ───────────────────────────────────────────────────────
 
 @app.on_event("startup")
 async def startup_event():
-    """
-    Se ejecuta al arrancar el servidor. Inicia el Radar (Watchlist VIP).
-    """
-    # Lanzamos el orquestador en una tarea de fondo para no bloquear el arranque de la API
-    asyncio.create_task(orchestrator.start())
-    print("[SLINGSHOT] 📡 Radar Center activado en segundo plano.")
+    """Se ejecuta al arrancar el servidor. Inicia el Radar (Watchlist VIP)."""
+    asyncio.create_task(global_orchestrator.start())
+    print("[SLINGSHOT] 📡 Radar Center activado en segundo plano (Subprocesos independientes).")
 
 @app.on_event("shutdown")
 async def shutdown_event():
-    """
-    Se ejecuta al apagar el servidor. Cierra conexiones limpiamente.
-    """
-    orchestrator.stop()
-    print("[SLINGSHOT] 🔌 Radar Center apagado.")
-
+    """Se ejecuta al apagar el servidor. Cierra conexiones limpiamente."""
+    global_orchestrator.stop()
+    print("[SLINGSHOT] 🔌 Radar Center apagado y workers terminados.")
 
 # ── Health & Status ───────────────────────────────────────────────────────────
 
@@ -103,35 +91,7 @@ async def status():
     }
 
 
-# ── REST One-Shot ─────────────────────────────────────────────────────────────
-
-@app.get("/api/v1/analyze/{symbol}")
-async def analyze_symbol(symbol: str, timeframe: str = "15m"):
-    """
-    Análisis instantáneo de un activo sin WebSocket.
-    Cold-start: descarga desde Binance REST si no hay datos locales.
-    """
-    try:
-        file_path = Path(__file__).parent.parent.parent / "data" / f"{symbol.lower()}_{timeframe}.parquet"
-
-        if not file_path.exists():
-            raw = await fetch_binance_history(symbol, interval=timeframe, limit=500)
-            if not raw:
-                return {"error": f"Binance no devolvió datos para {symbol} en {timeframe}"}
-
-            df = pd.DataFrame([i["data"] for i in raw])
-            df["timestamp"] = pd.to_datetime(df["timestamp"], unit="s")
-            file_path.parent.mkdir(parents=True, exist_ok=True)
-            df.to_parquet(file_path, index=False)
-        else:
-            df = pd.read_parquet(file_path)
-
-        result = _one_shot_router.process_market_data(df, asset=symbol.upper(), interval=timeframe)
-        return {"success": True, "data": sanitize_for_json(result)}
-
-    except Exception as e:
-        import traceback
-        return {"success": False, "error": str(e), "trace": traceback.format_exc()}
+# ── REST One-Shot (Removido por arquitectura pub/sub) ─────────────────────────
 
 
 # ── WebSocket Stream Multi-Usuario ───────────────────────────────────────────

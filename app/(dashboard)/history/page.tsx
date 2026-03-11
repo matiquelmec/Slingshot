@@ -47,12 +47,12 @@ export default function HistoryPage() {
         switch (status) {
             case 'ACTIVE':
                 return <span className="px-2 py-0.5 rounded border border-neon-cyan/30 bg-neon-cyan/10 text-neon-cyan text-[9px] font-bold tracking-widest flex items-center gap-1"><Clock size={10} /> ACTIVE</span>;
-            case 'HIT_TP':
-                return <span className="px-2 py-0.5 rounded border border-neon-green/30 bg-neon-green/10 text-neon-green text-[9px] font-bold tracking-widest flex items-center gap-1"><CheckCircle2 size={10} /> HIT TP</span>;
-            case 'HIT_SL':
-                return <span className="px-2 py-0.5 rounded border border-neon-red/30 bg-neon-red/10 text-neon-red text-[9px] font-bold tracking-widest flex items-center gap-1"><XCircle size={10} /> HIT SL</span>;
-            case 'EXPIRED':
-                return <span className="px-2 py-0.5 rounded border border-white/20 bg-white/5 text-white/50 text-[9px] font-bold tracking-widest flex items-center gap-1"><AlertTriangle size={10} /> EXPIRED</span>;
+            case 'COMPLETED':
+                return <span className="px-2 py-0.5 rounded border border-neon-green/30 bg-neon-green/10 text-neon-green text-[9px] font-bold tracking-widest flex items-center gap-1"><CheckCircle2 size={10} /> COMPLETED</span>;
+            case 'INVALIDATED':
+                return <span className="px-2 py-0.5 rounded border border-neon-red/30 bg-neon-red/10 text-neon-red text-[9px] font-bold tracking-widest flex items-center gap-1"><XCircle size={10} /> INVALIDATED</span>;
+            case 'BLOCKED':
+                return <span className="px-2 py-0.5 rounded border border-orange-400/30 bg-orange-400/10 text-orange-400 text-[9px] font-bold tracking-widest flex items-center gap-1"><AlertTriangle size={10} /> BLOCKED</span>;
             default:
                 return <span className="text-white/30 text-[9px]">{status}</span>;
         }

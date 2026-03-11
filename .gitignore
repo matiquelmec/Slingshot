@@ -46,3 +46,4 @@ tmp/
 
 # 🕒 Runtime States
 engine/data/session_state_*.json
+*.parquet
