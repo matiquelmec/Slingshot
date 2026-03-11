@@ -74,22 +74,12 @@ class SlingshotOrchestrator:
             self._async_tasks[key] = task
 
     async def sync_user_watchlists(self):
-        try:
-            max_workers = int(os.environ.get("MAX_WORKERS", 2))
-            
-            from engine.api.supabase_client import supabase_service
-            if not supabase_service: return
-
-            response = supabase_service.table("user_watchlists").select("asset").execute()
-            if response.data:
-                all_watchlist_assets = {item['asset'] for item in response.data}
-                
-                for symbol in all_watchlist_assets:
-                    key = f"{symbol}:15m"
-                    if not self.is_running(key) and len(self.get_running_keys()) < max_workers:
-                        self._spawn_worker(symbol, "15m")
-        except Exception as e:
-            print(f"[ORCHESTRATOR] Error sincronizando Watchlists: {e}")
+        """
+        ARQUITECTURA: La watchlist personal es solo para el frontend (precio en tiempo real via WS).
+        El backend NO lanza workers de señales para activos personales — solo para RADAR_ASSETS.
+        Esta funcion se mantiene como stub para no romper el ciclo principal.
+        """
+        pass  # Workers de señales: solo para BTCUSDT y PAXGUSDT (definidos en RADAR_ASSETS)
 
     async def push_market_states(self):
         active_symbols = set()

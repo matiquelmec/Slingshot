@@ -91,7 +91,8 @@ export default function OverviewPage() {
 
             // 🛠️ LOGICA DE AUTOSIEMBRA MEJORADA (Anti-duplicados con UPSERT)
             if (currentWatchlist.length === 0 && user) {
-                const defaultAssets = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'PAXGUSDT'];
+                // Radar Core: solo BTC y PAXG (activos monitoreados 24/7 por el backend)
+                const defaultAssets = ['BTCUSDT', 'PAXGUSDT'];
                 // Si venimos del Radar con otro activo que no esté en los defaults, lo añadimos si hay espacio
                 if (activeSymbol && !defaultAssets.includes(activeSymbol) && defaultAssets.length < user.tier.max_watchlist) {
                     defaultAssets.push(activeSymbol);
@@ -232,7 +233,7 @@ export default function OverviewPage() {
         setFilteredSymbols([]);
     }, [newSymbol, user, watchlist, activeTimeframe]);
 
-    const CORE_ASSETS = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'PAXGUSDT'];
+    const CORE_ASSETS = ['BTCUSDT', 'PAXGUSDT']; // Activos del Radar Core (no eliminables)
 
     const handleRemoveSymbol = useCallback(async (entry: WatchlistEntry) => {
         if (entry.asset === activeSymbol) return; // no eliminar el activo activo

@@ -453,20 +453,18 @@ class SymbolWorker:
                         if current_price == 0:
                             continue
 
-                        # Pipeline tactico en Fast Path
+                        # Pipeline tactico en Fast Path (solo broadcast, SIN persistencia a DB)
+                        # RAZON: el Fast Path corre en cada tick de precio (~1s).
+                        # Persistir aqui genera señales duplicadas del historial cada segundo.
+                        # Las señales se persisten UNA SOLA VEZ en el Slow Path (cierre de vela, cada 15m).
                         try:
                             live_tactical = self._router.process_market_data(
                                 df_tick, asset=self.symbol, interval=self.interval,
                                 macro_levels=self._macro_levels
                             )
                             await self._broadcast({"type": "tactical_update", "data": live_tactical})
-                            
-                            # 🚀 PERSISTENCIA EN TIEMPO REAL (Fast Path)
-                            # Si el router genera una nueva señal viva en este tick, la guardamos.
-                            if live_tactical.get("signals"):
-                                await self._handle_signals(live_tactical)
                         except Exception as e:
-                            print(f"[BROADCASTER] {self._key} → Fast Path pipeline error: {e}")
+                            print(f"[BROADCASTER] {self._key} Fast Path pipeline error: {e}")
                             traceback.print_exc()
 
                     # Neural Pulse
