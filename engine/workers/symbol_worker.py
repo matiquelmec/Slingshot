@@ -176,13 +176,12 @@ class SymbolWorker:
                     "session_update": self._last_session,
                     "advisor_update": self._last_advisor
                 }
+                await self._redis.set(self._state_key, json.dumps(state))
+
                 # Do NOT push the full history list into Redis on every tick to save IO and bandwidth
                 if msg_type == "history":
-                    state["history"] = self._history
-                elif self._history:
-                     state["history"] = [self._history[-1]] # Solo enviamos la vela live mas reciente para bootstrap
-
-                await self._redis.set(self._state_key, json.dumps(state))
+                    await self._redis.set(self._state_key + ":history", json.dumps(self._history))
+                    
             except Exception as e:
                 print(f"[REDIS] Error guardando cache: {e}")
 
@@ -473,6 +472,11 @@ class SymbolWorker:
                 if kline.get("x", False):
                     self._live_buffer.append(candle_payload)
                     self._candle_closes += 1
+                    
+                    try:
+                        await self._redis.set(self._state_key + ":history", json.dumps(list(self._live_buffer)))
+                    except Exception:
+                        pass
 
                     df_live = pd.DataFrame([i["data"] for i in self._live_buffer])
                     df_live["timestamp"] = pd.to_datetime(df_live["timestamp"], unit="s")

@@ -69,10 +69,12 @@ class SlingshotOrchestrator:
             print(f"📡 [ORCHESTRATOR] ⚠️ Error sincronizando Watchlists: {e}")
 
     async def push_market_states(self):
+        active_symbols = set()
         states = []
         for key in list(self._running_workers.keys()):
             if ":15m" not in key: continue 
             symbol = key.split(":")[0]
+            active_symbols.add(symbol)
             state_key = f"slingshot:state:{symbol}:15m"
             
             try:
@@ -80,7 +82,9 @@ class SlingshotOrchestrator:
                 if not state_json: continue
                 state = json.loads(state_json)
                 
-                history = state.get("history", [])
+                history_json = await self.redis_pool.get(f"{state_key}:history")
+                history = json.loads(history_json) if history_json else []
+                
                 tactical = state.get("tactical_update", {}).get("data", {})
                 ghost = state.get("ghost_update", {}).get("data", {})
                 
@@ -112,6 +116,14 @@ class SlingshotOrchestrator:
             from engine.api.supabase_client import supabase_service
             if supabase_service:
                 supabase_service.table("market_states").upsert(states, on_conflict="asset").execute()
+                
+                # Cleanup inactive pairs from Radar Center
+                if active_symbols:
+                    all_db = supabase_service.table("market_states").select("asset").execute()
+                    if all_db.data:
+                        to_delete = [row["asset"] for row in all_db.data if row["asset"] not in active_symbols]
+                        if to_delete:
+                            supabase_service.table("market_states").delete().in_("asset", to_delete).execute()
         except Exception as e:
             print(f"📡 [ORCHESTRATOR] ⚠️ Error sincronizando Radar en Supabase: {e}")
 

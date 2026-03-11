@@ -58,6 +58,7 @@ app.add_middleware(
 @app.on_event("startup")
 async def startup_event():
     """Se ejecuta al arrancar el servidor. Inicia el Radar (Watchlist VIP)."""
+    registry.set_orchestrator(global_orchestrator)
     asyncio.create_task(global_orchestrator.start())
     print("[SLINGSHOT] 📡 Radar Center activado en segundo plano (Subprocesos independientes).")
 

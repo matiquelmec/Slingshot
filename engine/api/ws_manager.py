@@ -93,12 +93,36 @@ class GatewayBroadcaster:
         # El servidor Uvicorn hace GET a Redis (hyper rápido)
         try:
             state_json = await redis_pool.get(self.state_key)
+            history_json = await redis_pool.get(f"{self.state_key}:history")
+
+            if history_json:
+                history = json.loads(history_json)
+                await queue.put({"type": "history", "data": history})
+            else:
+                # FALLBACK REST: Si no hay un worker pesado (SMC/ML) corriendo, permitimos que el usuario al menos vea el grafico!
+                print(f"[GATEWAY] ⚠️ Sin historial en Redis para {self._key}. Fallback a Binance REST.")
+                try:
+                    import httpx
+                    url = "https://api.binance.com/api/v3/klines"
+                    params = {"symbol": self.symbol, "interval": self.interval, "limit": 500}
+                    async with httpx.AsyncClient() as client:
+                        resp = await client.get(url, params=params)
+                        if resp.status_code == 200:
+                            raw = resp.json()
+                            history = [
+                                {"type": "candle", "data": {
+                                    "timestamp": k[0] / 1000,
+                                    "open": float(k[1]), "high": float(k[2]),
+                                    "low": float(k[3]),  "close": float(k[4]),
+                                    "volume": float(k[5]),
+                                }} for k in raw
+                            ]
+                            await queue.put({"type": "history", "data": history})
+                except Exception as e:
+                    print(f"[GATEWAY] ⚠️ Error en Binance fallback: {e}")
+
             if state_json:
                 state = json.loads(state_json)
-                # Redis state is a dict of individual updates
-                if state.get("history"):
-                    await queue.put({"type": "history", "data": state["history"]})
-                
                 for key in ["ghost_update", "smc_data", "tactical_update", "session_update", "advisor_update"]:
                     val = state.get(key)
                     if val is not None:
@@ -129,6 +153,10 @@ class BroadcasterRegistry:
     def __init__(self):
         self._broadcasters: Dict[str, GatewayBroadcaster] = {}
         self._lock = asyncio.Lock()
+        self.orchestrator = None
+
+    def set_orchestrator(self, orch):
+        self.orchestrator = orch
 
     async def get_or_create(self, symbol: str, interval: str, persistent: bool = False) -> tuple[GatewayBroadcaster, str]:
         key = f"{symbol.upper()}:{interval}"
@@ -136,6 +164,16 @@ class BroadcasterRegistry:
 
         async with self._lock:
             if key not in self._broadcasters:
+                # Dynamic On-Demand Spawn (respecting MAX_WORKERS limit in orchestrator)
+                if self.orchestrator:
+                    import os
+                    max_w = int(os.environ.get("MAX_WORKERS", 2))
+                    alive = len([p for p in self.orchestrator._running_workers.values() if p.poll() is None])
+                    if alive < max_w:
+                        self.orchestrator._spawn_worker(symbol, interval)
+                    else:
+                        print(f"[GATEWAY] ⚠️ Límite de workers ({max_w}) alcanzado. Cliente verá solo gráfica REST para {symbol}.")
+
                 broadcaster = GatewayBroadcaster(symbol, interval, persistent=persistent)
                 self._broadcasters[key] = broadcaster
                 await broadcaster.start()
