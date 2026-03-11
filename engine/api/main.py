@@ -45,6 +45,8 @@ app.add_middleware(
         "http://localhost:3000",
         "http://127.0.0.1:3000",
         "http://localhost:3001",
+        "https://slingshot-omega.vercel.app",
+        "https://slingshot-omega-*.vercel.app",  # Preview deployments
     ],
     allow_credentials=True,
     allow_methods=["*"],
