@@ -20,9 +20,24 @@ from engine.api.config import settings
 class SlingshotRouter:
     """
     El Cerebro Supremo de SLINGSHOT (Capa 2 -> Capa 3).
-    Ingiere OHLCV, detecta el Régimen de Wyckoff, mapea Soportes/Resistencias,
-    y rutea los datos SOLAMENTE a la estrategia matemáticamente correcta.
+    Ingiere OHLCV, detecta el Regimen de Wyckoff, mapea Soportes/Resistencias,
+    y rutea los datos SOLAMENTE a la estrategia matematicamente correcta.
     """
+
+    @staticmethod
+    def fmt_price(p) -> str:
+        """Formato inteligente de precio adaptado a la magnitud del activo.
+        BTC => $70,123.45  |  ETH => $2,071.33  |  PEPE => $0.000003521"""
+        try:
+            p = float(p)
+            if p == 0:          return "$0.00"
+            if p >= 1_000:      return f"${p:,.2f}"
+            if p >= 1:          return f"${p:.4f}"
+            if p >= 0.01:       return f"${p:.6f}"
+            if p >= 0.0001:     return f"${p:.8f}"
+            return f"${p:.10f}"
+        except:
+            return f"${p}"
     
     def __init__(self):
         self.regime_detector = RegimeDetector()
@@ -113,7 +128,7 @@ class SlingshotRouter:
         }
 
         # [AUDIT] Telemetría de Régimen
-        print(f"[ROUTER-AUDIT] 🔍 {asset} | Régimen: {current_regime} | Precio: ${result['current_price']:.2f}")
+        print(f"[ROUTER-AUDIT] {asset} | Regimen: {current_regime} | Precio: {SlingshotRouter.fmt_price(result['current_price'])}")
 
         # 2a. Fusión OB + S/R: detectar confluencias ANTES de serializar key_levels
         try:
@@ -380,11 +395,11 @@ class SlingshotRouter:
                 else:
                     sig['death_reason'] = death_reason
                     result['invalidated_signals'].append(sig)
-                    print(f"[ROUTER-AUDIT] 💀 Señal invalidada: {death_reason} | {asset} @ ${sig.get('price'):.2f}")
+                    print(f"[ROUTER-AUDIT] Senal invalidada: {death_reason} | {asset} @ {SlingshotRouter.fmt_price(sig.get('price', 0))}")
                 
             if result['signals']:
                 last_sig = result['signals'][-1]
-                print(f"[ROUTER] ✅ Backlog cargado | Última Señal: {last_sig['type']} @ ${last_sig['price']:.2f} | Leverage: {last_sig.get('leverage')}x")
+                print(f"[ROUTER] OK Backlog cargado | Ultima Senal: {last_sig['type']} @ {SlingshotRouter.fmt_price(last_sig['price'])} | Leverage: {last_sig.get('leverage')}x")
             else:
                 if opportunities:
                     print(f"[ROUTER-AUDIT] ⚠️ {asset}: {len(opportunities)} señales encontradas pero TODAS están muertas/invalidadas.")
