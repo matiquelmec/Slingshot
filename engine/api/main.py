@@ -60,13 +60,13 @@ async def startup_event():
     """Se ejecuta al arrancar el servidor. Inicia el Radar (Watchlist VIP)."""
     registry.set_orchestrator(global_orchestrator)
     asyncio.create_task(global_orchestrator.start())
-    print("[SLINGSHOT] 📡 Radar Center activado en segundo plano (Subprocesos independientes).")
+    print("[SLINGSHOT] Radar Center activado en segundo plano (Subprocesos independientes).")
 
 @app.on_event("shutdown")
 async def shutdown_event():
     """Se ejecuta al apagar el servidor. Cierra conexiones limpiamente."""
     global_orchestrator.stop()
-    print("[SLINGSHOT] 🔌 Radar Center apagado y workers terminados.")
+    print("[SLINGSHOT] Radar Center apagado y workers terminados.")
 
 # ── Health & Status ───────────────────────────────────────────────────────────
 

@@ -42,13 +42,13 @@ class SlingshotOrchestrator:
             return [k for k, t in self._async_tasks.items() if not t.done()]
 
     async def start(self):
-        print(f"📡 [ORCHESTRATOR] 🚀 Iniciando Orquestador (Modo: {self.worker_mode.upper()})...")
+        print(f"[ORCHESTRATOR] Iniciando Orquestador (Modo: {self.worker_mode.upper()})...")
         
         for symbol in self.radar_assets:
             for interval in self.intervals:
                 self._spawn_worker(symbol, interval)
 
-        print(f"📡 [ORCHESTRATOR] 🛡️  Sistema de vigilancia 24/7 desplegado con éxito.")
+        print(f"[ORCHESTRATOR] Sistema de vigilancia 24/7 desplegado con exito.")
         
         while not self._stop_event.is_set():
             await self.sync_user_watchlists()
@@ -61,7 +61,7 @@ class SlingshotOrchestrator:
         if self.is_running(key):
             return
                 
-        print(f"📡 [ORCHESTRATOR] ⚙️  Lanzando Worker para {key} (Modo: {self.worker_mode})...")
+        print(f"[ORCHESTRATOR] Lanzando Worker para {key} (Modo: {self.worker_mode})...")
         if self.worker_mode == "process":
             proc = subprocess.Popen([sys.executable, "-m", "engine.workers.symbol_worker", symbol, "--interval", interval])
             self._running_subprocesses[key] = proc
@@ -89,7 +89,7 @@ class SlingshotOrchestrator:
                     if not self.is_running(key) and len(self.get_running_keys()) < max_workers:
                         self._spawn_worker(symbol, "15m")
         except Exception as e:
-            print(f"📡 [ORCHESTRATOR] ⚠️ Error sincronizando Watchlists: {e}")
+            print(f"[ORCHESTRATOR] Error sincronizando Watchlists: {e}")
 
     async def push_market_states(self):
         active_symbols = set()
@@ -130,7 +130,7 @@ class SlingshotOrchestrator:
                 }
                 states.append(db_state)
             except Exception as e:
-                print(f"📡 [ORCHESTRATOR] ⚠️ Error parseando Redis state para {symbol}: {e}")
+                print(f"[ORCHESTRATOR] Error parseando Redis state para {symbol}: {e}")
 
         if not states: return
 
@@ -146,20 +146,20 @@ class SlingshotOrchestrator:
                         if to_delete:
                             supabase_service.table("market_states").delete().in_("asset", to_delete).execute()
         except Exception as e:
-            print(f"📡 [ORCHESTRATOR] ⚠️ Error sincronizando Radar en Supabase: {e}")
+            print(f"[ORCHESTRATOR] Error sincronizando Radar en Supabase: {e}")
 
     async def audit_health(self):
         if self.worker_mode == "process":
             for key, proc in list(self._running_subprocesses.items()):
                 if proc.poll() is not None:
-                    print(f"📡 [ORCHESTRATOR] ⚠️ {key} DIED (Exit code {proc.returncode}). Reiniciando...")
+                    print(f"[ORCHESTRATOR] {key} DIED (Exit code {proc.returncode}). Reiniciando...")
                     del self._running_subprocesses[key]
                     symbol, interval = key.split(":")
                     self._spawn_worker(symbol, interval)
         else:
             for key, task in list(self._async_tasks.items()):
                 if task.done():
-                    print(f"📡 [ORCHESTRATOR] ⚠️ {key} ASYNC TASK terminada. Reiniciando...")
+                    print(f"[ORCHESTRATOR] {key} ASYNC TASK terminada. Reiniciando...")
                     try:
                         exc = task.exception()
                         if exc:
@@ -178,11 +178,11 @@ class SlingshotOrchestrator:
         self._stop_event.set()
         if self.worker_mode == "process":
             for key, proc in self._running_subprocesses.items():
-                print(f"📡 [ORCHESTRATOR] 🛑 Matando worker subproceso {key}...")
+                print(f"[ORCHESTRATOR] Matando worker subproceso {key}...")
                 proc.terminate()
         else:
             for key, task in self._async_tasks.items():
-                print(f"📡 [ORCHESTRATOR] 🛑 Cancelando worker async {key}...")
+                print(f"[ORCHESTRATOR] Cancelando worker async {key}...")
                 task.cancel()
 
 async def run_orchestrator():
