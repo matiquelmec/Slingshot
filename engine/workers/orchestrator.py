@@ -51,6 +51,9 @@ class SlingshotOrchestrator:
 
     async def sync_user_watchlists(self):
         try:
+            import os
+            max_workers = int(os.environ.get("MAX_WORKERS", 2))
+            
             from engine.api.supabase_client import supabase_service
             if not supabase_service: return
 
@@ -59,7 +62,9 @@ class SlingshotOrchestrator:
                 all_watchlist_assets = {item['asset'] for item in response.data}
                 
                 for symbol in all_watchlist_assets:
-                    self._spawn_worker(symbol, "15m")
+                    key = f"{symbol}:15m"
+                    if key not in self._running_workers and len(self._running_workers) < max_workers:
+                        self._spawn_worker(symbol, "15m")
         except Exception as e:
             print(f"📡 [ORCHESTRATOR] ⚠️ Error sincronizando Watchlists: {e}")
 
