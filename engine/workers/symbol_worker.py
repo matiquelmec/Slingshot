@@ -582,7 +582,7 @@ class SymbolWorker:
             await self._persist_signal(sig, tactical, status="ACTIVE")
         
         for sig in prospects_blocked:
-            await self._persist_signal(sig, tactical, status="BLOCKED")
+            await self._persist_signal(sig, tactical, status="BLOCKED_BY_MACRO")
 
         # 2. Procesar Señales MUERTAS (Solo la más relevante)
         latest_inv = filter_latest_only(inv_signals)
@@ -590,7 +590,7 @@ class SymbolWorker:
             confluence = float(sig.get("confluence", {}).get("score", 0)) if sig.get("confluence") else 0
             if confluence >= 15.0:
                 raw_reason = str(sig.get('death_reason', 'INVALIDATED')).upper()
-                safe_status = "COMPLETED" if "PROFIT" in raw_reason else "INVALIDATED"
+                safe_status = "HIT_TP" if "PROFIT" in raw_reason else "EXPIRED"
                 await self._persist_signal(sig, tactical, status=safe_status)
 
     async def _persist_signal(self, sig: dict, tactical: dict, status: str = "ACTIVE"):
