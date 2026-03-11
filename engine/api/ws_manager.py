@@ -168,7 +168,7 @@ class BroadcasterRegistry:
                 if self.orchestrator:
                     import os
                     max_w = int(os.environ.get("MAX_WORKERS", 2))
-                    alive = len([p for p in self.orchestrator._running_workers.values() if p.poll() is None])
+                    alive = len(self.orchestrator.get_running_keys())
                     if alive < max_w:
                         self.orchestrator._spawn_worker(symbol, interval)
                     else:
