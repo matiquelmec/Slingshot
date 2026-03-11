@@ -361,8 +361,16 @@ class SymbolWorker:
 
         print(f"[BROADCASTER] {self._key} -> Conectando a Binance WS: {binance_url}")
 
-        async with ws_client.connect(binance_url) as binance_ws:
-            print(f"[BROADCASTER] {self._key} → Stream EN VIVO 🟢")
+        # ping_interval=20s: enviar ping cada 20s para mantener la conexion activa
+        # ping_timeout=60s: esperar hasta 60s el pong antes de declarar la conexion muerta
+        # Esto previene el "keepalive ping timeout" en entornos cloud con timeouts agresivos (Render, AWS)
+        async with ws_client.connect(
+            binance_url,
+            ping_interval=20,
+            ping_timeout=60,
+            close_timeout=10,
+        ) as binance_ws:
+            print(f"[BROADCASTER] {self._key} Stream EN VIVO")
             while True:
                 raw = await asyncio.wait_for(binance_ws.recv(), timeout=30.0)
                 data = json.loads(raw)
