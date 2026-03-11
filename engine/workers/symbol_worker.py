@@ -110,6 +110,7 @@ class SymbolWorker:
         self._candle_closes  = 0
         self._last_pulse_ts  = 0.0
         self._liquidity      = {"bids": [], "asks": []}
+        self._state          = {}  # Almacén de estado persistente (Anclaje, etc.)
         
         # Caché del último estado para nuevos suscriptores
         self._last_ghost     = None
@@ -450,33 +451,36 @@ class SymbolWorker:
 
                         # Guard: No procesar si precio es 0 (stream aun no conectado)
                         current_price = candle_payload["data"].get("close", 0)
-                # 🟢 [SENIOR-FIX] ANCLAJE DE ESTRUCTURA INSTITUCIONAL
-                # Evita que los niveles S/R y Símbolos (⚡, ◈) parpadeen en el Fast Path.
-                # Utilizamos los niveles 'anclados' de la última vela cerrada si el tick actual es ruidoso.
-                stable_structure = self._state.get("stable_structure", {})
+                        if current_price == 0:
+                            continue
 
-                # 🚀 FAST PATH (Pipeline reactivo cada ~1s)
-                if not df_tick.empty:
-                    current_price = float(df_tick["close"].iloc[-1])
-                    if current_price > 0:
-                        try:
-                            # Procesar data táctica (precio en vivo)
-                            live_tactical = self._router.process_market_data(
-                                df_tick, asset=self.symbol, interval=self.interval,
-                                macro_levels=self._macro_levels
-                            )
-                            
-                            # Si el cálculo del Fast Path perdió los niveles por ruido técnico, 
-                            # inyectamos los niveles anclados de la vela cerrada.
-                            if not live_tactical.get("key_levels", {}).get("resistances") and stable_structure.get("key_levels"):
-                                live_tactical["key_levels"] = stable_structure["key_levels"]
-                            
-                            if not live_tactical.get("smc") and stable_structure.get("smc"):
-                                live_tactical["smc"] = stable_structure["smc"]
+                        # 🟢 [SENIOR-FIX] ANCLAJE DE ESTRUCTURA INSTITUCIONAL
+                        # Evita que los niveles S/R y Símbolos (⚡, ◈) parpadeen en el Fast Path.
+                        # Utilizamos los niveles 'anclados' de la última vela cerrada si el tick actual es ruidoso.
+                        stable_structure = self._state.get("stable_structure", {})
 
-                            await self._broadcast({"type": "tactical_update", "data": live_tactical})
-                        except Exception as e:
-                            print(f"[BROADCASTER] {self._key} Fast Path error: {e}")
+                        # 🚀 FAST PATH (Pipeline reactivo cada ~1s)
+                        if not df_tick.empty:
+                            current_price = float(df_tick["close"].iloc[-1])
+                            if current_price > 0:
+                                try:
+                                    # Procesar data táctica (precio en vivo)
+                                    live_tactical = self._router.process_market_data(
+                                        df_tick, asset=self.symbol, interval=self.interval,
+                                        macro_levels=self._macro_levels
+                                    )
+                                    
+                                    # Si el cálculo del Fast Path perdió los niveles por ruido técnico, 
+                                    # inyectamos los niveles anclados de la vela cerrada.
+                                    if not live_tactical.get("key_levels", {}).get("resistances") and stable_structure.get("key_levels"):
+                                        live_tactical["key_levels"] = stable_structure["key_levels"]
+                                    
+                                    if not live_tactical.get("smc") and stable_structure.get("smc"):
+                                        live_tactical["smc"] = stable_structure["smc"]
+
+                                    await self._broadcast({"type": "tactical_update", "data": live_tactical})
+                                except Exception as e:
+                                    print(f"[BROADCASTER] {self._key} Fast Path error: {e}")
 
 
                     # Neural Pulse
