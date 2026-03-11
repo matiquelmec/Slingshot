@@ -161,21 +161,30 @@ class SlingshotOrchestrator:
                     self._spawn_worker(symbol, interval)
         else:
             for key, task in list(self._async_tasks.items()):
-                if task.done():
-                    print(f"[ORCHESTRATOR] {key} ASYNC TASK terminada. Reiniciando...")
-                    try:
-                        exc = task.exception()
-                        if exc:
-                            print(f"⚠️ Worker error: {exc}")
-                    except asyncio.CancelledError:
-                        pass
-                    except Exception as e:
-                        print(f"⚠️ Failed to get exception for {key}: {e}")
+                if not task.done():
+                    continue  # Tarea corriendo o en loop de reconexion -> OK
+
+                # Tarea terminada: verificar si fue crash real o cancelacion limpia
+                try:
+                    exc = task.exception()
+                    if exc:
+                        print(f"[ORCHESTRATOR] {key} CRASH: {exc}. Reiniciando...")
+                    else:
+                        print(f"[ORCHESTRATOR] {key} termino sin excepcion. Reiniciando...")
+                except asyncio.CancelledError:
+                    # Cancelacion intencionada al apagar el sistema -> no relanzar
                     del self._async_tasks[key]
                     if key in self._async_workers:
                         del self._async_workers[key]
-                    symbol, interval = key.split(":")
-                    self._spawn_worker(symbol, interval)
+                    continue
+                except Exception as e:
+                    print(f"[ORCHESTRATOR] {key} error al auditar: {e}")
+
+                del self._async_tasks[key]
+                if key in self._async_workers:
+                    del self._async_workers[key]
+                symbol, interval = key.split(":")
+                self._spawn_worker(symbol, interval)
 
     def stop(self):
         self._stop_event.set()

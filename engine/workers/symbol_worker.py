@@ -356,9 +356,10 @@ class SymbolWorker:
         """Conexión al stream multiplexado de Binance (klines + depth)."""
         kline_stream = f"{self.symbol.lower()}@kline_{self.interval}"
         depth_stream = f"{self.symbol.lower()}@depth20@100ms"
-        binance_url  = f"wss://stream.binance.com:9443/stream?streams={kline_stream}/{depth_stream}"
+        # Puerto 443 para evitar bloqueos de firewall en Render y entornos cloud
+        binance_url  = f"wss://stream.binance.com:443/stream?streams={kline_stream}/{depth_stream}"
 
-        print(f"[BROADCASTER] {self._key} → Conectando a Binance WS: {binance_url}")
+        print(f"[BROADCASTER] {self._key} -> Conectando a Binance WS: {binance_url}")
 
         async with ws_client.connect(binance_url) as binance_ws:
             print(f"[BROADCASTER] {self._key} → Stream EN VIVO 🟢")
@@ -439,7 +440,12 @@ class SymbolWorker:
                         else:
                             self._last_ml = raw_pred
 
-                        # Pipeline táctico en Fast Path
+                        # Guard: No procesar si precio es 0 (stream aun no conectado)
+                        current_price = candle_payload["data"].get("close", 0)
+                        if current_price == 0:
+                            continue
+
+                        # Pipeline tactico en Fast Path
                         try:
                             live_tactical = self._router.process_market_data(
                                 df_tick, asset=self.symbol, interval=self.interval,
