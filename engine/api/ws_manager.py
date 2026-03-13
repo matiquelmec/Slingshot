@@ -51,13 +51,14 @@ from engine.notifications.telegram import send_signal_async
 from engine.notifications.filter import signal_filter
 from engine.api.advisor import generate_tactical_advice
 from engine.core.store import store
+from engine.indicators.htf_analyzer import HTFAnalyzer
 
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Helpers compartidos
 # ──────────────────────────────────────────────────────────────────────────────
 
-async def fetch_binance_history(symbol: str, interval: str = "15m", limit: int = 500) -> list:
+async def fetch_binance_history(symbol: str, interval: str = "15m", limit: int = 1000) -> list:
     """Descarga velas históricas desde Binance REST. Retorna lista de dicts estandarizados."""
     url = "https://api.binance.com/api/v3/klines"
     params = {"symbol": symbol.upper(), "interval": interval, "limit": limit}
@@ -106,7 +107,7 @@ class SymbolBroadcaster:
         self._session_manager = SessionManager(symbol=self.symbol)
         self._history: list  = []
         self._macro_levels   = None
-        self._live_buffer: deque = deque(maxlen=500)
+        self._live_buffer: deque = deque(maxlen=1000)
         self._last_ml        = {"direction": "CALIBRANDO", "probability": 50, "status": "warmup"}
         self._ema_ml_prob    = 50.0
         self._ml_alpha       = 0.2
@@ -117,7 +118,11 @@ class SymbolBroadcaster:
         
         # ML Tracking Buffer: guarda [timestamp, precio, dirección_predicha] para verificar N velas después
         self._prediction_history = deque(maxlen=20) 
-        
+
+        # HTF Top-Down Analysis (v4.0)
+        self._htf_analyzer = HTFAnalyzer()
+        self._htf_bias     = None
+        self._last_htf_ts  = 0.0        
         # Caché del último estado para nuevos suscriptores
         self._last_ghost     = None
         self._last_smc       = None
@@ -280,9 +285,9 @@ class SymbolBroadcaster:
 
         # 1. Historial de velas
         try:
-            history = await fetch_binance_history(self.symbol, self.interval, limit=500)
+            history = await fetch_binance_history(self.symbol, self.interval, limit=1000)
             self._history = sanitize_for_json(history)
-            self._live_buffer = deque(self._history[-500:], maxlen=500)
+            self._live_buffer = deque(self._history[-1000:], maxlen=1000)
             await self._broadcast({"type": "history", "data": history})
             print(f"[BROADCASTER] {self._key} → {len(history)} velas enviadas.")
         except Exception as e:
@@ -313,6 +318,12 @@ class SymbolBroadcaster:
             asyncio.create_task(self._refresh_ghost())
         except Exception as e:
             print(f"[BROADCASTER] {self._key} → Ghost Data inicial error: {e}")
+
+        # 3.5 HTF Bias Analysis (4H + 1H)
+        try:
+            await self._refresh_htf_bias()
+        except Exception as e:
+            print(f"[BROADCASTER] {self._key} → HTF Bias inicial error: {e}")
 
         # 4. Bootstrap SMC + Sesiones + Pipeline inicial
         if history:
@@ -348,7 +359,8 @@ class SymbolBroadcaster:
                 self._router.set_context(session_data=self._session_manager.get_current_state().get("data", {}))
                 tactical = self._router.process_market_data(
                     df_init.copy(), asset=self.symbol, interval=self.interval,
-                    macro_levels=self._macro_levels
+                    macro_levels=self._macro_levels,
+                    htf_bias=self._htf_bias
                 )
                 await self._broadcast({"type": "tactical_update", "data": tactical})
 
@@ -428,6 +440,10 @@ class SymbolBroadcaster:
                     if not ghost.is_stale and (not self._last_ghost or ghost.last_updated > self._last_ghost.get("data", {}).get("last_updated", 0)):
                         await self._refresh_ghost(ghost)
 
+                    # Refresco Periódico de HTF Bias (cada 30 min)
+                    if now - self._last_htf_ts > 1800: # 30 min
+                         asyncio.create_task(self._refresh_htf_bias())
+
                     # ML Inference (XGBoost, <50ms)
                     current_buffer = [i["data"] for i in self._live_buffer] + [candle_payload["data"]]
                     if len(current_buffer) > 50:
@@ -459,12 +475,20 @@ class SymbolBroadcaster:
                         try:
                             live_tactical = self._router.process_market_data(
                                 df_tick, asset=self.symbol, interval=self.interval,
-                                macro_levels=self._macro_levels
+                                macro_levels=self._macro_levels,
+                                htf_bias=self._htf_bias
                             )
                             await self._broadcast({"type": "tactical_update", "data": live_tactical})
                             
+                            # 🚀 HEARTBEAT DE ESCANEO: Para que el usuario vea que el motor está vivo
+                            if live_tactical.get("market_regime") != "UNKNOWN":
+                                status_msg = f"[SCAN] Sesgo: {self._htf_bias.direction if self._htf_bias else 'NEUTRAL'} | Régimen: {live_tactical.get('market_regime')} | Filtros OK"
+                                await self._broadcast({"type": "neural_log", "data": {
+                                    "type": "SYSTEM",
+                                    "message": status_msg
+                                }})
+
                             # 🚀 PERSISTENCIA EN TIEMPO REAL (Fast Path)
-                            # Si el router genera una nueva señal viva en este tick, la guardamos.
                             if live_tactical.get("signals"):
                                 await self._handle_signals(live_tactical)
                         except Exception as e:
@@ -512,7 +536,8 @@ class SymbolBroadcaster:
                         )
                         final_tactical = self._router.process_market_data(
                             df_live, asset=self.symbol, interval=self.interval,
-                            macro_levels=self._macro_levels
+                            macro_levels=self._macro_levels,
+                            htf_bias=self._htf_bias
                         )
                         await self._broadcast({"type": "tactical_update", "data": final_tactical})
 
@@ -532,20 +557,46 @@ class SymbolBroadcaster:
                     # LLM Advisor (no bloqueante)
                     asyncio.create_task(self._emit_advisor(final_tactical, session_state))
 
+    async def _refresh_htf_bias(self):
+        """Re-evalúa el sesgo institucional (4H + 1H) para el enrutamiento top-down."""
+        try:
+            h1_raw = await fetch_binance_history(self.symbol, "1h", limit=250)
+            h4_raw = await fetch_binance_history(self.symbol, "4h", limit=250)
+            
+            df_h1 = pd.DataFrame([i["data"] for i in h1_raw])
+            df_h4 = pd.DataFrame([i["data"] for i in h4_raw])
+            
+            df_h1["timestamp"] = pd.to_datetime(df_h1["timestamp"], unit="s")
+            df_h4["timestamp"] = pd.to_datetime(df_h4["timestamp"], unit="s")
+            
+            self._htf_bias = self._htf_analyzer.analyze_bias(df_h4, df_h1)
+            self._last_htf_ts = time.time()
+            
+            print(f"[BROADCASTER] {self._key} → 🧭 HTF Bias Refrescado: {self._htf_bias.direction} ({self._htf_bias.reason})")
+        except Exception as e:
+            print(f"[BROADCASTER] {self._key} → Error refrescando HTF Bias: {e}")
+
     # ── Handlers auxiliares ───────────────────────────────────────────────────
 
     async def _handle_signals(self, tactical: dict):
-        """Filtra por macro, notifica por Telegram y persiste en MemoryStore local (v3.0)."""
+        """Filtra por macro, notifica por Telegram y persiste en MemoryStore local (v3.0).
+        En Audit Mode: también persiste las señales RECHAZADAS por el Portero Institucional o HTF.
+        """
         raw_signals = tactical.get("signals", [])
-        if not raw_signals:
+        # ✅ CORRECCIÓN: Recoger también las señales bloqueadas por el router (Portero R:R o HTF)
+        router_blocked = tactical.get("blocked_signals", [])
+
+        # Si no hay nada en absoluto, salir
+        if not raw_signals and not router_blocked:
             return
 
         ghost = get_ghost_state()
-        approved, blocked_sigs = filter_signals_by_macro(raw_signals, ghost)
+        approved, macro_blocked = filter_signals_by_macro(raw_signals, ghost)
         
-        # ──────── PROCESAR APROBADAS ────────
+        # ──────── PROCESAR APROBADAS Y TELEGRAM ────────
+        final_approved = []
         for sig in approved:
-            # Telegram
+            # Telegram (Filtro Anti-Spam / Cooldown)
             ok_to_send, reason = signal_filter.should_send(self.symbol, sig)
             if ok_to_send:
                 asyncio.create_task(send_signal_async(
@@ -553,18 +604,31 @@ class SymbolBroadcaster:
                     regime=tactical.get("market_regime", "UNKNOWN"),
                     strategy=tactical.get("active_strategy", "N/A")
                 ))
+                final_approved.append(sig)
             else:
                 print(f"[BROADCASTER] {self._key} → 🔕 Telegram bloqueado: {reason}")
-            
-            # Supabase — persistir señal como 'ACTIVE'
+                sig["blocked_reason"] = reason
+                macro_blocked.append(sig)
+        
+        # ──────── PERSISTIR ACTIVAS ────────
+        for sig in final_approved:
             asyncio.create_task(self._persist_signal(sig, tactical, status="ACTIVE"))
 
-        # ──────── PROCESAR BLOQUEADAS (Auditoría) ────────
-        for sig in blocked_sigs:
-            # Supabase — persistir señal como 'BLOCKED'
-            asyncio.create_task(self._persist_signal(sig, tactical, status="BLOCKED"))
+        # ──────── PROCESAR BLOQUEADAS POR MACRO/FILTRO (Auditoría) ────────
+        for sig in macro_blocked:
+            motivo = sig.get("blocked_reason", "Bloqueada por filtro macro (miedo/funding/dominancia)")
+            status = "BLOCKED_BY_MACRO" if "macro" in motivo.lower() or "miedo" in motivo.lower() else "BLOCKED_BY_FILTER"
+            asyncio.create_task(self._persist_signal(sig, tactical, status=status, rejection_reason=motivo))
 
-    async def _persist_signal(self, sig: dict, tactical: dict, status: str = "ACTIVE"):
+        # ──────── PROCESAR BLOQUEADAS POR EL ROUTER (Audit Mode: R:R o HTF) ────────
+        for sig in router_blocked:
+            motivo = sig.get("blocked_reason", "Rechazada por filtro táctico")
+            status = sig.get("status", "BLOCKED_BY_FILTER")
+            asyncio.create_task(self._persist_signal(sig, tactical, status=status, rejection_reason=motivo))
+
+
+
+    async def _persist_signal(self, sig: dict, tactical: dict, status: str = "ACTIVE", rejection_reason: str = None):
         """Inserta la señal en public.signal_events y en el MemoryStore local."""
         ghost = get_ghost_state()
         
@@ -583,12 +647,16 @@ class SymbolBroadcaster:
             "strategy":         tactical.get("active_strategy", "N/A"),
             "trigger":          sig.get("trigger", "N/A"),
             "status":           status,
+            "rejection_reason": rejection_reason,
             "timestamp":        datetime.now(timezone.utc).isoformat(),
             "confluence":       sig.get("confluence")
         }
         
         # Persistencia en Memoria Local
         asyncio.create_task(store.save_signal(realtime_data))
+        
+        # Emitir evento visual de auditoría al UI para que el Terminal HFT pestañee.
+        await self._broadcast({"type": "signal_auditor_update", "data": realtime_data})
         
         # En v3.0, solo guardamos en memoria. Print de confirmación local.
         icon = "✅" if status == "ACTIVE" else "🚫"

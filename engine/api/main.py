@@ -100,10 +100,12 @@ async def get_market_states():
 @app.get("/api/v1/signals")
 async def get_signals(
     asset: Optional[str] = Query(None),
-    status: Optional[str] = Query("ACTIVE")
+    status: Optional[str] = Query("ALL")
 ):
-    """Retorna el historial de señales activas."""
-    return await store.get_signals(asset=asset, status=status)
+    """Retorna el historial de señales activas o bloqueadas (Auditoría)."""
+    # Si el frontend pide "ALL", pasamos None al store para no filtrar por status.
+    _status_filter = None if status == "ALL" else status
+    return await store.get_signals(asset=asset, status=_status_filter)
 
 
 # ── REST One-Shot ─────────────────────────────────────────────────────────────

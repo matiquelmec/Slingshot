@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Activity, Bell, Target, TrendingUp, TrendingDown, Clock, Search, ExternalLink } from 'lucide-react';
+import { Activity, Bell, Target, TrendingUp, TrendingDown, Clock, Search, ExternalLink, AlertOctagon } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
 interface RadarSignal {
@@ -14,6 +14,7 @@ interface RadarSignal {
     confluence?: any;
     confluence_score?: number;
     status: string;
+    rejection_reason?: string;
     created_at: string;
 }
 
@@ -26,7 +27,8 @@ export default function RadarFeed() {
     useEffect(() => {
         const fetchSignals = async () => {
             try {
-                const res = await fetch(`http://localhost:8000/api/v1/signals`);
+                // Modificado para traer el historial completo (Auditoría)
+                const res = await fetch(`http://localhost:8000/api/v1/signals?status=ALL`);
                 if (res.ok) {
                     const data = await res.json();
                     if (data && data.length > 0) {
@@ -115,7 +117,7 @@ export default function RadarFeed() {
                                         exit={{ opacity: 0, scale: 0.95 }}
                                         layout
                                         className={`group/card relative flex items-center gap-4 p-4 rounded-xl border transition-all ${isBlocked
-                                            ? 'bg-black/40 border-white/5 opacity-60'
+                                            ? 'bg-black/40 border-white/5 opacity-60' // Señales bloqueadas (Auditoría)
                                             : isLong
                                                 ? 'bg-neon-green/5 border-neon-green/10 hover:border-neon-green/30'
                                                 : 'bg-neon-red/5 border-neon-red/10 hover:border-neon-red/30'
@@ -165,18 +167,28 @@ export default function RadarFeed() {
                                             </div>
                                         </div>
 
-                                        {/* Action Button */}
-                                        <div className="flex flex-col gap-1 items-end ml-auto">
+                                        {/* Action Button & Rejection Reason */}
+                                        <div className="flex flex-col gap-1 items-end ml-auto max-w-[200px]">
                                             <div className="flex items-center gap-1.5 text-[10px] text-white/30 font-mono mb-1">
                                                 <Clock size={10} />
                                                 {new Date(signal.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                                             </div>
-                                            <button
-                                                onClick={() => handleDeepDive(signal)}
-                                                className="flex items-center gap-2 bg-white/5 border border-white/10 hover:bg-neon-cyan/20 hover:border-neon-cyan/40 text-white/60 hover:text-white px-3 py-1.5 rounded-lg text-[10px] font-bold transition-all"
-                                            >
-                                                DEEP DIVE <ExternalLink size={10} />
-                                            </button>
+                                            
+                                            {isBlocked ? (
+                                                <div className="mt-1 flex items-start gap-1 p-1.5 bg-red-950/30 border border-red-500/20 rounded-md">
+                                                    <AlertOctagon size={12} className="text-red-500 shrink-0 mt-0.5" />
+                                                    <span className="text-[10px] leading-tight text-white/60 line-clamp-2">
+                                                        {signal.rejection_reason || "Rechazo cuantitativo"}
+                                                    </span>
+                                                </div>
+                                            ) : (
+                                                <button
+                                                    onClick={() => handleDeepDive(signal)}
+                                                    className="flex items-center gap-2 bg-white/5 border border-white/10 hover:bg-neon-cyan/20 hover:border-neon-cyan/40 text-white/60 hover:text-white px-3 py-1.5 rounded-lg text-[10px] font-bold transition-all"
+                                                >
+                                                    DEEP DIVE <ExternalLink size={10} />
+                                                </button>
+                                            )}
                                         </div>
                                     </motion.div>
                                 );

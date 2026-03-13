@@ -619,7 +619,7 @@ export default function TradingChart() {
         }
 
 
-        // ── Niveles de Sesión (Session Brackets v2) ──────────────────────────
+        // ── Niveles de Sesión (Session Brackets Históricos v3) ─────────────────
         const chart = chartRef.current;
         if (!chart) return;
 
@@ -629,82 +629,109 @@ export default function TradingChart() {
         killzoneSeriesRef.current.forEach(s => { try { chart.removeSeries(s); } catch(e){} });
         killzoneSeriesRef.current = [];
 
-        const sorted = [...candles]
-            .sort((a, b) => Number(a.time) - Number(b.time))
-            .filter((c, i, arr) => i === 0 || c.time !== arr[i - 1].time);
-
-        if (sessionData) {
-            const { pdh, pdl } = sessionData;
-            // 1. PDH / PDL (Líneas maestras infinitas) - Siempre visibles si hay datos
-            addLine(pdh, 'rgba(0, 255, 255, 0.4)', 'PDH', LineStyle.Dashed, 2);
-            addLine(pdl, 'rgba(0, 255, 255, 0.4)', 'PDL', LineStyle.Dashed, 2);
-        }
-
         if (sessionData && sessionData.sessions && isEnabled('session')) {
-            console.log("🎨 Drawing Session Brackets:", sessionData.current_session);
             const { sessions } = sessionData;
 
+            // Valores ajustados a petición del comandante: Cajas muy opacas y marcadas (bg 0.25, kz 0.40).
             const sessionColors: Record<string, { color: string; bg: string; kz: string }> = {
-                asia:   { color: 'rgba(251,146,60,0.8)', bg: 'rgba(251,146,60,0.15)', kz: 'rgba(251,146,60,0.05)' },
-                london: { color: 'rgba(96,165,250,0.8)', bg: 'rgba(96,165,250,0.15)', kz: 'rgba(96,165,250,0.05)' },
-                ny:     { color: 'rgba(192,132,252,0.8)', bg: 'rgba(192,132,252,0.15)', kz: 'rgba(192,132,252,0.05)' },
+                asia:   { color: 'rgba(251,146,60,0.8)', bg: 'rgba(251,146,60,0.25)', kz: 'rgba(251,146,60,0.40)' },
+                london: { color: 'rgba(96,165,250,0.8)', bg: 'rgba(96,165,250,0.25)', kz: 'rgba(96,165,250,0.40)' },
+                ny:     { color: 'rgba(192,132,252,0.8)', bg: 'rgba(192,132,252,0.25)', kz: 'rgba(192,132,252,0.40)' },
             };
 
-            // Sanitización de velas para dibujo de brackets
+            // Sanitización de velas
             const sorted = [...candles]
                 .sort((a, b) => Number(a.time) - Number(b.time))
                 .filter((c, i, arr) => i === 0 || c.time !== arr[i - 1].time);
 
+            // 1. PDH / PDL (Maestras del día actual)
+            const { pdh, pdl } = sessionData;
+            addLine(pdh, 'rgba(0, 255, 255, 0.3)', 'PDH', LineStyle.Dashed, 1);
+            addLine(pdl, 'rgba(0, 255, 255, 0.3)', 'PDL', LineStyle.Dashed, 1);
+
+            if (sorted.length === 0) return;
+
+            // 2. Trazar Cajas Perfectas Históricas
             Object.entries(sessions).forEach(([id, info]: [string, any]) => {
-                if (info.high == null || info.low == null) return;
+                if (info.start_utc == null || info.end_utc == null) return;
 
-                // Crear Brackets (Caja de Sesión)
-                const bracket = chart.addSeries(BaselineSeries, {
-                    baseValue: { type: 'price', price: info.low },
-                    topFillColor1: sessionColors[id].bg,
-                    topFillColor2: 'transparent',
-                    topLineColor: sessionColors[id].color,
-                    lineWidth: 1,
-                    bottomFillColor1: 'transparent',
-                    bottomFillColor2: 'transparent',
-                    bottomLineColor: 'transparent',
-                    priceLineVisible: false,
-                    lastValueVisible: false,
-                    crosshairMarkerVisible: false,
-                });
+                let currentBlock: any[] = [];
+                const blocks: any[][] = [];
 
-                // Filtrar velas que pertenecen a esta sesión (UTC logic)
-                const sessionDataPoints = sorted
-                    .filter(c => {
-                        const h = new Date(Number(c.time) * 1000).getUTCHours();
-                        if (info.start_utc < info.end_utc) return h >= info.start_utc && h < info.end_utc;
-                        return h >= info.start_utc || h < info.end_utc;
-                    })
-                    .map(c => ({ time: c.time, value: info.high }));
+                // Agrupamos consecutivamente las velas que rebotan dentro del rango horario
+                for (let i = 0; i < sorted.length; i++) {
+                    const c = sorted[i];
+                    const h = new Date(Number(c.time) * 1000).getUTCHours();
+                    
+                    let inside = false;
+                    if (info.start_utc < info.end_utc) {
+                        inside = h >= info.start_utc && h < info.end_utc;
+                    } else { // medianoche (ej: 22 a 06)
+                        inside = h >= info.start_utc || h < info.end_utc;
+                    }
 
-                if (sessionDataPoints.length > 0) {
-                    bracket.setData(sessionDataPoints as any);
-                    sessionSeriesRef.current.push(bracket);
+                    if (inside) {
+                        currentBlock.push(c);
+                    } else {
+                        if (currentBlock.length > 0) {
+                            blocks.push(currentBlock);
+                            currentBlock = [];
+                        }
+                    }
                 }
+                if (currentBlock.length > 0) blocks.push(currentBlock);
 
-                // 2. Killzone Glow (Si la sesión es de Killzone - Versión Segura)
-                const isKillzoneSession = (id === 'london' && sessionData.is_killzone) || (id === 'ny' && sessionData.is_killzone);
-                if (isKillzoneSession) {
-                    const kzGlow = chart.addSeries(BaselineSeries, {
-                        baseValue: { type: 'price', price: info.low },
-                        topFillColor1: sessionColors[id].kz,
-                        topFillColor2: sessionColors[id].kz,
-                        topLineColor: 'transparent',
+                // Instanciar un Baseline de Lightweight-Charts por cada iteración del bloque (todos los días del historial 1000 limit)
+                blocks.forEach((blockCandles) => {
+                    if (blockCandles.length < 2) return; // evitar cajas de un solo tick
+                    
+                    const blockHigh = Math.max(...blockCandles.map(c => c.high));
+                    const blockLow  = Math.min(...blockCandles.map(c => c.low));
+
+                    // Bracket de Sesión Principal
+                    const bracket = chart.addSeries(BaselineSeries, {
+                        baseValue: { type: 'price', price: blockLow },
+                        topFillColor1: sessionColors[id].bg,
+                        topFillColor2: 'transparent',
+                        topLineColor: sessionColors[id].color,
                         lineWidth: 1,
+                        bottomFillColor1: 'transparent',
+                        bottomFillColor2: 'transparent',
+                        bottomLineColor: 'transparent',
                         priceLineVisible: false,
                         lastValueVisible: false,
                         crosshairMarkerVisible: false,
                     });
-                    
-                    const kzPoints = sessionDataPoints.map(p => ({ time: p.time, value: info.high }));
-                    kzGlow.setData(kzPoints as any);
-                    killzoneSeriesRef.current.push(kzGlow);
-                }
+
+                    bracket.setData(blockCandles.map(c => ({ time: c.time, value: blockHigh })) as any);
+                    sessionSeriesRef.current.push(bracket);
+
+                    // 3. Replicar iluminación dinámica para Killzone (Asia, London y NY)
+                    // (Los algoritmos SMC definen el Killzone Asiático en sus primeras 4 horas, London/NY en sus primeras 3)
+                    const kzHours = id === 'asia' ? 4 : 3;
+                    const kzStart = info.start_utc;
+                    const kzEnd   = (info.start_utc + kzHours) % 24;
+                    const kzCandles = blockCandles.filter(c => {
+                        const hh = new Date(Number(c.time) * 1000).getUTCHours();
+                        if (kzStart < kzEnd) return hh >= kzStart && hh < kzEnd;
+                        return hh >= kzStart || hh < kzEnd;
+                    });
+
+                    if (kzCandles.length > 0) {
+                        const kzGlow = chart.addSeries(BaselineSeries, {
+                            baseValue: { type: 'price', price: blockLow },
+                            topFillColor1: sessionColors[id].kz,
+                            topFillColor2: sessionColors[id].kz,
+                            topLineColor: 'transparent',
+                            lineWidth: 1,
+                            priceLineVisible: false,
+                            lastValueVisible: false,
+                            crosshairMarkerVisible: false,
+                        });
+                        kzGlow.setData(kzCandles.map(c => ({ time: c.time, value: blockHigh })) as any);
+                        killzoneSeriesRef.current.push(kzGlow);
+                    }
+                });
             });
         }
 
@@ -770,6 +797,34 @@ export default function TradingChart() {
                             <span>OB Confluencia: Nivel solapado con un Order Block activo.</span>
                         </li>
                     </ul>
+                </div>
+            )}
+
+            {/* Session Legend Overlay */}
+            {isEnabled('session') && sessionData && (
+                <div className="absolute top-4 right-16 z-20 pointer-events-none bg-[#050B14]/80 backdrop-blur-md border border-white/10 rounded-lg p-3 max-w-[200px] shadow-2xl">
+                    <p className="text-[10px] font-bold text-white/80 mb-2 border-b border-white/10 pb-1 text-center">
+                        Sesiones Institucionales
+                    </p>
+                    <ul className="flex flex-col gap-2 text-[9px] text-white/70">
+                        <li className="flex items-center gap-2">
+                            <span className="w-2.5 h-2.5 rounded border border-orange-400 bg-orange-400/50 shadow-[0_0_8px_rgba(251,146,60,0.6)]"></span>
+                            <span>Asia <span className="text-white/40 italic">(Acumulación)</span></span>
+                        </li>
+                        <li className="flex items-center gap-2">
+                            <span className="w-2.5 h-2.5 rounded border border-blue-400 bg-blue-400/50 shadow-[0_0_8px_rgba(96,165,250,0.6)]"></span>
+                            <span>Londres <span className="text-white/40 italic">(Manipulación)</span></span>
+                        </li>
+                        <li className="flex items-center gap-2">
+                            <span className="w-2.5 h-2.5 rounded border border-purple-400 bg-purple-400/50 shadow-[0_0_8px_rgba(192,132,252,0.6)]"></span>
+                            <span>Nueva York <span className="text-white/40 italic">(Expansión)</span></span>
+                        </li>
+                    </ul>
+                    {sessionData.is_killzone && (
+                        <div className="mt-2 pt-2 border-t border-white/10 flex items-center justify-center gap-1 text-neon-red animate-pulse font-bold">
+                            <span className="text-[9px]">⚠️ KILLZONE EN CURSO</span>
+                        </div>
+                    )}
                 </div>
             )}
         </div>

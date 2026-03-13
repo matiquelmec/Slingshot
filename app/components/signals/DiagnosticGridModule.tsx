@@ -29,7 +29,7 @@ const DiagnosticGridModule: React.FC<DiagnosticGridProps> = ({
     };
 
     return (
-        <div className="flex-none grid grid-cols-4 gap-4 p-4 border-b border-white/5 bg-gradient-to-b from-white/[0.02] to-transparent">
+        <div className="flex-none grid grid-cols-5 gap-4 p-4 border-b border-white/5 bg-gradient-to-b from-white/[0.02] to-transparent">
             {/* Module A: Structure & Regime */}
             <div className="col-span-1 flex flex-col justify-between border-r border-white/5 pr-4">
                 <div className="flex items-center gap-2 mb-2">
@@ -113,22 +113,42 @@ const DiagnosticGridModule: React.FC<DiagnosticGridProps> = ({
                 </div>
             </div>
 
-            {/* Module D: AI & Environment */}
-            <div className="col-span-1 flex flex-col justify-between pl-2">
-                <div className="flex items-center justify-between mb-2">
-                    <div className="flex items-center gap-2">
-                        <BrainCircuit size={12} className="text-white/40" />
-                        <span className="text-[9px] font-bold tracking-widest text-white/40 uppercase">XGBOOST ML / INFO</span>
+            {/* Module D: HTF BIAS (Portero Institucional) */}
+            <div className="col-span-1 flex flex-col justify-between border-r border-white/5 pr-4 pl-2">
+                <div className="flex items-center gap-2 mb-2">
+                    <Radar size={12} className="text-white/40" />
+                    <span className="text-[9px] font-bold tracking-widest text-white/40 uppercase">Sesgo Institucional (HTF)</span>
+                </div>
+                <div className="flex flex-col gap-1">
+                    <div className="flex items-center justify-between mb-1">
+                        <span className={`text-[11px] font-black tracking-tighter ${
+                            tacticalDecision?.htf_bias?.direction === 'BULLISH' ? 'text-neon-green' : 
+                            tacticalDecision?.htf_bias?.direction === 'BEARISH' ? 'text-neon-red' : 'text-white/40'
+                        }`}>
+                            {tacticalDecision?.htf_bias?.direction || 'ANALIZANDO...'}
+                        </span>
+                        <span className="text-[9px] font-mono text-white/30">H4+H1</span>
+                    </div>
+                    <div className="text-[8px] leading-tight text-white/50 italic opacity-80 line-clamp-2">
+                         {tacticalDecision?.htf_bias?.reason || "Esperando confirmación de temporalidades mayores..."}
                     </div>
                 </div>
-                <div className="flex flex-col gap-2">
+            </div>
+
+            {/* Module E: AI & Environment */}
+            <div className="col-span-1 flex flex-col justify-between pl-2">
+                <div className="flex items-center gap-2 mb-2">
+                    <BrainCircuit size={12} className="text-white/40" />
+                    <span className="text-[9px] font-bold tracking-widest text-white/40 uppercase">ML Inferencia</span>
+                </div>
+                <div className="flex flex-col gap-1.5">
                     <div className="flex items-center justify-between text-[10px] font-mono bg-white/[0.02] border border-white/5 rounded px-2 py-1">
-                        <span className="text-white/50">PROJECTION:</span>
+                        <span className="text-white/50 text-[9px]">PROJECTION:</span>
                         <span className={`font-bold ${getMlColor()}`}>{mlProjection?.direction} {(mlProjection?.probability || 0).toFixed(0)}%</span>
                     </div>
                     <div className="flex items-center justify-between text-[10px] font-mono bg-white/[0.02] border border-white/5 rounded px-2 py-1">
                         <span className="flex items-center gap-1 text-white/50"><Clock size={10} /> SESSION:</span>
-                        <span className="text-white/80 font-bold">{sessionData?.current_session || '---'}</span>
+                        <span className="text-white/80 font-bold truncate">{sessionData?.current_session || '---'}</span>
                     </div>
                 </div>
             </div>

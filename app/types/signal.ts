@@ -14,6 +14,14 @@ export interface ConfluenceData {
     rvol?: number;
 }
 
+export interface HTFBias {
+    direction: 'BULLISH' | 'BEARISH' | 'NEUTRAL';
+    strength: number;
+    reason: string;
+    h4_regime: string;
+    h1_regime: string;
+}
+
 export interface Signal {
     asset?: string;
     type: string;
@@ -31,6 +39,8 @@ export interface Signal {
     expiry_candles?: number;
     expiry_timestamp?: string;
     interval_minutes?: number;
+    status?: string;
+    rejection_reason?: string;
     trigger?: string;
     confluence?: ConfluenceData;
     confluence_score?: number;
@@ -146,6 +156,7 @@ export interface TacticalDecision {
     current_price: number | null;
     nearest_support: number | null;
     nearest_resistance: number | null;
+    htf_bias?: HTFBias;
     diagnostic?: QuantDiagnostic;
     strategy?: string;
     reasoning?: string;

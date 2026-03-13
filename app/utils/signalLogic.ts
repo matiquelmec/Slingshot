@@ -15,6 +15,28 @@ export function getSignalLifecycle(sig: Signal, currentPrice: number | null, now
     const signalType = sig.signal_type || (sig.type?.includes('LONG') ? 'LONG' : 'SHORT');
     const expiryTs = sig.expiry_timestamp ? new Date(sig.expiry_timestamp).getTime() : null;
 
+    // 0. BLOQUEADA POR AUDITORÍA (Risk Manager / Macro / HTF)
+    if (sig.status === 'BLOCKED_BY_MACRO' || sig.status === 'BLOCKED_BY_FILTER' || sig.status === 'BLOCKED_BY_HTF') {
+        let typeStr = 'FILTRO';
+        let borderColor = 'border-red-500/10';
+        let textColor = 'text-white/40';
+
+        if (sig.status === 'BLOCKED_BY_MACRO') typeStr = 'MACRO';
+        if (sig.status === 'BLOCKED_BY_HTF') {
+            typeStr = 'HTF';
+            borderColor = 'border-amber-500/30';
+            textColor = 'text-amber-500/60';
+        }
+
+        return {
+            status: 'INVALIDADA', 
+            label: `⛔ BLOQUEADA (${typeStr} REJECT)`,
+            reason: sig.rejection_reason || 'Rechazada por módulo de riesgo/confluencia.',
+            color: textColor,
+            bgColor: `bg-black/60 ${borderColor} opacity-70 grayscale-[50%]`,
+        };
+    }
+
     // 1. INVALIDADA por precio: el precio cerró más allá del SL
     if (currentPrice !== null && sig.stop_loss) {
         if (signalType === 'SHORT' && currentPrice > sig.stop_loss) {

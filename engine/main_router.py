@@ -54,7 +54,8 @@ class SlingshotRouter:
         df: pd.DataFrame, 
         asset: str = "BTCUSDT", 
         interval: str = "15m",
-        macro_levels: dict = None
+        macro_levels: dict = None,
+        htf_bias = None
     ) -> dict:
         """
         El pipeline principal. Por aquí pasará cada vela en vivo.
@@ -148,6 +149,18 @@ class SlingshotRouter:
             base_key_levels = consolidate_mtf_levels(base_key_levels, macro_levels)
             
         result["key_levels"] = base_key_levels
+        
+        # Inyectar htf_bias en el resultado para la UI (Modo Auditoría v4.0)
+        if htf_bias:
+            result['htf_bias'] = {
+                'direction': htf_bias.direction,
+                'strength': htf_bias.strength,
+                'reason': htf_bias.reason,
+                'h4_regime': htf_bias.h4_regime,
+                'h1_regime': htf_bias.h1_regime,
+            }
+        else:
+            result['htf_bias'] = None
 
         # 2c. Fibonacci Dinámico (Fractal Swing Detection)
         try:
@@ -218,7 +231,32 @@ class SlingshotRouter:
 
             
         # Extraer el backlog de señales históricas recientes para que la UI no se vacíe
-        result['signals'] = [] # Reiniciar SIEMPRE la lista de señales exportadas por este tick
+        result['signals'] = []         # Señales aprobadas por el portero institucional
+        result['blocked_signals'] = []  # Señales RECHAZADAS (Modo Auditoría)
+
+        # ══════════════════════════════════════════════════════
+        # 🔒 PORTERO DIRECCIONAL HTF (Multi-Timeframe Top-Down)
+        # Solo permite señales que sigan la tendencia institucional.
+        # ══════════════════════════════════════════════════════
+        if htf_bias and htf_bias.direction != 'NEUTRAL' and opportunities:
+            final_opps = []
+            for sig in opportunities:
+                is_long = 'LONG' in str(sig.get('type', '')).upper()
+                
+                # Bloqueo direccional estricto:
+                if htf_bias.direction == 'BULLISH' and not is_long:
+                    sig["status"] = "BLOCKED_BY_HTF"
+                    sig["blocked_reason"] = f"Contra sesgo HTF Alcista: {htf_bias.reason}"
+                    result['blocked_signals'].append(sig)
+                elif htf_bias.direction == 'BEARISH' and is_long:
+                    sig["status"] = "BLOCKED_BY_HTF"
+                    sig["blocked_reason"] = f"Contra sesgo HTF Bajista: {htf_bias.reason}"
+                    result['blocked_signals'].append(sig)
+                else:
+                    final_opps.append(sig)
+            
+            opportunities = final_opps
+
         if opportunities:
             
             # PRE-CACHE para mejorar Performance de "Path Traversal"
@@ -286,7 +324,11 @@ class SlingshotRouter:
 
                 if not rr_verdict["approved"]:
                     print(f"[ROUTER] 🔴 Señal RECHAZADA por Portero R:R | {sig.get('signal_type','?')} {asset} | {rr_verdict['reason']}")
-                    continue  # La señal no llega al MemoryStore ni al Frontend.
+                    # ✅ AUDIT MODE: No descartar, incluir en blocked_signals con el motivo
+                    sig["status"] = "BLOCKED_BY_FILTER"
+                    sig["blocked_reason"] = rr_verdict["reason"]
+                    result['blocked_signals'].append(sig)
+                    continue  # Aún así no pasa al Terminal activo
 
                 # 🧠 CONFLUENCE SCORE — Evaluación institucional en tiempo real
                 try:

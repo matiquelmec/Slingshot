@@ -74,11 +74,20 @@ async def generate_tactical_advice(asset: str, tactical_data: dict, current_sess
     # Definir R:R dinámico basado en la estrategia
     recommended_rr = "1:2" if "REVERSION" in strategy else "1:3"
 
+    # Extraer Sesgo Institucional (HTF)
+    htf = tactical_data.get('htf_bias', {}) or {}
+    htf_dir = str(htf.get('direction', 'NEUTRAL')).upper()
+    htf_reason = htf.get('reason', 'Sin datos institucionales suficientes.')
+
     prompt = f"""
-    Eres el 'Asesor Cuantitativo Institucional' del sistema Slingshot.
-    Tu trabajo es leer los datos en crudo de la Matriz de Confluencia HFT y emitir UN (1) resumen táctico analítico de máximo 3 oraciones.
+    Eres el 'Asesor Cuantitativo Institucional' del sistema Slingshot. Operas bajo un modelo MTF (Multi-Timeframe) de 3 capas.
+    Tu trabajo es leer los datos en crudo de la Matriz de Confluencia y emitir UN (1) resumen táctico analítico de máximo 3 oraciones.
     
-    ESTADO ACTUAL DEL MERCADO ({asset}):
+    CONTEXTO INSTITUCIONAL (HIGH TIMEFRAME - 4H/1H):
+    - Sesgo Global: {htf_dir}
+    - Razón Institucional: {htf_reason}
+
+    ESTADO ACTUAL DEL MERCADO LOCAL ({asset}):
     - Sesión Activa: {current_session} | Dentro de KillZone: {in_killzone}
     - Régimen Wyckoff: {regime} | Estrategia Seleccionada: {strategy}
     - RSI: {rsi:.1f} | MACD Estado: {macd_cross} | Volatilidad (BBWP): {bbwp:.1f}% (Squeeze: {squeeze})
@@ -87,7 +96,7 @@ async def generate_tactical_advice(asset: str, tactical_data: dict, current_sess
     NIVELES CLAVE Y ESTRUCTURA (SMC):
     - Soporte Más Cercano: ${support} | Resistencia Más Cercana: ${resistance}
     - Nivel Fibonacci Actual: {fibo_lvl}
-    - Liquidez Institucional: {obs_bullish + fvgs_bullish} zonas de Demanda (Alcistas) y {obs_bearish + fvgs_bearish} zonas de Oferta (Bajistas).
+    - Liquidez Institucional: {obs_bullish + fvgs_bullish} zonas de Demanda y {obs_bearish + fvgs_bearish} zonas de Oferta.
     
     INTELIGENCIA ARTIFICIAL MECÁNICA (XGBoost):
     - Proyección Algorítmica Probabilística: {ml_dir} ({ml_prob}%)
@@ -95,8 +104,8 @@ async def generate_tactical_advice(asset: str, tactical_data: dict, current_sess
     REGLAS ESTRICTAS PARA TU RESPUESTA:
     1. DEBES devolver ÚNICAMENTE el texto final, ortografía PERFECTA, sin markdown.
     2. El tono debe ser frío, militar, ultra-preciso, analítico y en MAYÚSCULAS PURAS.
-    3. Si las métricas (SMC, RSI, ML) convergen, emite una directiva clara (ej: "DESPLEGAR LARGOS").
-    4. Si hay contradicción grave, recomienda "ESPERAR CONFIRMACIÓN" o "MANTENERSE AL MARGEN".
+    3. PRIORIDAD ESTRATÉGICA: El Sesgo Global (HTF) manda. No recomiendes entrar contra el HTF a menos que el ML sea >85%.
+    4. Si hay contradicción grave entre HTF y Local, recomienda "ESPERAR CONFIRMACIÓN" o "MANTENERSE AL MARGEN".
     5. AL FINAL de tu mensaje, DEBES incluir obligatoriamente [R:R TGT {recommended_rr}]
     """
 

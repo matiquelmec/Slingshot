@@ -2,7 +2,7 @@
 
 import React, { useEffect } from 'react';
 import { AnimatePresence } from 'framer-motion';
-import { Network } from 'lucide-react';
+import { Network, ShieldAlert, Check } from 'lucide-react';
 import { useSearchParams } from 'next/navigation';
 // Store & Types
 import { useTelemetryStore } from '../../store/telemetryStore';
@@ -23,6 +23,8 @@ export default function SignalTerminal() {
     // ⚠️ Se actualiza ~10 veces por segundo en volatilidad extrema
     const currentPrice_live = useTelemetryStore(state => state.latestPrice);
     const signalHistory = useTelemetryStore(state => state.signalHistory);
+    // ✅ CORRECCIÓN: Conectar auditedSignals del store WebSocket
+    const auditedSignals = useTelemetryStore(state => state.auditedSignals);
 
     // ✅ Se actualizan estáticamente / 1 vez cada cierre de vela (15 min)
     const tacticalDecision = useTelemetryStore(state => state.tacticalDecision as TacticalDecision);
@@ -34,7 +36,7 @@ export default function SignalTerminal() {
     const [globalSignals, setGlobalSignals] = React.useState<any[]>([]);
     const [isLoadingSignals, setIsLoadingSignals] = React.useState(true);
 
-    // ─── Sync con URL y Fetch Global ───
+    // ─── Sync con URL y Fetch Global (fallback REST) ───
     useEffect(() => {
         const symbol = searchParams.get('symbol');
         if (symbol && symbol !== activeSymbol) {
@@ -43,7 +45,8 @@ export default function SignalTerminal() {
 
         const fetchGlobal = async () => {
             try {
-                const res = await fetch(`http://localhost:8000/api/v1/signals`);
+                // ✅ CORRECCIÓN: Traer TODAS las señales (ACTIVE + BLOCKED) en el fallback REST
+                const res = await fetch(`http://localhost:8000/api/v1/signals?status=ALL`);
                 if (res.ok) {
                     const data = await res.json();
                     setGlobalSignals(data);
@@ -63,6 +66,19 @@ export default function SignalTerminal() {
         };
     }, [searchParams, activeSymbol, connect]);
 
+    // ✅ CORRECCIÓN: Prioridad del feed:
+    // 1. auditedSignals (WebSocket real-time — lo más reciente)
+    // 2. globalSignals  (REST poll — fallback cuando no hay WS aún)
+    // 3. signalHistory  (localStorage — señales guardadas de sesiones anteriores)
+    const displaySignals = auditedSignals.length > 0
+        ? auditedSignals
+        : globalSignals.length > 0
+            ? globalSignals
+            : signalHistory;
+
+    const activeCount = displaySignals.filter(s => s.status === 'ACTIVE').length;
+    const blockedCount = displaySignals.filter(s => s.status?.startsWith('BLOCKED')).length;
+
     return (
         <div className="flex flex-col h-full bg-[#03070E]/80 backdrop-blur-2xl border-t border-white/10 overflow-hidden relative">
 
@@ -77,9 +93,19 @@ export default function SignalTerminal() {
                         CONFLUENCE MATRIX <span className="text-white/30 font-normal">|</span> <span className="text-neon-cyan/80">HFT DIAGNOSTICS</span>
                     </h2>
                 </div>
-                <div className="flex items-center gap-4 text-[10px] font-bold tracking-widest text-white/40">
-                    <span className="flex items-center gap-1.5"><Network size={12} className="text-neon-cyan/60" /> REAL-TIME</span>
-                    <span>{signalHistory?.length || 0} ACTIVE SIGNALS</span>
+                {/* ✅ CORRECCIÓN: Mostrar conteo de aprobadas vs bloqueadas */}
+                <div className="flex items-center gap-3 text-[10px] font-bold tracking-widest text-white/40">
+                    <span className="flex items-center gap-1.5"><Network size={12} className="text-neon-cyan/60" /> AUDIT MODE</span>
+                    {activeCount > 0 && (
+                        <span className="flex items-center gap-1 text-neon-green/80">
+                            <Check size={10} /> {activeCount} APPROVED
+                        </span>
+                    )}
+                    {blockedCount > 0 && (
+                        <span className="flex items-center gap-1 text-red-400/80">
+                            <ShieldAlert size={10} /> {blockedCount} BLOCKED
+                        </span>
+                    )}
                 </div>
             </div>
 
@@ -112,23 +138,25 @@ export default function SignalTerminal() {
                     strategy={tacticalDecision?.strategy ?? null}
                 />
 
-                {/* 4. HISTORICAL SIGNAL SCROLL (HFT Actions) */}
+                {/* 4. SIGNAL AUDIT FEED (Aprobadas + Bloqueadas en tiempo real) */}
                 <div className="flex-1 overflow-y-auto custom-scrollbar p-2">
-                    {isLoadingSignals && globalSignals.length === 0 ? (
+                    {isLoadingSignals && displaySignals.length === 0 ? (
                         <div className="h-full flex items-center justify-center text-neon-cyan/20 animate-pulse text-[10px] font-mono tracking-widest">
                             CONECTANDO CON EL FEED GLOBAL...
                         </div>
-                    ) : globalSignals.length === 0 && (!signalHistory || signalHistory.length === 0) ? (
+                    ) : displaySignals.length === 0 ? (
                         <div className="h-full flex items-center justify-center text-white/10 text-[10px] font-mono italic tracking-widest flex-col gap-2 relative">
                             <div className="absolute inset-0 bg-gradient-to-t from-transparent to-white/[0.01] pointer-events-none" />
+                            <ShieldAlert size={24} className="text-white/5" />
                             AWAITING ALGORITHMIC CONFLUENCE
+                            <span className="text-[9px] text-white/20 mt-1">El auditor activará cuando cierre la próxima vela</span>
                         </div>
                     ) : (
                         <div className="flex flex-col gap-2 px-2">
                             <AnimatePresence>
-                                {(globalSignals.length > 0 ? globalSignals : signalHistory).map((sig, idx) => (
+                                {displaySignals.map((sig, idx) => (
                                     <SignalCardItem
-                                        key={`${sig.timestamp}-${sig.type}-${sig.asset || idx}`}
+                                        key={`${sig.timestamp ?? sig.created_at}-${sig.type ?? sig.signal_type}-${sig.asset || idx}`}
                                         signal={sig}
                                         currentPrice={currentPrice_live}
                                     />

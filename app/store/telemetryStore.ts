@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { Signal, NeuralLog, KeyLevel, TacticalDecision, SessionData, SMCDataPayload, GhostData } from '../types/signal';
+import { Signal, NeuralLog, KeyLevel, TacticalDecision, SessionData, SMCDataPayload, GhostData, HTFBias } from '../types/signal';
 
 
 export interface CandleData {
@@ -34,7 +34,9 @@ interface TelemetryState {
     smcData: SMCDataPayload | null;
     sessionData: SessionData | null;
     ghostData: GhostData | null;
+    htfBias: HTFBias | null;
     signalHistory: Signal[];   // ← Historial persistente de señales (sobrevive HMR y navegación)
+    auditedSignals: Signal[];  // ← Todas las señales de la sesión actual: ACTIVE y BLOCKED
     activeConnectionId: string | null;
     connect: (symbol: string, timeframe?: Timeframe) => void;
     disconnect: () => void;
@@ -139,7 +141,9 @@ export const useTelemetryStore = create<TelemetryState>((set, get) => {
                     sma_fast: null, sma_slow: null, sma_slow_slope: null,
                     bb_width: null, bb_width_mean: null, dist_to_sma200: null, signals: [],
                     key_levels: { resistances: [], supports: [] }
-                }
+                },
+                htfBias: null,
+                auditedSignals: [] // Limpiar al conectar a un nuevo activo
             });
         } else {
             // Si es un reintento, mantenemos el ID pero lo registramos como activo
@@ -273,9 +277,18 @@ export const useTelemetryStore = create<TelemetryState>((set, get) => {
                                 key_levels: d.key_levels ?? { resistances: [], supports: [] },
                                 fibonacci: d.fibonacci ?? undefined,
                                 diagnostic: d.diagnostic ?? undefined,
+                                htf_bias: d.htf_bias ?? undefined,
                             },
+                            htfBias: d.htf_bias ?? state.htfBias,
                             signalHistory: newHistory,
                         };
+                    });
+                } else if (data.type === 'signal_auditor_update') {
+                    // Evento específico inyectado en WS desde v3.3 (Audit Mode)
+                    const sig = data.data as Signal;
+                    set((state) => {
+                        const newAudited = [sig, ...state.auditedSignals].slice(0, 100); // Guardar últimas 100 evaluadas
+                        return { auditedSignals: newAudited };
                     });
                 } else if (data.type === 'advisor_update') {
                     set({ advisor_log: data.data });
@@ -389,8 +402,10 @@ export const useTelemetryStore = create<TelemetryState>((set, get) => {
         smcData: null,
         sessionData: null,
         ghostData: null,
+        htfBias: null,
         liquidityHeatmap: null,
         signalHistory: typeof window !== 'undefined' ? _loadSignalHistory() : [],
+        auditedSignals: [],
         activeConnectionId: null,
 
         connect: (symbol: string, timeframe?: Timeframe) => {
