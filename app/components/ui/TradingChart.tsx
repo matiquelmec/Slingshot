@@ -110,6 +110,8 @@ export default function TradingChart() {
     const macdLineRef = useRef<ISeriesApi<'Line'> | null>(null);
     const macdSigRef = useRef<ISeriesApi<'Line'> | null>(null);
     const macdHistRef = useRef<ISeriesApi<'Histogram'> | null>(null);
+    const sessionSeriesRef = useRef<ISeriesApi<'Baseline'>[]>([]);
+    const killzoneSeriesRef = useRef<ISeriesApi<'Baseline'>[]>([]);
 
     const markersSeriesRef = useRef<any>(null);
 
@@ -617,15 +619,93 @@ export default function TradingChart() {
         }
 
 
-        // ── Niveles de Sesión ───────────────────────────────────────────────
+        // ── Niveles de Sesión (Session Brackets v2) ──────────────────────────
+        const chart = chartRef.current;
+        if (!chart) return;
+
+        // Limpiar Brackets anteriores
+        sessionSeriesRef.current.forEach(s => { try { chart.removeSeries(s); } catch(e){} });
+        sessionSeriesRef.current = [];
+        killzoneSeriesRef.current.forEach(s => { try { chart.removeSeries(s); } catch(e){} });
+        killzoneSeriesRef.current = [];
+
+        const sorted = [...candles]
+            .sort((a, b) => Number(a.time) - Number(b.time))
+            .filter((c, i, arr) => i === 0 || c.time !== arr[i - 1].time);
+
         if (sessionData) {
-            const { sessions, pdh, pdl } = sessionData;
-            addLine(pdh, 'rgba(255,255,255,0.55)', 'PDH', LineStyle.LargeDashed);
-            addLine(pdl, 'rgba(255,255,255,0.55)', 'PDL', LineStyle.LargeDashed);
-            addLine(sessions.asia.high, 'rgba(251,146,60,0.7)', 'Asia H', LineStyle.Dotted);
-            addLine(sessions.asia.low, 'rgba(251,146,60,0.7)', 'Asia L', LineStyle.Dotted);
-            addLine(sessions.london.high, 'rgba(96,165,250,0.7)', 'Lon H', LineStyle.Dotted);
-            addLine(sessions.london.low, 'rgba(96,165,250,0.7)', 'Lon L', LineStyle.Dotted);
+            const { pdh, pdl } = sessionData;
+            // 1. PDH / PDL (Líneas maestras infinitas) - Siempre visibles si hay datos
+            addLine(pdh, 'rgba(0, 255, 255, 0.4)', 'PDH', LineStyle.Dashed, 2);
+            addLine(pdl, 'rgba(0, 255, 255, 0.4)', 'PDL', LineStyle.Dashed, 2);
+        }
+
+        if (sessionData && sessionData.sessions && isEnabled('session')) {
+            console.log("🎨 Drawing Session Brackets:", sessionData.current_session);
+            const { sessions } = sessionData;
+
+            const sessionColors: Record<string, { color: string; bg: string; kz: string }> = {
+                asia:   { color: 'rgba(251,146,60,0.8)', bg: 'rgba(251,146,60,0.15)', kz: 'rgba(251,146,60,0.05)' },
+                london: { color: 'rgba(96,165,250,0.8)', bg: 'rgba(96,165,250,0.15)', kz: 'rgba(96,165,250,0.05)' },
+                ny:     { color: 'rgba(192,132,252,0.8)', bg: 'rgba(192,132,252,0.15)', kz: 'rgba(192,132,252,0.05)' },
+            };
+
+            // Sanitización de velas para dibujo de brackets
+            const sorted = [...candles]
+                .sort((a, b) => Number(a.time) - Number(b.time))
+                .filter((c, i, arr) => i === 0 || c.time !== arr[i - 1].time);
+
+            Object.entries(sessions).forEach(([id, info]: [string, any]) => {
+                if (info.high == null || info.low == null) return;
+
+                // Crear Brackets (Caja de Sesión)
+                const bracket = chart.addSeries(BaselineSeries, {
+                    baseValue: { type: 'price', price: info.low },
+                    topFillColor1: sessionColors[id].bg,
+                    topFillColor2: 'transparent',
+                    topLineColor: sessionColors[id].color,
+                    lineWidth: 1,
+                    bottomFillColor1: 'transparent',
+                    bottomFillColor2: 'transparent',
+                    bottomLineColor: 'transparent',
+                    priceLineVisible: false,
+                    lastValueVisible: false,
+                    crosshairMarkerVisible: false,
+                });
+
+                // Filtrar velas que pertenecen a esta sesión (UTC logic)
+                const sessionDataPoints = sorted
+                    .filter(c => {
+                        const h = new Date(Number(c.time) * 1000).getUTCHours();
+                        if (info.start_utc < info.end_utc) return h >= info.start_utc && h < info.end_utc;
+                        return h >= info.start_utc || h < info.end_utc;
+                    })
+                    .map(c => ({ time: c.time, value: info.high }));
+
+                if (sessionDataPoints.length > 0) {
+                    bracket.setData(sessionDataPoints as any);
+                    sessionSeriesRef.current.push(bracket);
+                }
+
+                // 2. Killzone Glow (Si la sesión es de Killzone - Versión Segura)
+                const isKillzoneSession = (id === 'london' && sessionData.is_killzone) || (id === 'ny' && sessionData.is_killzone);
+                if (isKillzoneSession) {
+                    const kzGlow = chart.addSeries(BaselineSeries, {
+                        baseValue: { type: 'price', price: info.low },
+                        topFillColor1: sessionColors[id].kz,
+                        topFillColor2: sessionColors[id].kz,
+                        topLineColor: 'transparent',
+                        lineWidth: 1,
+                        priceLineVisible: false,
+                        lastValueVisible: false,
+                        crosshairMarkerVisible: false,
+                    });
+                    
+                    const kzPoints = sessionDataPoints.map(p => ({ time: p.time, value: info.high }));
+                    kzGlow.setData(kzPoints as any);
+                    killzoneSeriesRef.current.push(kzGlow);
+                }
+            });
         }
 
         // ── Fibonacci (Autofib) ─────────────────────────────────────────────

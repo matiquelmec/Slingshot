@@ -3,7 +3,8 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Clock, Zap, TrendingUp, TrendingDown, Minus } from 'lucide-react';
-import { useTelemetryStore, SessionData, SessionInfo } from '../../store/telemetryStore';
+import { useTelemetryStore } from '../../store/telemetryStore';
+import { SessionData, SessionInfo } from '../../types/signal';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -149,12 +150,35 @@ export default function SessionClock() {
             {/* Header */}
             <div className="p-4 border-b border-white/5 flex items-center justify-between bg-white/[0.01]">
                 <div className="flex items-center gap-2.5">
-                    <Clock size={15} className="text-neon-cyan" />
-                    <h2 className="text-xs font-bold text-white/90 tracking-widest">SESIONES DE MERCADO</h2>
+                    <div className="relative">
+                        <Clock size={15} className="text-neon-cyan" />
+                        <motion.div 
+                            animate={{ opacity: [0.4, 1, 0.4] }}
+                            transition={{ repeat: Infinity, duration: 2 }}
+                            className="absolute -top-1 -right-1 w-1.5 h-1.5 bg-neon-cyan rounded-full shadow-[0_0_5px_rgba(0,255,255,0.8)]"
+                        />
+                    </div>
+                    <div className="flex flex-col">
+                        <h2 className="text-xs font-bold text-white/90 tracking-widest leading-none">SESIONES DE MERCADO</h2>
+                        <span className="text-[8px] font-black text-neon-cyan/50 mt-1 flex items-center gap-1 uppercase">
+                            <span className="w-1 h-1 bg-neon-cyan rounded-full animate-pulse" />
+                            Global Master Sync v2
+                        </span>
+                    </div>
                 </div>
-                <div className="text-right">
-                    <p className="text-[10px] font-mono text-white/50">{utcStr}</p>
-                    <p className="text-[10px] font-mono text-white/30">{chileStr}</p>
+                <div className="text-right flex flex-col items-end">
+                    <div className="flex gap-2 items-center mb-1">
+                        <span className="text-[9px] font-bold text-white/30 tracking-tighter uppercase px-1.5 py-0.5 rounded border border-white/5 bg-white/[0.02]">
+                            🗽 {sessionData?.local_time_ny || '--:--'} NY
+                        </span>
+                        <span className="text-[9px] font-bold text-white/30 tracking-tighter uppercase px-1.5 py-0.5 rounded border border-white/5 bg-white/[0.02]">
+                            🏦 {sessionData?.local_time_lon || '--:--'} LON
+                        </span>
+                    </div>
+                    <div className="flex gap-2 items-baseline">
+                        <p className="text-[10px] font-mono font-bold text-white/60">{utcStr}</p>
+                        <p className="text-[10px] font-mono font-bold text-neon-cyan/60">{chileStr}</p>
+                    </div>
                 </div>
             </div>
 

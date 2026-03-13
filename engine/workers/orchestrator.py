@@ -2,6 +2,8 @@ import asyncio
 from typing import List, Dict, Optional
 from engine.api.config import settings
 from engine.api.ws_manager import registry
+from engine.indicators.ghost_data import refresh_ghost_data, load_local_state, get_ghost_state
+from engine.core.session_manager import SessionManager
 
 class SlingshotOrchestrator:
     """
@@ -20,7 +22,13 @@ class SlingshotOrchestrator:
         print(f"🚀 [ORCHESTRATOR] Iniciando Motor Local Master (Modo 100% Dinámico)...")
         
         # Sincronización inicial para poblar radar_assets
+        load_local_state() # Cargar datos macro previos si existen
         await self.sync_watchlists()
+        
+        # Iniciar Worker de Radar Macro (Ghost Data)
+        asyncio.create_task(self._ghost_worker())
+        # Iniciar Worker de Sesiones Globales
+        asyncio.create_task(self._session_worker())
         
         # Si la DB está vacía, podemos poner BTC por defecto para que el motor no esté ocioso
         if not self.radar_assets:
@@ -72,6 +80,47 @@ class SlingshotOrchestrator:
                 if key not in registry._broadcasters:
                     print(f"🚨 [ORCHESTRATOR] Alerta: Sensor {key} caído. Reiniciando...")
                     await self.spawn_persistent_broadcaster(symbol, interval)
+
+    async def _ghost_worker(self):
+        """Worker secundario que refresca los datos macro globales cada 15 min."""
+        print("🔮 [ORCHESTRATOR] Sensor Macro (Ghost) activado.")
+        while not self._stop_event.is_set():
+            try:
+                # Refrescar datos macro (usando BTC como proxy global)
+                state = await refresh_ghost_data("BTCUSDT")
+                print(f"[ORCHESTRATOR] 🔮 Radar Macro actualizado: {state.macro_bias}")
+            except Exception as e:
+                print(f"⚠️ [ORCHESTRATOR] Error en Radar Macro: {e}")
+            
+            # Esperar 15 minutos (900s) para el próximo ciclo macro
+            await asyncio.sleep(900)
+
+    async def _session_worker(self):
+        """Worker que sincroniza el estado de las sesiones globales cada minuto."""
+        print("🕒 [ORCHESTRATOR] Sincronizador de Sesiones Globales activo.")
+        last_session = None
+        
+        while not self._stop_event.is_set():
+            try:
+                # Obtener estado global (basado en tiempo)
+                status = SessionManager.get_global_session_status()
+                current = status["current_session"]
+                
+                # Solo hacer broadcast si la sesión cambió o cada 5 minutos por seguridad
+                if current != last_session:
+                    print(f"[ORCHESTRATOR] 🌎 Cambio de Sesión detectado: {current}")
+                    last_session = current
+                    
+                    # Hacer broadcast a todos los broadcasters activos
+                    payload = {"type": "session_update", "data": status}
+                    for broadcaster in registry._broadcasters.values():
+                        await broadcaster._broadcast(payload)
+                        
+            except Exception as e:
+                print(f"⚠️ [ORCHESTRATOR] Error en Worker de Sesiones: {e}")
+            
+            # Revisar cada 1 minuto (60s)
+            await asyncio.sleep(60)
 
     def stop(self):
         """Parada coordinada."""

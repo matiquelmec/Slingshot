@@ -8,7 +8,8 @@ CARACTERÍSTICAS:
 - DST-Aware: usa pytz para calcular horas reales de NY, Londres y Chile
 - Memoria persistente: sobrevive reinicios del servidor
 - Auto-rotación: detecta cambio de día UTC y rota PDH/PDL automáticamente
-- Tiempo real: se actualiza con cada tick, no solo al cierre de vela
+- Tiempo- Global Mastery: Proporciona estado de sesión independiente del símbolo
+- Real-time: Actualización por tiempo y por ticks
 """
 
 import json
@@ -36,7 +37,7 @@ def _empty_session() -> dict:
     return {
         "high": None, "low": None,
         "swept_high": False, "swept_low": False,
-        "prev_high": None, "prev_low": None,   # niveles del día anterior como referencia
+        "prev_high": None, "prev_low": None,
     }
 
 
@@ -382,6 +383,47 @@ class SessionManager:
         """Retorna el estado actual de sesiones sin necesitar un candle nuevo."""
         now_utc = datetime.now(timezone.utc)
         return self._build_payload(now_utc)
+
+    # ──────────────────────────────────────────────────────────────────────
+    # GLOBAL SESSION MASTERY (v2)
+    # ──────────────────────────────────────────────────────────────────────
+    @staticmethod
+    def get_global_session_status() -> dict:
+        """
+        Calcula el estado de las sesiones basado ÚNICAMENTE en el tiempo.
+        Ideal para el Orchestrator para broadcast global.
+        """
+        now_utc = datetime.now(timezone.utc)
+        now_ny  = now_utc.astimezone(_NY_TZ)
+        now_lon = now_utc.astimezone(_LONDON_TZ)
+        now_tokyo = now_utc.astimezone(_TOKYO_TZ)
+
+        ny_hour  = now_ny.hour
+        lon_hour = now_lon.hour
+        tok_hour = now_tokyo.hour
+
+        # Detección de sesión activa
+        if 9 <= tok_hour < 15:
+            session_name, is_killzone = "ASIA", False
+        elif 8 <= lon_hour < 11:
+            session_name, is_killzone = "LONDON_KILLZONE", True
+        elif 11 <= lon_hour < 16 and ny_hour < 8:
+            session_name, is_killzone = "LONDON", False
+        elif 8 <= ny_hour < 11:
+            session_name, is_killzone = "NY_KILLZONE", True
+        elif 11 <= ny_hour < 16:
+            session_name, is_killzone = "NEW_YORK", False
+        else:
+            session_name, is_killzone = "OFF_HOURS", False
+
+        return {
+            "current_session": session_name,
+            "is_killzone": is_killzone,
+            "local_time_ny": now_ny.strftime("%H:%M"),
+            "local_time_lon": now_lon.strftime("%H:%M"),
+            "local_time_chile": now_utc.astimezone(_CHILE_TZ).strftime("%H:%M"),
+            "timestamp_utc": now_utc.timestamp()
+        }
 
 
 # ──────────────────────────────────────────────────────────────────────────────

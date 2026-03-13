@@ -40,7 +40,10 @@ from engine.indicators.structure import (
     identify_support_resistance, get_key_levels, consolidate_mtf_levels
 )
 from engine.indicators.liquidity import detect_liquidity_clusters
-from engine.indicators.ghost_data import refresh_ghost_data, get_ghost_state, filter_signals_by_macro, is_cache_fresh
+from engine.indicators.ghost_data import (
+    refresh_ghost_data, get_ghost_state, filter_signals_by_macro, 
+    is_cache_fresh, fetch_funding_rate, compute_symbol_ghost
+)
 from engine.ml.features import FeatureEngineer
 from engine.ml.inference import ml_engine
 from engine.ml.drift_monitor import drift_monitor
@@ -305,22 +308,11 @@ class SymbolBroadcaster:
             except Exception as e:
                 print(f"[BROADCASTER] {self._key} → MTF fallido: {e}")
 
-        # 3. Ghost Data (Fear & Greed, BTCD, Funding)
+        # 3. Ghost Data (Fear & Greed, BTCD, Funding específico)
         try:
-            ghost = await refresh_ghost_data(self.symbol)
-            await self._broadcast({"type": "ghost_update", "data": {
-                "fear_greed_value": ghost.fear_greed_value,
-                "fear_greed_label": ghost.fear_greed_label,
-                "btc_dominance":    ghost.btc_dominance,
-                "funding_rate":     ghost.funding_rate,
-                "macro_bias":       ghost.macro_bias,
-                "block_longs":      ghost.block_longs,
-                "block_shorts":     ghost.block_shorts,
-                "reason":           ghost.reason,
-                "last_updated":     ghost.last_updated,
-            }})
+            asyncio.create_task(self._refresh_ghost())
         except Exception as e:
-            print(f"[BROADCASTER] {self._key} → Ghost Data no disponible: {e}")
+            print(f"[BROADCASTER] {self._key} → Ghost Data inicial error: {e}")
 
         # 4. Bootstrap SMC + Sesiones + Pipeline inicial
         if history:
@@ -431,9 +423,10 @@ class SymbolBroadcaster:
                 if now - self._last_pulse_ts >= pulse_interval:
                     self._last_pulse_ts = now
 
-                    # Ghost Data auto-refresh si el caché está vencido
-                    if not is_cache_fresh():
-                        asyncio.create_task(self._refresh_ghost())
+                    # Sincronización con Ghost Data Centralizado
+                    ghost = get_ghost_state()
+                    if not ghost.is_stale and (not self._last_ghost or ghost.last_updated > self._last_ghost.get("data", {}).get("last_updated", 0)):
+                        await self._refresh_ghost(ghost)
 
                     # ML Inference (XGBoost, <50ms)
                     current_buffer = [i["data"] for i in self._live_buffer] + [candle_payload["data"]]
@@ -628,15 +621,27 @@ class SymbolBroadcaster:
             print(f"[BROADCASTER] ❌ {self._key} → Advisor error: {e}")
             traceback.print_exc()
 
-    async def _refresh_ghost(self):
-        """Refresca Ghost Data y broadcast."""
+    async def _refresh_ghost(self, global_ghost=None):
+        """Refresca Ghost Data (Funding específico + Global context) y broadcast."""
         try:
-            ghost = await refresh_ghost_data(self.symbol)
+            # 1. Obtener contexto global (F&G, Dominancia)
+            if not global_ghost:
+                global_ghost = get_ghost_state()
+            
+            # 2. Obtener Funding específico de este símbolo en tiempo real
+            local_funding = await fetch_funding_rate(self.symbol)
+            
+            # 3. Calcular Bias híbrido
+            ghost = compute_symbol_ghost(global_ghost, self.symbol, local_funding)
+            
+            # 4. Broadcast
             await self._broadcast({"type": "ghost_update", "data": {
+                "symbol":           self.symbol,
                 "fear_greed_value": ghost.fear_greed_value,
                 "fear_greed_label": ghost.fear_greed_label,
                 "btc_dominance":    ghost.btc_dominance,
                 "funding_rate":     ghost.funding_rate,
+                "funding_symbol":   ghost.funding_symbol,
                 "macro_bias":       ghost.macro_bias,
                 "block_longs":      ghost.block_longs,
                 "block_shorts":     ghost.block_shorts,
@@ -644,7 +649,7 @@ class SymbolBroadcaster:
                 "last_updated":     ghost.last_updated,
             }})
         except Exception as e:
-            print(f"[BROADCASTER] {self._key} → Ghost refresh error: {e}")
+            print(f"[BROADCASTER] {self._key} → Ghost specific refresh error: {e}")
 
     async def _check_drift(self, df: pd.DataFrame):
         """Ejecuta el drift monitor y broadcast alerta si hay drift."""

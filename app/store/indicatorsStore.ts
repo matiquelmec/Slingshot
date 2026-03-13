@@ -26,6 +26,7 @@ export const INDICATOR_DEFAULTS: Indicator[] = [
     { id: 'sr', label: 'Soporte / Resistencia', sublabel: 'Zonas Institucionales (MTF)', enabled: true, color: '#00E5FF' },
     { id: 'smc', label: 'SMC Blocks', sublabel: 'Estructura Institucional (OBs)', enabled: false, color: '#00FF41' },
     { id: 'fvg', label: 'Fair Value Gaps', sublabel: 'Vacíos de Liquidez (FVG)', enabled: false, color: '#FFCC00' },
+    { id: 'session', label: 'Sesiones de Mercado', sublabel: 'Brackets & Killzones (Master Sync)', enabled: true, color: '#C084FC' },
 ];
 
 export const useIndicatorsStore = create<IndicatorsState>((set) => ({

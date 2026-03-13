@@ -94,6 +94,10 @@ export interface SessionData {
     current_session: string;
     current_session_utc?: string;
     local_time?: string;
+    local_time_ny?: string;
+    local_time_lon?: string;
+    local_time_chile?: string;
+    timestamp_utc?: number;
     is_killzone?: boolean;
     sessions?: { asia: SessionInfo; london: SessionInfo; ny: SessionInfo; };
     pdh: number | null;
@@ -122,10 +126,12 @@ export interface SMCDataPayload {
 }
 
 export interface GhostData {
+    symbol?: string;
     fear_greed_value: number;
     fear_greed_label: string;
     btc_dominance: number;
     funding_rate: number;
+    funding_symbol?: string;
     macro_bias: 'BULLISH' | 'BEARISH' | 'NEUTRAL' | 'BLOCK_LONGS' | 'BLOCK_SHORTS' | 'CONFLICTED' | string;
     block_longs: boolean;
     block_shorts: boolean;

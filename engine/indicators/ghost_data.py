@@ -17,7 +17,9 @@ import os
 import asyncio
 import time
 import httpx
-from dataclasses import dataclass, field
+import json
+from pathlib import Path
+from dataclasses import dataclass, field, asdict
 from typing import Optional
 
 # ── Credenciales ────────────────────────────────────────────────────────────
@@ -53,13 +55,40 @@ class GhostState:
     is_stale: bool                  = True
 
 
-# ── Cache en memoria ─────────────────────────────────────────────────────────
+# ── Cache & Persistencia en memoria ──────────────────────────────────────────
 _cache: GhostState = GhostState()
 _TTL_SECONDS = 900   # 15 minutos — igual a 1 vela de 15m
+_STATE_FILE = Path(__file__).parent.parent / "data" / "macro_state.json"
 
 
 def is_cache_fresh() -> bool:
+    """Verifica si el caché en RAM es reciente."""
     return (time.time() - _cache.last_updated) < _TTL_SECONDS
+
+
+def load_local_state():
+    """Carga el último estado guardado en disco al arrancar el motor."""
+    global _cache
+    if _STATE_FILE.exists():
+        try:
+            with open(_STATE_FILE, 'r') as f:
+                data = json.load(f)
+                # Filtrar solo los campos que existen en la dataclass
+                valid_fields = {k: v for k, v in data.items() if k in GhostState.__dataclass_fields__}
+                _cache = GhostState(**valid_fields)
+                print(f"[GHOST] 💾 Estado local cargado (F&G={_cache.fear_greed_value})")
+        except Exception as e:
+            print(f"[GHOST] ⚠️ Error cargando estado previo: {e}")
+
+
+def save_local_state(state: GhostState):
+    """Persiste el estado en disco para evitar 'fallbacks' al reiniciar."""
+    try:
+        _STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
+        with open(_STATE_FILE, 'w') as f:
+            json.dump(asdict(state), f, indent=2)
+    except Exception as e:
+        print(f"[GHOST] ⚠️ Error guardando estado en disco: {e}")
 
 
 # ── Fetchers individuales ─────────────────────────────────────────────────────
@@ -96,7 +125,7 @@ async def _fetch_btc_dominance() -> float:
         return 50.0
 
 
-async def _fetch_funding_rate(symbol: str = "BTCUSDT") -> float:
+async def fetch_funding_rate(symbol: str = "BTCUSDT") -> float:
     """
     Última tasa de financiación del perpetual en Binance Futures.
     Endpoint público, sin autenticación.
@@ -106,16 +135,16 @@ async def _fetch_funding_rate(symbol: str = "BTCUSDT") -> float:
     try:
         async with httpx.AsyncClient(timeout=8.0) as client:
             r = await client.get(
-                f"https://fapi.binance.com/fapi/v1/premiumIndex",
+                "https://fapi.binance.com/fapi/v1/premiumIndex",
                 params={"symbol": symbol.upper()}
             )
             r.raise_for_status()
             data = r.json()
-            if data and "lastFundingRate" in data:
+            if isinstance(data, dict) and "lastFundingRate" in data:
                 return float(data["lastFundingRate"]) * 100  # → porcentaje
             return 0.0
     except Exception as e:
-        print(f"[GHOST] ⚠️  Funding Rate fetch error: {e}")
+        print(f"[GHOST] ⚠️  Funding Rate fetch error for {symbol}: {e}")
         return 0.0
 
 
@@ -194,7 +223,7 @@ async def refresh_ghost_data(symbol: str = "BTCUSDT") -> GhostState:
     results = await asyncio.gather(
         _fetch_fear_greed(),
         _fetch_btc_dominance(),
-        _fetch_funding_rate(symbol),
+        fetch_funding_rate(symbol),
         return_exceptions=True
     )
 
@@ -227,6 +256,9 @@ async def refresh_ghost_data(symbol: str = "BTCUSDT") -> GhostState:
         is_stale         = False,
     )
 
+    # Persistir en disco para el próximo inicio
+    save_local_state(_cache)
+
     print(
         f"[GHOST] ✅ F&G={fng_val} ({fng_label}) | BTCD={btcd}% | "
         f"Funding={funding:.4f}% | Bias={bias}"
@@ -240,14 +272,54 @@ async def refresh_ghost_data(symbol: str = "BTCUSDT") -> GhostState:
 
 
 
-def get_ghost_state() -> GhostState:
+def get_ghost_state(symbol: Optional[str] = None) -> GhostState:
     """
-    Devuelve el último estado conocido del caché (síncrono).
-    Usar en el pipeline síncrono de main_router.py.
-    Si el caché está stale, igual devuelve el último valor conocido
-    (el refresh async se dispara aparte en api/main.py).
+    Devuelve el estado macro global. 
+    Si se pide un símbolo específico que no es el del caché global, 
+    mantenemos los datos macro (F&G, BTCD) pero reseteamos el funding 
+    para que el Broadcaster lo actualice con su valor real.
     """
-    return _cache
+    if not symbol or symbol.upper() == _cache.funding_symbol.upper():
+        return _cache
+    
+    # Contexto global con funding neutro para el nuevo símbolo
+    # El broadcaster se encargará de llamar a refresh_ghost_data(symbol) enseguida
+    return GhostState(
+        fear_greed_value = _cache.fear_greed_value,
+        fear_greed_label = _cache.fear_greed_label,
+        btc_dominance    = _cache.btc_dominance,
+        funding_rate     = 0.0,
+        funding_symbol   = symbol.upper(),
+        macro_bias       = _cache.macro_bias,
+        block_longs      = _cache.block_longs,
+        block_shorts     = _cache.block_shorts,
+        reason           = _cache.reason,
+        last_updated     = _cache.last_updated,
+        is_stale         = _cache.is_stale
+    )
+
+
+def compute_symbol_ghost(global_cache: GhostState, symbol: str, local_funding: float) -> GhostState:
+    """Combina el estado global con datos específicos de un activo."""
+    bias, block_long, block_short, reason = _compute_bias(
+        global_cache.fear_greed_value, 
+        global_cache.btc_dominance, 
+        local_funding
+    )
+    
+    return GhostState(
+        fear_greed_value = global_cache.fear_greed_value,
+        fear_greed_label = global_cache.fear_greed_label,
+        btc_dominance    = global_cache.btc_dominance,
+        funding_rate     = local_funding,
+        funding_symbol   = symbol,
+        macro_bias       = bias,
+        block_longs      = block_long,
+        block_shorts     = block_short,
+        reason           = reason,
+        last_updated     = global_cache.last_updated,
+        is_stale         = global_cache.is_stale
+    )
 
 
 def filter_signals_by_macro(signals: list[dict], ghost: GhostState) -> tuple[list[dict], list[dict]]:

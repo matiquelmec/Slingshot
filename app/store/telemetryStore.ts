@@ -277,7 +277,9 @@ export const useTelemetryStore = create<TelemetryState>((set, get) => {
                 } else if (data.type === 'advisor_update') {
                     set({ advisor_log: data.data });
                 } else if (data.type === 'session_update') {
-                    set({ sessionData: data.data });
+                    set((state) => ({ 
+                        sessionData: { ...(state.sessionData || {}), ...data.data } as any
+                    }));
                 } else if (data.type === 'smc_data') {
                     set({ smcData: data.data });
                     set((state) => {
@@ -291,22 +293,27 @@ export const useTelemetryStore = create<TelemetryState>((set, get) => {
                     });
                 } else if (data.type === 'ghost_update') {
                     const g = data.data || {};
-                    set({ ghostData: g });
-                    set((state) => {
-                        const biasIcons: Record<string, string> = {
-                            BULLISH: '🟢', BEARISH: '🔴', NEUTRAL: '⚪',
-                            BLOCK_LONGS: '🟠', BLOCK_SHORTS: '🟤', CONFLICTED: '🟡'
-                        };
-                        const icon = biasIcons[g.macro_bias] ?? '⚪';
-                        const fund = g.funding_rate != null ? Number(g.funding_rate).toFixed(4) : "0.0000";
-                        const newLog: NeuralLog = {
-                            id: Math.random().toString(36).substring(7),
-                            timestamp: new Date().toLocaleTimeString('en-US', { hour12: false }),
-                            type: g.block_longs || g.block_shorts ? 'ALERT' : 'SENSOR',
-                            message: `[GHOST] ${icon} F&G=${g.fear_greed_value ?? '?'} (${g.fear_greed_label ?? 'N/A'}) | BTCD=${g.btc_dominance ?? '?'}% | Fund=${fund}% | Bias=${g.macro_bias ?? 'N/A'}`
-                        };
-                        return { neuralLogs: [newLog, ...state.neuralLogs].slice(0, 5) };
-                    });
+                    const activeSym = get().activeSymbol;
+                    
+                    // Solo actualizar si el mensaje es para el activo que estamos viendo
+                    if (g.symbol && g.symbol === activeSym) {
+                        set({ ghostData: g });
+                        set((state) => {
+                            const biasIcons: Record<string, string> = {
+                                BULLISH: '🟢', BEARISH: '🔴', NEUTRAL: '⚪',
+                                BLOCK_LONGS: '🟠', BLOCK_SHORTS: '🟤', CONFLICTED: '🟡'
+                            };
+                            const icon = biasIcons[g.macro_bias] ?? '⚪';
+                            const fund = g.funding_rate != null ? Number(g.funding_rate).toFixed(4) : "0.0000";
+                            const newLog: NeuralLog = {
+                                id: Math.random().toString(36).substring(7),
+                                timestamp: new Date().toLocaleTimeString('en-US', { hour12: false }),
+                                type: g.block_longs || g.block_shorts ? 'ALERT' : 'SENSOR',
+                                message: `[GHOST] ${icon} F&G=${g.fear_greed_value ?? '?'} (${g.fear_greed_label ?? 'N/A'}) | BTCD=${g.btc_dominance ?? '?'}% | Fund=${fund}% | Bias=${g.macro_bias ?? 'N/A'}`
+                            };
+                            return { neuralLogs: [newLog, ...state.neuralLogs].slice(0, 5) };
+                        });
+                    }
                 } else if (data.type === 'drift_alert') {
                     const drift = data.data || {};
                     set((state) => {

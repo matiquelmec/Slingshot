@@ -70,14 +70,33 @@ export default function MacroRadar() {
                 </div>
 
                 {/* Funding Rate */}
-                <div className="flex flex-col gap-1">
-                    <span className="text-[9px] font-bold text-white/30 tracking-wider">FUNDING</span>
+                <div className="flex flex-col gap-1 relative group">
+                    <span className="text-[9px] font-bold text-white/30 tracking-wider flex items-center gap-1">
+                        FUNDING 
+                        <span className="text-neon-cyan/50 text-[8px] font-mono">[{ghostData.funding_symbol || '??'}]</span>
+                    </span>
                     <div className="flex items-baseline gap-1">
-                        <span className={`text-lg font-black ${funding_rate > 0 ? 'text-neon-red' : 'text-neon-green'}`}>
-                            {funding_rate.toFixed(4)}%
-                        </span>
+                        {funding_rate === 0 && !['BTCUSDT', 'ETHUSDT', 'SOLUSDT'].includes(ghostData.funding_symbol || '') ? (
+                            <span className="text-lg font-black text-white/40 uppercase tracking-tighter">SPOT</span>
+                        ) : (
+                            <motion.span 
+                                key={funding_rate}
+                                initial={{ opacity: 0, y: -5 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                className={`text-lg font-black tabular-nums ${funding_rate > 0 ? 'text-neon-red' : 'text-neon-green'}`}
+                            >
+                                {funding_rate.toFixed(4)}%
+                            </motion.span>
+                        )}
                     </div>
-                    <span className="text-[8px] font-bold text-white/20 uppercase">8h Avg</span>
+                    <span className="text-[8px] font-bold text-white/20 uppercase flex items-center justify-between">
+                        <span>{funding_rate === 0 && !['BTCUSDT', 'ETHUSDT', 'SOLUSDT'].includes(ghostData.funding_symbol || '') ? 'No Leverage' : '8h Avg'}</span>
+                        {ghostData.last_updated && (
+                            <span className="opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
+                                {new Date(ghostData.last_updated * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                            </span>
+                        )}
+                    </span>
                 </div>
             </div>
 
