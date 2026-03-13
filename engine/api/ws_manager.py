@@ -615,7 +615,7 @@ class SymbolBroadcaster:
                     current_session=session_state.get("data", {}).get("current_session", "UNKNOWN"),
                     ml_projection=self._last_ml
                 ),
-                timeout=20.0
+                timeout=60.0
             ) 
             print(f"[BROADCASTER] ✅ Análisis LLM completado para {self.symbol}")
             await self._broadcast({"type": "advisor_update", "data": advice})

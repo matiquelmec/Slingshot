@@ -1,33 +1,33 @@
-import google.generativeai as genai
+import httpx
 import traceback
 import asyncio
+import json
 from engine.api.config import settings
 
-# Limpieza profunda de la Key para evitar caracteres invisibles del .env
-GEMINI_API_KEY = settings.GEMINI_API_KEY.strip() if settings.GEMINI_API_KEY else None
+# Configuración de Ollama Local
+OLLAMA_URL = "http://localhost:11434/api/chat"
+DEFAULT_MODEL = "qwen3:8b" # El "Sweet Spot" para rendimiento y precisión local
 
-if GEMINI_API_KEY:
-    try:
-        genai.configure(api_key=GEMINI_API_KEY)
-        model = genai.GenerativeModel('gemini-2.5-flash')
-        print("[ADVISOR] 📡 Conectado a Gemini 2.5 Flash.")
-    except Exception as e:
-        print(f"[ADVISOR] ❌ Error configurando genai: {e}")
-        model = None
-else:
-    model = None
-    print("⚠️ [ADVISOR] GEMINI_API_KEY no encontrada.")
-
-# Semáforo global para evitar saturación de la API (Rate Limiting)
+# Semáforo global para evitar saturación de la CPU
 _ai_semaphore = asyncio.Semaphore(1)
+
+async def check_ollama_status():
+    """Verifica si el servidor de Ollama está corriendo."""
+    try:
+        async with httpx.AsyncClient(timeout=2.0) as client:
+            response = await client.get("http://localhost:11434/api/tags")
+            if response.status_code == 200:
+                print(f"[ADVISOR] 📡 Conectado a Ollama Local (Modelo: {DEFAULT_MODEL}).")
+                return True
+    except:
+        pass
+    print("⚠️ [ADVISOR] Ollama no detectado en localhost:11434. Asegúrate de que esté abierto.")
+    return False
 
 async def generate_tactical_advice(asset: str, tactical_data: dict, current_session: str, ml_projection: dict = None) -> str:
     """
-    Genera un consejo cuantitativo breve usando Gemini LLM de forma asíncrona.
+    Genera un consejo cuantitativo breve usando Ollama Local de forma asíncrona.
     """
-    if not model:
-        return "ADVISOR LOG: SYSTEM_OFFLINE (Missing API Key). Awaiting manual override."
-
     strategy = tactical_data.get('active_strategy', 'UNKNOWN')
     regime = tactical_data.get('market_regime', 'UNKNOWN')
     
@@ -66,14 +66,12 @@ async def generate_tactical_advice(asset: str, tactical_data: dict, current_sess
         ml_prob = float(p_raw) if p_raw is not None else 50.0
     except:
         ml_prob = 50.0
-    ml_reason = ml_projection.get('reason', 'SIN DATA')
     
     # Extraer Data de Fibonacci
     fibo = tactical_data.get('fibonacci', {}) or {}
     fibo_lvl = fibo.get('current_level') or 'N/A'
     
     # Definir R:R dinámico basado en la estrategia
-    # Reversion = Más defensivo (1:2) | Trend/SMC = Más agresivo (1:3 o superior)
     recommended_rr = "1:2" if "REVERSION" in strategy else "1:3"
 
     prompt = f"""
@@ -95,35 +93,37 @@ async def generate_tactical_advice(asset: str, tactical_data: dict, current_sess
     - Proyección Algorítmica Probabilística: {ml_dir} ({ml_prob}%)
     
     REGLAS ESTRICTAS PARA TU RESPUESTA:
-    1. DEBES devolver ÚNICAMENTE el texto final, ortografía PERFECTA, sin errores tipográficos simulados, sin markdown.
+    1. DEBES devolver ÚNICAMENTE el texto final, ortografía PERFECTA, sin markdown.
     2. El tono debe ser frío, militar, ultra-preciso, analítico y en MAYÚSCULAS PURAS.
     3. Si las métricas (SMC, RSI, ML) convergen, emite una directiva clara (ej: "DESPLEGAR LARGOS").
     4. Si hay contradicción grave, recomienda "ESPERAR CONFIRMACIÓN" o "MANTENERSE AL MARGEN".
-    5. No menciones los nombres de los indicadores si no aportan valor clave.
-    6. JAMÁS dejes la frase cortada a medias. Termina tu análisis limpiamente.
-    7. AL FINAL de tu mensaje, DEBES incluir obligatoriamente la recomendación de Ratio Riesgo/Beneficio dinámico adjunta en el formato [R:R TGT {recommended_rr}]
-
-    Ejemplo de respuesta ideal:
-    MÁXIMA CONFLUENCIA ALCISTA DETECTADA EN LONDRES KILLZONE. PRECIO APOYADO SOBRE DEMANDA INSTITUCIONAL CON IA PROYECTANDO 62% DE PROBABILIDAD. DESPLEGAR ÓRDENES LARGAS APUNTANDO A LA RESISTENCIA MÁS CERCANA. [R:R TGT 1:3]
+    5. AL FINAL de tu mensaje, DEBES incluir obligatoriamente [R:R TGT {recommended_rr}]
     """
 
     try:
-        # Usamos la versión síncrona dentro de un thread para evitar colgar el loop de asyncio
-        # y asegurar compatibilidad máxima con el SDK GenAI 0.8.x
-        import asyncio
         async with _ai_semaphore:
-            response = await asyncio.to_thread(
-                model.generate_content,
-                prompt,
-                generation_config=genai.types.GenerationConfig(
-                    temperature=0.0
-                )
-            )
-        advice = response.text.strip()
-        advice = advice.replace('\n', ' ').replace('**', '').replace('ADVISOR LOG:', '').strip()
-        print(f"[ADVISOR] ✅ Análisis generado para {asset} ({len(advice)} chars)")
-        return advice
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                payload = {
+                    "model": DEFAULT_MODEL,
+                    "messages": [
+                        {"role": "user", "content": prompt}
+                    ],
+                    "stream": False
+                }
+                
+                response = await client.post(OLLAMA_URL, json=payload)
+                if response.status_code != 200:
+                    return f"ADVISOR LOG: OLLAMA_SERVICER_ERROR ({response.status_code})"
+                
+                result = response.json()
+                advice = result.get("message", {}).get("content", "").strip()
+                
+                # Limpieza de seguridad
+                advice = advice.replace('\n', ' ').replace('**', '').strip()
+                
+                print(f"[ADVISOR] ✅ Análisis generado localmente para {asset} (Ollama)")
+                return advice
+
     except Exception as e:
-        print(f"[ADVISOR] ❌ CRITICAL_ERROR en Gemini Node ({asset}):")
-        traceback.print_exc()
-        return f"ADVISOR LOG: SENSOR_MALFUNCTION. Node Error: {str(e)[:50]}"
+        print(f"[ADVISOR] ❌ Error en Ollama Advisor ({asset}): {e}")
+        return "ADVISOR LOG: LOCAL_MODEL_OFFLINE. Verifica si Ollama está corriendo."

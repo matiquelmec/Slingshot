@@ -18,6 +18,7 @@ from engine.api.ws_manager import registry, fetch_binance_history
 from engine.main_router import SlingshotRouter
 from engine.core.store import store
 from engine.workers.orchestrator import SlingshotOrchestrator
+from engine.api.advisor import check_ollama_status
 import asyncio
 
 global_orchestrator = SlingshotOrchestrator()
@@ -55,6 +56,10 @@ app.add_middleware(
 async def startup_event():
     """Inicialización del motor y limpieza del almacén de datos."""
     await store.clear_all() # Reset del estado efímero al arrancar
+    
+    # Verificar Inteligencia Local
+    asyncio.create_task(check_ollama_status())
+    
     asyncio.create_task(global_orchestrator.start())
     print("[API] Motor Slingshot v3.2 activado. Radar Center en línea.")
 
