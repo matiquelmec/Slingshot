@@ -30,7 +30,7 @@ export default function OverviewPage() {
     const [availableSymbols, setAvailableSymbols] = useState<string[]>([]);
     const [filteredSymbols, setFilteredSymbols] = useState<string[]>([]);
 
-    const { activeSymbol, activeTimeframe, latestPrice, mlProjection, neuralLogs, connect } = useTelemetryStore();
+    const { activeSymbol, activeTimeframe, latestPrice, mlProjection, neuralLogs, connect, isCalibrating, advisor_log } = useTelemetryStore();
 
     // ── Lifecycle ─────────────────────────────────────────────────────────────
 
@@ -50,10 +50,12 @@ export default function OverviewPage() {
                 console.error("Error parsing local watchlist");
             }
         } else {
-            // Default watchlist
+            // Default watchlist (VIP Assets)
             const defaultWatchlist: WatchlistEntry[] = [
                 { id: '1', asset: 'BTCUSDT', interval: '15m', alerts_enabled: true },
-                { id: '2', asset: 'ETHUSDT', interval: '15m', alerts_enabled: true }
+                { id: '2', asset: 'ETHUSDT', interval: '15m', alerts_enabled: true },
+                { id: '3', asset: 'SOLUSDT', interval: '15m', alerts_enabled: true },
+                { id: '4', asset: 'PAXGUSDT', interval: '15m', alerts_enabled: true }
             ];
             setWatchlist(defaultWatchlist);
             localStorage.setItem('slingshot_watchlist', JSON.stringify(defaultWatchlist));
@@ -308,7 +310,17 @@ export default function OverviewPage() {
 
             {/* Middle Column */}
             <motion.section variants={itemVariants} className="col-span-12 lg:col-span-4 flex flex-col gap-5 min-h-[600px]">
-                <div className="flex-1"><QuantDiagnosticPanel /></div>
+                <div className="flex-1">
+                    {isCalibrating ? (
+                        <div className="bg-[#050B14]/60 backdrop-blur-xl border border-white/5 rounded-2xl h-full min-h-[400px] flex flex-col items-center justify-center p-5 shadow-2xl">
+                            <div className="w-10 h-10 border-2 border-t-neon-cyan border-r-transparent border-b-transparent border-l-transparent rounded-full animate-spin mb-4"></div>
+                            <p className="text-[10px] text-neon-cyan/80 tracking-[0.2em] font-bold uppercase drop-shadow-[0_0_8px_rgba(0,229,255,0.5)]">Calibrando Topografía...</p>
+                            <p className="text-[9px] text-white/30 mt-2 text-center">Sincronizando SMC, Volatilidad y Niveles Institucionales</p>
+                        </div>
+                    ) : (
+                        <QuantDiagnosticPanel />
+                    )}
+                </div>
                 <div className="flex flex-col h-[300px]"><MacroRadar /></div>
             </motion.section>
 
@@ -317,31 +329,34 @@ export default function OverviewPage() {
                 <div className="h-44 bg-gradient-to-br from-[#050B14] to-black backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl flex flex-col justify-between p-5 relative overflow-hidden flex-shrink-0">
                     <div className={`absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(${mlProjection.direction === 'ALCISTA' ? '0,255,65' : mlProjection.direction === 'BAJISTA' ? '255,0,60' : '100,100,100'},0.1),transparent_50%)] pointer-events-none transition-colors duration-1000`} />
                     <div className="flex justify-between items-start z-10">
-                        <p className="text-[10px] text-white/50 tracking-[0.2em] font-bold">PROYECCIÓN IA (XGBOOST)</p>
+                        <p className="text-[10px] text-white/50 tracking-[0.2em] font-bold">INTELIGENCIA TÁCTICA (QWEN + XGBOOST)</p>
                         <Activity size={14} className={`${mlProjection.direction === 'ALCISTA' ? 'text-neon-green' : mlProjection.direction === 'BAJISTA' ? 'text-neon-red' : 'text-gray-400'} opacity-50`} />
                     </div>
                     <div className="z-10 mt-auto">
-                        <div className="flex items-baseline gap-3">
-                            <span className={`text-4xl font-black ${mlProjection.direction === 'ALCISTA' ? 'text-neon-green drop-shadow-[0_0_15px_rgba(0,255,65,0.5)]' : mlProjection.direction === 'BAJISTA' ? 'text-neon-red drop-shadow-[0_0_15px_rgba(255,0,60,0.5)]' : 'text-white/50'} tracking-tighter`}>
-                                {mlProjection.probability}%
-                            </span>
-                            <div className="flex flex-col">
-                                <span className={`text-xs ${mlProjection.direction === 'ALCISTA' ? 'text-neon-green/80' : mlProjection.direction === 'BAJISTA' ? 'text-neon-red/80' : 'text-white/40'} font-semibold tracking-wider`}>
-                                    {mlProjection.direction} ({activeTimeframe})
+                        <div className="flex items-center gap-4">
+                            <div className="flex flex-col items-center justify-center min-w-[70px]">
+                                <span className={`text-4xl font-black ${mlProjection.direction === 'ALCISTA' ? 'text-neon-green drop-shadow-[0_0_15px_rgba(0,255,65,0.5)]' : mlProjection.direction === 'BAJISTA' ? 'text-neon-red drop-shadow-[0_0_15px_rgba(255,0,60,0.5)]' : 'text-white/50'} tracking-tighter`}>
+                                    {mlProjection.probability}%
                                 </span>
-                                {mlProjection.reason && (
-                                    <span className="text-[9px] text-white/40 mt-1 max-w-[200px] leading-tight break-words">{mlProjection.reason}</span>
+                                <span className={`text-[10px] ${mlProjection.direction === 'ALCISTA' ? 'text-neon-green/80' : mlProjection.direction === 'BAJISTA' ? 'text-neon-red/80' : 'text-white/40'} font-black tracking-widest mt-0.5 uppercase`}>
+                                    {mlProjection.direction}
+                                </span>
+                            </div>
+                            
+                            <div className="h-12 w-px bg-white/10" />
+
+                            <div className="flex-1 flex flex-col justify-center overflow-y-auto max-h-[65px] custom-scrollbar pr-1">
+                                {advisor_log ? (
+                                    <p className="text-[9.5px] text-white/80 leading-relaxed font-mono tracking-tight border-l-2 border-neon-cyan/50 pl-2">
+                                        <span className="text-neon-cyan opacity-80 font-bold mr-1">&gt;_</span>
+                                        {advisor_log}
+                                    </p>
+                                ) : (
+                                    <p className="text-[9px] text-white/30 italic text-center animate-pulse">
+                                        Qwen inferiendo sobre ticks. Aguardando dictamen...
+                                    </p>
                                 )}
                             </div>
-                        </div>
-                        <div className="h-2 w-full bg-black rounded-full mt-4 overflow-hidden border border-white/5">
-                            <motion.div
-                                animate={{ width: `${mlProjection.probability}%` }}
-                                transition={{ duration: 1.5, ease: [0.16, 1, 0.3, 1] }}
-                                className={`h-full bg-gradient-to-r ${mlProjection.direction === 'ALCISTA' ? 'from-green-600 to-neon-green shadow-[0_0_15px_rgba(0,255,65,0.8)]' : mlProjection.direction === 'BAJISTA' ? 'from-red-600 to-neon-red shadow-[0_0_15px_rgba(255,0,60,0.8)]' : 'from-gray-600 to-gray-400'} relative`}
-                            >
-                                <div className="absolute top-0 right-0 bottom-0 w-4 bg-white/30 rounded-full blur-[2px]" />
-                            </motion.div>
                         </div>
                     </div>
                 </div>

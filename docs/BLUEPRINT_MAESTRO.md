@@ -1,6 +1,6 @@
-# 🎯 PROJECT: SLINGSHOT — BLUEPRINT MAESTRO v3.2
+# 🎯 PROJECT: SLINGSHOT — BLUEPRINT MAESTRO v3.3
 ## "Poder de cómputo local al servicio del trader individual."
-> **Versión:** 3.2 (Local Master Edition)  |  **Fecha:** 2026-03-13  |  **Estado:** ACTIVO ✅
+> **Versión:** 3.3 (Qwen Local Master Edition)  |  **Fecha:** 2026-03-13  |  **Estado:** ACTIVO ✅
 > *Actualizado desde Blueprint 3.0 — Portero Institucional R:R activado. PAXGUSDT (Oro) reintegrado.*
 
 ---
@@ -78,7 +78,7 @@ Dado que las señales son efímeras y el análisis vive *mientras la app esté d
 
 ---
 
-## 🛠️ STACK TECNOLÓGICO v3.2
+## 🛠️ STACK TECNOLÓGICO v3.3
 
 ### Backend (Local Engine)
 | Componente | Tecnología | Uso |
@@ -89,8 +89,9 @@ Dado que las señales son efímeras y el análisis vive *mientras la app esté d
 | **Risk Manager** | `engine/risk/risk_manager.py` | Portero Institucional: calcular SL/TP, validar R:R ≥ 1.8. |
 | **Notificaciones** | `engine/notifications/` | Telegram + Signal Filter anti-spam. |
 | **Orquestador** | `engine/workers/orchestrator.py` | Mantiene Broadcasters VIP vivos (BTC, ETH, SOL, PAXG). |
-| **ML Local** | `engine/ml/inference.py` (XGBoost) | Probabilidad Alcista/Bajista en <50ms sin red. |
-| **Persistencia** | JSON Local (engine/data/) | Solo estados de sesión VIP entre reinicios. |
+| **ML Probabilístico**| `engine/ml/inference.py` (XGBoost)| Probabilidad matemática Alcista/Bajista en <50ms. |
+| **LLM Táctico**    | `engine/api/advisor.py` (Ollama/Qwen3) | Cerebro Institucional que asimila data y emite directrices 100% locales. |
+| **Persistencia** | JSON Local (`engine/data/`) | Solo estados de sesión VIP entre reinicios. |
 
 ### Frontend (Local UI)
 | Componente | Tecnología | Uso |

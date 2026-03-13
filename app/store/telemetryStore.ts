@@ -22,6 +22,7 @@ export type Timeframe = '1m' | '3m' | '5m' | '15m' | '30m' | '1h' | '2h' | '4h' 
 interface TelemetryState {
     advisor_log: string | null;
     isConnected: boolean;
+    isCalibrating: boolean;
     activeSymbol: string;
     activeTimeframe: Timeframe;
     candles: CandleData[];
@@ -123,6 +124,7 @@ export const useTelemetryStore = create<TelemetryState>((set, get) => {
                 activeConnectionId: connectionId,
                 candles: [],
                 isConnected: false,
+                isCalibrating: true,
                 smcData: null,
                 sessionData: null,
                 latestPrice: null,
@@ -253,6 +255,7 @@ export const useTelemetryStore = create<TelemetryState>((set, get) => {
                             ? _mergeSignals(state.signalHistory, incomingSignals)
                             : state.signalHistory;
                         return {
+                            isCalibrating: false,
                             tacticalDecision: {
                                 regime: d.market_regime ?? 'UNKNOWN',
                                 strategy: d.active_strategy ?? 'STANDBY',
@@ -363,6 +366,7 @@ export const useTelemetryStore = create<TelemetryState>((set, get) => {
     return {
         advisor_log: null,
         isConnected: false,
+        isCalibrating: true,
 
         activeSymbol: 'BTCUSDT',
         activeTimeframe: '15m',

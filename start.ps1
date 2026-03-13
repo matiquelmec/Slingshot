@@ -28,6 +28,18 @@ if (-Not (Test-Path "$PSScriptRoot\node_modules")) {
     exit 1
 }
 
+# --- Chequeo de Cerebro Local (Ollama) ---
+Write-Host "  [0/2] Verificando servidor Ollama (Qwen)..." -ForegroundColor Yellow
+try {
+    $ollama = Invoke-RestMethod -Uri "http://localhost:11434/api/tags" -Method Get -ErrorAction Stop
+    Write-Host "        OK - Conectado a Ollama Local." -ForegroundColor Green
+} catch {
+    Write-Host "  [ALERTA ROJA] Ollama no esta corriendo en localhost:11434." -ForegroundColor Red
+    Write-Host "                El sistema de IA tactica estara degradado o inoperativo." -ForegroundColor DarkYellow
+    Write-Host "                Levanta la app de Ollama para tener inferencia Tactica humana." -ForegroundColor DarkYellow
+    Start-Sleep -Seconds 2
+}
+
 # --- Backend (FastAPI en puerto 8000) ---
 Write-Host "  [1/2] Iniciando Backend  (http://localhost:8000)..." -ForegroundColor Yellow
 Start-Process powershell -ArgumentList `
