@@ -5,8 +5,6 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Activity, Terminal, ChevronRight, Plus, X, Lock } from 'lucide-react';
 import dynamic from 'next/dynamic';
 import { useTelemetryStore, Timeframe } from '../store/telemetryStore';
-import { useUser } from '../hooks/useUser';
-import { createClient } from '@/lib/supabase/client';
 
 const QuantDiagnosticPanel = dynamic(() => import('../components/ui/QuantDiagnosticPanel'), { ssr: false });
 const SessionClock = dynamic(() => import('../components/ui/SessionClock'), { ssr: false });
@@ -31,24 +29,55 @@ export default function OverviewPage() {
     const [newSymbol, setNewSymbol] = useState('');
     const [availableSymbols, setAvailableSymbols] = useState<string[]>([]);
     const [filteredSymbols, setFilteredSymbols] = useState<string[]>([]);
-    const [tierLimitReached, setTierLimitReached] = useState(false);
 
-    const { user } = useUser();
     const { activeSymbol, activeTimeframe, latestPrice, mlProjection, neuralLogs, connect } = useTelemetryStore();
 
     // ── Lifecycle ─────────────────────────────────────────────────────────────
 
     useEffect(() => { setMounted(true); }, []);
 
-    // Cargar watchlist desde Supabase al tener usuario
+    // Load watchlist from localStorage
     useEffect(() => {
-        if (!user) return;
-        loadWatchlist();
-    }, [user]);
+        const localWatchlist = localStorage.getItem('slingshot_watchlist');
+        if (localWatchlist) {
+            try {
+                const parsed = JSON.parse(localWatchlist) as WatchlistEntry[];
+                setWatchlist(parsed);
+                if (parsed.length > 0 && !activeSymbol) {
+                    connect(parsed[0].asset, parsed[0].interval as Timeframe);
+                }
+            } catch (e) {
+                console.error("Error parsing local watchlist");
+            }
+        } else {
+            // Default watchlist
+            const defaultWatchlist: WatchlistEntry[] = [
+                { id: '1', asset: 'BTCUSDT', interval: '15m', alerts_enabled: true },
+                { id: '2', asset: 'ETHUSDT', interval: '15m', alerts_enabled: true }
+            ];
+            setWatchlist(defaultWatchlist);
+            localStorage.setItem('slingshot_watchlist', JSON.stringify(defaultWatchlist));
+            if (!activeSymbol) {
+                // We use setTimeout to ensure it connects properly initially
+                setTimeout(() => connect(defaultWatchlist[0].asset, defaultWatchlist[0].interval as Timeframe), 100);
+            }
+        }
+        setWatchlistLoading(false);
+    }, [activeSymbol, connect]);
 
+    // Update interval in localStorage when changed in UI
     useEffect(() => {
-        if (user) setTierLimitReached(watchlist.length >= user.tier.max_watchlist);
-    }, [watchlist, user]);
+        if (!activeSymbol || !activeTimeframe || watchlist.length === 0) return;
+
+        const currentEntry = watchlist.find(w => w.asset === activeSymbol);
+        if (currentEntry && currentEntry.interval !== activeTimeframe) {
+            const updated = watchlist.map(w =>
+                w.id === currentEntry.id ? { ...w, interval: activeTimeframe } : w
+            );
+            setWatchlist(updated);
+            localStorage.setItem('slingshot_watchlist', JSON.stringify(updated));
+        }
+    }, [activeSymbol, activeTimeframe, watchlist]);
 
     // Buscar símbolos disponibles en Binance cuando se abre el panel de búsqueda
     useEffect(() => {
@@ -76,113 +105,46 @@ export default function OverviewPage() {
         );
     }, [newSymbol, availableSymbols, watchlist]);
 
-    // ── DB Operations ─────────────────────────────────────────────────────────
+    // ── Local Operations ─────────────────────────────────────────────────────────
 
-    const loadWatchlist = useCallback(async () => {
-        setWatchlistLoading(true);
-        const supabase = createClient();
-        const { data, error } = await supabase
-            .from('user_watchlists')
-            .select('id, asset, interval, alerts_enabled')
-            .order('created_at', { ascending: true });
-
-        if (!error && data) {
-            // Auto-Seed: Si es un usuario nuevo con lista vacía, agregar el activo actual por defecto
-            if (data.length === 0 && user && activeSymbol) {
-                const { data: newData, error: insertError } = await supabase
-                    .from('user_watchlists')
-                    .insert({ user_id: user.id, asset: activeSymbol, interval: activeTimeframe, alerts_enabled: true })
-                    .select('id, asset, interval, alerts_enabled')
-                    .single();
-
-                if (!insertError && newData) {
-                    setWatchlist([newData as WatchlistEntry]);
-                    setWatchlistLoading(false);
-                    return;
-                }
-            }
-
-            setWatchlist(data as WatchlistEntry[]);
-            // Auto-conectar al primer activo de la lista (si lo hay) si no tenemos ninguno activo
-            if (data.length > 0 && !activeSymbol) {
-                connect(data[0].asset, data[0].interval as Timeframe);
-            }
-        }
-        setWatchlistLoading(false);
-    }, [activeSymbol, activeTimeframe, connect, user]);
-
-    // Actualizar interval en Base de Datos cuando se cambia en el UI
-    useEffect(() => {
-        if (!user || !activeSymbol || !activeTimeframe || watchlist.length === 0) return;
-
-        const currentEntry = watchlist.find(w => w.asset === activeSymbol);
-        if (currentEntry && currentEntry.interval !== activeTimeframe) {
-            const syncTimeframe = async () => {
-                const supabase = createClient();
-                await supabase
-                    .from('user_watchlists')
-                    .update({ interval: activeTimeframe })
-                    .eq('id', currentEntry.id);
-
-                setWatchlist(prev => prev.map(w =>
-                    w.id === currentEntry.id ? { ...w, interval: activeTimeframe } : w
-                ));
-            };
-            syncTimeframe();
-        }
-    }, [activeSymbol, activeTimeframe, user, watchlist]);
-
-    const handleAddSymbol = useCallback(async (symToAdd?: string | React.MouseEvent) => {
+    const handleAddSymbol = useCallback((symToAdd?: string | React.MouseEvent) => {
         const sym = (typeof symToAdd === 'string' ? symToAdd : newSymbol).trim().toUpperCase();
-        if (!sym || !user) return;
+        if (!sym) return;
 
-        // Validar límite de tier
-        if (watchlist.length >= user.tier.max_watchlist) {
-            setTierLimitReached(true);
-            return;
-        }
-
-        // Evitar duplicados localmente antes de ir a la DB
+        // Evitar duplicados
         if (watchlist.find(w => w.asset === sym)) {
             setNewSymbol('');
             setAddingSymbol(false);
             return;
         }
 
-        const supabase = createClient();
-        const { data, error } = await supabase
-            .from('user_watchlists')
-            .insert({ user_id: user.id, asset: sym, interval: activeTimeframe, alerts_enabled: true })
-            .select('id, asset, interval, alerts_enabled')
-            .single();
+        const newEntry: WatchlistEntry = {
+            id: Math.random().toString(36).substring(7),
+            asset: sym,
+            interval: activeTimeframe,
+            alerts_enabled: true
+        };
 
-        if (!error && data) {
-            setWatchlist(prev => [...prev, data as WatchlistEntry]);
-            if (watchlist.length === 0) {
-                connect(data.asset, data.interval as Timeframe);
-            }
-        } else if (error) {
-            console.error("Error agregando a watchlist:", error);
+        const updated = [...watchlist, newEntry];
+        setWatchlist(updated);
+        localStorage.setItem('slingshot_watchlist', JSON.stringify(updated));
+
+        if (watchlist.length === 0) {
+            connect(newEntry.asset, newEntry.interval as Timeframe);
         }
 
         setNewSymbol('');
         setAddingSymbol(false);
         setFilteredSymbols([]);
-    }, [newSymbol, user, watchlist, activeTimeframe]);
+    }, [newSymbol, watchlist, activeTimeframe, connect]);
 
-    const handleRemoveSymbol = useCallback(async (entry: WatchlistEntry) => {
+    const handleRemoveSymbol = useCallback((entry: WatchlistEntry) => {
         if (entry.asset === activeSymbol) return; // no eliminar el activo activo
 
-        const supabase = createClient();
-        const { error } = await supabase
-            .from('user_watchlists')
-            .delete()
-            .eq('id', entry.id);
-
-        if (!error) {
-            setWatchlist(prev => prev.filter(w => w.id !== entry.id));
-        }
-    }, [activeSymbol]);
+        const updated = watchlist.filter(w => w.id !== entry.id);
+        setWatchlist(updated);
+        localStorage.setItem('slingshot_watchlist', JSON.stringify(updated));
+    }, [activeSymbol, watchlist]);
 
     const handleSymbolClick = useCallback((entry: WatchlistEntry) => {
         if (entry.asset !== activeSymbol) {
@@ -203,7 +165,7 @@ export default function OverviewPage() {
         show: { opacity: 1, scale: 1, y: 0, transition: { type: 'spring' as const, stiffness: 250, damping: 22 } }
     };
 
-    const maxWatchlist = user?.tier.max_watchlist ?? 3;
+    const maxWatchlist = 20; // Límite virtual
     const watchlistFull = watchlist.length >= maxWatchlist;
 
     return (
@@ -231,11 +193,12 @@ export default function OverviewPage() {
                                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-neon-cyan opacity-40" />
                                 <span className="relative inline-flex rounded-full h-2 w-2 bg-neon-cyan/80" />
                             </span>
-                            {watchlistFull ? (
-                                <span title={`Plan ${user?.tier.tier ?? 'free'}: máximo ${maxWatchlist} activos`}>
+                            {watchlistFull && (
+                                <span title={`Máximo ${maxWatchlist} activos permitidos`}>
                                     <Lock size={13} className="text-amber-400/70 ml-1" />
                                 </span>
-                            ) : (
+                            )}
+                            {!watchlistFull && (
                                 <button
                                     onClick={() => setAddingSymbol(v => !v)}
                                     className="ml-1 text-white/30 hover:text-neon-cyan transition-colors"

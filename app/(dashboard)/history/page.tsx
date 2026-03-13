@@ -2,8 +2,8 @@
 
 import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Database, TrendingUp, TrendingDown, Target, Clock, AlertTriangle, CheckCircle2, XCircle } from 'lucide-react';
-import { createClient } from '@/lib/supabase/client';
+import { Database, TrendingUp, TrendingDown, Target, Clock, AlertTriangle, CheckCircle2, XCircle, RefreshCw, Info } from 'lucide-react';
+
 
 interface SignalEvent {
     id: string;
@@ -26,21 +26,24 @@ export default function HistoryPage() {
 
     useEffect(() => {
         fetchSignals();
+        // Auto-refresh every 5 seconds since it's a local live memory stream
+        const interval = setInterval(fetchSignals, 5000);
+        return () => clearInterval(interval);
     }, []);
 
     const fetchSignals = async () => {
         setLoading(true);
-        const supabase = createClient();
-        const { data, error } = await supabase
-            .from('signal_events')
-            .select('*')
-            .order('created_at', { ascending: false })
-            .limit(100);
-
-        if (!error && data) {
-            setSignals(data as SignalEvent[]);
+        try {
+            const res = await fetch('http://localhost:8000/api/v1/signals');
+            if (res.ok) {
+                const data = await res.json();
+                setSignals(data as SignalEvent[]);
+            }
+        } catch(e) {
+            console.error("Local Master not ready");
+        } finally {
+            setLoading(false);
         }
-        setLoading(false);
     };
 
     const StatusBadge = ({ status }: { status: string }) => {
@@ -84,8 +87,11 @@ export default function HistoryPage() {
                         <Database size={20} className="text-blue-400" />
                     </div>
                     <div>
-                        <h1 className="text-xl font-black text-white/90 tracking-[0.2em]">AUDIT HISTORY</h1>
-                        <p className="text-[10px] text-white/40 tracking-widest">REGISTRO INMUTABLE DE SEÑALES GENERADAS POR EL ALGORITMO</p>
+                        <h1 className="text-xl font-black text-white/90 tracking-[0.2em]">SESSION LOG</h1>
+                        <p className="text-[10px] text-white/40 tracking-widest flex items-center gap-1.5 mt-1">
+                            <Info size={10} className="text-neon-cyan" /> 
+                            REGISTRO EFÍMERO DE EVENTOS EN LA SESIÓN DE MEMORIA ACTUAL (SE BORRA AL REINICIAR)
+                        </p>
                     </div>
                 </div>
             </div>
@@ -116,6 +122,14 @@ export default function HistoryPage() {
                             <option key={a} value={a}>{a}</option>
                         ))}
                     </select>
+                    
+                    <button 
+                        onClick={fetchSignals} 
+                        className="ml-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded p-1.5 text-white/50 hover:text-white/90 transition-colors"
+                        title="Actualizar registro"
+                    >
+                        <RefreshCw size={14} className={loading && signals.length > 0 ? "animate-spin" : ""} />
+                    </button>
                 </div>
             </div>
 
@@ -135,7 +149,7 @@ export default function HistoryPage() {
                 <div className="flex-1 overflow-y-auto custom-scrollbar">
                     {loading ? (
                         <div className="flex items-center justify-center h-full">
-                            <span className="text-neon-cyan/50 animate-pulse text-[10px] tracking-widest font-bold">QUERYING SUPABASE SECURE VAULT...</span>
+                            <span className="text-neon-cyan/50 animate-pulse text-[10px] tracking-widest font-bold">QUERYING LOCAL MASTER...</span>
                         </div>
                     ) : filteredSignals.length === 0 ? (
                         <div className="flex items-center justify-center h-full text-white/20 text-[10px] tracking-widest font-bold">

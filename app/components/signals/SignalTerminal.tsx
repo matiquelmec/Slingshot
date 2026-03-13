@@ -4,7 +4,6 @@ import React, { useEffect } from 'react';
 import { AnimatePresence } from 'framer-motion';
 import { Network } from 'lucide-react';
 import { useSearchParams } from 'next/navigation';
-
 // Store & Types
 import { useTelemetryStore } from '../../store/telemetryStore';
 import { TacticalDecision, MLProjection, SessionData } from '../../types/signal';
@@ -32,12 +31,36 @@ export default function SignalTerminal() {
     const activeTimeframe = useTelemetryStore(state => state.activeTimeframe);
     const advisorLog = useTelemetryStore(state => state.advisor_log);
 
-    // ─── Sync con URL ───
+    const [globalSignals, setGlobalSignals] = React.useState<any[]>([]);
+    const [isLoadingSignals, setIsLoadingSignals] = React.useState(true);
+
+    // ─── Sync con URL y Fetch Global ───
     useEffect(() => {
         const symbol = searchParams.get('symbol');
         if (symbol && symbol !== activeSymbol) {
             connect(symbol);
         }
+
+        const fetchGlobal = async () => {
+            try {
+                const res = await fetch(`http://localhost:8000/api/v1/signals`);
+                if (res.ok) {
+                    const data = await res.json();
+                    setGlobalSignals(data);
+                }
+            } catch (e) {
+                console.warn("SignalTerminal: Feed offline.");
+            } finally {
+                setIsLoadingSignals(false);
+            }
+        };
+
+        fetchGlobal();
+        const interval = setInterval(fetchGlobal, 5000); // Polling intensivo al no tener WSS global de señales por ahora
+        
+        return () => {
+            clearInterval(interval);
+        };
     }, [searchParams, activeSymbol, connect]);
 
     return (
@@ -91,7 +114,11 @@ export default function SignalTerminal() {
 
                 {/* 4. HISTORICAL SIGNAL SCROLL (HFT Actions) */}
                 <div className="flex-1 overflow-y-auto custom-scrollbar p-2">
-                    {!signalHistory || signalHistory.length === 0 ? (
+                    {isLoadingSignals && globalSignals.length === 0 ? (
+                        <div className="h-full flex items-center justify-center text-neon-cyan/20 animate-pulse text-[10px] font-mono tracking-widest">
+                            CONECTANDO CON EL FEED GLOBAL...
+                        </div>
+                    ) : globalSignals.length === 0 && (!signalHistory || signalHistory.length === 0) ? (
                         <div className="h-full flex items-center justify-center text-white/10 text-[10px] font-mono italic tracking-widest flex-col gap-2 relative">
                             <div className="absolute inset-0 bg-gradient-to-t from-transparent to-white/[0.01] pointer-events-none" />
                             AWAITING ALGORITHMIC CONFLUENCE
@@ -99,9 +126,9 @@ export default function SignalTerminal() {
                     ) : (
                         <div className="flex flex-col gap-2 px-2">
                             <AnimatePresence>
-                                {signalHistory.map((sig) => (
+                                {(globalSignals.length > 0 ? globalSignals : signalHistory).map((sig, idx) => (
                                     <SignalCardItem
-                                        key={`${sig.timestamp}-${sig.type}`}
+                                        key={`${sig.timestamp}-${sig.type}-${sig.asset || idx}`}
                                         signal={sig}
                                         currentPrice={currentPrice_live}
                                     />

@@ -160,24 +160,31 @@ export const useTelemetryStore = create<TelemetryState>((set, get) => {
                 return;
             }
 
+            let data: any;
             try {
-                const data = JSON.parse(event.data);
+                data = JSON.parse(event.data);
 
                 if (data.type === 'history') {
                     // Carga ultrasónica de datos históricos (Batch Processing)
-                    const newCandles = data.data.map((item: any) => ({
-                        time: item.data.timestamp,
-                        open: item.data.open,
-                        high: item.data.high,
-                        low: item.data.low,
-                        close: item.data.close,
-                        volume: item.data.volume,
+                    const rawItems = data.data.map((item: any) => ({
+                        time: Number(item.data.timestamp),
+                        open: Number(item.data.open),
+                        high: Number(item.data.high),
+                        low: Number(item.data.low),
+                        close: Number(item.data.close),
+                        volume: Number(item.data.volume),
                         bullish_div: item.data.bullish_div,
                         bearish_div: item.data.bearish_div
                     }));
+
+                    // 🛡️ Blindaje de duplicados y orden
+                    const uniqueCandlesMap = new Map();
+                    rawItems.forEach((c: any) => uniqueCandlesMap.set(c.time, c));
+                    const sortedCandles = Array.from(uniqueCandlesMap.values()).sort((a, b) => (a.time as number) - (b.time as number));
+
                     set({
-                        candles: newCandles,
-                        latestPrice: newCandles.length > 0 ? newCandles[newCandles.length - 1].close : null
+                        candles: sortedCandles,
+                        latestPrice: sortedCandles.length > 0 ? sortedCandles[sortedCandles.length - 1].close : null
                     });
                 } else if (data.type === 'candle') {
                     const newCandle: CandleData = {
@@ -221,17 +228,20 @@ export const useTelemetryStore = create<TelemetryState>((set, get) => {
                 } else if (data.type === 'neural_pulse') {
                     // Update del Fast Path (Tiempo Real Inter-Vela)
                     set((state) => {
+                        const pulseData = data.data || {};
+                        const logObj = pulseData.log || {};
+                        
                         const newLog: NeuralLog = {
                             id: Math.random().toString(36).substring(7),
                             timestamp: new Date().toLocaleTimeString('en-US', { hour12: false }),
-                            type: data.data.log.type,
-                            message: data.data.log.message
+                            type: logObj.type || 'SYSTEM',
+                            message: logObj.message || 'Heartbeat neural recibido.'
                         };
-                        const updatedLogs = [newLog, ...state.neuralLogs].slice(0, 5); // Mantener últimos 5
+                        const updatedLogs = [newLog, ...state.neuralLogs].slice(0, 10); 
 
                         return {
-                            mlProjection: data.data.ml_projection,
-                            liquidityHeatmap: data.data.liquidity_heatmap,
+                            mlProjection: pulseData.ml_projection || state.mlProjection,
+                            liquidityHeatmap: pulseData.liquidity_heatmap || state.liquidityHeatmap,
                             neuralLogs: updatedLogs
                         };
                     });
@@ -280,37 +290,44 @@ export const useTelemetryStore = create<TelemetryState>((set, get) => {
                         return { neuralLogs: [newLog, ...state.neuralLogs].slice(0, 3) };
                     });
                 } else if (data.type === 'ghost_update') {
-                    // 🔮 Datos Fantasma — Niveles macro del mercado
-                    set({ ghostData: data.data });
+                    const g = data.data || {};
+                    set({ ghostData: g });
                     set((state) => {
                         const biasIcons: Record<string, string> = {
                             BULLISH: '🟢', BEARISH: '🔴', NEUTRAL: '⚪',
                             BLOCK_LONGS: '🟠', BLOCK_SHORTS: '🟤', CONFLICTED: '🟡'
                         };
-                        const icon = biasIcons[data.data.macro_bias] ?? '⚪';
+                        const icon = biasIcons[g.macro_bias] ?? '⚪';
+                        const fund = g.funding_rate != null ? Number(g.funding_rate).toFixed(4) : "0.0000";
                         const newLog: NeuralLog = {
                             id: Math.random().toString(36).substring(7),
                             timestamp: new Date().toLocaleTimeString('en-US', { hour12: false }),
-                            type: data.data.block_longs || data.data.block_shorts ? 'ALERT' : 'SENSOR',
-                            message: `[GHOST] ${icon} F&G=${data.data.fear_greed_value} (${data.data.fear_greed_label}) | BTCD=${data.data.btc_dominance}% | Fund=${data.data.funding_rate.toFixed(4)}% | Bias=${data.data.macro_bias}`
+                            type: g.block_longs || g.block_shorts ? 'ALERT' : 'SENSOR',
+                            message: `[GHOST] ${icon} F&G=${g.fear_greed_value ?? '?'} (${g.fear_greed_label ?? 'N/A'}) | BTCD=${g.btc_dominance ?? '?'}% | Fund=${fund}% | Bias=${g.macro_bias ?? 'N/A'}`
                         };
                         return { neuralLogs: [newLog, ...state.neuralLogs].slice(0, 5) };
                     });
                 } else if (data.type === 'drift_alert') {
-                    // 🧠 Alerta de drift del modelo ML
+                    const drift = data.data || {};
                     set((state) => {
-                        const levelIcon = data.data.drift_level === 'SEVERE' ? '🚨' : '⚠️';
+                        const levelIcon = drift.drift_level === 'SEVERE' ? '🚨' : '⚠️';
+                        const psi = drift.psi_max != null ? Number(drift.psi_max).toFixed(3) : "0.000";
+                        const acc = drift.rolling_accuracy != null ? (Number(drift.rolling_accuracy) * 100).toFixed(1) : "0.0";
                         const newLog: NeuralLog = {
                             id: Math.random().toString(36).substring(7),
                             timestamp: new Date().toLocaleTimeString('en-US', { hour12: false }),
                             type: 'ALERT',
-                            message: `[DRIFT] ${levelIcon} ${data.data.drift_level}: PSI=${data.data.psi_max.toFixed(3)} | Acc=${(data.data.rolling_accuracy * 100).toFixed(1)}% | ${data.data.recommendation}`
+                            message: `[DRIFT] ${levelIcon} ${drift.drift_level}: PSI=${psi} | Acc=${acc}% | ${drift.recommendation ?? 'Analizando...'}`
                         };
                         return { neuralLogs: [newLog, ...state.neuralLogs].slice(0, 5) };
                     });
                 }
-            } catch (e) {
-                console.error("Failed to parse telemetry message", e);
+            } catch (err) {
+                console.error("Critical error in WS message handler:", {
+                    error: err,
+                    messageType: data?.type,
+                    payload: data?.data
+                });
             }
         };
 

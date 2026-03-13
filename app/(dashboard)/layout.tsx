@@ -6,17 +6,15 @@ import { usePathname, useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import {
     Crosshair, Radio, Database, ShieldCheck,
-    LayoutDashboard, Activity, Terminal, BarChart2, LogOut, User
+    LayoutDashboard, Activity, Terminal, BarChart2, User
 } from 'lucide-react';
 import { useTelemetryStore } from '../store/telemetryStore';
-import { createClient } from '@/lib/supabase/client';
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
     const pathname = usePathname();
     const router = useRouter();
     const { isConnected, connect } = useTelemetryStore();
     const hasInitialized = React.useRef(false);
-    const [userEmail, setUserEmail] = useState<string | null>(null);
 
     // Auto-Conexión Global con persistencia de moneda (evita reinicios a BTC en F5)
     useEffect(() => {
@@ -29,27 +27,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         }
     }, [connect]);
 
-    // Obtener usuario autenticado
-    useEffect(() => {
-        const supabase = createClient();
-        supabase.auth.getUser().then(({ data }) => {
-            setUserEmail(data.user?.email ?? null);
-        });
-    }, []);
-
-    const handleLogout = async () => {
-        const supabase = createClient();
-        await supabase.auth.signOut();
-        router.push('/login');
-        router.refresh();
-    };
-
     const navItems = [
         { name: 'Overview', href: '/', icon: LayoutDashboard },
+        { name: 'Radar Center', href: '/radar', icon: Radio },
         { name: 'Signal Terminal', href: '/signals', icon: Terminal },
         { name: 'Trading Chart', href: '/chart', icon: BarChart2 },
         { name: 'Liquidity Heatmap', href: '/heatmap', icon: Activity },
-        { name: 'Audit History', href: '/history', icon: Database },
+        { name: 'Session Log', href: '/history', icon: Database },
     ];
 
     return (
@@ -87,29 +71,19 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                     </div>
                     <div className="flex items-center gap-2.5 text-blue-400/80">
                         <Database size={14} />
-                        <span>CACHE: <span className="text-blue-400 drop-shadow-[0_0_5px_rgba(96,165,250,0.5)]">REDIS OK</span></span>
+                        <span>ESTADO: <span className="text-blue-400 drop-shadow-[0_0_5px_rgba(96,165,250,0.5)]">LOCAL MASTER v3.2</span></span>
                     </div>
                     <div className="flex items-center gap-2.5 bg-neon-green/10 px-3 py-1.5 rounded-full border border-neon-green/20">
                         <ShieldCheck size={14} className="text-neon-green" />
                         <span className="text-neon-green drop-shadow-[0_0_8px_rgba(0,255,65,0.8)]">SYSTEM ONLINE</span>
                     </div>
 
-                    {/* Usuario + Logout */}
+                    {/* Local Environment Marker */}
                     <div className="flex items-center gap-2 border-l border-white/10 pl-5">
-                        {userEmail && (
-                            <div className="flex items-center gap-1.5 text-white/30">
-                                <User size={12} />
-                                <span className="text-[10px] tracking-wide max-w-[140px] truncate">{userEmail}</span>
-                            </div>
-                        )}
-                        <button
-                            id="btn-logout"
-                            onClick={handleLogout}
-                            title="Cerrar sesión"
-                            className="flex items-center gap-1.5 text-white/30 hover:text-red-400 transition-colors px-2 py-1 rounded-lg hover:bg-red-400/10"
-                        >
-                            <LogOut size={13} />
-                        </button>
+                        <div className="flex items-center gap-1.5 text-white/30 px-2 py-1 rounded-lg">
+                            <User size={12} />
+                            <span className="text-[10px] tracking-wide">LOCAL ADMIN</span>
+                        </div>
                     </div>
                 </div>
             </motion.header>

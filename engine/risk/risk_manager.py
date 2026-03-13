@@ -1,22 +1,74 @@
 import math
 
+# Ratio Riesgo/Beneficio mínimo para que una señal sea publicada al dashboard.
+# Si la geometría natural del trade no ofrece al menos 1.8R, se rechaza.
+MIN_RR_REQUIRED = 1.8
+
 class RiskManager:
     """
-    State-of-the-Art Risk Management Engine (2026).
+    State-of-the-Art Risk Management Engine v3.0 (Local Master Edition).
     Implementa:
     1. Volatility Targeting (Position Sizing basado en distancia de SL).
     2. Fractional Kelly Criteria (Ajuste de riesgo por Régimen de Mercado).
     3. Structural Stop Loss + ATR Padding (Anti-manipulación).
+    4. [NUEVO] Portero Institucional: Rechaza señales con R:R insuficiente.
     """
 
-    def __init__(self, account_balance: float = 1000.0, base_risk_pct: float = 0.01):
+    def __init__(self, account_balance: float = 1000.0, base_risk_pct: float = 0.01, min_rr: float = MIN_RR_REQUIRED):
         """
         :param account_balance: Saldo total de la cuenta en USDT (Ej: $1,000 para Prop Firms).
         :param base_risk_pct: Porcentaje base a arriesgar por trade (Ej: 0.01 = 1%).
+        :param min_rr: Ratio Riesgo/Beneficio mínimo para aprobar una señal (default: 1.8).
         """
         self.account_balance = account_balance
         self.base_risk_pct = base_risk_pct
+        self.min_rr = min_rr
         self.max_leverage = 50.0 # Apalancamiento máximo permitido por el exchange/gestor de riesgo
+
+    def validate_signal(self, signal_data: dict) -> dict:
+        """
+        [PORTERO INSTITUCIONAL v3.0]
+        Evalúa si una señal merece ser publicada al Signal Terminal.
+        Calcula el R:R real basándose en los datos de la señal ya procesada.
+        Retorna: { "approved": bool, "rr_ratio": float, "trade_quality": str, "reason": str }
+        """
+        try:
+            entry = float(signal_data.get("price", 0))
+            sl    = float(signal_data.get("stop_loss", 0))
+            tp    = float(signal_data.get("take_profit_3r", 0))
+
+            if entry <= 0 or sl <= 0 or tp <= 0:
+                return {"approved": False, "rr_ratio": 0.0, "trade_quality": "INVALID", "reason": "Precios inválidos (SL o TP = 0)"}
+
+            risk   = abs(entry - sl)
+            reward = abs(tp - entry)
+
+            if risk < 0.0001:
+                return {"approved": False, "rr_ratio": 0.0, "trade_quality": "INVALID", "reason": "SL demasiado ajustado al precio de entrada"}
+            
+            rr = round(reward / risk, 2)
+            
+            if rr >= 2.5:
+                quality = "A+ (Institutional)"
+            elif rr >= 1.8:
+                quality = "B (Acceptable)"
+            elif rr >= 1.2:
+                quality = "C (Subóptimo)"
+            else:
+                quality = "D (Rechazado)"
+
+            approved = rr >= self.min_rr
+            reason = (
+                f"R:R {rr:.2f}R >= {self.min_rr}R mínimo → APROBADA 🟢"
+                if approved else
+                f"R:R {rr:.2f}R < {self.min_rr}R mínimo → RECHAZADA 🔴"
+            )
+
+            return {"approved": approved, "rr_ratio": rr, "trade_quality": quality, "reason": reason}
+
+        except Exception as e:
+            return {"approved": False, "rr_ratio": 0.0, "trade_quality": "ERROR", "reason": str(e)}
+
 
     def get_regime_multiplier(self, market_regime: str) -> float:
         """

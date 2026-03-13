@@ -3,7 +3,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Activity, Bell, Target, TrendingUp, TrendingDown, Clock, Search, ExternalLink } from 'lucide-react';
-import { createClient } from '@/lib/supabase/client';
 import { useRouter } from 'next/navigation';
 
 interface RadarSignal {
@@ -25,42 +24,29 @@ export default function RadarFeed() {
     const router = useRouter();
 
     useEffect(() => {
-        const supabase = createClient();
-
-        // 1. Fetch initial signals from the last 24h
         const fetchSignals = async () => {
-            const { data, error } = await supabase
-                .from('signal_events')
-                .select('*')
-                .order('created_at', { ascending: false })
-                .limit(20);
-
-            if (!error && data) {
-                setSignals(data as RadarSignal[]);
+            try {
+                const res = await fetch(`http://localhost:8000/api/v1/signals`);
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data && data.length > 0) {
+                        setSignals(data as RadarSignal[]);
+                    } else {
+                        setSignals([]);
+                    }
+                }
+            } catch (err) {
+                console.warn("Master API signals not available");
+                setSignals([]);
+            } finally {
+                setLoading(false);
             }
-            setLoading(false);
         };
 
         fetchSignals();
+        const pollInterval = setInterval(fetchSignals, 10000); // Polling cada 10s para el feed global
 
-        // 2. Subscribe to REALTIME updates for new signals
-        const channel = supabase
-            .channel('radar_signals')
-            .on('postgres_changes', {
-                event: 'INSERT',
-                schema: 'public',
-                table: 'signal_events'
-            }, (payload) => {
-                const newSignal = payload.new as RadarSignal;
-                // Reproducir un sonido sutil de alerta (opcional/institucional)
-                // update state
-                setSignals(prev => [newSignal, ...prev].slice(0, 50));
-            })
-            .subscribe();
-
-        return () => {
-            supabase.removeChannel(channel);
-        };
+        return () => clearInterval(pollInterval);
     }, []);
 
     const filteredSignals = signals.filter(s =>

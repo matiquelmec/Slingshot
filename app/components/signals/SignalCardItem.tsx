@@ -41,6 +41,11 @@ const SignalCardItem: React.FC<SignalCardItemProps> = ({ signal, currentPrice })
             <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-2">
                     <span className="font-mono text-[10px] text-white/40">{formatTime(signal.timestamp)}</span>
+                    {signal.asset && (
+                        <span className="text-[10px] font-black text-neon-cyan tracking-tighter bg-neon-cyan/5 px-1.5 py-0.5 rounded border border-neon-cyan/20">
+                            {signal.asset}
+                        </span>
+                    )}
                     <div className={`flex items-center gap-1.5 px-2 py-0.5 rounded border ${style.bg} ${style.border}`}>
                         <span className={`text-[9px] font-bold tracking-wider ${style.color} ${style.shadow}`}>
                             {signal.type.replace('🟢', '').replace('🔴', '').trim()}

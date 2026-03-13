@@ -347,14 +347,57 @@ export function buildConditions(
             ];
         }
 
-        default:
+        case 'CHOPPY': {
+            const rs = rsiDesc();
             return [
                 {
-                    label: 'Analizando flujos institucionales',
-                    status: 'WAITING',
-                    currentValue: 'Sincronizando...',
-                    meaning: 'Buscando patrones en la formación de precio (Price Action).',
+                    label: 'Estado: Standby Táctico por Indecisión',
+                    status: 'WARNING',
+                    currentValue: 'Sincronización de Medias: FALLIDA',
+                    meaning: 'El mercado está en un estado de "ruido". Las medias móviles se cruzan sin tendencia. Operar aquí es jugar al azar institucional.',
                 },
+                {
+                    label: 'Monitoreo: Volatilidad Extremadamente Sucia',
+                    status: bbwp > 80 ? 'WARNING' : 'WAITING',
+                    currentValue: `BBWP: ${bbwp.toFixed(1)}% | Momentum: FRAGMENTADO`,
+                    meaning: bbwp > 80 ? 'Volatilidad expandida pero sin dirección. Riesgo de "Whipsaw" (barrida de stops en ambos lados).' : 'Esperando que la volatilidad se asiente en un rango operable.',
+                },
+                {
+                    label: 'Filtro: RSI en Tierra de Nadie',
+                    status: 'PARTIAL',
+                    currentValue: `RSI actual: ${rsi.toFixed(1)}`,
+                    meaning: 'El RSI oscila cerca de 50. No hay ventaja estadística ni para compradores ni para vendedores.',
+                },
+                {
+                    label: 'Plan de Acción: Esperar Expansión con Volumen',
+                    status: 'WAITING',
+                    currentValue: `Volumen actual: ${volume.toFixed(0)}`,
+                    meaning: 'Necesitamos ver una vela de rango amplio (Marubozu) acompañada de volumen institucional (2x media) para confirmar el inicio de un nuevo régimen.',
+                },
+            ];
+        }
+
+        default:
+            const rs = rsiDesc();
+            return [
+                {
+                    label: 'Análisis Preliminar: Calibrando Régimen',
+                    status: 'WAITING',
+                    currentValue: 'Sincronizando Wyckoff...',
+                    meaning: 'El motor requiere un historial de 200 velas (15m) para confirmar el régimen institucional con seguridad estadística. Realizando análisis de momentum preventivo.',
+                },
+                {
+                    label: 'Monitor de Momentum (RSI)',
+                    status: rsi < 30 || rsi > 70 ? 'PARTIAL' : 'WAITING',
+                    currentValue: `RSI actual: ${rsi.toFixed(1)} (${rs.level})`,
+                    meaning: rs.note,
+                },
+                {
+                    label: 'Estado de Volatilidad (BBWP)',
+                    status: squeeze_active ? 'MET' : 'WAITING',
+                    currentValue: `BBWP: ${bbwp.toFixed(1)}%`,
+                    meaning: squeeze_active ? 'Compresión detectada. El mercado prepara expansión.' : 'Volatilidad en fase de carga.',
+                }
             ];
     }
 }

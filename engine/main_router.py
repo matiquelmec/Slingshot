@@ -275,7 +275,19 @@ class SlingshotRouter:
                     "expiry_timestamp":   expiry_timestamp_str,
                     "interval_minutes":   interval_minutes,
                 })
-                
+
+                # ══════════════════════════════════════════════════════
+                # 🔒 PORTERO INSTITUCIONAL v3.0 — Filtro de R:R
+                # Solo señales con geometría aprobada llegan al Terminal.
+                # ══════════════════════════════════════════════════════
+                rr_verdict = self.risk_manager.validate_signal(sig)
+                sig["rr_ratio"]     = rr_verdict["rr_ratio"]
+                sig["trade_quality"] = rr_verdict["trade_quality"]
+
+                if not rr_verdict["approved"]:
+                    print(f"[ROUTER] 🔴 Señal RECHAZADA por Portero R:R | {sig.get('signal_type','?')} {asset} | {rr_verdict['reason']}")
+                    continue  # La señal no llega al MemoryStore ni al Frontend.
+
                 # 🧠 CONFLUENCE SCORE — Evaluación institucional en tiempo real
                 try:
                     confluence_result = confluence_manager.evaluate_signal(

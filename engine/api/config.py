@@ -18,13 +18,7 @@ class Settings(BaseSettings):
     # Gemini AI (LLM Advisor)
     GEMINI_API_KEY: Optional[str] = None
 
-    # Redis
-    REDIS_URL: str = "redis://localhost:6379"
-
-    # 🗄️ Supabase (DB + Auth)
-    SUPABASE_URL: Optional[str] = None
-    SUPABASE_KEY: Optional[str] = None               # anon/public key
-    SUPABASE_SERVICE_ROLE_KEY: Optional[str] = None  # service_role (solo backend)
+    # Removido: REDIS y SUPABASE en entorno local
 
     # Security
     CORS_ORIGINS: list[str] = ["*"]

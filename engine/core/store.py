@@ -1,0 +1,99 @@
+import asyncio
+from collections import deque
+from typing import Dict, List, Any, Optional
+from datetime import datetime, timezone
+import uuid
+
+class MemoryStore:
+    """
+    Motor de Persistencia Atómica y Efímera Slingshot v3.0.
+    Utiliza buffers circulares para garantizar un uso de RAM constante y predecible.
+    """
+    def __init__(self, max_history: int = 1000, max_signals: int = 200):
+        # Estados actuales por activo (Radar)
+        self._market_states: Dict[str, Dict[str, Any]] = {}
+        
+        # Buffers circulares para señales (Evita crecimiento infinito)
+        self._signal_events = deque(maxlen=max_signals)
+        
+        # Candlestick Cache (Para hot-start de nuevos suscriptores)
+        self._candle_history: Dict[str, deque] = {}
+        self._max_history = max_history
+        
+        # Lock de concurrencia para evitar condiciones de carrera
+        self._lock = asyncio.Lock()
+
+    async def update_market_state(self, asset: str, data: Dict[str, Any]):
+        """Actualiza el radar en tiempo real."""
+        async with self._lock:
+            if asset not in self._market_states:
+                self._market_states[asset] = {}
+            
+            self._market_states[asset].update(data)
+            self._market_states[asset]["last_updated"] = datetime.now(timezone.utc).isoformat()
+            self._market_states[asset]["asset"] = asset
+
+    async def save_candle(self, asset: str, interval: str, candle_data: Dict[str, Any]):
+        """Guarda la vela en un buffer circular específico para el activo."""
+        key = f"{asset}:{interval}"
+        async with self._lock:
+            if key not in self._candle_history:
+                self._candle_history[key] = deque(maxlen=self._max_history)
+            self._candle_history[key].append(candle_data)
+
+    async def get_history(self, asset: str, interval: str) -> List[Dict[str, Any]]:
+        """Recupera el historial circular para sincronización inicial."""
+        key = f"{asset}:{interval}"
+        async with self._lock:
+            return list(self._candle_history.get(key, []))
+
+    async def get_market_states(self) -> List[Dict[str, Any]]:
+        """Retorna el estado de todos los activos para el Radar."""
+        async with self._lock:
+            return list(self._market_states.values())
+
+    async def save_signal(self, signal_data: Dict[str, Any]):
+        """
+        Persiste una señal o la evoluciona si ya existe.
+        Mantiene el buffer circular de 200 señales para evitar saturación.
+        """
+        async with self._lock:
+            if "id" not in signal_data:
+                signal_data["id"] = str(uuid.uuid4())
+                if "created_at" not in signal_data:
+                    signal_data["created_at"] = datetime.now(timezone.utc).isoformat()
+            
+            # Evolución de señal: si existe una activa del mismo tipo para el mismo par, la actualizamos
+            existing = None
+            for s in self._signal_events:
+                if (s["asset"] == signal_data["asset"] and 
+                    s.get("signal_type") == signal_data.get("signal_type") and 
+                    s.get("status") == "ACTIVE"):
+                    existing = s
+                    break
+            
+            if existing:
+                existing.update(signal_data)
+            else:
+                self._signal_events.append(signal_data)
+
+    async def get_signals(self, asset: Optional[str] = None, status: Optional[str] = None) -> List[Dict[str, Any]]:
+        """Busca señales en el buffer circular con filtros."""
+        async with self._lock:
+            filtered = list(self._signal_events)
+            if asset:
+                filtered = [s for s in filtered if s["asset"] == asset]
+            if status:
+                filtered = [s for s in filtered if s.get("status") == status]
+            return filtered
+
+    async def clear_all(self):
+        """Wipe total (Reseteo de sistema)."""
+        async with self._lock:
+            self._market_states.clear()
+            self._signal_events.clear()
+            self._candle_history.clear()
+            print("🧱 [MemoryStore] RAM Liberada. Estado 100% efímero reiniciado.")
+
+# Singleton Global para todo el proceso
+store = MemoryStore()

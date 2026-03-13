@@ -1,20 +1,12 @@
 """
-main.py — API Gateway Slingshot v2.0
-=====================================
-Responsabilidad ÚNICA: orquestación de conexiones.
-Toda la lógica de análisis vive en ws_manager.SymbolBroadcaster.
-
-Endpoints:
-  GET  /                          → health check
-  GET  /api/v1/status             → estado del registry (broadcasters activos)
-  GET  /api/v1/analyze/{symbol}   → análisis REST one-shot (cold start)
-  WS   /api/v1/stream/{symbol}    → stream en tiempo real (multi-usuario)
-
-Tamaño objetivo: ≤200 líneas. ✅
+main.py — API Gateway Slingshot v3.2 (Local Master)
+=========================================================
+Responsabilidad: Orquestación del motor local y endpoints REST/WS.
+Arquitectura Zero-Redis: Todo el estado vive en engine.core.store.
 """
 
 from pathlib import Path
-
+from typing import Optional, List
 import httpx
 import pandas as pd
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Query
@@ -24,7 +16,11 @@ from engine.api.config import settings
 from engine.api.json_utils import sanitize_for_json, SlingshotJSONEncoder
 from engine.api.ws_manager import registry, fetch_binance_history
 from engine.main_router import SlingshotRouter
-from engine.indicators.structure import identify_support_resistance, get_key_levels
+from engine.core.store import store
+from engine.workers.orchestrator import SlingshotOrchestrator
+import asyncio
+
+global_orchestrator = SlingshotOrchestrator()
 
 # Parchar WebSocket.send_json para usar el encoder robusto globalmente
 _original_send_json = WebSocket.send_json
@@ -37,7 +33,7 @@ WebSocket.send_json = _safe_send_json  # type: ignore[method-assign]
 
 app = FastAPI(
     title=settings.PROJECT_NAME,
-    description="Slingshot v2.0 — Gateway Multi-Usuario (Compute Once, Fan-Out N)",
+    description="Slingshot v3.2 — Motor Local Maestro (Local-First, Zero-Latency)",
     version=settings.VERSION,
 )
 
@@ -53,6 +49,21 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# ── Lifespan / Startup ───────────────────────────────────────────────────────
+
+@app.on_event("startup")
+async def startup_event():
+    """Inicialización del motor y limpieza del almacén de datos."""
+    await store.clear_all() # Reset del estado efímero al arrancar
+    asyncio.create_task(global_orchestrator.start())
+    print("[API] Motor Slingshot v3.2 activado. Radar Center en línea.")
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    """Apagado ordenado de workers."""
+    global_orchestrator.stop()
+    print("[API] Motor Slingshot desactivado.")
+
 # Router one-shot para análisis REST (no WebSocket)
 _one_shot_router = SlingshotRouter()
 
@@ -63,22 +74,31 @@ _one_shot_router = SlingshotRouter()
 async def root():
     return {
         "status": "online",
-        "engine": "Slingshot v2.0 — Compute Once, Fan-Out N",
+        "engine": "Slingshot v3.2 — Local Master Edition",
         "version": settings.VERSION,
     }
 
 
 @app.get("/api/v1/status")
-async def status():
-    """
-    Estado del BroadcasterRegistry:
-    - Cuántos símbolos tienen workers activos
-    - Cuántos clientes por símbolo
-    """
+async def get_status():
+    """Estado del registro de broadcasters."""
     return {
-        "broadcasters": registry.status(),
-        "total_symbols": len(registry._broadcasters),
+        "active_broadcasters": registry.status(),
+        "total_active": len(registry._broadcasters),
     }
+
+@app.get("/api/v1/market-states")
+async def get_market_states():
+    """Retorna el estado actual de todos los activos (Radar)."""
+    return await store.get_market_states()
+
+@app.get("/api/v1/signals")
+async def get_signals(
+    asset: Optional[str] = Query(None),
+    status: Optional[str] = Query("ACTIVE")
+):
+    """Retorna el historial de señales activas."""
+    return await store.get_signals(asset=asset, status=status)
 
 
 # ── REST One-Shot ─────────────────────────────────────────────────────────────
@@ -157,5 +177,5 @@ async def websocket_stream_endpoint(
 
 if __name__ == "__main__":
     import uvicorn
-    print("[SLINGSHOT v2.0] Iniciando en http://0.0.0.0:8000")
+    print("[SLINGSHOT v3.2] Iniciando en http://0.0.0.0:8000")
     uvicorn.run(app, host="0.0.0.0", port=8000)

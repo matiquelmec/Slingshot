@@ -15,6 +15,7 @@ export interface ConfluenceData {
 }
 
 export interface Signal {
+    asset?: string;
     type: string;
     signal_type?: string;
     timestamp: string;

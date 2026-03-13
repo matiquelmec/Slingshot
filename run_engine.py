@@ -13,6 +13,12 @@ import os
 os.environ["PYTHONUTF8"] = "1"
 os.environ["PYTHONIOENCODING"] = "utf-8"
 
+# Asegurar que stdout/stderr soporten UTF-8 incluso si el sistema intenta usar charmap (cp1252)
+if sys.platform == "win32":
+    import io
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
+    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
+
 # Asegurar que el directorio raíz del proyecto está en el path de Python
 # para que todas las importaciones absolutas del paquete 'engine' funcionen.
 project_root = os.path.dirname(os.path.abspath(__file__))

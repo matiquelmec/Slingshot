@@ -18,6 +18,9 @@ else:
     model = None
     print("⚠️ [ADVISOR] GEMINI_API_KEY no encontrada.")
 
+# Semáforo global para evitar saturación de la API (Rate Limiting)
+_ai_semaphore = asyncio.Semaphore(1)
+
 async def generate_tactical_advice(asset: str, tactical_data: dict, current_session: str, ml_projection: dict = None) -> str:
     """
     Genera un consejo cuantitativo breve usando Gemini LLM de forma asíncrona.
@@ -108,13 +111,14 @@ async def generate_tactical_advice(asset: str, tactical_data: dict, current_sess
         # Usamos la versión síncrona dentro de un thread para evitar colgar el loop de asyncio
         # y asegurar compatibilidad máxima con el SDK GenAI 0.8.x
         import asyncio
-        response = await asyncio.to_thread(
-            model.generate_content,
-            prompt,
-            generation_config=genai.types.GenerationConfig(
-                temperature=0.0
+        async with _ai_semaphore:
+            response = await asyncio.to_thread(
+                model.generate_content,
+                prompt,
+                generation_config=genai.types.GenerationConfig(
+                    temperature=0.0
+                )
             )
-        )
         advice = response.text.strip()
         advice = advice.replace('\n', ' ').replace('**', '').replace('ADVISOR LOG:', '').strip()
         print(f"[ADVISOR] ✅ Análisis generado para {asset} ({len(advice)} chars)")

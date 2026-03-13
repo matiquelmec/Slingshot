@@ -47,7 +47,7 @@ from engine.ml.drift_monitor import drift_monitor
 from engine.notifications.telegram import send_signal_async
 from engine.notifications.filter import signal_filter
 from engine.api.advisor import generate_tactical_advice
-from engine.api.supabase_client import supabase_service  # cliente Supabase service_role
+from engine.core.store import store
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -111,6 +111,9 @@ class SymbolBroadcaster:
         self._candle_closes  = 0
         self._last_pulse_ts  = 0.0
         self._liquidity      = {"bids": [], "asks": []}
+        
+        # ML Tracking Buffer: guarda [timestamp, precio, dirección_predicha] para verificar N velas después
+        self._prediction_history = deque(maxlen=20) 
         
         # Caché del último estado para nuevos suscriptores
         self._last_ghost     = None
@@ -185,11 +188,26 @@ class SymbolBroadcaster:
         clean = sanitize_for_json(message)
         
         msg_type = clean.get("type", "")
-        if msg_type == "ghost_update":     self._last_ghost    = clean
-        elif msg_type == "smc_data":       self._last_smc      = clean
-        elif msg_type == "tactical_update":self._last_tactical = clean
-        elif msg_type == "session_update": self._last_session  = clean
-        elif msg_type == "advisor_update": self._last_advisor  = clean
+        if msg_type == "ghost_update":     
+            self._last_ghost = clean
+            await store.update_market_state(self.symbol, {"macro_bias": clean["data"].get("macro_bias")})
+        elif msg_type == "smc_data":       
+            self._last_smc = clean
+        elif msg_type == "tactical_update":
+            self._last_tactical = clean
+            await store.update_market_state(self.symbol, {
+                "regime": clean["data"].get("market_regime"),
+                "strategy": clean["data"].get("active_strategy"),
+                "price": float(clean["data"].get("current_price", 0))
+            })
+        elif msg_type == "session_update": 
+            self._last_session  = clean
+            await store.update_market_state(self.symbol, {"session": clean["data"].get("current_session")})
+        elif msg_type == "advisor_update": 
+            self._last_advisor  = clean
+        elif msg_type == "candle":
+            await store.save_candle(self.symbol, self.interval, clean)
+            await store.update_market_state(self.symbol, {"price": float(clean["data"].get("close", 0))})
         
         dead  = []
         async with self._lock:
@@ -400,9 +418,17 @@ class SymbolBroadcaster:
                 session_state = self._session_manager.get_current_state()
                 await self._broadcast(session_state)
 
-                # ── FAST PATH (max 1 vez/segundo) ─────────────────────────────
+                # ── FAST PATH (Dinámico: 1s a 5s) ─────────────────────────────
                 now = time.time()
-                if now - self._last_pulse_ts >= 1.0:
+                
+                # Definir intervalo de pulso dinámico
+                pulse_interval = 1.0  # Default (TRENDING o alta actividad)
+                regime = self._last_tactical.get("data", {}).get("market_regime", "UNKNOWN") if self._last_tactical else "UNKNOWN"
+                
+                if regime in ["CHOPPY", "ACCUMULATION", "DISTRIBUTION"]:
+                    pulse_interval = 3.0  # Reducir frecuencia en mercados laterales
+                
+                if now - self._last_pulse_ts >= pulse_interval:
                     self._last_pulse_ts = now
 
                     # Ghost Data auto-refresh si el caché está vencido
@@ -516,7 +542,7 @@ class SymbolBroadcaster:
     # ── Handlers auxiliares ───────────────────────────────────────────────────
 
     async def _handle_signals(self, tactical: dict):
-        """Filtra por macro, notifica por Telegram y persiste en Supabase."""
+        """Filtra por macro, notifica por Telegram y persiste en MemoryStore local (v3.0)."""
         raw_signals = tactical.get("signals", [])
         if not raw_signals:
             return
@@ -546,48 +572,34 @@ class SymbolBroadcaster:
             asyncio.create_task(self._persist_signal(sig, tactical, status="BLOCKED"))
 
     async def _persist_signal(self, sig: dict, tactical: dict, status: str = "ACTIVE"):
-        """Inserta la señal en public.signal_events con service_role key."""
-        if not supabase_service:
-            return
-        
+        """Inserta la señal en public.signal_events y en el MemoryStore local."""
         ghost = get_ghost_state()
-        try:
-            data = {
-                "asset":            self.symbol,
-                "interval":         self.interval,
-                "signal_type":      sig.get("signal_type", sig.get("type", "LONG")).upper(),
-                "entry_price":      float(sig.get("price", 0)),
-                "stop_loss":        float(sig.get("stop_loss", 0)),
-                "take_profit":      float(sig.get("take_profit_3r", 0)),
-                "confluence_score": float(sig.get("confluence", {}).get("total_score", 0)) if sig.get("confluence") else None,
-                "regime":           tactical.get("market_regime", "UNKNOWN"),
-                "strategy":         tactical.get("active_strategy", "N/A"),
-                "trigger":          sig.get("trigger", "N/A"),
-                "status":           status,
-                "metadata": {
-                    "reasoning": tactical.get("confluence", {}).get("reasoning", ""),
-                    "blocked_reason": sig.get("blocked_reason"),
-                    "ghost_bias": ghost.macro_bias,
-                    "fear_greed": ghost.fear_greed_value
-                }
-            }
-            # Normalización de tipo
-            if "LONG" in data["signal_type"]: data["signal_type"] = "LONG"
-            elif "SHORT" in data["signal_type"]: data["signal_type"] = "SHORT"
-            else: return
-
-            # Saneamiento final anti-Timestamp
-            data = sanitize_for_json(data)
-            
-            # temporal: eliminamos metadata si no existe la columna (prevención de crash)
-            data.pop("metadata", None)
-
-            result = supabase_service.table("signal_events").insert(data).execute()
-            if result.data:
-                icon = "✅" if status == "ACTIVE" else "🚫"
-                print(f"[SUPABASE] {icon} Señal ({status}) persistida: {data['signal_type']} {self.symbol} @ ${data['entry_price']:.2f}")
-        except Exception as e:
-            print(f"[SUPABASE] ⚠️ Error al persistir señal: {e}")
+        
+        # Datos para tiempo real
+        realtime_data = {
+            "asset":            self.symbol,
+            "interval":         self.interval,
+            "signal_type":      sig.get("signal_type", sig.get("type", "LONG")).upper(),
+            "type":             sig.get("signal_type", sig.get("type", "LONG")).upper(),
+            "entry_price":      float(sig.get("price", 0)),
+            "price":            float(sig.get("price", 0)),
+            "stop_loss":        float(sig.get("stop_loss", 0)),
+            "take_profit_3r":   float(sig.get("take_profit_3r", 0)),
+            "confluence_score": float(sig.get("confluence", {}).get("total_score", 0)) if sig.get("confluence") else 0,
+            "regime":           tactical.get("market_regime", "UNKNOWN"),
+            "strategy":         tactical.get("active_strategy", "N/A"),
+            "trigger":          sig.get("trigger", "N/A"),
+            "status":           status,
+            "timestamp":        datetime.now(timezone.utc).isoformat(),
+            "confluence":       sig.get("confluence")
+        }
+        
+        # Persistencia en Memoria Local
+        asyncio.create_task(store.save_signal(realtime_data))
+        
+        # En v3.0, solo guardamos en memoria. Print de confirmación local.
+        icon = "✅" if status == "ACTIVE" else "🚫"
+        print(f"[LOCAL STORE] {icon} Señal ({status}) persistida: {realtime_data['signal_type']} {self.symbol} @ ${realtime_data['entry_price']:.2f}")
 
     async def _emit_advisor(self, tactical: dict, session_state: dict):
         """Llama al LLM Advisor y broadcast el resultado."""
