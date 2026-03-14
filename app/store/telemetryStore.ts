@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { Signal, NeuralLog, KeyLevel, TacticalDecision, SessionData, SMCDataPayload, GhostData, HTFBias } from '../types/signal';
+import { Signal, NeuralLog, KeyLevel, TacticalDecision, SessionData, SMCDataPayload, GhostData, HTFBias, NewsItem, LiquidationCluster, EconomicEvent } from '../types/signal';
 
 
 export interface CandleData {
@@ -35,12 +35,18 @@ interface TelemetryState {
     sessionData: SessionData | null;
     ghostData: GhostData | null;
     htfBias: HTFBias | null;
+    news: NewsItem[];
+    liquidations: LiquidationCluster[];
+    marketSummary: Record<string, { asset: string, price: number | null, regime: string, strategy: string, bias: string, trend: number }>;
+    economicEvents: EconomicEvent[];
     signalHistory: Signal[];   // ← Historial persistente de señales (sobrevive HMR y navegación)
     auditedSignals: Signal[];  // ← Todas las señales de la sesión actual: ACTIVE y BLOCKED
     activeConnectionId: string | null;
     connect: (symbol: string, timeframe?: Timeframe) => void;
     disconnect: () => void;
     setTimeframe: (tf: Timeframe) => void;
+    setNews: (news: NewsItem[]) => void;
+    fetchEconomicEvents: () => Promise<void>;
 }
 
 export const useTelemetryStore = create<TelemetryState>((set, get) => {
@@ -292,6 +298,16 @@ export const useTelemetryStore = create<TelemetryState>((set, get) => {
                     });
                 } else if (data.type === 'advisor_update') {
                     set({ advisor_log: data.data });
+                } else if (data.type === 'radar_update') {
+                    // Update del Status de todos los radares (Broadcasters persistentes)
+                    const summary = data.data as any[];
+                    set((state) => {
+                        const newSummary = { ...state.marketSummary };
+                        summary.forEach(s => {
+                            newSummary[s.asset] = s;
+                        });
+                        return { marketSummary: newSummary };
+                    });
                 } else if (data.type === 'session_update') {
                     set((state) => ({ 
                         sessionData: { ...(state.sessionData || {}), ...data.data } as any
@@ -344,6 +360,13 @@ export const useTelemetryStore = create<TelemetryState>((set, get) => {
                         };
                         return { neuralLogs: [newLog, ...state.neuralLogs].slice(0, 5) };
                     });
+                } else if (data.type === 'news_update') {
+                    const newsItem = data.data as NewsItem;
+                    set((state) => ({
+                        news: [newsItem, ...state.news].slice(0, 30) // Mantener las últimas 30
+                    }));
+                } else if (data.type === 'liquidation_update') {
+                    set({ liquidations: data.data as LiquidationCluster[] });
                 }
             } catch (err) {
                 console.error("Critical error in WS message handler:", {
@@ -403,6 +426,10 @@ export const useTelemetryStore = create<TelemetryState>((set, get) => {
         sessionData: null,
         ghostData: null,
         htfBias: null,
+        news: [],
+        liquidations: [],
+        economicEvents: [],
+        marketSummary: {},
         liquidityHeatmap: null,
         signalHistory: typeof window !== 'undefined' ? _loadSignalHistory() : [],
         auditedSignals: [],
@@ -429,6 +456,36 @@ export const useTelemetryStore = create<TelemetryState>((set, get) => {
             if (ws) {
                 ws.close();
                 ws = null;
+            }
+        },
+
+        setNews: (newsItems: NewsItem[]) => {
+            set({ news: newsItems });
+        },
+
+        fetchEconomicEvents: async () => {
+            try {
+                const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000';
+                const res = await fetch(`${BASE_URL}/api/v1/calendar`);
+                if (res.ok) {
+                    const data = await res.json();
+                    
+                    // Handle different API response formats (Direct Array or Wrapped)
+                    let events: EconomicEvent[] = [];
+                    if (Array.isArray(data)) {
+                        events = data;
+                    } else if (data && Array.isArray(data.value)) {
+                        events = data.value;
+                    } else if (data && Array.isArray(data.data)) {
+                        events = data.data;
+                    }
+
+                    if (events.length > 0 || Array.isArray(data)) {
+                        set({ economicEvents: events });
+                    }
+                }
+            } catch (e) {
+                console.error("Failed to fetch economic events:", e);
             }
         }
     };

@@ -115,7 +115,7 @@ export default function TradingChart() {
 
     const markersSeriesRef = useRef<any>(null);
 
-    const { candles, isConnected, smcData, liquidityHeatmap, tacticalDecision, sessionData } = useTelemetryStore();
+    const { candles, isConnected, smcData, liquidityHeatmap, tacticalDecision, sessionData, liquidations } = useTelemetryStore();
     const { indicators } = useIndicatorsStore();
 
     const isEnabled = (id: string) => indicators.find(i => i.id === id)?.enabled ?? false;
@@ -534,6 +534,37 @@ export default function TradingChart() {
         });
 
     }, [liquidityHeatmap, indicators]);
+
+    // ── Liquidation Clusters visualization (Rekt Radar) ──
+    const liquidationLinesRef = useRef<any[]>([]);
+
+    useEffect(() => {
+        if (!chartRef.current || !liquidations || !candleSeriesRef.current) return;
+
+        // Limpiar líneas anteriores
+        liquidationLinesRef.current.forEach(line => {
+            try { candleSeriesRef.current?.removePriceLine(line); } catch (e) { }
+        });
+        liquidationLinesRef.current = [];
+
+        if (isEnabled('liquidations')) {
+            liquidations.forEach(liq => {
+                const isAbove = liq.type === 'SHORT_LIQ';
+                const opacity = 0.1 + (liq.strength / 100) * 0.4;
+                const color = isAbove ? `rgba(0, 229, 255, ${opacity})` : `rgba(192, 132, 252, ${opacity})`;
+                
+                const line = candleSeriesRef.current?.createPriceLine({
+                    price: liq.price,
+                    color: color,
+                    lineWidth: Math.max(1, Math.floor(liq.strength / 20)) as any,
+                    lineStyle: LineStyle.Dashed,
+                    axisLabelVisible: true,
+                    title: `REKT ${liq.leverage}x ${isAbove ? '▲' : '▼'}`,
+                });
+                if (line) liquidationLinesRef.current.push(line);
+            });
+        }
+    }, [liquidations, indicators]);
 
     // ── S/R High-Touch + Niveles de Sesión ───────────────────────────────────
     const srLinesRef = useRef<{ line: any; series: any }[]>([]);

@@ -175,3 +175,30 @@ export interface TacticalDecision {
     };
 }
 
+export interface NewsItem {
+    title: string;
+    url: string;
+    source: string;
+    timestamp: string;
+    sentiment: 'BULLISH' | 'BEARISH' | 'NEUTRAL';
+    score: number;
+    impact: string;
+}
+
+export interface LiquidationCluster {
+    price: number;
+    volume: number;
+    type: 'LONG_LIQ' | 'SHORT_LIQ';
+    leverage: number;
+    strength: number;
+}
+
+export interface EconomicEvent {
+    title: string;
+    country: string;
+    impact: string;
+    date: string;
+    forecast: string;
+    previous: string;
+}
+

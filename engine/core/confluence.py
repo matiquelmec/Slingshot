@@ -27,7 +27,8 @@ class ConfluenceManager:
         df: pd.DataFrame,
         signal: dict,
         ml_projection: dict = None,
-        session_data: dict = None
+        session_data: dict = None,
+        **kwargs
     ) -> dict:
         """
         :param df:            DataFrame con OHLCV + indicadores ya calculados por el router.
@@ -232,6 +233,46 @@ class ConfluenceManager:
                                "detail": f"IA indecisa o divergente ({ml_dir} {ml_prob:.0f}%)"})
 
         # ─────────────────────────────────────────────────────────────
+        # 7. CONTEXTO AI — NOTICIAS (peso 15) v4.0
+        # ─────────────────────────────────────────────────────────────
+        news_weight = 15
+        total_weight += news_weight
+        news_items = kwargs.get('news_items', [])
+        
+        relevant_news = []
+        news_sentiment_score = 0
+        
+        # Analizar noticias recientes (últimas 12h)
+        for item in news_items:
+            # Si el título menciona el activo o es macro (BTC, Market, SEC...)
+            title = item.get('title', '').upper()
+            asset_ref = signal.get('asset', '').upper()
+            is_relevant = asset_ref in title or any(k in title for k in ['BTC', 'CRYPTO', 'FED', 'MARKET', 'SEC', 'ETF'])
+            
+            if is_relevant:
+                sentiment = item.get('sentiment', 'NEUTRAL').upper()
+                score_val = float(item.get('score', 0))
+                
+                if is_long and sentiment == 'BULLISH':
+                    news_sentiment_score = max(news_sentiment_score, score_val)
+                    relevant_news.append(item)
+                elif not is_long and sentiment == 'BEARISH':
+                    news_sentiment_score = max(news_sentiment_score, score_val)
+                    relevant_news.append(item)
+
+        if news_sentiment_score >= 0.7:
+            score += news_weight
+            checklist.append({"factor": "Contexto AI (Noticias)", "status": "CONFIRMADO",
+                               "detail": f"Sentimiento Institucional ALCISTA (Conf: {news_sentiment_score*100:.0f}%)" if is_long else f"Sentimiento Institucional BAJISTA (Conf: {news_sentiment_score*100:.0f}%)"})
+        elif news_sentiment_score >= 0.4:
+            score += int(news_weight * 0.6)
+            checklist.append({"factor": "Contexto AI (Noticias)", "status": "PARCIAL",
+                               "detail": "Relatos de mercado alineados moderadamente"})
+        else:
+            checklist.append({"factor": "Contexto AI (Noticias)", "status": "NEUTRAL",
+                               "detail": "Sin noticias de alto impacto alineadas"})
+
+        # ─────────────────────────────────────────────────────────────
         # SCORE FINAL
         # ─────────────────────────────────────────────────────────────
         final_score = int((score / total_weight) * 100) if total_weight > 0 else 0
@@ -241,7 +282,10 @@ class ConfluenceManager:
             "ESPECULATIVA"    if final_score >= 30 else
             "ALTO RIESGO"
         )
-        reasoning = self._build_reasoning(final_score, conviction, is_long, regime, has_ob, rvol, in_kz, sweep_detected, div_aligned)
+        reasoning = self._build_reasoning(
+            final_score, conviction, is_long, regime, has_ob, rvol, in_kz, sweep_detected, div_aligned,
+            news_score=news_sentiment_score
+        )
 
         return {
             "score":      final_score,
@@ -253,7 +297,8 @@ class ConfluenceManager:
 
     def _build_reasoning(
         self, score: int, conviction: str, is_long: bool,
-        regime: str, has_ob: bool, rvol: float, in_kz: bool, sweep: bool, div_aligned: bool
+        regime: str, has_ob: bool, rvol: float, in_kz: bool, sweep: bool, div_aligned: bool,
+        news_score: float = 0
     ) -> str:
         direction = "LONG" if is_long else "SHORT"
         msg = f"Señal {direction} de naturaleza {conviction} ({score}/100). "
@@ -261,7 +306,12 @@ class ConfluenceManager:
         if has_ob:
             msg += "Respaldada por un Order Block institucional. "
         if div_aligned:
-            msg += "🔥 POTENCIADA POR DIVERGENCIA CUANTITATIVA (Price vs Momentum). "
+            msg += "🔥 POTENCIADA POR DIVERGENCIA CUANTITATIVA. "
+        if news_score >= 0.7:
+            msg += "🚀 CONFLUENCIA FUNDAMENTAL: El sentimiento AI de las noticias es altamente favorable. "
+        elif news_score >= 0.4:
+            msg += "📰 Narrativa de mercado alineada con la dirección. "
+            
         if rvol >= 1.5:
             msg += f"Flujo de capital significativo detectado ({rvol:.1f}x). "
         if sweep:

@@ -369,6 +369,8 @@ class SessionManager:
                 "current_session":     session_name,
                 "current_session_utc": now_utc.strftime("%H:%M UTC"),
                 "local_time":          now_chile.strftime("%H:%M Chile"),
+                "local_time_ny":       now_ny.strftime("%H:%M"),
+                "local_time_lon":      now_lon.strftime("%H:%M"),
                 "is_killzone":         is_killzone,
                 "sessions":            sessions_info,
                 "pdh":       self._state.get("pdh"),

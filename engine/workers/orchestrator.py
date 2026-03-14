@@ -4,6 +4,8 @@ from engine.api.config import settings
 from engine.api.ws_manager import registry
 from engine.indicators.ghost_data import refresh_ghost_data, load_local_state, get_ghost_state
 from engine.core.session_manager import SessionManager
+from engine.workers.news_worker import NewsWorker
+from engine.workers.calendar_worker import CalendarWorker
 
 class SlingshotOrchestrator:
     """
@@ -17,6 +19,8 @@ class SlingshotOrchestrator:
         self.intervals = ["15m"] 
         self._tasks: Dict[str, asyncio.Task] = {}
         self._stop_event = asyncio.Event()
+        self.news_worker = NewsWorker()
+        self.calendar_worker = CalendarWorker()
 
     async def start(self):
         print(f"🚀 [ORCHESTRATOR] Iniciando Motor Local Master (Modo 100% Dinámico)...")
@@ -29,6 +33,10 @@ class SlingshotOrchestrator:
         asyncio.create_task(self._ghost_worker())
         # Iniciar Worker de Sesiones Globales
         asyncio.create_task(self._session_worker())
+        # Iniciar Worker de Noticias en Tiempo Real
+        asyncio.create_task(self.news_worker.start())
+        # Iniciar Worker de Calendario Económico
+        asyncio.create_task(self.calendar_worker.start())
         
         # Si la DB está vacía, podemos poner BTC por defecto para que el motor no esté ocioso
         if not self.radar_assets:

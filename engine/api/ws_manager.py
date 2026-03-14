@@ -39,6 +39,7 @@ from engine.indicators.structure import (
     identify_order_blocks, extract_smc_coordinates,
     identify_support_resistance, get_key_levels, consolidate_mtf_levels
 )
+from engine.indicators.liquidations import estimate_liquidation_clusters
 from engine.indicators.liquidity import detect_liquidity_clusters
 from engine.indicators.ghost_data import (
     refresh_ghost_data, get_ghost_state, filter_signals_by_macro, 
@@ -129,6 +130,7 @@ class SymbolBroadcaster:
         self._last_tactical  = None
         self._last_session   = None
         self._last_advisor   = None
+        self._last_liquidations = None
 
         print(f"[BROADCASTER] ✅ Creado: {self._key}")
 
@@ -150,6 +152,7 @@ class SymbolBroadcaster:
         if self._last_tactical: await queue.put(self._last_tactical)
         if self._last_session:  await queue.put(self._last_session)
         if self._last_advisor:  await queue.put(self._last_advisor)
+        if self._last_liquidations: await queue.put(self._last_liquidations)
 
         return queue
 
@@ -213,6 +216,9 @@ class SymbolBroadcaster:
             await store.update_market_state(self.symbol, {"session": clean["data"].get("current_session")})
         elif msg_type == "advisor_update": 
             self._last_advisor  = clean
+        elif msg_type == "liquidation_update":
+            self._last_liquidations = clean
+            await store.update_liquidation_clusters(self.symbol, clean["data"])
         elif msg_type == "candle":
             await store.save_candle(self.symbol, self.interval, clean)
             await store.update_market_state(self.symbol, {"price": float(clean["data"].get("close", 0))})
@@ -337,6 +343,13 @@ class SymbolBroadcaster:
                 await self._broadcast(session_state)
             except Exception as e:
                 print(f"[BROADCASTER] {self._key} → Sesión bootstrap error: {e}")
+
+            # Liquidaciones iniciales (Trapped Money)
+            try:
+                liq_clusters = estimate_liquidation_clusters(df_init, self.latest_price)
+                await self._broadcast({"type": "liquidation_update", "data": liq_clusters})
+            except Exception as e:
+                print(f"[BROADCASTER] {self._key} → Initial Liquidation error: {e}")
 
             # Drift Monitor — referencia inicial
             try:
@@ -528,11 +541,20 @@ class SymbolBroadcaster:
                     except Exception as e:
                         print(f"[BROADCASTER] {self._key} → SMC Slow Path error: {e}")
 
+                    # Liquidaciones Sintéticas (Trapped Money)
+                    try:
+                        liq_clusters = estimate_liquidation_clusters(df_live, self.latest_price)
+                        await self._broadcast({"type": "liquidation_update", "data": liq_clusters})
+                    except Exception as e:
+                        print(f"[BROADCASTER] {self._key} → Liquidation Estimator error: {e}")
+
                     # Pipeline táctico final (vela cerrada = máxima precisión)
                     try:
+                        news_items = await store.get_news()
                         self._router.set_context(
                             ml_projection=self._last_ml,
-                            session_data=session_state.get("data", {})
+                            session_data=session_state.get("data", {}),
+                            news_items=news_items
                         )
                         final_tactical = self._router.process_market_data(
                             df_live, asset=self.symbol, interval=self.interval,
@@ -669,12 +691,20 @@ class SymbolBroadcaster:
             # Enviar estado de 'Cargando' explícito si es necesario (opcional)
             # await self._broadcast({"type": "advisor_update", "data": "ANALIZANDO... ⚡"})
 
-            # Timeout de 20 segundos para no colgar el worker
+            # Obtener datos adicionales del store para el LLM
+            news_items = await store.get_news(limit=5)
+            liqs = await store.get_liquidation_clusters(self.symbol)
+            econ_events = await store.get_economic_events(limit=5)
+
+            # Timeout de 60 segundos para no colgar el worker
             advice = await asyncio.wait_for(
                 generate_tactical_advice(self.symbol, 
                     tactical_data=tactical,
                     current_session=session_state.get("data", {}).get("current_session", "UNKNOWN"),
-                    ml_projection=self._last_ml
+                    ml_projection=self._last_ml,
+                    news=news_items,
+                    liquidations=liqs,
+                    economic_events=econ_events
                 ),
                 timeout=60.0
             ) 
@@ -745,12 +775,52 @@ class BroadcasterRegistry:
     def __init__(self):
         self._broadcasters: Dict[str, SymbolBroadcaster] = {}
         self._lock = asyncio.Lock()
+        self._pulse_task: Optional[asyncio.Task] = None
+
+    async def start_global_pulse(self):
+        """Inicia el latido global que sincroniza el estado de todos los radares."""
+        if self._pulse_task: return
+        self._pulse_task = asyncio.create_task(self._pulse_loop())
+        print("[REGISTRY] 💓 Global Radar Pulse iniciado")
+
+    async def _pulse_loop(self):
+        """Loop que emite el estado resumido de todo el mercado cada 15 segundos."""
+        while True:
+            try:
+                await asyncio.sleep(15)
+                # 1. Obtener estados de todos los activos desde el store
+                states = await store.get_market_states()
+                if not states: continue
+
+                # 2. Simplificar para el Radar (ahorro de ancho de banda)
+                summary = []
+                for s in states:
+                    summary.append({
+                        "asset":    s.get("asset"),
+                        "price":    s.get("current_price"),
+                        "regime":   s.get("regime", "UNKNOWN"),
+                        "strategy": s.get("strategy", "STANDBY"),
+                        "bias":     s.get("htf_bias", {}).get("bias", "NEUTRAL") if isinstance(s.get("htf_bias"), dict) else "NEUTRAL",
+                        "trend":    s.get("sma_slow_slope", 0)
+                    })
+
+                # 3. Fan-out: Enviar a TODOS los broadcasters activos
+                async with self._lock:
+                    for b in self._broadcasters.values():
+                        await b._broadcast({"type": "radar_update", "data": summary})
+            except Exception as e:
+                print(f"[REGISTRY] Pulse error: {e}")
+                await asyncio.sleep(5)
 
     async def get_or_create(self, symbol: str, interval: str, persistent: bool = False) -> tuple[SymbolBroadcaster, str]:
         """
         Retorna el broadcaster para symbol:interval, creándolo si no existe.
         También retorna el client_id único para este suscriptor.
         """
+        # Asegurarse de que el pulso global esté corriendo
+        if not self._pulse_task:
+            await self.start_global_pulse()
+
         key = f"{symbol.upper()}:{interval}"
         client_id = str(uuid.uuid4())
 
@@ -789,7 +859,8 @@ class BroadcasterRegistry:
                 del self._broadcasters[key]
                 print(f"[REGISTRY] 🗑️  Broadcaster eliminado (sin clientes): {key}")
             elif broadcaster.subscriber_count() == 0 and broadcaster.persistent:
-                print(f"[REGISTRY] 🛡️  Broadcaster {key} mantenido en segundo plano (PERSISTENTE)")
+                # print(f"[REGISTRY] 🛡️  Broadcaster {key} mantenido en segundo plano (PERSISTENTE)")
+                pass
 
     def status(self) -> dict:
         """Retorna el estado del registry para el endpoint /health."""

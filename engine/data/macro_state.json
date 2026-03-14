@@ -1,13 +1,13 @@
 {
-  "fear_greed_value": 15,
+  "fear_greed_value": 16,
   "fear_greed_label": "Extreme Fear",
-  "btc_dominance": 56.88,
-  "funding_rate": 0.000927,
+  "btc_dominance": 56.82,
+  "funding_rate": -0.00392,
   "funding_symbol": "BTCUSDT",
   "macro_bias": "BEARISH",
   "block_longs": false,
   "block_shorts": false,
-  "reason": "Contexto macro pesimista: F&G=15",
-  "last_updated": 1773426365.8015177,
+  "reason": "Contexto macro pesimista: F&G=16",
+  "last_updated": 1773475609.8968828,
   "is_stale": false
 }

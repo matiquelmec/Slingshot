@@ -1,0 +1,69 @@
+
+[
+  {
+    "title": "CPI (YoY) (Feb)",
+    "country": "USD",
+    "impact": "High",
+    "date": "2026-03-11T13:30:00"
+  },
+  {
+    "title": "GDP MoM",
+    "country": "GBP",
+    "impact": "High",
+    "date": "2026-03-13T05:00:00"
+  },
+  {
+    "title": "Durable Goods Orders MoM",
+    "country": "USD",
+    "impact": "High",
+    "date": "2026-03-13T10:30:00"
+  },
+  {
+    "title": "Retail Sales YoY",
+    "country": "CNY",
+    "impact": "High",
+    "date": "2026-03-16T00:00:00"
+  },
+  {
+    "title": "Industrial Production YoY",
+    "country": "CNY",
+    "impact": "High",
+    "date": "2026-03-16T00:00:00"
+  },
+  {
+    "title": "Building Permits Prel",
+    "country": "USD",
+    "impact": "High",
+    "date": "2026-03-17T10:30:00"
+  },
+  {
+    "title": "Housing Starts",
+    "country": "USD",
+    "impact": "High",
+    "date": "2026-03-17T10:30:00"
+  },
+  {
+    "title": "Balance of Trade",
+    "country": "JPY",
+    "impact": "High",
+    "date": "2026-03-17T21:50:00"
+  },
+  {
+    "title": "PPI MoM",
+    "country": "USD",
+    "impact": "High",
+    "date": "2026-03-18T10:30:00"
+  },
+  {
+    "title": "Fed Interest Rate Decision",
+    "country": "USD",
+    "impact": "High",
+    "date": "2026-03-18T16:00:00"
+  },
+  {
+    "title": "Fed Press Conference",
+    "country": "USD",
+    "impact": "High",
+    "date": "2026-03-18T16:30:00"
+  }
+]

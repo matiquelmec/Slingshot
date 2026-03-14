@@ -41,13 +41,16 @@ class SlingshotRouter:
         # Estado compartido para ConfluenceManager (se actualiza en cada llamada)
         self._last_ml_projection: dict = {}
         self._last_session_data:  dict = {}
+        self._last_news_items:    list = []
         
-    def set_context(self, ml_projection: dict = None, session_data: dict = None):
-        """Actualiza el contexto externo (ML + Sesiones) para el evaluador de confluencias."""
+    def set_context(self, ml_projection: dict = None, session_data: dict = None, news_items: list = None):
+        """Actualiza el contexto externo (ML + Sesiones + Noticias) para el evaluador de confluencias."""
         if ml_projection:
             self._last_ml_projection = ml_projection
         if session_data:
             self._last_session_data = session_data
+        if news_items is not None:
+            self._last_news_items = news_items
         
     def process_market_data(
         self, 
@@ -337,12 +340,25 @@ class SlingshotRouter:
                         signal=sig,
                         ml_projection=self._last_ml_projection,
                         session_data=self._last_session_data,
+                        news_items=self._last_news_items
                     )
                     sig["confluence"] = confluence_result
                 except Exception as e:
                     print(f"[ROUTER] ConfluenceManager error: {e}")
                     sig["confluence"] = None
                 
+                # ══════════════════════════════════════════════════════
+                # 🔒 FILTRO DE CONFLUENCIA AI v4.0 — Umbral de Excelencia
+                # Solo señales >= 75% llegan al Terminal activo (User Request)
+                # ══════════════════════════════════════════════════════
+                score = (sig["confluence"].get("score", 0)) if sig.get("confluence") else 0
+                if score < 75:
+                    print(f"[ROUTER] 🔴 Señal RECHAZADA por Confluencia Insuficiente ({score}%) | {asset}")
+                    sig["status"] = "BLOCKED_BY_CONFIDENCE"
+                    sig["blocked_reason"] = f"Confianza {score}% < 75% (Umbral de excelencia)"
+                    result['blocked_signals'].append(sig)
+                    continue
+
                 # REGLA INSTITUCIONAL: Solo enviamos al Dashboard las señales VIVAS.
                 # Para ser viva, no debe haber expirado ni haber tocado SL/TP desde que nació.
                 is_alive = True

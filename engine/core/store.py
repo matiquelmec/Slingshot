@@ -20,6 +20,15 @@ class MemoryStore:
         self._candle_history: Dict[str, deque] = {}
         self._max_history = max_history
         
+        # Zonas de Liquidación (Trapped Money)
+        self._liquidation_clusters: Dict[str, List[Dict[str, Any]]] = {}
+        
+        # Buffer circular para noticias
+        self._news_items = deque(maxlen=50)
+
+        # Buffer circular para calendario económico
+        self._economic_events = deque(maxlen=100)
+        
         # Lock de concurrencia para evitar condiciones de carrera
         self._lock = asyncio.Lock()
 
@@ -45,7 +54,8 @@ class MemoryStore:
         """Recupera el historial circular para sincronización inicial."""
         key = f"{asset}:{interval}"
         async with self._lock:
-            return list(self._candle_history.get(key, []))
+            history = self._candle_history.get(key)
+            return list(history) if history is not None else []
 
     async def get_market_states(self) -> List[Dict[str, Any]]:
         """Retorna el estado de todos los activos para el Radar."""
@@ -76,6 +86,7 @@ class MemoryStore:
                 existing.update(signal_data)
             else:
                 self._signal_events.append(signal_data)
+        return signal_data
 
     async def get_signals(self, asset: Optional[str] = None, status: Optional[str] = None) -> List[Dict[str, Any]]:
         """Busca señales en el buffer circular con filtros."""
@@ -87,12 +98,56 @@ class MemoryStore:
                 filtered = [s for s in filtered if s.get("status") == status]
             return filtered
 
+    async def save_news(self, news_item: Dict[str, Any]):
+        """Guarda una noticia en el buffer circular."""
+        async with self._lock:
+            # Evitar duplicados por título
+            existing_titles = [n["title"] for n in self._news_items]
+            if news_item["title"] not in existing_titles:
+                self._news_items.append(news_item)
+
+    async def get_news(self, limit: Optional[int] = None) -> List[Dict[str, Any]]:
+        """Recupera las últimas noticias del buffer."""
+        async with self._lock:
+            news_list = list(self._news_items)
+            news_list = news_list[::-1]
+            if limit:
+                return news_list[:limit]
+            return news_list
+
+    async def save_economic_events(self, events: List[Dict[str, Any]]):
+        """Guarda una lista de eventos económicos en el buffer circular."""
+        async with self._lock:
+            # Reemplazamos los eventos actuales por los nuevos (refresco total de la semana)
+            self._economic_events.clear()
+            self._economic_events.extend(events)
+
+    async def get_economic_events(self, limit: Optional[int] = None) -> List[Dict[str, Any]]:
+        """Recupera los eventos económicos del buffer."""
+        async with self._lock:
+            events = list(self._economic_events)
+            if limit:
+                return events[:limit]
+            return events
+
+    async def update_liquidation_clusters(self, asset: str, clusters: List[Dict[str, Any]]):
+        """Actualiza el mapa de calor de liquidaciones para un activo."""
+        async with self._lock:
+            self._liquidation_clusters[asset] = clusters
+
+    async def get_liquidation_clusters(self, asset: str) -> List[Dict[str, Any]]:
+        """Recupera las zonas de liquidación para un activo."""
+        async with self._lock:
+            return self._liquidation_clusters.get(asset, [])
+
     async def clear_all(self):
         """Wipe total (Reseteo de sistema)."""
         async with self._lock:
             self._market_states.clear()
             self._signal_events.clear()
             self._candle_history.clear()
+            self._news_items.clear()
+            self._liquidation_clusters.clear()
             print("🧱 [MemoryStore] RAM Liberada. Estado 100% efímero reiniciado.")
 
 # Singleton Global para todo el proceso

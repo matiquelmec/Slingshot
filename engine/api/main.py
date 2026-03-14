@@ -97,6 +97,21 @@ async def get_market_states():
     """Retorna el estado actual de todos los activos (Radar)."""
     return await store.get_market_states()
 
+@app.get("/api/v1/news")
+async def get_news():
+    """Retorna las últimas noticias analizadas."""
+    return await store.get_news()
+
+@app.get("/api/v1/calendar")
+async def get_calendar():
+    """Retorna el calendario económico global."""
+    return await store.get_economic_events()
+
+@app.get("/api/v1/liquidations/{asset}")
+async def get_liquidations(asset: str):
+    """Retorna las zonas de liquidación estimadas para un activo."""
+    return await store.get_liquidation_clusters(asset)
+
 @app.get("/api/v1/signals")
 async def get_signals(
     asset: Optional[str] = Query(None),

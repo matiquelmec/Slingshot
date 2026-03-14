@@ -9,6 +9,9 @@ import { useTelemetryStore, Timeframe } from '../store/telemetryStore';
 const QuantDiagnosticPanel = dynamic(() => import('../components/ui/QuantDiagnosticPanel'), { ssr: false });
 const SessionClock = dynamic(() => import('../components/ui/SessionClock'), { ssr: false });
 const MacroRadar = dynamic(() => import('../components/ui/MacroRadar'), { ssr: false });
+const NewsTerminal = dynamic(() => import('../components/ui/NewsTerminal'), { ssr: false });
+const LiquidationScanner = dynamic(() => import('../components/ui/LiquidationScanner'), { ssr: false });
+const MacroCalendar = dynamic(() => import('../components/macro/MacroCalendar'), { ssr: false });
 
 // ── Tipos ─────────────────────────────────────────────────────────────────────
 
@@ -29,8 +32,19 @@ export default function OverviewPage() {
     const [newSymbol, setNewSymbol] = useState('');
     const [availableSymbols, setAvailableSymbols] = useState<string[]>([]);
     const [filteredSymbols, setFilteredSymbols] = useState<string[]>([]);
+    const [sidePanelMode, setSidePanelMode] = useState<'LOGS' | 'NEWS' | 'LIQS' | 'CAL'>('LIQS');
 
-    const { activeSymbol, activeTimeframe, latestPrice, mlProjection, neuralLogs, connect, isCalibrating, advisor_log } = useTelemetryStore();
+    const { 
+        activeSymbol, 
+        activeTimeframe, 
+        latestPrice, 
+        mlProjection, 
+        neuralLogs, 
+        connect, 
+        isCalibrating, 
+        advisor_log,
+        marketSummary 
+    } = useTelemetryStore();
 
     // ── Lifecycle ─────────────────────────────────────────────────────────────
 
@@ -258,7 +272,7 @@ export default function OverviewPage() {
                     </AnimatePresence>
 
                     {/* Lista de activos */}
-                    <div className="p-4 flex flex-col gap-2 overflow-y-auto flex-1 custom-scrollbar">
+                    <div className="p-4 flex flex-col gap-2.5 overflow-y-auto flex-1 custom-scrollbar">
                         {watchlistLoading ? (
                             <div className="text-white/20 text-xs text-center mt-4 animate-pulse">Cargando watchlist...</div>
                         ) : watchlist.length === 0 ? (
@@ -268,34 +282,64 @@ export default function OverviewPage() {
                         ) : (
                             watchlist.map((entry) => {
                                 const isActive = entry.asset === activeSymbol;
+                                const summary = marketSummary[entry.asset];
+                                
+                                const biasColor = summary?.bias === 'BULLISH' ? 'text-neon-green' : 
+                                                 summary?.bias === 'BEARISH' ? 'text-neon-red' : 'text-white/40';
+                                
+                                const regimeColor = summary?.regime === 'MARKUP' ? 'text-neon-green' :
+                                                   summary?.regime === 'MARKDOWN' ? 'text-neon-red' :
+                                                   summary?.regime === 'ACCUMULATION' ? 'text-yellow-400' :
+                                                   summary?.regime === 'DISTRIBUTION' ? 'text-orange-400' : 'text-white/30';
+
                                 return (
                                     <div
                                         key={entry.id}
                                         onClick={() => handleSymbolClick(entry)}
-                                        className={`group flex justify-between items-center text-xs p-3 rounded-lg border transition-all cursor-pointer hover:-translate-y-0.5 ${isActive
-                                            ? 'bg-neon-cyan/10 border-neon-cyan/30 shadow-[0_0_20px_rgba(0,229,255,0.1)]'
+                                        className={`group flex flex-col gap-2 p-3 rounded-xl border transition-all cursor-pointer hover:-translate-y-0.5 ${isActive
+                                            ? 'bg-neon-cyan/10 border-neon-cyan/30 shadow-[0_0_25px_rgba(0,229,255,0.1)]'
                                             : 'bg-white/[0.02] border-white/5 hover:border-white/20 hover:bg-white/[0.05]'
                                             }`}
                                     >
-                                        <span className={`font-bold tracking-wider ${isActive ? 'text-neon-cyan' : 'text-white/70 group-hover:text-white'}`}>
-                                            {entry.asset}
-                                        </span>
-                                        <div className="flex items-center gap-2">
-                                            {isActive && latestPrice && (
-                                                <span className="text-neon-green font-bold text-[10px] tracking-wider">
-                                                    ${latestPrice.toLocaleString('en-US', { maximumFractionDigits: 2 })}
+                                        <div className="flex justify-between items-center">
+                                            <div className="flex items-center gap-2">
+                                                <span className={`font-black tracking-widest text-[11px] ${isActive ? 'text-neon-cyan' : 'text-white/70 group-hover:text-white'}`}>
+                                                    {entry.asset}
                                                 </span>
-                                            )}
-                                            {!isActive && (
-                                                <button
-                                                    onClick={e => { e.stopPropagation(); handleRemoveSymbol(entry); }}
-                                                    className="opacity-0 group-hover:opacity-100 transition-opacity text-white/20 hover:text-red-400"
-                                                >
-                                                    <X size={10} />
-                                                </button>
-                                            )}
-                                            <span className={`h-2 w-2 rounded-full ${isActive ? 'bg-neon-cyan shadow-[0_0_8px_rgba(0,229,255,0.8)]' : 'bg-neon-green/40'}`} />
+                                                {summary?.bias && (
+                                                    <span className={`text-[8px] font-black px-1.5 py-0.5 rounded border border-current ${biasColor} opacity-70`}>
+                                                        {summary.bias}
+                                                    </span>
+                                                )}
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-[10px] font-black text-white/80 tabular-nums">
+                                                    {summary?.price ? `$${summary.price.toLocaleString('en-US', { maximumFractionDigits: (summary.price < 1 ? 4 : 2) })}` : (isActive && latestPrice ? `$${latestPrice.toLocaleString('en-US', { maximumFractionDigits: 2 })}` : '—')}
+                                                </span>
+                                                {!isActive && (
+                                                    <button
+                                                        onClick={e => { e.stopPropagation(); handleRemoveSymbol(entry); }}
+                                                        className="opacity-0 group-hover:opacity-100 transition-opacity text-white/20 hover:text-red-400"
+                                                    >
+                                                        <X size={10} />
+                                                    </button>
+                                                )}
+                                                <span className={`h-2 w-2 rounded-full ${isActive ? 'bg-neon-cyan shadow-[0_0_10px_rgba(0,229,255,1)] animate-pulse' : (summary ? 'bg-neon-green/40' : 'bg-white/10')}`} />
+                                            </div>
                                         </div>
+                                        
+                                        {summary && (
+                                            <div className="flex items-center justify-between text-[9px] font-bold tracking-tight">
+                                                <div className="flex items-center gap-1.5">
+                                                    <span className="text-white/20 uppercase tracking-[0.1em]">Regime:</span>
+                                                    <span className={`${regimeColor}`}>{summary.regime.replace('_', ' ')}</span>
+                                                </div>
+                                                <div className={`flex items-center gap-1 ${summary.trend > 0 ? 'text-neon-green' : summary.trend < 0 ? 'text-neon-red' : 'text-white/20'}`}>
+                                                    {summary.trend > 0 ? '↗' : summary.trend < 0 ? '↘' : '→'}
+                                                    <span className="text-white/30 uppercase tracking-[0.05em]">{summary.strategy.split(' ')[0]}</span>
+                                                </div>
+                                            </div>
+                                        )}
                                     </div>
                                 );
                             })
@@ -362,25 +406,65 @@ export default function OverviewPage() {
                 </div>
 
                 <div className="bg-[#050B14]/60 backdrop-blur-xl border border-white/5 rounded-2xl shadow-[0_10px_40px_rgba(0,0,0,0.5)] flex-1 flex flex-col overflow-hidden relative">
-                    <div className="p-4 border-b border-white/5 flex items-center justify-between bg-gradient-to-r from-neon-cyan/10 to-transparent">
-                        <div className="flex items-center gap-2.5">
-                            <Terminal size={16} className="text-neon-cyan" />
-                            <h2 className="text-xs font-bold text-white/90 tracking-widest drop-shadow-[0_0_8px_rgba(0,229,255,0.5)]">FLUJO NEURAL</h2>
-                        </div>
+                    {/* Header Controls (Global for Side Panel) */}
+                    <div className="absolute top-4 right-4 flex items-center gap-1.5 z-50 bg-black/40 p-1 rounded-xl border border-white/10 backdrop-blur-md">
+                        <button
+                            onClick={() => setSidePanelMode('LOGS')}
+                            className={`px-3 py-1.5 rounded-lg text-[9px] font-black tracking-widest transition-all ${sidePanelMode === 'LOGS' ? 'bg-neon-cyan/20 text-neon-cyan border border-neon-cyan/30 shadow-[0_0_10px_rgba(0,229,255,0.2)]' : 'text-white/30 hover:text-white/60'}`}
+                        >
+                            LOGS
+                        </button>
+                        <button
+                            onClick={() => setSidePanelMode('NEWS')}
+                            className={`px-3 py-1.5 rounded-lg text-[9px] font-black tracking-widest transition-all ${sidePanelMode === 'NEWS' ? 'bg-neon-purple/20 text-neon-purple border border-neon-purple/30 shadow-[0_0_10px_rgba(191,0,255,0.2)]' : 'text-white/30 hover:text-white/60'}`}
+                        >
+                            NEWS
+                        </button>
+                        <button
+                            onClick={() => setSidePanelMode('LIQS')}
+                            className={`px-3 py-1.5 rounded-lg text-[9px] font-black tracking-widest transition-all ${sidePanelMode === 'LIQS' ? 'bg-neon-red/20 text-neon-red border border-neon-red/30 shadow-[0_0_10px_rgba(255,0,60,0.2)]' : 'text-white/30 hover:text-white/60'}`}
+                        >
+                            LIQS
+                        </button>
+                        <button
+                            onClick={() => setSidePanelMode('CAL')}
+                            className={`px-3 py-1.5 rounded-lg text-[9px] font-black tracking-widest transition-all ${sidePanelMode === 'CAL' ? 'bg-amber-500/20 text-amber-500 border border-amber-500/30 shadow-[0_0_10px_rgba(245,158,11,0.2)]' : 'text-white/30 hover:text-white/60'}`}
+                        >
+                            CAL
+                        </button>
                     </div>
-                    <div className="p-5 flex flex-col gap-5 overflow-y-auto text-[11.5px] leading-relaxed font-mono custom-scrollbar">
-                        {neuralLogs.length === 0 ? (
-                            <div className="text-white/40 italic">Esperando inicialización del motor neural...</div>
-                        ) : (
-                            neuralLogs.map((log) => (
-                                <div key={log.id} className={`relative pl-4 ${log.type === 'ALERT' ? 'bg-neon-red/5 p-3 rounded-xl border border-neon-red/10' : ''}`}>
-                                    <div className={`absolute left-0 top-${log.type === 'ALERT' ? '0' : '1.5'} bottom-0 w-${log.type === 'ALERT' ? '1' : '0.5'} ${log.type === 'ALERT' ? 'bg-neon-red rounded-l-xl shadow-[0_0_10px_rgba(255,0,60,0.5)]' : log.type === 'SYSTEM' ? 'bg-gradient-to-b from-blue-500 to-transparent' : 'bg-gradient-to-b from-white/30 to-transparent'}`} />
-                                    <span className={`block mb-1 font-${log.type === 'ALERT' ? 'bold' : 'semibold'} flex items-center gap-2 ${log.type === 'ALERT' ? 'text-neon-red' : log.type === 'SYSTEM' ? 'text-blue-400' : 'text-white/40'}`}>
-                                        [{log.timestamp}] <ChevronRight size={12} /> {log.type}
-                                    </span>
-                                    <span className={`${log.type === 'ALERT' ? 'text-white/90 font-medium' : 'text-white/60'}`}>{log.message}</span>
+
+                    <div className="flex-1 flex flex-col overflow-hidden">
+                        {sidePanelMode === 'LOGS' ? (
+                            <>
+                                <div className="p-4 border-b border-white/5 flex items-center justify-between bg-gradient-to-r from-neon-cyan/10 to-transparent">
+                                    <div className="flex items-center gap-2.5">
+                                        <Terminal size={16} className="text-neon-cyan" />
+                                        <h2 className="text-xs font-bold text-white/90 tracking-widest drop-shadow-[0_0_8px_rgba(0,229,255,0.5)]">FLUJO NEURAL</h2>
+                                    </div>
                                 </div>
-                            ))
+                                <div className="p-5 flex flex-col gap-5 overflow-y-auto text-[11.5px] leading-relaxed font-mono custom-scrollbar">
+                                    {neuralLogs.length === 0 ? (
+                                        <div className="text-white/40 italic">Esperando inicialización del motor neural...</div>
+                                    ) : (
+                                        neuralLogs.map((log) => (
+                                            <div key={log.id} className={`relative pl-4 ${log.type === 'ALERT' ? 'bg-neon-red/5 p-3 rounded-xl border border-neon-red/10' : ''}`}>
+                                                <div className={`absolute left-0 top-${log.type === 'ALERT' ? '0' : '1.5'} bottom-0 w-${log.type === 'ALERT' ? '1' : '0.5'} ${log.type === 'ALERT' ? 'bg-neon-red rounded-l-xl shadow-[0_0_10px_rgba(255,0,60,0.5)]' : log.type === 'SYSTEM' ? 'bg-gradient-to-b from-blue-500 to-transparent' : 'bg-gradient-to-b from-white/30 to-transparent'}`} />
+                                                <span className={`block mb-1 font-${log.type === 'ALERT' ? 'bold' : 'semibold'} flex items-center gap-2 ${log.type === 'ALERT' ? 'text-neon-red' : log.type === 'SYSTEM' ? 'text-blue-400' : 'text-white/40'}`}>
+                                                    [{log.timestamp}] <ChevronRight size={12} /> {log.type}
+                                                </span>
+                                                <span className={`${log.type === 'ALERT' ? 'text-white/90 font-medium' : 'text-white/60'}`}>{log.message}</span>
+                                            </div>
+                                        ))
+                                    )}
+                                </div>
+                            </>
+                        ) : sidePanelMode === 'NEWS' ? (
+                            <NewsTerminal />
+                        ) : sidePanelMode === 'LIQS' ? (
+                            <LiquidationScanner />
+                        ) : (
+                            <MacroCalendar />
                         )}
                     </div>
                 </div>
