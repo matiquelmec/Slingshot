@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Activity, Bell, Target, TrendingUp, TrendingDown, Clock, Search, ExternalLink, AlertOctagon } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-
+import { useTelemetryStore } from '../../store/telemetryStore';
 interface RadarSignal {
     id: string;
     asset: string;
@@ -16,40 +16,49 @@ interface RadarSignal {
     status: string;
     rejection_reason?: string;
     created_at: string;
+    timestamp?: string;
 }
 
 export default function RadarFeed() {
-    const [signals, setSignals] = useState<RadarSignal[]>([]);
+    const [globalSignals, setGlobalSignals] = useState<RadarSignal[]>([]);
     const [loading, setLoading] = useState(true);
     const [filter, setFilter] = useState('');
     const router = useRouter();
+    
+    const auditedSignals = useTelemetryStore(state => state.auditedSignals) as unknown as RadarSignal[];
 
     useEffect(() => {
-        const fetchSignals = async () => {
+        const fetchInitialHydration = async () => {
             try {
-                // Modificado para traer el historial completo (Auditoría)
                 const res = await fetch(`http://localhost:8000/api/v1/signals?status=ALL`);
                 if (res.ok) {
                     const data = await res.json();
                     if (data && data.length > 0) {
-                        setSignals(data as RadarSignal[]);
+                        setGlobalSignals(data as RadarSignal[]);
                     } else {
-                        setSignals([]);
+                        setGlobalSignals([]);
                     }
                 }
             } catch (err) {
                 console.warn("Master API signals not available");
-                setSignals([]);
+                setGlobalSignals([]);
             } finally {
                 setLoading(false);
             }
         };
 
-        fetchSignals();
-        const pollInterval = setInterval(fetchSignals, 10000); // Polling cada 10s para el feed global
-
-        return () => clearInterval(pollInterval);
+        // Hidratación Inicial Estática (Zero-Polling)
+        fetchInitialHydration();
     }, []);
+
+    // Híbrido: Caché Base + Websocket Maestro
+    const displayMap = new Map();
+    globalSignals.forEach(s => displayMap.set(s.id || `${s.timestamp}-${s.asset}`, s));
+    auditedSignals.forEach(s => displayMap.set(s.id || `${s.timestamp}-${s.asset}`, s));
+    
+    // Sort descendente por tiempo (las más nuevas primero)
+    const signals = Array.from(displayMap.values())
+        .sort((a, b) => new Date(b.created_at || b.timestamp).getTime() - new Date(a.created_at || a.timestamp).getTime());
 
     const filteredSignals = signals.filter(s =>
         s.asset.toLowerCase().includes(filter.toLowerCase()) ||

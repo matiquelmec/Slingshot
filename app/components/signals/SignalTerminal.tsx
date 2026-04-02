@@ -39,7 +39,7 @@ export default function SignalTerminal() {
             connect(symbol);
         }
 
-        const fetchGlobal = async () => {
+        const fetchInitialHydration = async () => {
             try {
                 const res = await fetch(`http://localhost:8000/api/v1/signals?status=ALL`);
                 if (res.ok) {
@@ -53,16 +53,20 @@ export default function SignalTerminal() {
             }
         };
 
-        fetchGlobal();
-        const interval = setInterval(fetchGlobal, 3000);
-        return () => clearInterval(interval);
+        // Hidratación Inicial Estática (Zero-Polling)
+        fetchInitialHydration();
     }, [searchParams, activeSymbol, connect]);
 
-    const displaySignals = auditedSignals.length > 0
-        ? auditedSignals
-        : globalSignals.length > 0
-            ? globalSignals
-            : signalHistory;
+    // Combinación Híbrida: Base de Datos Local + Transmisión de WS (Zustand)
+    const displayMap = new Map();
+    [...signalHistory, ...globalSignals].forEach(s => displayMap.set(s.id || `${s.timestamp}-${s.asset}`, s));
+    // El WS de Zustand (Auditor) SIEMPRE tiene la prioridad absolutaa (sobrescribe pasados)
+    auditedSignals.forEach(s => displayMap.set(s.id || `${s.timestamp}-${s.asset}`, s));
+    
+    // Sort descendente por tiempo
+    const displaySignals = Array.from(displayMap.values())
+        .sort((a, b) => new Date(b.created_at || b.timestamp).getTime() - new Date(a.created_at || a.timestamp).getTime())
+        .slice(0, 50);
 
     const activeCount = displaySignals.filter(s => s.status === 'ACTIVE').length;
     const blockedCount = displaySignals.filter(s => s.status?.startsWith('BLOCKED')).length;

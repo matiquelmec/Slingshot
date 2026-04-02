@@ -23,13 +23,16 @@ interface MarketState {
 }
 
 export default function ActiveAssetsMonitor() {
-    const [states, setStates] = useState<MarketState[]>([]);
+    const [globalStates, setGlobalStates] = useState<MarketState[]>([]);
     const [watchlist, setWatchlist] = useState<string[]>([]);
     const [loading, setLoading] = useState(true);
     const { activeSymbol, connect } = useTelemetryStore();
+    
+    // Obtenemos el flujo en tiempo real desde Websockets
+    const marketSummary = useTelemetryStore(state => state.marketSummary);
 
     useEffect(() => {
-        const loadSyncData = async () => {
+        const loadInitialSync = async () => {
             try {
                 // 1. Cargar Watchlist local del usuario
                 const localWl = localStorage.getItem('slingshot_watchlist');
@@ -37,14 +40,11 @@ export default function ActiveAssetsMonitor() {
                 const userAssets = wlData.map((w: any) => w.asset.toUpperCase()) || [];
                 setWatchlist(userAssets);
 
-                // 2. Cargar estados del Master
+                // 2. Hidratación Base
                 const res = await fetch(`http://localhost:8000/api/v1/market-states`);
                 if (res.ok) {
                     const masterStates = await res.json();
-                    
-                    // Filtrar: Solo mostrar lo que el usuario PREVIAMENTE seleccionó en su control
-                    // o los activos que el Master está procesando y que coinciden con su lista.
-                    const filtered = masterStates.map((s: any) => ({
+                    const formatted = masterStates.map((s: any) => ({
                         asset: s.asset,
                         price: s.price || s.current_price,
                         regime: s.regime,
@@ -58,10 +58,8 @@ export default function ActiveAssetsMonitor() {
                         sentiment: s.sentiment,
                         session: s.session,
                         last_updated: s.last_updated || new Date().toISOString()
-                    })).filter((s: MarketState) => 
-                        userAssets.includes(s.asset.toUpperCase())
-                    );
-                    setStates(filtered);
+                    }));
+                    setGlobalStates(formatted);
                 }
             } catch (err) {
                 console.error("Error in Radar Center sync:", err);
@@ -70,10 +68,31 @@ export default function ActiveAssetsMonitor() {
             }
         };
 
-        loadSyncData();
-        const interval = setInterval(loadSyncData, 5000); 
-        return () => clearInterval(interval);
+        // Hidratación Inicial Estática (Zero-Polling)
+        loadInitialSync();
     }, []);
+
+    // 3. Fusión Híbrida Inteligente: Base de API Inicial fusionada con Eventos WebSocket
+    const displayMap = new Map();
+    globalStates.forEach(s => displayMap.set(s.asset.toUpperCase(), s));
+    
+    // Transmisión de estado vivo (Zustand radar_update)
+    Object.values(marketSummary).forEach((s: any) => {
+        if(s.asset) {
+            const assetKey = s.asset.toUpperCase();
+            displayMap.set(assetKey, {
+               ...(displayMap.get(assetKey) || {}),
+               ...s,
+               price: s.price || s.current_price,
+               last_updated: new Date().toISOString()
+            });
+        }
+    });
+
+    // 4. Aplicar el filtro de la watchlist del usuario
+    const states = Array.from(displayMap.values()).filter((s: any) => 
+        watchlist.includes(s.asset.toUpperCase())
+    );
 
     const getBiasIcon = (bias?: string) => {
         switch (bias) {
