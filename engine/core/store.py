@@ -76,12 +76,15 @@ class MemoryStore:
                 if "created_at" not in signal_data:
                     signal_data["created_at"] = datetime.now(timezone.utc).isoformat()
             
-            # Evolución de señal: si existe una activa del mismo tipo para el mismo par, la actualizamos
+            # Evolución de señal: Desduplicación por "Punto de Interés" (POI)
             existing = None
+            new_price = float(signal_data.get("price", 0))
             for s in self._signal_events:
+                old_price = float(s.get("price", 0))
+                # Consideramos que es la misma señal si es el mismo activo, dirección y el precio de entrada es idéntico o casi idéntico
                 if (s["asset"] == signal_data["asset"] and 
                     s.get("signal_type") == signal_data.get("signal_type") and 
-                    s.get("status") == "ACTIVE"):
+                    abs(old_price - new_price) < 0.000001):
                     existing = s
                     break
             
