@@ -16,13 +16,16 @@ export function getSignalLifecycle(sig: Signal, currentPrice: number | null, now
     const expiryTs = sig.expiry_timestamp ? new Date(sig.expiry_timestamp).getTime() : null;
 
     // 0. BLOQUEADA POR AUDITORÍA (Risk Manager / Macro / HTF)
-    if (sig.status === 'BLOCKED_BY_MACRO' || sig.status === 'BLOCKED_BY_FILTER' || sig.status === 'BLOCKED_BY_HTF' || sig.status === 'BLOCKED_BY_CONFIDENCE') {
+    if (sig.status === 'BLOCKED_BY_MACRO' || sig.status === 'BLOCKED_BY_FILTER' || sig.status === 'BLOCKED_BY_HTF' || sig.status === 'BLOCKED_BY_CONFIDENCE' || sig.status === 'BLOCKED_BY_VOLATILITY' || sig.status === 'STAND_BY' || sig.status === 'BLOCKED_EXPIRED') {
         const typeStr = sig.status === 'BLOCKED_BY_MACRO' ? 'MACRO' : 
                         sig.status === 'BLOCKED_BY_HTF' ? 'HTF' : 
-                        sig.status === 'BLOCKED_BY_CONFIDENCE' ? 'Score' : 'Filtro';
+                        sig.status === 'BLOCKED_BY_CONFIDENCE' ? 'Score' :
+                        sig.status === 'BLOCKED_BY_VOLATILITY' ? 'Volatilidad' :
+                        sig.status === 'STAND_BY' ? 'Conflicto IA/SMC' :
+                        sig.status === 'BLOCKED_EXPIRED' ? 'Expirada' : 'Filtro';
         
-        const borderColor = sig.status === 'BLOCKED_BY_HTF' ? 'border-amber-500/30' : 'border-red-500/10';
-        const textColor = sig.status === 'BLOCKED_BY_HTF' ? 'text-amber-500/60' : 'text-white/40';
+        const borderColor = sig.status === 'BLOCKED_BY_HTF' ? 'border-amber-500/30' : sig.status === 'STAND_BY' ? 'border-cyan-500/30' : 'border-red-500/10';
+        const textColor = sig.status === 'BLOCKED_BY_HTF' ? 'text-amber-500/60' : sig.status === 'STAND_BY' ? 'text-cyan-400/60' : 'text-white/40';
 
         // Detalle extendido: Combinar POR QUÉ es señal + POR QUÉ se rechaza
         // Priorizar rejection_reason que viene del broadcast estandarizado
@@ -100,10 +103,14 @@ export function getSignalLifecycle(sig: Signal, currentPrice: number | null, now
         ? `Precio a $${Math.abs(distToZone).toLocaleString(undefined, { maximumFractionDigits: 0 })} de la zona.`
         : '';
 
+    const zoneText = sig.entry_zone_bottom != null && sig.entry_zone_top != null
+        ? `Esperando zona ($${sig.entry_zone_bottom.toLocaleString()} – $${sig.entry_zone_top.toLocaleString()}). ${distText}`
+        : `Esperando retorno al nivel de entrada ($${sig.price?.toLocaleString(undefined, { minimumFractionDigits: 2 }) ?? 'N/A'}). ${distText}`;
+
     return {
         status: 'PENDING',
         label: '⏳ PENDIENTE',
-        reason: `Esperando zona ($${sig.entry_zone_bottom?.toLocaleString()} – $${sig.entry_zone_top?.toLocaleString()}). ${distText}`,
+        reason: zoneText,
         color: 'text-yellow-400',
         bgColor: 'bg-yellow-400/5 border-yellow-400/20',
         countdown: timeLeft != null ? `Expira en ~${timeLeft}min (${Math.ceil(timeLeft / intervalMin)} velas)` : undefined,
