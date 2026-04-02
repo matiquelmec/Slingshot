@@ -91,15 +91,39 @@ class SignalGatekeeper:
             )
             # (El enriquecimiento real lo hace el dispatcher; aquí validamos)
 
-            # ── Filtro 2: Direccional HTF ─────────────────────────────────────
+            # ── Filtro 2: Direccional HTF (Confluencia = 0%) ──────────────────
             if htf_bias and htf_bias.direction != "NEUTRAL":
                 is_long = "LONG" in str(sig.get("type", "")).upper()
                 if htf_bias.direction == "BULLISH" and not is_long:
+                    sig["confluence"] = {"score": 0}
                     self._block(sig, "BLOCKED_BY_HTF", f"Contra sesgo HTF Alcista: {htf_bias.reason}", result)
                     continue
                 if htf_bias.direction == "BEARISH" and is_long:
+                    sig["confluence"] = {"score": 0}
                     self._block(sig, "BLOCKED_BY_HTF", f"Contra sesgo HTF Bajista: {htf_bias.reason}", result)
                     continue
+
+            # ── Filtro 2.5: Conflict Manager (IA vs SMC) ──────────────────────
+            if context.ml_projection and "direction" in context.ml_projection:
+                ml_dir = str(context.ml_projection["direction"]).upper()
+                is_long = "LONG" in str(sig.get("signal_type", sig.get("type", ""))).upper()
+                
+                if is_long and ml_dir == "BAJISTA":
+                    self._block(sig, "STAND_BY", "[CONFLICT MANAGER] ML proyecta Venta (Stand-by)", result)
+                    continue
+                if not is_long and ml_dir == "ALCISTA":
+                    self._block(sig, "STAND_BY", "[CONFLICT MANAGER] ML proyecta Compra (Stand-by)", result)
+                    continue
+
+            # ── Filtro 2.6: Mitigación Instantánea (Volatilidad Ghost) ────────
+            try:
+                # Si la volatilidad de la vela actual excede severamente el tramo normal
+                candle_spread = ((df["high"].iloc[-1] - df["low"].iloc[-1]) / df["close"].iloc[-1]) * 100
+                if candle_spread > 2.5:  # Considerado anormal (Flash Crash/Pump)
+                    self._block(sig, "BLOCKED_BY_VOLATILITY", f"Flash Volatility detectada ({candle_spread:.2f}%). Prevención de Slippage.", result)
+                    continue
+            except:
+                pass
 
             # ── Filtro 3: Jurado de Confluencia ───────────────────────────────
             try:

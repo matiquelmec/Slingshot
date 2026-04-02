@@ -1,7 +1,7 @@
-# 🛡️ SLINGSHOT v4.0 PLATINUM: ESPECIFICACIÓN TÉCNICA MAESTRA
+# 🛡️ SLINGSHOT v4.3 TITANIUM: ESPECIFICACIÓN TÉCNICA MAESTRA
 
 > **"La precisión institucional al servicio del trader individual. Zero Latency, Zero Cloud, Zero Noise."**
-> **Versión:** 4.1 Platinum Edition | **Fecha:** 02 de Abril, 2026 | **Estado:** TOTALMENTE DESPLEGADO ✅
+> **Versión:** 4.3 Titanium Edition | **Fecha:** 02 de Abril, 2026 | **Estado:** TOTALMENTE DESPLEGADO ✅
 
 ---
 
@@ -54,9 +54,14 @@ slingshot_gen1/
 *   **Sesgo Diario:** Definido por el barrido de liquidez de la sesión de Asia o el día anterior (PDH/PDL).
 
 ### 💠 Capa 2: Selección de Punto de Interés (POI)
-*   **Order Blocks (OB):** Identificados por el motor de estructura como zonas de cacería institucional.
+*   **Order Blocks (OB):** Identificados por el motor de estructura como zonas de cacería institucional. Se exije el filtro **Wait For Sweep** (solo OBs Extremos que barrieron liquidez previa).
 *   **Fair Value Gaps (FVG):** Detectados para filtrar entradas con el sesgo correcto.
 *   **Paso 0.50 (Discount/Premium):** Solo Longs en Discount, solo Shorts en Premium.
+
+### 💠 Capa 2.5: La Fusión Predictiva y Protocolo MACRO (V4.3)
+*   **Conflict Manager (SMC vs IA):** Si la estructura SMC difiere de la proyección matemática de la Red Neuronal (XGBoost), la señal se suspende (STAND_BY). Operamos solo bajo Armonía Direccional Total.
+*   **DEFCON 1 (Ghost Data):** Escáner de calendario económico y noticias. Si el mercado sufre un cisne negro (Ej: Guerra, Hack, Quiebra Bancaria), entra en "DEFCON 1" y anula la señal de inmediato para salvaguardar el fondo.
+*   **Forensics JSON:** Post-Trade audit mode. El bot salva el estado completo de RAM y el Output del IA en `tmp/forensics_...` en tiempo real tras tomar una decisión.
 
 ### 💠 Capa 3: El Jurado de Confluencia (Audit Evidence)
 Cada señal debe superar un score mínimo de **75%** evaluado en:
@@ -69,9 +74,10 @@ Cada señal debe superar un score mínimo de **75%** evaluado en:
 
 ## 🔒 4. EL PORTERO INSTITUCIONAL (GESTIÓN DE RIESGO)
 Ninguna señal se emite si no cumple estrictamente:
-1.  **Ratio R:R ≥ 1.8** (Calculado por `RiskManager`).
-2.  **Stop Loss** situado tras el barrido de liquidez estructural.
-3.  **Take Profit** apuntando a pools de liquidez lógicos (Asian Highs, PDL).
+1.  **Alineación HTF (Confluencia = 0):** Sin el respaldo de la temporalidad superior, el análisis expira antes de evaluarse.
+2.  **Mitigación Instantánea (Volatilidad):** Si una vela genera una variación anormal (`> 2.5%`) durante un intento de entrada, se bloquea la orden por 'Flash Volatility' para eludir Slippage.
+3.  **Ratio R:R ≥ 1.8** (Calculado por `RiskManager`).
+4.  **Chain of Thought Forzado:** El LLM enciende `advisor.py` y analiza por capas obligatorias (Macro -> Estructura -> Sesión) para evitar ceguera estructural.
 
 Las señales que no cumplen son redirigidas al **Modo Auditoría** en el frontend para el estudio de su rechazo.
 
@@ -83,5 +89,6 @@ Las señales que no cumplen son redirigidas al **Modo Auditoría** en el fronten
 3.  **Logs:** El sistema utiliza parches UTF-8 forzados para garantizar visualización de emojis y símbolos institucionales en Windows.
 
 ---
-*Slingshot v4.1 Platinum — El Estándar Maestro de la Terminal Algorítmica.*
+---
+*Slingshot v4.3 Titanium — El Estándar Maestro de la Terminal Algorítmica.*
 *Unificado por Antigravity — 02 de Abril, 2026*

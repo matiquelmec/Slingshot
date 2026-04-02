@@ -327,7 +327,7 @@ class SessionManager:
                 "end_utc":     asia_end_utc,
                 "open_chile":  _to_chile_str(asia_start_utc),
                 "close_chile": _to_chile_str(asia_end_utc),
-                "status":      "ACTIVE" if asia_start_utc <= utc_hour < asia_end_utc else "CLOSED",
+                "status":      "ACTIVE" if 9 <= tokyo_hour < 15 else ("PENDING" if tokyo_hour < 9 else "CLOSED"),
             },
             "london": {
                 **self._state["london"],
@@ -335,8 +335,7 @@ class SessionManager:
                 "end_utc":     lon_end_utc,
                 "open_chile":  _to_chile_str(lon_start_utc),
                 "close_chile": _to_chile_str(lon_end_utc),
-                "status":      "ACTIVE" if lon_start_utc <= utc_hour < lon_end_utc
-                               else ("PENDING" if utc_hour < lon_start_utc else "CLOSED"),
+                "status":      "ACTIVE" if 8 <= lon_hour < 16 else ("PENDING" if lon_hour < 8 else "CLOSED"),
             },
             "ny": {
                 **self._state["ny"],
@@ -344,8 +343,7 @@ class SessionManager:
                 "end_utc":     ny_end_utc,
                 "open_chile":  _to_chile_str(ny_start_utc),
                 "close_chile": _to_chile_str(ny_end_utc),
-                "status":      "ACTIVE" if ny_start_utc <= utc_hour < ny_end_utc
-                               else ("PENDING" if utc_hour < ny_start_utc else "CLOSED"),
+                "status":      "ACTIVE" if 8 <= ny_hour < 16 else ("PENDING" if ny_hour < 8 else "CLOSED"),
             },
         }
 

@@ -206,21 +206,16 @@ async def generate_tactical_advice(
     CALENDARIO ECONÓMICO (Macro Inminente):
     {cal_text}
 
-    EJECUTA ESTE CHECKLIST ESTRICTO PASO A PASO (NIVEL INSTITUCIONAL):
-    0. ANALISIS DE NARRATIVA Y CALENDARIO:
-       - RIESGO FUTURO: Si hay eventos [UPCOMING] o [LIVE] de ALTO IMPACTO en los próximos 60 min, RECHAZA POR VOLATILIDAD INMINENTE.
-       - SENTIMIENTO RECIENTE: Evalúa eventos [RECENT_PAST] de las últimas 12h. Si un evento de ALTO IMPACTO ocurrió recientemente (ejp. Trump, FED), ese sentimiento DOMINA la sesión. Si la noticia fue negativa y buscas LONG, DEBES RECHAZAR O ADVERTIR FUERTE.
-       - NEWS FEED: Cruza los titulares de noticias recientes. Si el sentimiento es opuesto a la dirección técnica, la narrativa es FALSA; RECHAZA.
-       
-    1. LEY DXY: [HARD BLOCK] Si el DXY es BULLISH, cualquier análisis LONG debe ser DENEGADO sin excepción.
-    2. LEY SESIÓN: Valida si estamos en NY Killzone. Si es ASIA o LONDON, rechaza por falta de volumen o manipulación.
-    3. ESTRUCTURA SMC: Analiza el Soporte y Resistencia enviados. Si están en Discovery (Fallback), menciónalo como 'Zona de Referencia Absoluta'. Si el campo es 'N/A', grita 'ESTRUCTURA NO IDENTIFICADA'.
-    4. GATILLO IA (XGBoost): Probabilidad >55% requerida para confirmar.
-    5. VEREDICTO FINAL: Si DXY es BULLISH y buscas LONG, el veredicto es DENEGADO por el muro del dólar.
+    EJECUTA ESTE CHECKLIST ESTRICTO MEDIANTE RAZONAMIENTO EN CADENA (Chain of Thought - Responde en este orden):
+    [PASO 1] LEY DE SUPERVIVENCIA (DEFCON 1): Si las noticias o el calendario contienen 'Guerra', 'War', 'Bankruptcy', 'Quiebra', 'Hack' o 'SEC sue', ABORTA TODO INMEDIATAMENTE. Tu veredicto debe ser "🚨 [DEFCON 1] MERCADO CONTAMINADO. OPERACIONES SUSPENDIDAS." y justificarlo.
+    [PASO 2] CONTEXTO DE ALTO NIVEL (HTF/4H): Estandarización de la directriz principal (Ley DXY). Si hay contradicción, infórmalo.
+    [PASO 3] CONTEXTO ESTRUCTURAL (1H/15m): Condición del Precio vs Soportes/Resistencias institucionales. Identifica si es la Zona Extrema.
+    [PASO 4] EL GATILLO Y SESIÓN (1m/5m): Confirma si estamos en Killzone y evalúa el predictor IA (XGBoost).
+    [PASO 5] VEREDICTO FINAL: Decisión unificada e incuestionable. Si DXY es BULLISH y buscas LONG, el veredicto es DENEGADO.
 
     REGLAS ESTRICTAS PARA TU RESPUESTA:
-    1. BREVEDAD NIVEL PENTÁGONO. Sin rodeos.
-    2. Tono frío, militar, ultra-profesional. EMPIEZA CON "INFORME SMC V4.1 PLATINUM:".
+    1. BREVEDAD NIVEL PENTÁGONO. Sin rodeos. Redacta el paso a paso exigido arriba.
+    2. Tono frío, militar, ultra-profesional. EMPIEZA CON "INFORME SMC V4.3 PLATINUM:".
     3. AL FINAL incluye: [RIESGO DE SISTEMA: TGT 1:3 MINIMO INNEGOCIABLE]
     """
 
@@ -263,6 +258,25 @@ async def generate_tactical_advice(
                 
                 # Actualizar Memoria de Corto Plazo
                 _strategic_memo[asset] = {**current_state, "advice": advice}
+                
+                # --- SNAPSHOT FORENSICS POST-TRADE (Nivel Auditoría Black-Box) ---
+                try:
+                    import time
+                    forensics = {
+                        "ts_ms": int(time.time() * 1000),
+                        "asset": asset,
+                        "session": current_session,
+                        "state_snapshot": current_state,
+                        "raw_ml": ml_dir,
+                        "news_feed": news_text,
+                        "macro_cal": cal_text,
+                        "prompt_sent": prompt,
+                        "raw_llm_response": advice
+                    }
+                    with open(f"c:/tmp/forensics_{asset.lower()}_{int(time.time())}.json", "w", encoding="utf-8") as fb:
+                        json.dump(forensics, fb, indent=4, ensure_ascii=False)
+                except Exception as fx:
+                    print(f"[ADVISOR] Forensics dump failed: {fx}")
                 
                 print(f"[ADVISOR] ✅ Análisis generado localmente para {asset} (Ollama)")
                 return advice
