@@ -17,79 +17,9 @@ import {
 import { useTelemetryStore, CandleData } from '../../store/telemetryStore';
 import { useIndicatorsStore } from '../../store/indicatorsStore';
 
-// ─── Indicator Math ──────────────────────────────────────────────────────────
+// SMC V4.0 PURO: Se han eliminado los cálculos matemáticos retail (RSI, EMA, MACD, BB)
+// El sistema ahora se centra exclusivamente en el flujo de órdenes y liquidez institucional.
 
-function calcEMA(candles: CandleData[], period: number): { time: number | string; value: number }[] {
-    if (candles.length < period) return [];
-    const k = 2 / (period + 1);
-    const result: { time: number | string; value: number }[] = [];
-    let ema = candles.slice(0, period).reduce((s, c) => s + c.close, 0) / period;
-    result.push({ time: candles[period - 1].time, value: ema });
-    for (let i = period; i < candles.length; i++) {
-        ema = candles[i].close * k + ema * (1 - k);
-        result.push({ time: candles[i].time, value: ema });
-    }
-    return result;
-}
-
-function calcBollinger(candles: CandleData[], period = 20, stdMult = 2) {
-    const upper: { time: number | string; value: number }[] = [];
-    const middle: { time: number | string; value: number }[] = [];
-    const lower: { time: number | string; value: number }[] = [];
-    for (let i = period - 1; i < candles.length; i++) {
-        const slice = candles.slice(i - period + 1, i + 1);
-        const mean = slice.reduce((s, c) => s + c.close, 0) / period;
-        const variance = slice.reduce((s, c) => s + Math.pow(c.close - mean, 2), 0) / period;
-        const std = Math.sqrt(variance);
-        middle.push({ time: candles[i].time, value: mean });
-        upper.push({ time: candles[i].time, value: mean + stdMult * std });
-        lower.push({ time: candles[i].time, value: mean - stdMult * std });
-    }
-    return { upper, middle, lower };
-}
-
-function calcRSI(candles: CandleData[], period = 14): { time: number | string; value: number }[] {
-    if (candles.length < period + 1) return [];
-    const result: { time: number | string; value: number }[] = [];
-    let avgGain = 0;
-    let avgLoss = 0;
-    for (let i = 1; i <= period; i++) {
-        const change = candles[i].close - candles[i - 1].close;
-        if (change > 0) avgGain += change; else avgLoss += Math.abs(change);
-    }
-    avgGain /= period;
-    avgLoss /= period;
-    const firstRS = avgLoss === 0 ? 100 : avgGain / avgLoss;
-    result.push({ time: candles[period].time, value: 100 - 100 / (1 + firstRS) });
-    for (let i = period + 1; i < candles.length; i++) {
-        const change = candles[i].close - candles[i - 1].close;
-        const gain = change > 0 ? change : 0;
-        const loss = change < 0 ? Math.abs(change) : 0;
-        avgGain = (avgGain * (period - 1) + gain) / period;
-        avgLoss = (avgLoss * (period - 1) + loss) / period;
-        const rs = avgLoss === 0 ? 100 : avgGain / avgLoss;
-        result.push({ time: candles[i].time, value: 100 - 100 / (1 + rs) });
-    }
-    return result;
-}
-
-function calcMACD(candles: CandleData[], fast = 12, slow = 26, signal = 9) {
-    const emaFast = calcEMA(candles, fast);
-    const emaSlow = calcEMA(candles, slow);
-    // Align: slow starts later, so find common candles
-    const slowTimes = new Map(emaSlow.map(d => [d.time, d.value]));
-    const macdLine = emaFast
-        .filter(d => slowTimes.has(d.time))
-        .map(d => ({ time: d.time, value: d.value - slowTimes.get(d.time)! }));
-    // Compute signal line (EMA of MACD line)
-    const syntheticCandles = macdLine.map(d => ({ ...({} as CandleData), time: d.time, close: d.value, open: d.value, high: d.value, low: d.value, volume: 0 }));
-    const signalLine = calcEMA(syntheticCandles, signal);
-    const signalMap = new Map(signalLine.map(d => [d.time, d.value]));
-    const histogram = macdLine
-        .filter(d => signalMap.has(d.time))
-        .map(d => ({ time: d.time, value: d.value - signalMap.get(d.time)!, color: d.value - signalMap.get(d.time)! >= 0 ? '#26A69A' : '#EF5350' }));
-    return { macdLine, signalLine, histogram };
-}
 
 // ─── Component ───────────────────────────────────────────────────────────────
 
@@ -99,17 +29,8 @@ export default function TradingChart() {
 
     // Series refs
     const candleSeriesRef = useRef<ISeriesApi<'Candlestick'> | null>(null);
-    const ema20Ref = useRef<ISeriesApi<'Line'> | null>(null);
-    const ema50Ref = useRef<ISeriesApi<'Line'> | null>(null);
-    const ema200Ref = useRef<ISeriesApi<'Line'> | null>(null);
-    const bbUpperRef = useRef<ISeriesApi<'Line'> | null>(null);
-    const bbMidRef = useRef<ISeriesApi<'Line'> | null>(null);
-    const bbLowerRef = useRef<ISeriesApi<'Line'> | null>(null);
     const volumeRef = useRef<ISeriesApi<'Histogram'> | null>(null);
-    const rsiRef = useRef<ISeriesApi<'Line'> | null>(null);
-    const macdLineRef = useRef<ISeriesApi<'Line'> | null>(null);
-    const macdSigRef = useRef<ISeriesApi<'Line'> | null>(null);
-    const macdHistRef = useRef<ISeriesApi<'Histogram'> | null>(null);
+
     const sessionSeriesRef = useRef<ISeriesApi<'Baseline'>[]>([]);
     const killzoneSeriesRef = useRef<ISeriesApi<'Baseline'>[]>([]);
 
@@ -152,44 +73,6 @@ export default function TradingChart() {
             wickUpColor: '#00FF41', wickDownColor: '#FF003C',
         });
 
-        // Markers Plugin Reference
-        markersSeriesRef.current = null;
-
-        // EMA 20
-        ema20Ref.current = chart.addSeries(LineSeries, {
-            color: '#00E5FF', lineWidth: 1, lineStyle: LineStyle.Solid,
-            crosshairMarkerVisible: false, lastValueVisible: false, priceLineVisible: false,
-        });
-
-        // EMA 50
-        ema50Ref.current = chart.addSeries(LineSeries, {
-            color: '#FFC107', lineWidth: 1, lineStyle: LineStyle.Solid,
-            crosshairMarkerVisible: false, lastValueVisible: false, priceLineVisible: false,
-        });
-
-        // EMA 200
-        ema200Ref.current = chart.addSeries(LineSeries, {
-            color: '#EF5350', lineWidth: 1, lineStyle: LineStyle.Dashed,
-            crosshairMarkerVisible: false, lastValueVisible: false, priceLineVisible: false,
-        });
-
-        // Bollinger Upper
-        bbUpperRef.current = chart.addSeries(LineSeries, {
-            color: 'rgba(156,39,176,0.6)', lineWidth: 1,
-            crosshairMarkerVisible: false, lastValueVisible: false, priceLineVisible: false,
-        });
-
-        // Bollinger Middle
-        bbMidRef.current = chart.addSeries(LineSeries, {
-            color: 'rgba(156,39,176,0.4)', lineWidth: 1, lineStyle: LineStyle.Dashed,
-            crosshairMarkerVisible: false, lastValueVisible: false, priceLineVisible: false,
-        });
-
-        // Bollinger Lower
-        bbLowerRef.current = chart.addSeries(LineSeries, {
-            color: 'rgba(156,39,176,0.6)', lineWidth: 1,
-            crosshairMarkerVisible: false, lastValueVisible: false, priceLineVisible: false,
-        });
 
         // Volume  (uses separate price scale)
         volumeRef.current = chart.addSeries(HistogramSeries, {
@@ -198,34 +81,6 @@ export default function TradingChart() {
         });
         chart.priceScale('volume').applyOptions({ scaleMargins: { top: 0.8, bottom: 0 }, borderVisible: false });
 
-        // RSI (separate price scale)
-        rsiRef.current = chart.addSeries(LineSeries, {
-            color: '#FF7043', lineWidth: 1,
-            priceScaleId: 'rsi',
-            crosshairMarkerVisible: false, lastValueVisible: false, priceLineVisible: false,
-        });
-        chart.priceScale('rsi').applyOptions({ scaleMargins: { top: 0.7, bottom: 0.1 }, borderVisible: false });
-
-        // MACD LINE
-        macdLineRef.current = chart.addSeries(LineSeries, {
-            color: '#26A69A', lineWidth: 1,
-            priceScaleId: 'macd',
-            crosshairMarkerVisible: false, lastValueVisible: false, priceLineVisible: false,
-        });
-
-        // MACD SIGNAL
-        macdSigRef.current = chart.addSeries(LineSeries, {
-            color: '#FF7043', lineWidth: 1,
-            priceScaleId: 'macd',
-            crosshairMarkerVisible: false, lastValueVisible: false, priceLineVisible: false,
-        });
-
-        // MACD HISTOGRAM
-        macdHistRef.current = chart.addSeries(HistogramSeries, {
-            priceScaleId: 'macd',
-            lastValueVisible: false, priceLineVisible: false,
-        });
-        chart.priceScale('macd').applyOptions({ scaleMargins: { top: 0.6, bottom: 0 }, borderVisible: false });
 
         return () => { chart.remove(); };
     }, []);
@@ -247,58 +102,11 @@ export default function TradingChart() {
 
         candleSeriesRef.current.setData(sortedCandles as any);
 
-        // 🎯 INYECTAR MARCADORES DE DIVERGENCIA EN EL GRÁFICO PRINCIPAL 🎯
-        const markers: any[] = [];
-        sortedCandles.forEach(c => {
-            if (c.bullish_div) {
-                markers.push({
-                    time: c.time,
-                    position: 'belowBar',
-                    color: '#00FF41', // Verde Neón Institucional
-                    shape: 'arrowUp',
-                    text: 'BULL DIV',
-                    size: 1.5,
-                });
-            }
-            if (c.bearish_div) {
-                markers.push({
-                    time: c.time,
-                    position: 'aboveBar',
-                    color: '#FF003C', // Rojo Neón Institucional
-                    shape: 'arrowDown',
-                    text: 'BEAR DIV',
-                    size: 1.5,
-                });
-            }
-        });
-
-        if (!markersSeriesRef.current) {
-            markersSeriesRef.current = createSeriesMarkers(candleSeriesRef.current, markers);
-        } else {
-            markersSeriesRef.current.setMarkers(markers);
-        }
-
-        if (sortedCandles.length < 5) return;
-
-        // ─ Helper ─
+        // ─ Helper 🎯 ─
         const on = (id: string) => indicators.find(i => i.id === id)?.enabled ?? false;
 
         // ── Dynamic Subpanels Layout ──
-        const rsiOn = on('rsi');
-        const macdOn = on('macd');
-
         let mainBottom = 0.08;
-        if (rsiOn && macdOn) {
-            mainBottom = 0.45;
-            chartRef.current?.priceScale('rsi').applyOptions({ scaleMargins: { top: 0.58, bottom: 0.24 } });
-            chartRef.current?.priceScale('macd').applyOptions({ scaleMargins: { top: 0.78, bottom: 0.02 } });
-        } else if (rsiOn) {
-            mainBottom = 0.25;
-            chartRef.current?.priceScale('rsi').applyOptions({ scaleMargins: { top: 0.77, bottom: 0.02 } });
-        } else if (macdOn) {
-            mainBottom = 0.25;
-            chartRef.current?.priceScale('macd').applyOptions({ scaleMargins: { top: 0.77, bottom: 0.02 } });
-        }
 
         // Apply to main chart scale: ends strictly 20% before the volume area
         chartRef.current?.priceScale('right').applyOptions({
@@ -309,37 +117,6 @@ export default function TradingChart() {
         chartRef.current?.priceScale('volume').applyOptions({
             scaleMargins: { top: 1 - mainBottom - 0.15, bottom: mainBottom }
         });
-
-        // ─ EMA 20 ─
-        if (ema20Ref.current) {
-            ema20Ref.current.applyOptions({ visible: on('ema20') });
-            if (on('ema20')) ema20Ref.current.setData(calcEMA(candles, 20) as any);
-        }
-
-        // ─ EMA 50 ─
-        if (ema50Ref.current) {
-            ema50Ref.current.applyOptions({ visible: on('ema50') });
-            if (on('ema50')) ema50Ref.current.setData(calcEMA(candles, 50) as any);
-        }
-
-        // ─ EMA 200 (calcEMA returns [] automatically if < 200 candles, which clears the series) ─
-        if (ema200Ref.current) {
-            const ema200Data = calcEMA(candles, 200);
-            ema200Ref.current.applyOptions({ visible: on('ema200') && ema200Data.length > 0 });
-            if (on('ema200')) ema200Ref.current.setData(ema200Data as any);
-        }
-
-        // ─ Bollinger Bands ─
-        const bbOn = on('bb');
-        bbUpperRef.current?.applyOptions({ visible: bbOn });
-        bbMidRef.current?.applyOptions({ visible: bbOn });
-        bbLowerRef.current?.applyOptions({ visible: bbOn });
-        if (bbOn && bbUpperRef.current) {
-            const bb = calcBollinger(candles);
-            bbUpperRef.current.setData(bb.upper as any);
-            bbMidRef.current?.setData(bb.middle as any);
-            bbLowerRef.current?.setData(bb.lower as any);
-        }
 
         // ─ Volume ─
         if (volumeRef.current) {
@@ -352,22 +129,6 @@ export default function TradingChart() {
             }
         }
 
-        // ─ RSI (needs 15+ candles) ─
-        if (rsiRef.current) {
-            rsiRef.current.applyOptions({ visible: on('rsi') });
-            if (on('rsi') && candles.length > 15) rsiRef.current.setData(calcRSI(candles) as any);
-        }
-
-        // ─ MACD ─
-        macdLineRef.current?.applyOptions({ visible: macdOn });
-        macdSigRef.current?.applyOptions({ visible: macdOn });
-        macdHistRef.current?.applyOptions({ visible: macdOn });
-        if (macdOn && macdLineRef.current && candles.length > 35) {
-            const macd = calcMACD(candles);
-            macdLineRef.current.setData(macd.macdLine as any);
-            macdSigRef.current?.setData(macd.signalLine as any);
-            macdHistRef.current?.setData(macd.histogram as any);
-        }
 
     }, [candles, indicators]);
 

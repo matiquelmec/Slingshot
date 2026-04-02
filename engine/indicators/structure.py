@@ -109,9 +109,23 @@ def identify_support_resistance(
     # Fase 1: usar window dinámico si no se override explícitamente
     window = WINDOW_BY_INTERVAL.get(interval, window)
 
-    if len(df) < window * 2:
-        df['support_level']    = np.nan
+    # ── 0. Guard de redundancia ──────────────────────────────────────────────
+    if len(df) < 2: 
+        df['support_level'] = np.nan
         df['resistance_level'] = np.nan
+        return df
+    
+    # Fallback pre-agresivo: Si no hay masa crítica para pivotes, usar High/Low absoluto.
+    # Esto evita N/A durante el 'calentamiento' del motor.
+    abs_high = float(df['high'].max())
+    abs_low  = float(df['low'].min())
+    
+    # Si somos muy cortos (< window*2), asignamos los extremos y salimos rápido.
+    if len(df) < window * 2:
+        df['support_level'] = abs_low
+        df['resistance_level'] = abs_high
+        df.attrs['key_resistances'] = [{'price': abs_high, 'type': 'RESISTANCE', 'origin': 'ABS_EXTREME', 'touches': 1, 'is_active': True}]
+        df.attrs['key_supports'] = [{'price': abs_low, 'type': 'SUPPORT', 'origin': 'ABS_EXTREME', 'touches': 1, 'is_active': True}]
         return df
 
     highs  = df['high'].values
@@ -277,15 +291,32 @@ def identify_support_resistance(
         key=lambda x: x['price'], reverse=True   # más cercano primero
     )[:num_levels]
 
-    # ── 7. Columnas de compatibilidad ────────────────────────────────────────
-    df['resistance_level'] = resistances[0]['price'] if resistances else np.nan
-    df['support_level']    = supports[0]['price']    if supports    else np.nan
+    # ── 7. Fallback de Emergencia: Extremos Absolutos (v4.3.4 Platinum) ───────
+    # Si tras todo el análisis (Pivots + Clusters + RR) seguimos sin niveles,
+    # usamos los extremos absolutos de la ventana para garantizar datos.
+    abs_high = float(df['high'].max())
+    abs_low  = float(df['low'].min())
+
+    if not resistances:
+        resistances = [{
+            'price': abs_high, 'touches': 1, 'zone_top': abs_high, 'zone_bottom': abs_high,
+            'type': 'RESISTANCE', 'origin': 'ABS_EXTREME', 'strength': 'WEAK', 'is_active': True
+        }]
+    if not supports:
+        supports = [{
+            'price': abs_low, 'touches': 1, 'zone_top': abs_low, 'zone_bottom': abs_low,
+            'type': 'SUPPORT', 'origin': 'ABS_EXTREME', 'strength': 'WEAK', 'is_active': True
+        }]
+
+    # ── 8. Columnas de compatibilidad y Atributos ────────────────────────────
+    df['resistance_level'] = resistances[0]['price']
+    df['support_level']    = supports[0]['price']
 
     # Guardar en attrs para get_key_levels()
     df.attrs['key_resistances'] = resistances
     df.attrs['key_supports']    = supports
     df.attrs['atr_value']       = current_atr
-
+    
     return df
 
 

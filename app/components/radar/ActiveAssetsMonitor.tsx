@@ -9,7 +9,15 @@ interface MarketState {
     asset: string;
     price: number;
     regime?: string;
-    macro_bias?: string;
+    bias?: string;
+    ob_count?: number;
+    fvg_active?: boolean;
+    is_killzone?: boolean;
+    macro_risk?: boolean;
+    liq_magnet?: boolean;
+    ml_dir?: string;
+    ml_prob?: number;
+    sentiment?: string;
     session?: string;
     last_updated: string;
 }
@@ -36,7 +44,21 @@ export default function ActiveAssetsMonitor() {
                     
                     // Filtrar: Solo mostrar lo que el usuario PREVIAMENTE seleccionó en su control
                     // o los activos que el Master está procesando y que coinciden con su lista.
-                    const filtered = masterStates.filter((s: MarketState) => 
+                    const filtered = masterStates.map((s: any) => ({
+                        asset: s.asset,
+                        price: s.price || s.current_price,
+                        regime: s.regime,
+                        bias: s.bias,
+                        ob_count: s.ob_count,
+                        fvg_active: s.fvg_active,
+                        macro_risk: s.macro_risk,
+                        liq_magnet: s.liq_magnet,
+                        ml_dir: s.ml_dir,
+                        ml_prob: s.ml_prob,
+                        sentiment: s.sentiment,
+                        session: s.session,
+                        last_updated: s.last_updated || new Date().toISOString()
+                    })).filter((s: MarketState) => 
                         userAssets.includes(s.asset.toUpperCase())
                     );
                     setStates(filtered);
@@ -95,12 +117,47 @@ export default function ActiveAssetsMonitor() {
                                     </h3>
                                     <p className="text-[10px] text-white/30 font-mono uppercase">{state.session || 'N/A'}</p>
                                 </div>
-                                {getBiasIcon(state.macro_bias)}
+                                <div className="flex items-center gap-2">
+                                    {state.is_killzone && (
+                                        <div className="px-1.5 py-0.5 rounded bg-amber-500/10 border border-amber-500/20 text-[8px] font-black text-amber-500 tracking-tighter">
+                                            KILLZONE
+                                        </div>
+                                    )}
+                                    {state.macro_risk && (
+                                        <div className="px-1.5 py-0.5 rounded bg-orange-500/10 border border-orange-500/20 text-[8px] font-black text-orange-500 tracking-tighter animate-pulse">
+                                            MACRO RISK
+                                        </div>
+                                    )}
+                                    {state.liq_magnet && (
+                                        <div className="px-1.5 py-0.5 rounded bg-cyan-500/10 border border-cyan-500/20 text-[8px] font-black text-cyan-400 tracking-tighter shadow-[0_0_10px_rgba(0,229,255,0.2)]">
+                                            LIQ MAGNET
+                                        </div>
+                                    )}
+                                    {getBiasIcon(state.bias)}
+                                </div>
                             </div>
 
-                            <div className="mt-auto">
-                                <div className="text-xl font-mono font-bold text-white">
+                            <div className="flex items-center gap-3 mt-1 pt-2 border-t border-white/5">
+                                <div className="flex flex-col">
+                                    <span className="text-[8px] text-white/20 font-bold uppercase">AI PROJ</span>
+                                    <span className={`text-[10px] font-black ${state.ml_dir === 'ALCISTA' ? 'text-neon-cyan' : state.ml_dir === 'BAJISTA' ? 'text-neon-red' : 'text-white/40'}`}>
+                                        {state.ml_dir} {state.ml_prob}%
+                                    </span>
+                                </div>
+                                <div className="flex flex-col ml-auto text-right">
+                                    <span className="text-[8px] text-white/20 font-bold uppercase">SENTIMENT</span>
+                                    <span className={`text-[10px] font-black ${state.sentiment === 'BULLISH' ? 'text-neon-cyan' : state.sentiment === 'BEARISH' ? 'text-neon-red' : 'text-white/40'}`}>
+                                        {state.sentiment}
+                                    </span>
+                                </div>
+                            </div>
+
+                            <div className="mt-auto pt-2">
+                                <div className="text-xl font-mono font-bold text-white flex items-center justify-between">
                                     ${state.price?.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                    <span className={`text-[8px] px-1 py-0.5 rounded ${state.ml_dir === 'ALCISTA' ? 'bg-neon-cyan/10 text-neon-cyan' : 'bg-neon-red/10 text-neon-red'}`}>
+                                        {state.ml_dir === 'ALCISTA' ? '↗' : '↘'}
+                                    </span>
                                 </div>
                                 <div className="flex items-center justify-between mt-1">
                                     <span className="text-[9px] font-bold text-neon-cyan/80 bg-neon-cyan/10 px-1.5 py-0.5 rounded border border-neon-cyan/20">

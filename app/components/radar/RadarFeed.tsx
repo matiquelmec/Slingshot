@@ -106,7 +106,7 @@ export default function RadarFeed() {
                         <AnimatePresence initial={false}>
                             {filteredSignals.map((signal) => {
                                 const isLong = signal.signal_type.toUpperCase().includes('LONG');
-                                const score = signal.confluence_score || signal.confluence?.total_score || 0;
+                                const score = signal.confluence?.score || signal.confluence_score || 0;
                                 const isBlocked = signal.status === 'BLOCKED_BY_MACRO';
 
                                 return (

@@ -99,13 +99,24 @@ async def send_drift_alert_async(drift_info: dict) -> bool:
     if not _is_configured():
         return False
 
+    # Visual indicators based on level
+    level = drift_info.get('level', 'MODERATE')
+    icon  = "🚨" if level == "SEVERE" else "⚠️"
+    asset = drift_info.get('asset', 'N/A').replace('-', '\\-').replace('_', '\\_') # MarkdownV2 safe
+
+    # Escaping features for MarkdownV2 backticks
+    feats  = drift_info.get('affected_features', 'N/A').replace('_', '\\_')
+
     text = (
-        f"⚠️ *SLINGSHOT — ALERTA DE DRIFT ML*\n\n"
-        f"El modelo XGBoost puede estar obsoleto\\.\n\n"
-        f"📊 Features con PSI alto: `{drift_info.get('affected_features', 'N/A')}`\n"
-        f"📉 Accuracy rolling: `{drift_info.get('rolling_accuracy', 'N/A')}%`\n\n"
-        f"_Considera re\\-entrenar el modelo con datos recientes\\._"
-    )
+        f"{icon} *SLINGSHOT — DRIFT ML [{asset}]*\n\n"
+        f"Salud del modelo: *{level}*\n\n"
+        f"📊 Features con PSI alto: `{feats}`\n"
+        f"📉 Accuracy rolling: `{drift_info.get('rolling_accuracy', 'N/A')}%` \n"
+        f"🧠 PSI Máximo: `{drift_info.get('psi_max', 'N/A')}`\n\n"
+        f"🛡️ *Acción recomendada:*\n"
+        f"_{drift_info.get('recommendation', 'Revisar modelo')}_"
+    ).replace('.', '\\.')
+
     url = f"{_BASE_URL}/sendMessage"
     payload = {"chat_id": TELEGRAM_CHAT_ID, "text": text, "parse_mode": "MarkdownV2"}
 

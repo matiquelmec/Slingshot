@@ -1,117 +1,122 @@
 """
-Test End-to-End del pipeline completo de Slingshot.
-Descarga datos reales de Binance, corre el router y verifica señales.
+scripts/tests/test_pipeline.py — Slingshot v4.1 Platinum
+=========================================================
+Test End-to-End del pipeline completo.
+Descarga velas reales de Binance y verifica el pipeline SMC íntegro.
 """
 import sys
-sys.path.insert(0, '.')
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 import asyncio
 import pandas as pd
 import httpx
 from datetime import datetime
 
-async def fetch_real_data(symbol="BTCUSDT", interval="15m", limit=500):
-    """Descarga velas reales de Binance."""
-    url = f"https://api.binance.com/api/v3/klines"
+
+async def fetch_real_data(symbol: str = "BTCUSDT", interval: str = "15m", limit: int = 500) -> pd.DataFrame:
+    """Descarga velas reales de Binance REST."""
+    url = "https://api.binance.com/api/v3/klines"
     params = {"symbol": symbol, "interval": interval, "limit": limit}
     async with httpx.AsyncClient(timeout=15.0) as client:
         r = await client.get(url, params=params)
         r.raise_for_status()
         raw = r.json()
-    
+
     df = pd.DataFrame(raw, columns=[
-        'timestamp','open','high','low','close','volume',
-        'close_time','quote_vol','trades','taker_buy_base',
-        'taker_buy_quote','ignore'
+        "timestamp", "open", "high", "low", "close", "volume",
+        "close_time", "quote_vol", "trades", "taker_buy_base",
+        "taker_buy_quote", "ignore",
     ])
-    df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
-    for col in ['open','high','low','close','volume']:
+    df["timestamp"] = pd.to_datetime(df["timestamp"], unit="ms")
+    for col in ["open", "high", "low", "close", "volume"]:
         df[col] = df[col].astype(float)
     return df
 
+
+def _section(title: str):
+    print(f"\n{'='*60}")
+    print(f"  {title}")
+    print(f"{'='*60}")
+
+
 async def main():
-    print("="*60)
-    print("🔬 TEST END-TO-END PIPELINE SLINGSHOT v1.0")
-    print(f"⏱  {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} (hora local)")
-    print("="*60)
+    _section(f"🔬 TEST END-TO-END — SLINGSHOT v4.1 PLATINUM")
+    print(f"⏱  {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
 
-    # 1. Descargar datos reales
-    print("\n📡 Descargando 500 velas BTCUSDT 15m desde Binance...")
+    # ── 1. Datos reales de Binance ────────────────────────────────────────────
+    _section("📡 FUENTE DE DATOS")
     df = await fetch_real_data("BTCUSDT", "15m", 500)
-    print(f"✅ {len(df)} velas recibidas. Última vela: {df['timestamp'].iloc[-1]}")
-    print(f"   Último precio: ${df['close'].iloc[-1]:,.2f}")
+    assert len(df) >= 200, "❌ Datos insuficientes para el pipeline"
+    print(f"✅ {len(df)} velas recibidas | Último cierre: ${df['close'].iloc[-1]:,.2f}")
 
-    # 2. Correr el RegimeDetector directamente
-    print("\n🔮 Detectando régimen de mercado (Wyckoff)...")
-    from engine.indicators.regime import RegimeDetector
-    detector = RegimeDetector()
-    df_regime = detector.detect_regime(df.copy())
-    regime_counts = df_regime['market_regime'].value_counts()
-    current_regime = df_regime['market_regime'].iloc[-1]
-    print(f"✅ Régimen ACTUAL (última vela): {current_regime}")
-    print(f"   Distribución últimas 500 velas: {dict(regime_counts)}")
+    # ── 2. MarketAnalyzer (análisis puro) ────────────────────────────────────
+    _section("📊 CAPA 1-3: MarketAnalyzer")
+    from engine.router.analyzer import MarketAnalyzer
+    analyzer = MarketAnalyzer()
+    market_map = analyzer.analyze(df.copy(), asset="BTCUSDT", interval="15m")
 
-    # 3. Correr el SlingshotRouter completo
-    print("\n🧠 Corriendo SlingshotRouter completo...")
+    assert market_map.current_price > 0,              "❌ Precio inválido"
+    assert market_map.market_regime is not None,      "❌ Régimen no detectado"
+    assert isinstance(market_map.smc, dict),          "❌ SMC data inválida"
+    assert isinstance(market_map.key_levels, list),   "❌ Key levels inválidos"
+
+    print(f"✅ Régimen actual: {market_map.market_regime}")
+    print(f"   OBs Alcistas: {len(market_map.smc.get('order_blocks', {}).get('bullish', []))}")
+    print(f"   OBs Bajistas: {len(market_map.smc.get('order_blocks', {}).get('bearish', []))}")
+    print(f"   FVGs: {len(market_map.smc.get('fvgs', {}).get('bullish', []))} bull / "
+          f"{len(market_map.smc.get('fvgs', {}).get('bearish', []))} bear")
+    print(f"   Fibonacci: {'✅' if market_map.fibonacci else '⚠️ No disponible'}")
+
+    # ── 3. SMC Strategy (detección de oportunidades) ─────────────────────────
+    _section("🏛️ MOTOR SMC: SMCInstitutionalStrategy")
+    from engine.strategies.smc import SMCInstitutionalStrategy
+    strategy = SMCInstitutionalStrategy()
+    df_analyzed = strategy.analyze(market_map.df_analyzed.copy())
+    opportunities = strategy.find_opportunities(df_analyzed)
+    print(f"✅ Oportunidades detectadas (sin filtrar): {len(opportunities)}")
+
+    # ── 4. SlingshotRouter (pipeline completo) ────────────────────────────────
+    _section("🧠 PIPELINE COMPLETO: SlingshotRouter")
     from engine.main_router import SlingshotRouter
     router = SlingshotRouter()
     result = router.process_market_data(df.copy(), asset="BTCUSDT", interval="15m")
-    
+
+    assert "signals" in result,         "❌ 'signals' no encontrado en resultado"
+    assert "blocked_signals" in result, "❌ 'blocked_signals' no encontrado en resultado"
+    assert "market_regime" in result,   "❌ 'market_regime' no encontrado en resultado"
+    assert "smc" in result,             "❌ 'smc' no encontrado en resultado"
+
     print(f"✅ Estrategia activa: {result['active_strategy']}")
-    print(f"   Régimen: {result['market_regime']}")
-    print(f"   Señales generadas: {len(result['signals'])}")
-    
-    if result['signals']:
-        for s in result['signals']:
-            print(f"   🎯 {s.get('type')} @ ${s.get('price', 0):,.2f} | Trigger: {s.get('trigger', 'N/A')}")
+    print(f"   Señales aprobadas:  {len(result['signals'])}")
+    print(f"   Señales bloqueadas: {len(result['blocked_signals'])}")
+
+    if result["signals"]:
+        for s in result["signals"]:
+            score = s.get("confluence", {}).get("score", "?") if s.get("confluence") else "?"
+            print(f"   🎯 {s.get('type')} @ ${s.get('price', 0):,.2f} | Score: {score}% | Leverage: {s.get('leverage')}x")
     else:
-        print("   ℹ️  Sin señales en la vela actual (normal si no hay confluencia)")
+        print("   ℹ️  Sin señales aprobadas (normal si no hay confluencia institucional)")
 
-    # 4. Test individual de cada estrategia
-    print("\n📊 Test individual de estrategias...")
-    
-    # ReversionStrategy
-    from engine.strategies.reversion import ReversionStrategy
-    rev = ReversionStrategy()
-    df_rev = rev.analyze(df.copy())
-    opps_rev = rev.find_opportunities(df_rev)
-    print(f"   ReversionStrategy: {len(opps_rev)} oportunidades en historial")
-    if opps_rev:
-        last = opps_rev[-1]
-        print(f"     Última: {last.get('type')} @ ${last.get('price', 0):,.2f} | {last.get('trigger')}")
-    
-    # TrendFollowingStrategy
-    from engine.strategies.trend import TrendFollowingStrategy
-    trend = TrendFollowingStrategy()
-    df_trend = trend.analyze(df.copy())
-    opps_trend = trend.find_opportunities(df_trend)
-    print(f"   TrendFollowingStrategy: {len(opps_trend)} oportunidades en historial")
-    if opps_trend:
-        last = opps_trend[-1]
-        print(f"     Última: {last.get('type')} @ ${last.get('price', 0):,.2f} | {last.get('trigger')}")
+    if result["blocked_signals"]:
+        print(f"\n   📋 Muestra de señales bloqueadas (Modo Auditoría):")
+        for s in result["blocked_signals"][:3]:
+            print(f"   🔴 {s.get('status')} | {s.get('blocked_reason', 'N/A')[:60]}")
 
-    # PaulPerdicesStrategy (SMC)
-    from engine.strategies.smc import PaulPerdicesStrategy
-    smc = PaulPerdicesStrategy()
-    df_smc = smc.analyze(df.copy())
-    opps_smc = smc.find_opportunities(df_smc)
-    print(f"   PaulPerdicesSMC: {len(opps_smc)} oportunidades en historial")
-    if opps_smc:
-        last = opps_smc[-1]
-        print(f"     Última: {last.get('type')} @ ${last.get('price', 0):,.2f} | {last.get('trigger')}")
+    # ── 5. Ghost Data (contexto macro) ───────────────────────────────────────
+    _section("👻 CONTEXTO MACRO: GhostData")
+    try:
+        from engine.indicators.ghost_data import refresh_ghost_data
+        ghost = await refresh_ghost_data("BTCUSDT")
+        print(f"✅ Fear & Greed: {ghost.fear_greed_value} ({ghost.fear_greed_label})")
+        print(f"   BTC Dominance: {ghost.btc_dominance}%")
+        print(f"   Funding Rate:  {ghost.funding_rate:.4f}%")
+        print(f"   Macro Bias:    {ghost.macro_bias}")
+    except Exception as e:
+        print(f"⚠️  GhostData no disponible (puede ser normal): {e}")
 
-    # 5. Ghost Data (contexto macro real)
-    print("\n🔮 Contexto macro actual (Ghost Data)...")
-    from engine.indicators.ghost_data import refresh_ghost_data
-    ghost = await refresh_ghost_data("BTCUSDT")
-    print(f"   Fear & Greed: {ghost.fear_greed_value} ({ghost.fear_greed_label})")
-    print(f"   BTC Dominance: {ghost.btc_dominance}%")
-    print(f"   Funding Rate: {ghost.funding_rate:.4f}%")
-    print(f"   Macro Bias: {ghost.macro_bias}")
-    print(f"   Block LONGs: {ghost.block_longs} | Block SHORTs: {ghost.block_shorts}")
+    _section("✅ TEST COMPLETADO — SLINGSHOT v4.1 PLATINUM")
 
-    print("\n" + "="*60)
-    print("✅ TEST COMPLETADO")
-    print("="*60)
 
-asyncio.run(main())
+if __name__ == "__main__":
+    asyncio.run(main())

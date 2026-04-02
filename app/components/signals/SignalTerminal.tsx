@@ -18,25 +18,21 @@ export default function SignalTerminal() {
     const searchParams = useSearchParams();
     const connect = useTelemetryStore(state => state.connect);
     const activeSymbol = useTelemetryStore(state => state.activeSymbol);
-    // ─── Suscripciones al Store (Granulares) ───
-
-    // ⚠️ Se actualiza ~10 veces por segundo en volatilidad extrema
+    
     const currentPrice_live = useTelemetryStore(state => state.latestPrice);
     const signalHistory = useTelemetryStore(state => state.signalHistory);
-    // ✅ CORRECCIÓN: Conectar auditedSignals del store WebSocket
     const auditedSignals = useTelemetryStore(state => state.auditedSignals);
 
-    // ✅ Se actualizan estáticamente / 1 vez cada cierre de vela (15 min)
     const tacticalDecision = useTelemetryStore(state => state.tacticalDecision as TacticalDecision);
     const mlProjection = useTelemetryStore(state => state.mlProjection as MLProjection);
     const sessionData = useTelemetryStore(state => state.sessionData as SessionData);
     const activeTimeframe = useTelemetryStore(state => state.activeTimeframe);
-    const advisorLog = useTelemetryStore(state => state.advisor_log);
+    const advisorLogs = useTelemetryStore(state => state.advisorLogs);
+    const advisorLog = advisorLogs[activeSymbol] || null;
 
     const [globalSignals, setGlobalSignals] = React.useState<any[]>([]);
     const [isLoadingSignals, setIsLoadingSignals] = React.useState(true);
 
-    // ─── Sync con URL y Fetch Global (fallback REST) ───
     useEffect(() => {
         const symbol = searchParams.get('symbol');
         if (symbol && symbol !== activeSymbol) {
@@ -45,7 +41,6 @@ export default function SignalTerminal() {
 
         const fetchGlobal = async () => {
             try {
-                // ✅ CORRECCIÓN: Traer TODAS las señales (ACTIVE + BLOCKED) en el fallback REST
                 const res = await fetch(`http://localhost:8000/api/v1/signals?status=ALL`);
                 if (res.ok) {
                     const data = await res.json();
@@ -59,17 +54,10 @@ export default function SignalTerminal() {
         };
 
         fetchGlobal();
-        const interval = setInterval(fetchGlobal, 5000); // Polling intensivo al no tener WSS global de señales por ahora
-        
-        return () => {
-            clearInterval(interval);
-        };
+        const interval = setInterval(fetchGlobal, 3000);
+        return () => clearInterval(interval);
     }, [searchParams, activeSymbol, connect]);
 
-    // ✅ CORRECCIÓN: Prioridad del feed:
-    // 1. auditedSignals (WebSocket real-time — lo más reciente)
-    // 2. globalSignals  (REST poll — fallback cuando no hay WS aún)
-    // 3. signalHistory  (localStorage — señales guardadas de sesiones anteriores)
     const displaySignals = auditedSignals.length > 0
         ? auditedSignals
         : globalSignals.length > 0
@@ -81,8 +69,6 @@ export default function SignalTerminal() {
 
     return (
         <div className="flex flex-col h-full bg-[#03070E]/80 backdrop-blur-2xl border-t border-white/10 overflow-hidden relative">
-
-            {/* ── Header ── */}
             <div className="flex-none h-10 border-b border-white/5 flex items-center justify-between px-5 bg-gradient-to-r from-neon-cyan/5 to-transparent">
                 <div className="flex items-center gap-3">
                     <div className="relative flex h-2 w-2">
@@ -93,7 +79,6 @@ export default function SignalTerminal() {
                         CONFLUENCE MATRIX <span className="text-white/30 font-normal">|</span> <span className="text-neon-cyan/80">HFT DIAGNOSTICS</span>
                     </h2>
                 </div>
-                {/* ✅ CORRECCIÓN: Mostrar conteo de aprobadas vs bloqueadas */}
                 <div className="flex items-center gap-3 text-[10px] font-bold tracking-widest text-white/40">
                     <span className="flex items-center gap-1.5"><Network size={12} className="text-neon-cyan/60" /> AUDIT MODE</span>
                     {activeCount > 0 && (
@@ -109,9 +94,7 @@ export default function SignalTerminal() {
                 </div>
             </div>
 
-            <div className="flex-1 flex flex-col overflow-hidden">
-
-                {/* 1. MASTER DIAGNOSTIC GRID */}
+            <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
                 <DiagnosticGridModule
                     tacticalDecision={tacticalDecision}
                     activeTimeframe={activeTimeframe}
@@ -119,7 +102,6 @@ export default function SignalTerminal() {
                     sessionData={sessionData}
                 />
 
-                {/* 2. MARKET CONTEXT PANEL */}
                 <div className="flex-none px-4 pb-3 border-b border-white/5">
                     <MarketContextPanel
                         regime={tacticalDecision?.market_regime ?? tacticalDecision?.regime ?? null}
@@ -132,14 +114,15 @@ export default function SignalTerminal() {
                     />
                 </div>
 
-                {/* 3. AUTONOMOUS ADVISOR (LLM Log) */}
-                <AutonomousAdvisor
-                    advisorLog={advisorLog}
-                    strategy={tacticalDecision?.strategy ?? null}
-                />
+                <div className="flex-none max-h-[150px] overflow-y-auto custom-scrollbar">
+                    <AutonomousAdvisor
+                        advisorLog={advisorLog}
+                        strategy={tacticalDecision?.strategy ?? null}
+                    />
+                </div>
 
                 {/* 4. SIGNAL AUDIT FEED (Aprobadas + Bloqueadas en tiempo real) */}
-                <div className="flex-1 overflow-y-auto custom-scrollbar p-2">
+                <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar p-2">
                     {isLoadingSignals && displaySignals.length === 0 ? (
                         <div className="h-full flex items-center justify-center text-neon-cyan/20 animate-pulse text-[10px] font-mono tracking-widest">
                             CONECTANDO CON EL FEED GLOBAL...
@@ -156,7 +139,7 @@ export default function SignalTerminal() {
                             <AnimatePresence>
                                 {displaySignals.map((sig, idx) => (
                                     <SignalCardItem
-                                        key={`${sig.timestamp ?? sig.created_at}-${sig.type ?? sig.signal_type}-${sig.asset || idx}`}
+                                        key={`audited-${sig.timestamp}-${sig.asset ?? 'any'}-${idx}`}
                                         signal={sig}
                                         currentPrice={currentPrice_live}
                                     />
@@ -165,7 +148,6 @@ export default function SignalTerminal() {
                         </div>
                     )}
                 </div>
-
             </div>
         </div>
     );

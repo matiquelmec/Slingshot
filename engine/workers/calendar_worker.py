@@ -38,17 +38,43 @@ class CalendarWorker:
                 if response.status_code == 200:
                     events = response.json()
                     relevant_events = []
+                    now = datetime.now(timezone.utc)
+                    now_iso = now.isoformat()
+                    
                     for event in events:
-                        if event["country"] in ["USD", "EUR", "ALL"] or event["impact"] == "High":
-                            relevant_events.append({
-                                "title": event["title"],
-                                "country": event["country"],
-                                "impact": event["impact"],
-                                "date": event["date"],
-                                "forecast": event.get("forecast", ""),
-                                "previous": event.get("previous", ""),
-                            })
+                        event_date_str = event.get("date", "")
+                        if not event_date_str: continue
+                        
+                        try:
+                            # Parsear fecha del evento (manejando offsets de FF)
+                            event_date = datetime.fromisoformat(event_date_str.replace('Z', '+00:00'))
+                            diff_hours = (now - event_date).total_seconds() / 3600
+                            
+                            # LOGICA DE PERSISTENCIA PROFESIONAL:
+                            # 1. Todo lo futuro (diff_hours < 0)
+                            # 2. Todo lo ocurrido en las últimas 24 horas (0 <= diff_hours <= 24)
+                            is_relevant_time = diff_hours <= 24 
+                            
+                            if is_relevant_time:
+                                if event["country"] in ["USD", "EUR", "ALL"] or event["impact"] == "High":
+                                    # Añadir flag de estado para el LLM
+                                    status = "LIVE" if abs((event_date - now).total_seconds()) < 1800 else \
+                                            ("UPCOMING" if event_date > now else "RECENT_PAST")
+                                    
+                                    relevant_events.append({
+                                        "title": event["title"],
+                                        "country": event["country"],
+                                        "impact": event["impact"],
+                                        "date": event["date"],
+                                        "status": status,
+                                        "forecast": event.get("forecast", ""),
+                                        "previous": event.get("previous", ""),
+                                    })
+                        except Exception as ee:
+                            print(f"⚠️ [CALENDAR-WORKER] Error procesando evento {event.get('title')}: {ee}")
 
+                    # Ordenar: Lo más inminente o reciente primero
+                    relevant_events.sort(key=lambda x: abs((datetime.fromisoformat(x['date'].replace('Z', '+00:00')) - now).total_seconds()))
                     await store.save_economic_events(relevant_events)
                     print(f"✅ [CALENDAR-WORKER] {len(relevant_events)} eventos macro sincronizados.")
                 else:

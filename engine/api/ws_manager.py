@@ -117,8 +117,8 @@ class SymbolBroadcaster:
         self._last_pulse_ts  = 0.0
         self._liquidity      = {"bids": [], "asks": []}
         
-        # ML Tracking Buffer: guarda [timestamp, precio, dirección_predicha] para verificar N velas después
-        self._prediction_history = deque(maxlen=20) 
+        # ML Tracking Buffer: guarda la predicción de la vela anterior para evaluarla en el cierre (v4.3)
+        self._last_ml_prediction = None
 
         # HTF Top-Down Analysis (v4.0)
         self._htf_analyzer = HTFAnalyzer()
@@ -131,6 +131,11 @@ class SymbolBroadcaster:
         self._last_session   = None
         self._last_advisor   = None
         self._last_liquidations = None
+        self._first_advisor_done = False
+        
+        self._processed_signals_this_candle = set()
+        self._last_advisor_ts = 0
+        self._advisor_task: Optional[asyncio.Task] = None
 
         print(f"[BROADCASTER] ✅ Creado: {self._key}")
 
@@ -147,6 +152,17 @@ class SymbolBroadcaster:
         # Enviar historial actual y estado cacheado al nuevo cliente
         if self._history:
             await queue.put({"type": "history", "data": self._history})
+        
+        # ✅ SYNC INSTANTÁNEO: Enviar últimas 20 señales auditadas para poblar el Terminal de inmediato
+        last_signals = await store.get_signals(asset=self.symbol)
+        # Tomamos las últimas 20 y las enviamos en orden cronológico inverso (o según el buffer)
+        for sig in list(last_signals)[-20:]:
+            await queue.put({"type": "signal_auditor_update", "data": sig})
+
+        # ✅ SYNC INSTANTÁNEO: Radar Center (Global Context)
+        if registry._last_radar_summary:
+            await queue.put({"type": "radar_update", "data": registry._last_radar_summary})
+
         if self._last_ghost:    await queue.put(self._last_ghost)
         if self._last_smc:      await queue.put(self._last_smc)
         if self._last_tactical: await queue.put(self._last_tactical)
@@ -201,21 +217,54 @@ class SymbolBroadcaster:
         msg_type = clean.get("type", "")
         if msg_type == "ghost_update":     
             self._last_ghost = clean
-            await store.update_market_state(self.symbol, {"macro_bias": clean["data"].get("macro_bias")})
+            await store.update_market_state(self.symbol, {
+                "macro_bias": clean["data"].get("macro_bias"),
+                "dxy_trend":  clean["data"].get("dxy_trend"),
+                "risk_appetite": clean["data"].get("risk_appetite")
+            })
         elif msg_type == "smc_data":       
             self._last_smc = clean
+            # Extraer métricas para el Radar
+            data = clean.get("data", {})
+            obs = data.get("order_blocks", {})
+            fvgs = data.get("fvgs", {})
+            await store.update_market_state(self.symbol, {
+                "ob_bullish_count": len(obs.get("bullish", [])),
+                "ob_bearish_count": len(obs.get("bearish", [])),
+                "fvg_bullish_active": len(fvgs.get("bullish", [])) > 0,
+                "fvg_bearish_active": len(fvgs.get("bearish", [])) > 0
+            })
         elif msg_type == "tactical_update":
             self._last_tactical = clean
+            # Extraer confluencia y riesgo macro
+            data = clean.get("data", {})
+            conf = data.get("confluence", {})
             await store.update_market_state(self.symbol, {
-                "regime": clean["data"].get("market_regime"),
-                "strategy": clean["data"].get("active_strategy"),
-                "price": float(clean["data"].get("current_price", 0))
+                "regime":        data.get("market_regime"),
+                "strategy":      data.get("active_strategy"),
+                "price":         float(data.get("current_price", 0)),
+                "in_killzone":   any(f.get("factor") == "Liquidez/KZ" and f.get("status") == "CONFIRMADO" for f in conf.get("checklist", [])),
+                "macro_risk":    any(f.get("factor") == "Macro Calendar" and f.get("status") == "PRECAUCIÓN" for f in conf.get("checklist", [])),
+                "liq_magnet":    any(f.get("factor") == "Liq Clusters" and f.get("status") == "CONFIRMADO" for f in conf.get("checklist", []))
             })
         elif msg_type == "session_update": 
             self._last_session  = clean
             await store.update_market_state(self.symbol, {"session": clean["data"].get("current_session")})
-        elif msg_type == "advisor_update": 
-            self._last_advisor  = clean
+        elif msg_type == "advisor_update":
+            self._last_advisor = clean
+        elif msg_type == "neural_pulse":
+            data = clean.get("data", {})
+            ml = data.get("ml_projection", {})
+            if ml:
+                await store.update_market_state(self.symbol, {
+                    "ml_dir": ml.get("direction"),
+                    "ml_prob": ml.get("probability")
+                })
+                
+                # 🚀 FULL POTENTIAL: Disparar primer briefing LLM inmediato al conectar
+                if not self._first_advisor_done and self._last_tactical:
+                    self._first_advisor_done = True
+                    asyncio.create_task(self._emit_advisor(self._last_tactical, self._last_session or {}))
         elif msg_type == "liquidation_update":
             self._last_liquidations = clean
             await store.update_liquidation_clusters(self.symbol, clean["data"])
@@ -294,8 +343,9 @@ class SymbolBroadcaster:
             history = await fetch_binance_history(self.symbol, self.interval, limit=1000)
             self._history = sanitize_for_json(history)
             self._live_buffer = deque(self._history[-1000:], maxlen=1000)
-            await self._broadcast({"type": "history", "data": history})
-            print(f"[BROADCASTER] {self._key} → {len(history)} velas enviadas.")
+            # ✅ ZERO-TRUST INITIALIZATION: Limpiamos la caché del Advisor para forzar re-análisis
+            await store.save_advisor_advice(self.symbol, {})
+            print(f"[BROADCASTER] {self._key} → 1000 velas enviadas y caché del Advisor invalidada.")
         except Exception as e:
             print(f"[BROADCASTER] {self._key} → Binance REST falló: {e}")
             history = []
@@ -375,9 +425,18 @@ class SymbolBroadcaster:
                     macro_levels=self._macro_levels,
                     htf_bias=self._htf_bias
                 )
-                await self._broadcast({"type": "tactical_update", "data": tactical})
+                # Inyectar último análisis cacheado para hidratación instantánea (Zero-Latency) v4.3
+                if hasattr(self, '_last_advisor') and self._last_advisor:
+                    tactical["advisor_log"] = self._last_advisor
+                elif self.symbol:
+                    # Intentar buscarlo en el store si no está en la instancia (ej: tras reinicio del registry)
+                    cached = await store.get_advisor_advice(self.symbol)
+                    if cached:
+                        tactical["advisor_log"] = cached
 
-                # LLM Advisor inicial (no bloqueante)
+                await self._broadcast({"type": "tactical_update", "data": tactical})
+                
+                # LLM Advisor inicial (no bloqueante para actualizar si es necesario)
                 asyncio.create_task(self._emit_advisor(tactical, self._session_manager.get_current_state()))
             except Exception as e:
                 print(f"[BROADCASTER] {self._key} → Pipeline inicial error: {e}")
@@ -484,26 +543,36 @@ class SymbolBroadcaster:
                         else:
                             self._last_ml = raw_pred
 
-                        # Pipeline táctico en Fast Path
+                        # Pipeline táctico en Fast Path (SILENCIOSO v4.0)
                         try:
                             live_tactical = self._router.process_market_data(
                                 df_tick, asset=self.symbol, interval=self.interval,
                                 macro_levels=self._macro_levels,
-                                htf_bias=self._htf_bias
+                                htf_bias=self._htf_bias,
+                                silent=True
                             )
                             await self._broadcast({"type": "tactical_update", "data": live_tactical})
                             
                             # 🚀 HEARTBEAT DE ESCANEO: Para que el usuario vea que el motor está vivo
                             if live_tactical.get("market_regime") != "UNKNOWN":
+                                # SI el análisis inicial fue N/A y ahora ya tenemos niveles, forzar actualización del Advisor
+                                has_levels = len(live_tactical.get('key_levels', {}).get('supports', [])) > 0
+                                if not self._first_advisor_done and has_levels:
+                                    print(f"[BROADCASTER] 🚀 Estructura detectada para {self.symbol}. Forzando primer análisis del Advisor...")
+                                    session_state = SessionManager.get_global_session_status() # Estado actual
+                                    asyncio.create_task(self._emit_advisor(live_tactical, session_state))
+                                    self._first_advisor_done = True
+                                    self._last_advisor_ts = live_tactical.get("timestamp", 0)
+
                                 status_msg = f"[SCAN] Sesgo: {self._htf_bias.direction if self._htf_bias else 'NEUTRAL'} | Régimen: {live_tactical.get('market_regime')} | Filtros OK"
                                 await self._broadcast({"type": "neural_log", "data": {
                                     "type": "SYSTEM",
                                     "message": status_msg
                                 }})
 
-                            # 🚀 PERSISTENCIA EN TIEMPO REAL (Fast Path)
-                            if live_tactical.get("signals"):
-                                await self._handle_signals(live_tactical)
+                            # 🚀 PERSISTENCIA EN TIEMPO REAL (Fast Path - SILENCIA LOGS)
+                            if live_tactical.get("signals") or live_tactical.get("blocked_signals"):
+                                await self._handle_signals(live_tactical, silent=True)
                         except Exception as e:
                             print(f"[BROADCASTER] {self._key} → Fast Path pipeline error: {e}")
                             traceback.print_exc()
@@ -523,11 +592,27 @@ class SymbolBroadcaster:
 
                 # ── SLOW PATH: cierre de vela ─────────────────────────────────
                 if kline.get("x", False):
+                    # Resetear debounce de señales para la nueva vela
+                    self._processed_signals_this_candle.clear()
+                    
                     self._live_buffer.append(candle_payload)
                     self._candle_closes += 1
 
                     df_live = pd.DataFrame([i["data"] for i in self._live_buffer])
                     df_live["timestamp"] = pd.to_datetime(df_live["timestamp"], unit="s")
+
+                    # --- ML Accuracy Tracker para Drift Monitor (v4.3) ---
+                    # Registramos el resultado de la vela que acaba de cerrar vs la predicción de la anterior.
+                    if len(df_live) > 2:
+                        last_c = df_live.iloc[-1]
+                        actual_up = 1 if last_c['close'] > last_c['open'] else 0
+                        if hasattr(self, '_last_ml_prediction') and self._last_ml_prediction:
+                            pred_up = 1 if self._last_ml_prediction == "ALCISTA" else 0
+                            drift_monitor.record_prediction(pred_up, actual_up)
+                        
+                        # Guardamos la predicción actual para evaluarla en el siguiente cierre
+                        # Usamos la dirección suavizada vía EMA para evitar ruido
+                        self._last_ml_prediction = self._ml_direction
 
                     # Drift Monitor (cada 100 velas cerradas ≈ 25h en 15m)
                     if self._candle_closes % 100 == 0:
@@ -550,21 +635,26 @@ class SymbolBroadcaster:
 
                     # Pipeline táctico final (vela cerrada = máxima precisión)
                     try:
-                        news_items = await store.get_news()
+                        news_items   = await store.get_news()
+                        econ_events  = await store.get_economic_events(limit=5)
+                        
                         self._router.set_context(
                             ml_projection=self._last_ml,
                             session_data=session_state.get("data", {}),
-                            news_items=news_items
+                            news_items=news_items,
+                            economic_events=econ_events,
+                            liquidation_clusters=liq_clusters if 'liq_clusters' in locals() else []
                         )
                         final_tactical = self._router.process_market_data(
                             df_live, asset=self.symbol, interval=self.interval,
                             macro_levels=self._macro_levels,
-                            htf_bias=self._htf_bias
+                            htf_bias=self._htf_bias,
+                            silent=False # En Slow Path queremos ver los porqués
                         )
                         await self._broadcast({"type": "tactical_update", "data": final_tactical})
 
-                        # Filtro macro + Telegram + Supabase
-                        await self._handle_signals(final_tactical)
+                        # Filtro macro + Telegram + Supabase (LOGS ACTIVOS EN CIERRE)
+                        await self._handle_signals(final_tactical, silent=False)
 
                     except Exception as e:
                         print(f"[BROADCASTER] {self._key} → Slow Path pipeline error: {e}")
@@ -576,8 +666,19 @@ class SymbolBroadcaster:
                     except Exception as e:
                         print(f"[BROADCASTER] {self._key} → Session Slow Path error: {e}")
 
-                    # LLM Advisor (no bloqueante)
-                    asyncio.create_task(self._emit_advisor(final_tactical, session_state))
+                    # 🚨 DRIFT MONITOR: Evaluación de salud del modelo ML (v4.1)
+                    # Se ejecuta cada 100 velas (aprox 25h en 15m) para detectar obsolescencia.
+                    if self._candle_closes % 100 == 0:
+                        asyncio.create_task(self._check_drift(df_live.copy()))
+
+                    # LLM Advisor (no bloqueante -v4.0)
+                    # Solo disparamos el análisis una vez por cierre real de vela para evitar spam.
+                    current_candle_ts = candle_payload["data"]["timestamp"]
+                    if current_candle_ts > self._last_advisor_ts:
+                        self._last_advisor_ts = current_candle_ts
+                        asyncio.create_task(self._emit_advisor(final_tactical, session_state))
+                    else:
+                        print(f"[BROADCASTER] {self._key} → 🧠 Advisor omitido (ya analizado para esta vela)")
 
     async def _refresh_htf_bias(self):
         """Re-evalúa el sesgo institucional (4H + 1H) para el enrutamiento top-down."""
@@ -600,20 +701,53 @@ class SymbolBroadcaster:
 
     # ── Handlers auxiliares ───────────────────────────────────────────────────
 
-    async def _handle_signals(self, tactical: dict):
+    def check_ollama(self) -> bool:
+        """Prueba rápida sincrónica para ver si Ollama responde en localhost:11434."""
+        import requests
+        try:
+            r = requests.get("http://localhost:11434/api/tags", timeout=1.0)
+            return r.status_code == 200
+        except:
+            return False
+
+    async def _handle_signals(self, tactical: dict, silent: bool = False):
         """Filtra por macro, notifica por Telegram y persiste en MemoryStore local (v3.0).
         En Audit Mode: también persiste las señales RECHAZADAS por el Portero Institucional o HTF.
         """
         raw_signals = tactical.get("signals", [])
-        # ✅ CORRECCIÓN: Recoger también las señales bloqueadas por el router (Portero R:R o HTF)
         router_blocked = tactical.get("blocked_signals", [])
 
         # Si no hay nada en absoluto, salir
         if not raw_signals and not router_blocked:
             return
 
+        # --- DEBOUNCE INSTITUCIONAL (v4.0) ---
+        # Identificar señales únicas para evitar spam en el Fast Path (mismo candle).
+        # Generamos un ID basado en Asset, Tipo, Score y Timestamp de la vela.
+        def get_sig_id(s):
+            ts = s.get("timestamp") or s.get("time") or tactical.get("candles", [{}])[-1].get("timestamp", 0)
+            score = s.get("confluence", {}).get("total_score", 0)
+            return f"{self.symbol}:{s.get('type', 'LONG')}:{ts}:{score}"
+
+        unique_new = []
+        for s in raw_signals:
+            sid = get_sig_id(s)
+            if sid not in self._processed_signals_this_candle:
+                unique_new.append(s)
+                self._processed_signals_this_candle.add(sid)
+
+        unique_blocked = []
+        for s in router_blocked:
+            sid = get_sig_id(s)
+            if sid not in self._processed_signals_this_candle:
+                unique_blocked.append(s)
+                self._processed_signals_this_candle.add(sid)
+
+        if not unique_new and not unique_blocked:
+            return # Ya hemos auditado estas señales en este ciclo de vela
+
         ghost = get_ghost_state()
-        approved, macro_blocked = filter_signals_by_macro(raw_signals, ghost)
+        approved, macro_blocked = filter_signals_by_macro(unique_new, ghost)
         
         # ──────── PROCESAR APROBADAS Y TELEGRAM ────────
         final_approved = []
@@ -634,27 +768,116 @@ class SymbolBroadcaster:
         
         # ──────── PERSISTIR ACTIVAS ────────
         for sig in final_approved:
-            asyncio.create_task(self._persist_signal(sig, tactical, status="ACTIVE"))
+            asyncio.create_task(self._persist_signal(sig, tactical, status="ACTIVE", silent=silent))
 
         # ──────── PROCESAR BLOQUEADAS POR MACRO/FILTRO (Auditoría) ────────
         for sig in macro_blocked:
             motivo = sig.get("blocked_reason", "Bloqueada por filtro macro (miedo/funding/dominancia)")
             status = "BLOCKED_BY_MACRO" if "macro" in motivo.lower() or "miedo" in motivo.lower() else "BLOCKED_BY_FILTER"
-            asyncio.create_task(self._persist_signal(sig, tactical, status=status, rejection_reason=motivo))
+            asyncio.create_task(self._persist_signal(sig, tactical, status=status, rejection_reason=motivo, silent=silent))
 
         # ──────── PROCESAR BLOQUEADAS POR EL ROUTER (Audit Mode: R:R o HTF) ────────
-        for sig in router_blocked:
+        for sig in unique_blocked:
             motivo = sig.get("blocked_reason", "Rechazada por filtro táctico")
             status = sig.get("status", "BLOCKED_BY_FILTER")
-            asyncio.create_task(self._persist_signal(sig, tactical, status=status, rejection_reason=motivo))
+            asyncio.create_task(self._persist_signal(sig, tactical, status=status, rejection_reason=motivo, silent=silent))
+
+    async def _check_drift(self, df_live: pd.DataFrame):
+        """
+        Analiza si el mercado ha divergido de los datos de entrenamiento (Population Stability Index).
+        Si detecta drift severo, emite una alerta institucional a Telegram.
+        """
+        try:
+            print(f"[BROADCASTER] 🔍 Ejecutando Drift Monitor para {self.symbol}...")
+            
+            # --- 0. Generar features para el análisis de distribución ---
+            # El monitor espera features procesadas (RSI, MACD, etc), no Ohlcv crudo.
+            fe = FeatureEngineer()
+            df_features = fe.generate_features(df_live.copy())
+
+            # --- 1. Evaluar Drift via PSI ---
+            # El monitor ya tiene el historial de accuracy actualizado del Slow Path.
+            report = drift_monitor.check(df_features)
+            
+            if not report:
+                return
+
+            # --- 3. Si hay alerta disparada, notificar vía Telegram ---
+            if report.alert_triggered:
+                from engine.notifications.telegram import send_drift_alert_async
+                
+                drift_payload = {
+                    "asset": self.symbol,
+                    "affected_features": ", ".join(report.features_in_drift) if report.features_in_drift else "Generales",
+                    "rolling_accuracy": f"{report.rolling_accuracy * 100:.1f}",
+                    "psi_max": f"{report.psi_max:.3f}",
+                    "level": report.drift_level,
+                    "recommendation": report.recommendation
+                }
+                
+                await send_drift_alert_async(drift_payload)
+                
+                # Log en la consola institucional (Frontend)
+                await self._broadcast({
+                    "type": "neural_log", 
+                    "data": {
+                        "type": "WARNING",
+                        "message": f"🚨 {self.symbol} DRIFT MONITOR: {report.recommendation}"
+                    }
+                })
+            else:
+                print(f"[BROADCASTER] ✅ Drift Monitor ({self.symbol}): Modelo estable (PSI Max: {report.psi_max:.3f})")
+
+        except Exception as e:
+            import traceback
+            print(f"[BROADCASTER] ❌ Error en Drift Monitor ({self.symbol}): {e}")
+            traceback.print_exc()
+            traceback.print_exc()
 
 
 
-    async def _persist_signal(self, sig: dict, tactical: dict, status: str = "ACTIVE", rejection_reason: str = None):
+    async def _persist_signal(self, sig: dict, tactical: dict, status: str = "ACTIVE", rejection_reason: str = None, silent: bool = False):
         """Inserta la señal en public.signal_events y en el MemoryStore local."""
         ghost = get_ghost_state()
         
-        # Datos para tiempo real
+        # Mantener identidad de la señal: Si ya trae un timestamp (de la vela), usarlo. 
+        # Si no, usar la última vela de tactical.
+        raw_ts = sig.get("timestamp") or sig.get("time")
+        if not raw_ts and "candles" in tactical: # Fallback a última vela
+            raw_ts = tactical["candles"][-1]["timestamp"] if tactical["candles"] else None
+        
+        final_ts = raw_ts if raw_ts else datetime.now(timezone.utc).isoformat()
+        if isinstance(final_ts, (int, float)):
+            final_ts = datetime.fromtimestamp(final_ts, tz=timezone.utc).isoformat()
+
+        # --- CÁLCULO DE RIESGO HIPOTÉTICO (Audit Mode) ---
+        # Si la señal no trae cálculos de riesgo (posible en señales rechazadas), los simulamos.
+        risk_pct = sig.get("risk_pct")
+        risk_usd = sig.get("risk_amount_usdt", sig.get("risk_usd"))
+        pos_size = sig.get("position_size_usdt", sig.get("position_size"))
+        lev      = sig.get("leverage", 1)
+
+        if not risk_pct or not pos_size:
+            try:
+                from engine.risk.risk_manager import RiskManager
+                # Instanciamos el RiskManager con el balance actual del Ghost State
+                rm = RiskManager(account_balance=float(ghost.get("total_balance", 1000.0)))
+                
+                # Simulamos el cálculo estructural para que la UI no muestre N/A
+                calc = rm.calculate_position(
+                    current_price=float(sig.get("price", 0)),
+                    signal_type=sig.get("signal_type", sig.get("type", "LONG")).upper(),
+                    market_regime=tactical.get("market_regime", "UNKNOWN"),
+                    smc_data=tactical.get("smc"),
+                    atr_value=sig.get("atr", 0)
+                )
+                risk_pct = calc.get("risk_pct")
+                risk_usd = calc.get("risk_amount_usdt")
+                pos_size = calc.get("position_size_usdt")
+                lev      = calc.get("leverage")
+            except Exception as e:
+                print(f"[AUDITOR] Error simulando riesgo: {e}")
+
         realtime_data = {
             "asset":            self.symbol,
             "interval":         self.interval,
@@ -670,8 +893,12 @@ class SymbolBroadcaster:
             "trigger":          sig.get("trigger", "N/A"),
             "status":           status,
             "rejection_reason": rejection_reason,
-            "timestamp":        datetime.now(timezone.utc).isoformat(),
-            "confluence":       sig.get("confluence")
+            "timestamp":        final_ts,
+            "confluence":       sig.get("confluence"),
+            "risk_pct":         risk_pct,
+            "risk_usd":         risk_usd,
+            "position_size":    pos_size,
+            "leverage":         lev
         }
         
         # Persistencia en Memoria Local
@@ -682,24 +909,86 @@ class SymbolBroadcaster:
         
         # En v3.0, solo guardamos en memoria. Print de confirmación local.
         icon = "✅" if status == "ACTIVE" else "🚫"
-        print(f"[LOCAL STORE] {icon} Señal ({status}) persistida: {realtime_data['signal_type']} {self.symbol} @ ${realtime_data['entry_price']:.2f}")
+        if not silent:
+            print(f"[LOCAL STORE] {icon} Señal ({status}) persistida: {realtime_data['signal_type']} {self.symbol} @ ${realtime_data['entry_price']:.2f}")
 
     async def _emit_advisor(self, tactical: dict, session_state: dict):
-        """Llama al LLM Advisor y broadcast el resultado."""
+        """Llama al LLM Advisor y broadcast el resultado (v4.2 con Caché)."""
+        
+        # ✅ VERIFICACIÓN DE CACHÉ INTERNO (SMC v4.2)
+        # Si ya tenemos un análisis para esta vela en el Store, lo reutilizamos.
+        current_candle_ts = tactical.get("candles", [{}])[-1].get("timestamp", 0) if tactical.get("candles") else 0
+        
+        # Si ya existe un análisis para este activo en el store, no volvemos a llamar a Ollama.
+        # EXCEPCIÓN: Si el análisis guardado es un error (trae N/A o estructura no identificada), lo ignoramos.
+        existing_advice = await store.get_advisor_advice(self.symbol)
+        if existing_advice and existing_advice.get("timestamp") == current_candle_ts:
+            content = existing_advice.get("content", "")
+            if "N/A" not in content and "ESTRUCTURA NO IDENTIFICADA" not in content:
+                print(f"[BROADCASTER] ♻️ Reutilizando análisis cacheado para {self.symbol} ({current_candle_ts})")
+                self._last_advisor = existing_advice
+                await self._broadcast({"type": "advisor_update", "data": existing_advice})
+                return
+            else:
+                print(f"[BROADCASTER] 🔃 Re-generando análisis para {self.symbol} (Caché previo era inválido/incompleto)")
+
+        # ✅ VERIFICACIÓN PREVENTIVA (Ollama) v4.3
+        # Si el motor IA no responde rápido, informamos al usuario de inmediato en vez de colgar el sistema.
+        if not self.check_ollama():
+            print(f"[BROADCASTER] ⚠️ Ollama no disponible para {self.symbol}")
+            await self._broadcast({"type": "advisor_update", "data": {
+                "content": "⚠️ MOTOR IA OFFLINE: El motor Ollama no responde en localhost:11434. Asegúrate de que Ollama esté abierto.",
+                "timestamp": current_candle_ts,
+                "updated_at": datetime.now(timezone.utc).isoformat()
+            }})
+            return
+
         print(f"[BROADCASTER] 🧠 Iniciando análisis LLM para {self.symbol}...")
+        
+        # ✅ CANCELACIÓN DE TAREA PREVIA (Inteligencia de Concurrencia)
+        # Si ya hay un análisis corriendo (ej: cambio rápido de moneda), lo cancelamos para liberar el semáforo
+        if self._advisor_task and not self._advisor_task.done():
+            self._advisor_task.cancel()
+            print(f"[BROADCASTER] 🔃 Análisis previo cancelado para {self.symbol} (Nueva petición)")
+
         try:
-            # Enviar estado de 'Cargando' explícito si es necesario (opcional)
-            # await self._broadcast({"type": "advisor_update", "data": "ANALIZANDO... ⚡"})
+            loading_obj = {
+                "content": "CONECTANDO CON EL MOTOR CUÁNTICO (Ollama)... ⚡",
+                "timestamp": current_candle_ts,
+                "status": "LOADING_IA",
+                "updated_at": datetime.now(timezone.utc).isoformat()
+            }
+            # self._last_advisor se actualizará automáticamente via _broadcast
+            await self._broadcast({"type": "advisor_update", "data": loading_obj})
+
+            # Creamos la tarea para poder cancelarla si fuera necesario
+            self._advisor_task = asyncio.current_task()
 
             # Obtener datos adicionales del store para el LLM
             news_items = await store.get_news(limit=5)
             liqs = await store.get_liquidation_clusters(self.symbol)
             econ_events = await store.get_economic_events(limit=5)
 
+            # ✅ SERIALIZACIÓN ROBUSTA (v4.6.5)
+            # Convertimos tipos de Numpy a Python nativo (Evita el bug del N/A)
+            import numpy as np
+            def sanitize(obj):
+                if isinstance(obj, dict):
+                    return {k: sanitize(v) for k, v in obj.items()}
+                if isinstance(obj, list):
+                    return [sanitize(i) for i in obj]
+                if isinstance(obj, (np.float64, np.float32)):
+                    return float(obj)
+                if isinstance(obj, (np.int64, np.int32)):
+                    return int(obj)
+                return obj
+
+            sanitized_tactical = sanitize(tactical)
+
             # Timeout de 60 segundos para no colgar el worker
             advice = await asyncio.wait_for(
                 generate_tactical_advice(self.symbol, 
-                    tactical_data=tactical,
+                    tactical_data=sanitized_tactical,
                     current_session=session_state.get("data", {}).get("current_session", "UNKNOWN"),
                     ml_projection=self._last_ml,
                     news=news_items,
@@ -709,14 +998,38 @@ class SymbolBroadcaster:
                 timeout=60.0
             ) 
             print(f"[BROADCASTER] ✅ Análisis LLM completado para {self.symbol}")
-            await self._broadcast({"type": "advisor_update", "data": advice})
+            
+            # ✅ PERSISTENCIA EN EL STORE (v4.2)
+            # Guardamos el análisis con el timestamp de la vela para el debouncing global
+            advice_obj = {
+                "timestamp": current_candle_ts,
+                "asset": self.symbol,
+                "content": advice,
+                "updated_at": datetime.now(timezone.utc).isoformat()
+            }
+            await store.save_advisor_advice(self.symbol, advice_obj)
+            
+            # self._last_advisor será actualizado por _broadcast
+            await self._broadcast({"type": "advisor_update", "data": advice_obj})
         except asyncio.TimeoutError:
             print(f"[BROADCASTER] ⚠️ Timeout en LLM Advisor ({self.symbol})")
-            await self._broadcast({"type": "advisor_update", "data": "ADVISOR LOG: LLM_TIMEOUT. El motor de inferencia está saturado. Reintentando en la próxima vela."})
+            error_obj = {
+                "content": "⚠️ MOTOR IA SATURADO: Ollama está tardando demasiado en responder. Reintentando en la próxima vela...",
+                "timestamp": current_candle_ts,
+                "status": "TIMEOUT",
+                "updated_at": datetime.now(timezone.utc).isoformat()
+            }
+            self._last_advisor = error_obj
+            await self._broadcast({"type": "advisor_update", "data": error_obj})
         except asyncio.CancelledError:
             pass
         except Exception as e:
             print(f"[BROADCASTER] ❌ {self._key} → Advisor error: {e}")
+            await self._broadcast({"type": "advisor_update", "data": {
+                "content": f"ADVISOR OFFLINE: {str(e)}",
+                "timestamp": current_candle_ts,
+                "updated_at": datetime.now(timezone.utc).isoformat()
+            }})
             traceback.print_exc()
 
     async def _refresh_ghost(self, global_ghost=None):
@@ -745,6 +1058,11 @@ class SymbolBroadcaster:
                 "block_shorts":     ghost.block_shorts,
                 "reason":           ghost.reason,
                 "last_updated":     ghost.last_updated,
+                "dxy_trend":        ghost.dxy_trend,
+                "dxy_price":        ghost.dxy_price,
+                "nasdaq_trend":     ghost.nasdaq_trend,
+                "nasdaq_change_pct":ghost.nasdaq_change_pct,
+                "risk_appetite":    ghost.risk_appetite,
             }})
         except Exception as e:
             print(f"[BROADCASTER] {self._key} → Ghost specific refresh error: {e}")
@@ -776,18 +1094,19 @@ class BroadcasterRegistry:
         self._broadcasters: Dict[str, SymbolBroadcaster] = {}
         self._lock = asyncio.Lock()
         self._pulse_task: Optional[asyncio.Task] = None
+        self._last_radar_summary: Optional[list] = None
 
     async def start_global_pulse(self):
         """Inicia el latido global que sincroniza el estado de todos los radares."""
         if self._pulse_task: return
         self._pulse_task = asyncio.create_task(self._pulse_loop())
-        print("[REGISTRY] 💓 Global Radar Pulse iniciado")
+        print("[REGISTRY] 💓 Global Radar Pulse iniciado (3s interval)")
 
     async def _pulse_loop(self):
-        """Loop que emite el estado resumido de todo el mercado cada 15 segundos."""
+        """Loop que emite el estado resumido de todo el mercado cada 3 segundos."""
         while True:
             try:
-                await asyncio.sleep(15)
+                await asyncio.sleep(3) # Optimizado a 3s para feed institucional
                 # 1. Obtener estados de todos los activos desde el store
                 states = await store.get_market_states()
                 if not states: continue
@@ -796,13 +1115,22 @@ class BroadcasterRegistry:
                 summary = []
                 for s in states:
                     summary.append({
-                        "asset":    s.get("asset"),
-                        "price":    s.get("current_price"),
-                        "regime":   s.get("regime", "UNKNOWN"),
-                        "strategy": s.get("strategy", "STANDBY"),
-                        "bias":     s.get("htf_bias", {}).get("bias", "NEUTRAL") if isinstance(s.get("htf_bias"), dict) else "NEUTRAL",
-                        "trend":    s.get("sma_slow_slope", 0)
+                        "asset":       s.get("asset"),
+                        "price":       s.get("price") or s.get("current_price"),
+                        "regime":      s.get("regime") or s.get("market_regime", "UNKNOWN"),
+                        "strategy":    s.get("strategy") or "SMC INSTITUTIONAL",
+                        "bias":        s.get("macro_bias") or (s.get("htf_bias", {}).get("direction", "NEUTRAL") if isinstance(s.get("htf_bias"), dict) else "NEUTRAL"),
+                        "ob_count":    (s.get("ob_bullish_count", 0) + s.get("ob_bearish_count", 0)),
+                        "fvg_active":  (s.get("fvg_bullish_active", False) or s.get("fvg_bearish_active", False)),
+                        "is_killzone": s.get("in_killzone", False),
+                        "macro_risk":  s.get("macro_risk", False),
+                        "liq_magnet":  s.get("liq_magnet", False),
+                        "ml_dir":      s.get("ml_dir", "NEUTRAL"),
+                        "ml_prob":     s.get("ml_prob", 50),
+                        "sentiment":   s.get("risk_appetite", "NEUTRAL")
                     })
+
+                self._last_radar_summary = summary
 
                 # 3. Fan-out: Enviar a TODOS los broadcasters activos
                 async with self._lock:
@@ -852,12 +1180,18 @@ class BroadcasterRegistry:
 
             await broadcaster.unsubscribe(client_id)
 
-            # 🚀 REGLA DE PERSISTENCIA: Los del Radar (persistent=True) NUNCA se eliminan.
-            # Los que pide el usuario por el Dashboard (persistent=False) sí.
+            # 🚀 REGLA DE LINGER (Grace Period v4.2)
+            # No eliminamos el broadcaster inmediatamente. Esperamos 60 segundos por si el usuario recarga la página.
             if broadcaster.subscriber_count() == 0 and not broadcaster.persistent:
-                await broadcaster.stop()
-                del self._broadcasters[key]
-                print(f"[REGISTRY] 🗑️  Broadcaster eliminado (sin clientes): {key}")
+                async def _delayed_cleanup():
+                    await asyncio.sleep(60.0) # 60 segundos de "Gracia"
+                    async with self._lock:
+                        if key in self._broadcasters and self._broadcasters[key].subscriber_count() == 0:
+                            await self._broadcasters[key].stop()
+                            del self._broadcasters[key]
+                            print(f"[REGISTRY] 🗑️ Broadcaster eliminado tras Grace Period: {key}")
+                
+                asyncio.create_task(_delayed_cleanup())
             elif broadcaster.subscriber_count() == 0 and broadcaster.persistent:
                 # print(f"[REGISTRY] 🛡️  Broadcaster {key} mantenido en segundo plano (PERSISTENTE)")
                 pass

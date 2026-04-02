@@ -16,24 +16,26 @@ export function getSignalLifecycle(sig: Signal, currentPrice: number | null, now
     const expiryTs = sig.expiry_timestamp ? new Date(sig.expiry_timestamp).getTime() : null;
 
     // 0. BLOQUEADA POR AUDITORÍA (Risk Manager / Macro / HTF)
-    if (sig.status === 'BLOCKED_BY_MACRO' || sig.status === 'BLOCKED_BY_FILTER' || sig.status === 'BLOCKED_BY_HTF') {
-        let typeStr = 'FILTRO';
-        let borderColor = 'border-red-500/10';
-        let textColor = 'text-white/40';
+    if (sig.status === 'BLOCKED_BY_MACRO' || sig.status === 'BLOCKED_BY_FILTER' || sig.status === 'BLOCKED_BY_HTF' || sig.status === 'BLOCKED_BY_CONFIDENCE') {
+        const typeStr = sig.status === 'BLOCKED_BY_MACRO' ? 'MACRO' : 
+                        sig.status === 'BLOCKED_BY_HTF' ? 'HTF' : 
+                        sig.status === 'BLOCKED_BY_CONFIDENCE' ? 'Score' : 'Filtro';
+        
+        const borderColor = sig.status === 'BLOCKED_BY_HTF' ? 'border-amber-500/30' : 'border-red-500/10';
+        const textColor = sig.status === 'BLOCKED_BY_HTF' ? 'text-amber-500/60' : 'text-white/40';
 
-        if (sig.status === 'BLOCKED_BY_MACRO') typeStr = 'MACRO';
-        if (sig.status === 'BLOCKED_BY_HTF') {
-            typeStr = 'HTF';
-            borderColor = 'border-amber-500/30';
-            textColor = 'text-amber-500/60';
-        }
+        // Detalle extendido: Combinar POR QUÉ es señal + POR QUÉ se rechaza
+        // Priorizar rejection_reason que viene del broadcast estandarizado
+        const whySignal = sig.confluence?.reasoning || 'Criterio técnico base cumplido.';
+        const rejectionDetail = sig.rejection_reason || (sig as any).blocked_reason || 
+                               (sig.status === 'BLOCKED_BY_CONFIDENCE' ? 'No alcanzó el umbral de excelencia (75%)' : 'Rechazada por módulo de riesgo.');
 
         return {
             status: 'INVALIDADA', 
             label: `⛔ BLOQUEADA (${typeStr} REJECT)`,
-            reason: sig.rejection_reason || 'Rechazada por módulo de riesgo/confluencia.',
+            reason: `CAUSA RECHAZO: ${rejectionDetail}\n\nPOR QUÉ ES SEÑAL: ${whySignal}`,
             color: textColor,
-            bgColor: `bg-black/60 ${borderColor} opacity-70 grayscale-[50%]`,
+            bgColor: `bg-black/60 ${borderColor} opacity-95 shadow-inner`,
         };
     }
 
@@ -151,275 +153,121 @@ export function buildConditions(
     sessionData: SessionData | null = null
 ): Condition[] {
 
-    // Extraemos valores seguros (fallbacks a "0" o neutrales)
-    const diag = d || {
-        rsi: 50, macd_line: 0, macd_signal: 0, macd_bullish_cross: false,
-        bbwp: 50, squeeze_active: false, volume: 0, rsi_oversold: false,
-        rsi_overbought: false, bullish_divergence: false, bearish_divergence: false,
-        volume_mean: 0
-    };
+    // SMC Data (Order Blocks & FVGs)
+    const smc = (d as any)?.smc || { order_blocks: { bullish: [], bearish: [] }, fvgs: { bullish: [], bearish: [] } };
+    const bullOBs = smc.order_blocks?.bullish?.length || 0;
+    const bearOBs = smc.order_blocks?.bearish?.length || 0;
+    const activeFVGs = (smc.fvgs?.bullish?.length || 0) + (smc.fvgs?.bearish?.length || 0);
 
-    const {
-        rsi, macd_line, macd_signal, macd_bullish_cross, bbwp, squeeze_active,
-        volume, rsi_oversold, rsi_overbought, bullish_divergence, bearish_divergence, volume_mean = 0
-    } = diag;
+    // RVOL (Volume Institucional)
+    const rvol = d?.volume || 1.0;
+    
+    // Macro Bias & HTF
+    const htf = (d as any)?.htf_bias || { direction: 'NEUTRAL', strength: 0 };
+    const macro = (d as any)?.macro_bias || 'NEUTRAL';
 
-
-    // RSI helper
-    const rsiDesc = () => {
-        if (rsi < 30) return { level: 'Sobreventa extrema', note: 'Zona de pánico minorista. Institucionales compran aquí.' };
-        if (rsi < 40) return { level: 'Sobreventa moderada', note: 'Presión vendedora alta. Zona de interés.' };
-        if (rsi < 50) return { level: 'Zona neutral bajista', note: 'Momentum negativo.' };
-        if (rsi < 60) return { level: 'Zona neutral alcista', note: 'Momentum positivo.' };
-        if (rsi < 70) return { level: 'Sobrecompra moderada', note: 'Atención a agotamiento.' };
-        return { level: 'Sobrecompra extrema', note: 'Zona de euforia minorista. Vendedores institucionales activos.' };
-    };
-
-    // MACD helper
-    const macdDesc = () => {
-        const diff = (macd_line - macd_signal).toFixed(2);
-        if (macd_bullish_cross) return `Línea MACD (${macd_line.toFixed(2)}) > Señal (${macd_signal.toFixed(2)}). Alcista validado.`;
-        if (macd_line > macd_signal) return `Línea MACD (${macd_line.toFixed(2)}) conserva ventaja sobre Señal.`;
-        return `Línea MACD (${macd_line.toFixed(2)}) < Señal (${macd_signal.toFixed(2)}). Déficit: ${diff}.`;
-    };
-
-    // Rango helper (Fallback al profile de Sesión)
-    const rangePos = () => {
-        let s = support;
-        let r = resistance;
-        if (!s || !r) {
-            s = sessionData?.pdl ?? sessionData?.sessions?.london?.low ?? null;
-            r = sessionData?.pdh ?? sessionData?.sessions?.london?.high ?? null;
-        }
-        if (!price || !s || !r) return null;
-        const range = r - s;
-        const pos = price - s;
-        const pct = range > 0 ? ((pos / range) * 100).toFixed(0) : '?';
-        const isFallback = (!support || !resistance);
-        return { pct, s, r, range, label: isFallback ? 'Nivel Diario/Sesión' : 'Soporte/Resistencia' };
-    };
-
-    switch (regime.toUpperCase()) {
-
-        case 'ACCUMULATION': {
-            const rs = rsiDesc();
-            return [
-                {
-                    label: 'Objetivo: RSI en sobreventa (< 35)',
-                    status: rsi_oversold ? 'MET' : rsi < 45 ? 'PARTIAL' : 'WAITING',
-                    currentValue: `Nivel actual: RSI ${rsi.toFixed(1)} (${rs.level})`,
-                    meaning: rsi_oversold
-                        ? `✅ ${rs.note} Búsqueda de LONG en el próximo Order Block.`
-                        : `Aún no llega a 35 (actualmente ${rsi.toFixed(1)}). ${rs.note}`,
-                },
-                {
-                    label: 'Buscando: OB alcista en soporte',
-                    status: 'WAITING',
-                    currentValue: support ? `Soporte: $${support.toFixed(2)}` : 'Buscando zona de interés...',
-                    meaning: 'Order Block: Zona donde quedó liquidez e intencionalidad pendiente.',
-                },
-                {
-                    label: 'Verificando: Momentum MACD alcista',
-                    status: macd_bullish_cross ? 'MET' : macd_line > macd_signal ? 'PARTIAL' : 'WAITING',
-                    currentValue: macd_bullish_cross ? 'Cruce alcista CONFIRMADO' : `MACD: ${macd_line.toFixed(2)}`,
-                    meaning: macdDesc(),
-                },
-                {
-                    label: 'Monitoreo: Compresión BB Squeeze',
-                    status: squeeze_active ? 'MET' : bbwp < 30 ? 'PARTIAL' : 'WAITING',
-                    currentValue: `BBWP: ${bbwp.toFixed(1)}% — ${squeeze_active ? '🔥 COMPRIMIDO' : 'Expandido'}`,
-                    meaning: squeeze_active ? 'Compresión extrema. Explosión inminente.' : 'Baja volatilidad. Esperando carga.',
-                },
-                {
-                    label: bullish_divergence ? '🔥 Alerta: Divergencia Alcista Detectada' : 'Buscando: Divergencias Cuantitativas',
-                    status: bullish_divergence ? 'MET' : 'WAITING',
-                    currentValue: bullish_divergence ? 'DIVERGENCIA ALCISTA (Price vs RSI)' : 'Sin anomalías alcistas.',
-                    meaning: bullish_divergence ? 'El precio hizo un mínimo más bajo, pero el momentum (RSI) subió.' : 'Momentum sincrónico.',
-                },
-            ];
-        }
-
+    switch (regime) {
+        case 'ACCUMULATION':
         case 'MARKUP': {
-            const rs = rsiDesc();
+            const isBullishBias = htf.direction === 'BULLISH' || macro === 'LONG_ONLY';
+            const isKillZone = sessionData?.is_killzone;
+            
             return [
                 {
-                    label: 'Objetivo: Retroceso (Pullback) y Confluencia',
-                    status: 'WAITING',
-                    currentValue: support ? `Soportes EMA: $${support.toFixed(2)}` : 'Esperando corrección...',
-                    meaning: 'En tendencia, compramos retrocesos hacia la EMA 50 o el Fibo 0.5 - 0.618.',
+                    label: 'Sesgo HTF: Alineación Alcista',
+                    status: isBullishBias ? 'MET' : 'WAITING',
+                    currentValue: `Bias: ${htf.direction} | Macro: ${macro}`,
+                    meaning: isBullishBias ? '✅ Flujo de capital institucional a favor de compras.' : '⚠️ No hay alineación de temporalidades mayores. Riesgo alto.',
                 },
                 {
-                    label: 'Verificando: Espacio libre en RSI (< 60)',
-                    status: rsi_overbought ? 'WARNING' : rsi < 60 ? 'MET' : 'PARTIAL',
-                    currentValue: `Nivel actual: RSI ${rsi.toFixed(1)} (${rs.level})`,
-                    meaning: rsi_overbought ? '⚠️ Peligro de Sobrecompra. Entrar ahora es altísimo riesgo.' : '✅ El RSI tiene margen para seguir subiendo.',
+                    label: 'Sesión: Ventana de Volatilidad (KillZone)',
+                    status: isKillZone ? 'MET' : 'PARTIAL',
+                    currentValue: `Estado: ${isKillZone ? 'KILLZONE ACTIVA' : 'FUERA DE HORARIO'}`,
+                    meaning: isKillZone ? '✅ Manipulación y expansión institucional en curso.' : 'Volumen bajo. Probable mercado lateral o lento.',
                 },
                 {
-                    label: 'Confirmación: Momentum MACD alcista',
-                    status: macd_line > macd_signal ? 'MET' : 'WAITING',
-                    currentValue: `MACD Line: ${macd_line.toFixed(2)}`,
-                    meaning: macdDesc(),
+                    label: 'Liquidez: Barrida de Mínimos (Sweeps)',
+                    status: (sessionData?.pdl_swept) ? 'MET' : 'WAITING',
+                    currentValue: `PDL Swept: ${sessionData?.pdl_swept ? 'SÍ' : 'NO'}`,
+                    meaning: sessionData?.pdl_swept ? '✅ Los bancos ya cazaron los stop-loss del piso previo. Camino libre al alza.' : 'Buscando barrida de Asian Low o PDL.',
                 },
                 {
-                    label: bearish_divergence ? '⚠️ Alerta: Divergencia Bajista Detectada' : 'Monitoreo: Riesgo de Divergencias',
-                    status: bearish_divergence ? 'WARNING' : 'WAITING',
-                    currentValue: bearish_divergence ? 'DIVERGENCIA BAJISTA (Price vs RSI)' : 'Sin anomalías estructurales.',
-                    meaning: bearish_divergence ? 'Precio con máximo más alto, pero momentum (RSI) decayendo.' : 'Subida saludable soportada linealmente.',
+                    label: 'Zona de Valor: Order Blocks (OBs)',
+                    status: bullOBs > 0 ? 'MET' : 'WAITING',
+                    currentValue: `OBs Alcistas: ${bullOBs} detectados`,
+                    meaning: bullOBs > 0 ? '✅ El precio descansa sobre demanda institucional confirmada.' : 'Esperando formación de bloque de órdenes.',
+                },
+                {
+                    label: 'Volumen: Esfuerzo Institucional (RVOL)',
+                    status: rvol >= 1.5 ? 'MET' : rvol >= 1.2 ? 'PARTIAL' : 'WAITING',
+                    currentValue: `RVOL: ${rvol.toFixed(2)}x`,
+                    meaning: rvol >= 1.5 ? '✅ Participación institucional confirmada por volumen.' : 'Esperando intención volumétrica real.',
                 },
             ];
         }
-
-        case 'DISTRIBUTION': {
-            const rs = rsiDesc();
-            return [
-                {
-                    label: 'Objetivo: RSI en sobrecompra (> 70)',
-                    status: rsi_overbought ? 'MET' : rsi > 60 ? 'PARTIAL' : 'WAITING',
-                    currentValue: `RSI: ${rsi.toFixed(1)} (${rs.level})`,
-                    meaning: rsi_overbought ? '✅ Euforia detectada. Institucionales listos para vender.' : 'Esperando agotamiento alcista.',
-                },
-                {
-                    label: 'Buscando: Barrida de liquidez institucional',
-                    status: 'WAITING',
-                    currentValue: resistance ? `Umbral a romper: $${resistance.toFixed(2)}` : 'Mapeando techo...',
-                    meaning: 'Buscamos que el precio supere un máximo previo temporalmente para atrapar liquidez (Sweep).',
-                },
-                {
-                    label: bearish_divergence ? '⚠️ Alerta: Divergencia Bajista (Oculta)' : 'Monitoreo: Debilidad Estructural',
-                    status: bearish_divergence ? 'MET' : 'WAITING',
-                    currentValue: bearish_divergence ? 'DIVERGENCIA BAJISTA DETECTADA' : 'Subida lineal en curso.',
-                    meaning: bearish_divergence ? 'El rally carece de fuerza de compra real. Manos fuertes vendiendo ocultamente.' : 'Distribución algorítmica sin debilidad oculta visible todavía.',
-                },
-            ];
-        }
-
+ 
+        case 'DISTRIBUTION':
         case 'MARKDOWN': {
-            const volExtreme = volume > (volume_mean * 2.5);
+            const isBearishBias = htf.direction === 'BEARISH' || macro === 'SHORT_ONLY';
+            const isKillZone = sessionData?.is_killzone;
+ 
             return [
                 {
-                    label: 'Objetivo: Pullback Bajista a la EMA 50',
-                    status: 'WAITING',
-                    currentValue: resistance ? `Resistencia EMA: $${resistance.toFixed(2)}` : 'Esperando rebote temporal...',
-                    meaning: 'En tendencia bajista, se busca operar en corto (SHORT) en los rebotes a la EMA 50.',
+                    label: 'Sesgo HTF: Alineación Bajista',
+                    status: isBearishBias ? 'MET' : 'WAITING',
+                    currentValue: `Bias: ${htf.direction} | Macro: ${macro}`,
+                    meaning: isBearishBias ? '✅ Flujo de capital institucional a favor de ventas.' : '⚠️ Temporalidades mayores en contra o neutrales.',
                 },
                 {
-                    label: 'Confirmando: MACD negativo',
-                    status: macd_line < macd_signal ? 'MET' : 'WAITING',
-                    currentValue: `MACD Line: ${macd_line.toFixed(2)}`,
-                    meaning: macdDesc(),
+                    label: 'Sesión: Ventana de Volatilidad (KillZone)',
+                    status: isKillZone ? 'MET' : 'PARTIAL',
+                    currentValue: `Estado: ${isKillZone ? 'KILLZONE ACTIVA' : 'FUERA DE HORARIO'}`,
+                    meaning: isKillZone ? '✅ Los algoritmos de alta frecuencia están activos.' : 'Mercado en modo "Slow Walk". Poca intención bancaria.',
                 },
                 {
-                    label: 'Precaución: ¿Inminente Clímax de Ventas?',
-                    status: (rsi_oversold && volExtreme) ? 'WARNING' : 'WAITING',
-                    currentValue: `Vol: ${volume.toFixed(0)} | RSI: ${rsi.toFixed(1)}`,
-                    meaning: (rsi_oversold && volExtreme)
-                        ? '⚠️ CLÍMAX DETECTADO. Probable cierre masivo de cortos por capitulación minorista.'
-                        : 'Sin señales de clímax.',
+                    label: 'Liquidez: Barrida de Máximos (Sweeps)',
+                    status: (sessionData?.pdh_swept) ? 'MET' : 'WAITING',
+                    currentValue: `PDH Swept: ${sessionData?.pdh_swept ? 'SÍ' : 'NO'}`,
+                    meaning: sessionData?.pdh_swept ? '✅ Manipulación a la alza completada. Atrapando compradores finales.' : 'Buscando barrida de Asian High o PDH.',
                 },
                 {
-                    label: bullish_divergence ? '🔥 Alerta: Divergencia Alcista en Caída' : 'Monitoreo: Riesgo de Reversión',
-                    status: bullish_divergence ? 'WARNING' : 'WAITING',
-                    currentValue: bullish_divergence ? 'DIVERGENCIA ALCISTA DETECTADA' : 'Caída fluida normal.',
-                    meaning: bullish_divergence ? 'La presión vendedora se secó internamente. El RSI ya dio la vuelta.' : 'Tendencia confirmada.',
+                    label: 'Zona de Valor: Order Blocks (OBs)',
+                    status: bearOBs > 0 ? 'MET' : 'WAITING',
+                    currentValue: `OBs Bajistas: ${bearOBs} detectados`,
+                    meaning: bearOBs > 0 ? '✅ Presencia de oferta institucional en este nivel.' : 'Esperando formación de bloque de oferta.',
+                },
+                {
+                    label: 'Esfuerzo: Confirmación de Volumen',
+                    status: rvol >= 1.5 ? 'MET' : 'WAITING',
+                    currentValue: `RVOL: ${rvol.toFixed(2)}x`,
+                    meaning: rvol >= 1.5 ? '✅ Anomalía de volumen confirma la distribución.' : 'Volumen minorista (bajo). No hay confirmación institucional.',
                 },
             ];
         }
-
-        case 'RANGING': {
-            const rp = rangePos();
-            const priceOut = rp && (parseInt(rp.pct) > 105 || parseInt(rp.pct) < -5);
-            const lowVol = volume < (volume_mean * 1.2);
+ 
+        case 'RANGING':
+        case 'CHOPPY':
+        default: {
             return [
                 {
-                    label: 'Calculando: Ubicación geométrica en el lateral',
-                    status: rp ? 'PARTIAL' : 'WAITING',
-                    currentValue: rp
-                        ? `${rp.pct}% (entre $${rp.s?.toFixed(2)} y $${rp.r?.toFixed(2)})`
-                        : 'Mapeando rangos vigentes...',
-                    meaning: rp
-                        ? `Posición actual: ${rp.pct}% del bloque. ${parseInt(rp.pct) < 30 ? 'Zona Soporte (LONG)' : parseInt(rp.pct) > 70 ? 'Zona Techo (SHORT)' : 'Zona Media (Riesgo)'}`
-                        : 'Buscando las barreras del canal lateral.',
-                },
-                {
-                    label: 'Verificando: Ruptura del rango y Volumen',
-                    status: (priceOut && lowVol) ? 'WARNING' : priceOut ? 'MET' : 'WAITING',
-                    currentValue: priceOut ? 'PRECIO FUERA DEL RANGO' : 'PRECIO DENTRO DEL RANGO',
-                    meaning: (priceOut && lowVol)
-                        ? '⚠️ ALERTA DE TRAMPA (Fakeout). Ruptura con volumen anémico, probablemente diseñada para casar stops.'
-                        : priceOut
-                            ? 'Ruptura con intención detectada. Verificando confirmación volumétrica.'
-                            : 'Navegando dentro del canal lateral.',
-                },
-                {
-                    label: 'Monitoreo: Compresión BB Squeeze',
-                    status: squeeze_active ? 'MET' : bbwp < 25 ? 'PARTIAL' : 'WAITING',
-                    currentValue: `BBWP: ${bbwp.toFixed(1)}%`,
-                    meaning: squeeze_active
-                        ? '🔥 SQUEEZE CONFIRMADO. Bandas totalmente comprimidas. Explosión direccional muy próxima.'
-                        : bbwp < 25
-                            ? 'Baja Volatilidad: El "resorte" se comprime.'
-                            : 'Volatilidad Normal en el bloque.',
-                },
-                {
-                    label: 'Buscando: Anomalías o Divergencias Ocultas',
-                    status: bullish_divergence ? 'MET' : bearish_divergence ? 'WARNING' : 'WAITING',
-                    currentValue: bullish_divergence ? 'RSI ALCISTA DETECTADO 🔥' : bearish_divergence ? 'RSI BAJISTA DETECTADO ⚠️' : 'Sin desequilibrios.',
-                    meaning: bullish_divergence ? 'Posible "Spring" institucional (manipulación a la baja antes de volar).' : bearish_divergence ? 'Posible "Upthrust" inminente (trampa alcista).' : 'Métricas balanceadas en el rango.',
-                },
-            ];
-        }
-
-        case 'CHOPPY': {
-            const rs = rsiDesc();
-            return [
-                {
-                    label: 'Estado: Standby Táctico por Indecisión',
+                    label: 'Estado: Standby por Filtro Dinámico',
                     status: 'WARNING',
-                    currentValue: 'Sincronización de Medias: FALLIDA',
-                    meaning: 'El mercado está en un estado de "ruido". Las medias móviles se cruzan sin tendencia. Operar aquí es jugar al azar institucional.',
+                    currentValue: `Régimen: ${regime}`,
+                    meaning: 'Acción de precio sucia o consolidación lateral. El motor bloquea señales para prevenir "Whipsaws".',
                 },
                 {
-                    label: 'Monitoreo: Volatilidad Extremadamente Sucia',
-                    status: bbwp > 80 ? 'WARNING' : 'WAITING',
-                    currentValue: `BBWP: ${bbwp.toFixed(1)}% | Momentum: FRAGMENTADO`,
-                    meaning: bbwp > 80 ? 'Volatilidad expandida pero sin dirección. Riesgo de "Whipsaw" (barrida de stops en ambos lados).' : 'Esperando que la volatilidad se asiente en un rango operable.',
+                    label: 'Monitor de Liquidez: Zonas Pendientes',
+                    status: activeFVGs > 0 ? 'PARTIAL' : 'WAITING',
+                    currentValue: `FVGs Pendientes: ${activeFVGs}`,
+                    meaning: 'El precio suele buscar llenar estos vacíos antes de definir una nueva tendencia.',
                 },
                 {
-                    label: 'Filtro: RSI en Tierra de Nadie',
-                    status: 'PARTIAL',
-                    currentValue: `RSI actual: ${rsi.toFixed(1)}`,
-                    meaning: 'El RSI oscila cerca de 50. No hay ventaja estadística ni para compradores ni para vendedores.',
-                },
-                {
-                    label: 'Plan de Acción: Esperar Expansión con Volumen',
-                    status: 'WAITING',
-                    currentValue: `Volumen actual: ${volume.toFixed(0)}`,
-                    meaning: 'Necesitamos ver una vela de rango amplio (Marubozu) acompañada de volumen institucional (2x media) para confirmar el inicio de un nuevo régimen.',
+                    label: 'Estructura HTF (Superior)',
+                    status: htf.direction !== 'NEUTRAL' ? 'MET' : 'WAITING',
+                    currentValue: `Bias 1H: ${htf.direction}`,
+                    meaning: htf.direction === 'NEUTRAL' ? 'Institucionales sin dirección clara. Evitar operar.' : 'Esperando que el marco temporal menor se alinee.',
                 },
             ];
         }
-
-        default:
-            const rs = rsiDesc();
-            return [
-                {
-                    label: 'Análisis Preliminar: Calibrando Régimen',
-                    status: 'WAITING',
-                    currentValue: 'Sincronizando Wyckoff...',
-                    meaning: 'El motor requiere un historial de 200 velas (15m) para confirmar el régimen institucional con seguridad estadística. Realizando análisis de momentum preventivo.',
-                },
-                {
-                    label: 'Monitor de Momentum (RSI)',
-                    status: rsi < 30 || rsi > 70 ? 'PARTIAL' : 'WAITING',
-                    currentValue: `RSI actual: ${rsi.toFixed(1)} (${rs.level})`,
-                    meaning: rs.note,
-                },
-                {
-                    label: 'Estado de Volatilidad (BBWP)',
-                    status: squeeze_active ? 'MET' : 'WAITING',
-                    currentValue: `BBWP: ${bbwp.toFixed(1)}%`,
-                    meaning: squeeze_active ? 'Compresión detectada. El mercado prepara expansión.' : 'Volatilidad en fase de carga.',
-                }
-            ];
     }
 }

@@ -20,7 +20,7 @@ export type Timeframe = '1m' | '3m' | '5m' | '15m' | '30m' | '1h' | '2h' | '4h' 
 
 
 interface TelemetryState {
-    advisor_log: string | null;
+    advisorLogs: Record<string, any>; // 🧠 Mapeo de análisis por activo (v4.4)
     isConnected: boolean;
     isCalibrating: boolean;
     activeSymbol: string;
@@ -98,8 +98,8 @@ export const useTelemetryStore = create<TelemetryState>((set, get) => {
             return age < 2 * 60 * 60 * 1000; // 2 horas max caching
         });
 
-        const existingKeys = new Set(activePrev.map((s: Signal) => `${s.timestamp}-${s.type}`));
-        const newOnes = incoming.filter((s: Signal) => !existingKeys.has(`${s.timestamp}-${s.type}`));
+        const existingKeys = new Set(activePrev.map((s: Signal) => s.id || `${s.timestamp}-${s.type}`));
+        const newOnes = incoming.filter((s: Signal) => !existingKeys.has(s.id || `${s.timestamp}-${s.type}`));
 
         if (newOnes.length === 0 && activePrev.length === prev.length) return prev;
 
@@ -137,7 +137,7 @@ export const useTelemetryStore = create<TelemetryState>((set, get) => {
                 sessionData: null,
                 latestPrice: null,
                 liquidityHeatmap: null,
-                advisor_log: null,
+                // advisorLogs: {},  <-- REMOVED: Mantener caché entre símbolos para hidratación instantánea v4.5
                 mlProjection: { direction: 'NEUTRAL', probability: 50, reason: "Aguardando conexión de telemetría..." },
                 tacticalDecision: {
                     regime: "ANALIZANDO NUEVO RIESGO...", strategy: "STANDBY",
@@ -149,8 +149,22 @@ export const useTelemetryStore = create<TelemetryState>((set, get) => {
                     key_levels: { resistances: [], supports: [] }
                 },
                 htfBias: null,
+                ghostData: null, // Restablecer al desconectar
                 auditedSignals: [] // Limpiar al conectar a un nuevo activo
             });
+
+            // 🚀 Hidratación REST asíncrona: evita que el Frontend parpadee en "Sincronizando..." 
+            // mientras espera el ciclo 1s-3s (Fast Path) del primer ghost_update por WebSocket.
+            const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000';
+            fetch(`${BASE_URL}/api/v1/ghost`)
+                .then(res => res.json())
+                .then(data => {
+                    const currentId = get().activeConnectionId;
+                    if (connectionId === currentId && data.ghost) {
+                        set({ ghostData: { ...data.ghost, symbol } });
+                    }
+                }).catch(err => console.error("Ghost hydration failed", err));
+
         } else {
             // Si es un reintento, mantenemos el ID pero lo registramos como activo
             set({ activeConnectionId: connectionId });
@@ -163,6 +177,7 @@ export const useTelemetryStore = create<TelemetryState>((set, get) => {
         ws.onopen = () => {
             set({ isConnected: true });
             console.log(`Telemetry connected: ${symbol} @ ${timeframe}`);
+
         };
 
         ws.onmessage = (event) => {
@@ -284,6 +299,11 @@ export const useTelemetryStore = create<TelemetryState>((set, get) => {
                                 fibonacci: d.fibonacci ?? undefined,
                                 diagnostic: d.diagnostic ?? undefined,
                                 htf_bias: d.htf_bias ?? undefined,
+                                smc: d.smc ?? undefined,
+                            },
+                            advisorLogs: {
+                                ...state.advisorLogs,
+                                [state.activeSymbol]: d.advisor_log ?? state.advisorLogs[state.activeSymbol]
                             },
                             htfBias: d.htf_bias ?? state.htfBias,
                             signalHistory: newHistory,
@@ -293,11 +313,24 @@ export const useTelemetryStore = create<TelemetryState>((set, get) => {
                     // Evento específico inyectado en WS desde v3.3 (Audit Mode)
                     const sig = data.data as Signal;
                     set((state) => {
-                        const newAudited = [sig, ...state.auditedSignals].slice(0, 100); // Guardar últimas 100 evaluadas
+                        // Anti-duplicación por ID único (permite a la señal mutar narrativamente)
+                        const isDuplicate = state.auditedSignals.some(s => s.id === sig.id);
+                        if (isDuplicate) return state;
+
+                        const newAudited = [sig, ...state.auditedSignals].slice(0, 100); 
                         return { auditedSignals: newAudited };
                     });
                 } else if (data.type === 'advisor_update') {
-                    set({ advisor_log: data.data });
+                    const advice = data.data;
+                    set((state) => {
+                        const asset = advice?.asset || state.activeSymbol; 
+                        return {
+                            advisorLogs: {
+                                ...state.advisorLogs,
+                                [asset]: advice
+                            }
+                        };
+                    });
                 } else if (data.type === 'radar_update') {
                     // Update del Status de todos los radares (Broadcasters persistentes)
                     const summary = data.data as any[];
@@ -400,7 +433,7 @@ export const useTelemetryStore = create<TelemetryState>((set, get) => {
     };
 
     return {
-        advisor_log: null,
+        advisorLogs: {},
         isConnected: false,
         isCalibrating: true,
 
@@ -408,10 +441,8 @@ export const useTelemetryStore = create<TelemetryState>((set, get) => {
         activeTimeframe: '15m',
         candles: [],
         latestPrice: null,
-        mlProjection: { direction: 'ALCISTA', probability: 64 },
-        neuralLogs: [
-            { id: 'init', timestamp: new Date().toLocaleTimeString('en-US', { hour12: false }), type: 'SYSTEM', message: 'Modelo XGBoost cargado exitosamente. Pesos calibrados para volatilidad actual.' }
-        ],
+        mlProjection: { direction: 'CALIBRANDO', probability: 0 },
+        neuralLogs: [],
         tacticalDecision: {
             regime: "DESCUBRIENDO...",
             strategy: "STANDBY",

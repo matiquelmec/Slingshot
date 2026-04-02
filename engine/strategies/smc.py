@@ -1,32 +1,19 @@
-"""
-Estrategia 1: PaulPerdices SMC — La entrada de francotirador.
-=============================================================
-Estrategia Maestra Híbrida (SMC + Wyckoff + Criptodamus).
-Orquesta los 5 Niveles del Blueprint para detectar la
-"Tormenta Perfecta": una vela institucional, con volumen,
-en una KillZone, en el lugar correcto del ciclo de Wyckoff.
-
-Operativa en: MARKUP (LONGs en pullbacks) y DISTRIBUTION (SHORTs en sweeps).
-"""
-
 import pandas as pd
-from engine.filters.time_filter import TimeFilter
+from engine.core.session_manager import TimeFilter
 from engine.indicators.sessions import map_sessions_liquidity
 from engine.indicators.structure import identify_order_blocks
 from engine.indicators.volume import confirm_trigger
-from engine.indicators.momentum import apply_criptodamus_suite
 
-
-class PaulPerdicesStrategy:
+class SMCInstitutionalStrategy:
     """
-    Estrategia Maestra Híbrida (SMC + Wyckoff + Criptodamus).
-    Detecta la "Entrada de Francotirador":
-      1. Régimen de Mercado favorable (Wyckoff)
+    Estrategia Maestra de Smart Money Concepts (SMC).
+    Detecta la "Entrada Institucional de Alta Probabilidad":
+      1. Contexto de Mercado (HTF Alignment)
       2. KillZone UTC (Londres o NY)
       3. Barrida de liquidez (Sweep de Asian Low, London Low, PDL)
-      4. Order Block Alcista o Bajista formado
-      5. RVOL alto (confirmación institucional)
-      6. [Opcional] RSI Sobrevendido o Squeeze (Criptodamus)
+      4. Order Block (OB) formado
+      5. RVOL Intradía (Smart Money Footprint)
+      6. Verificación de Desequilibrio (FVG)
     """
 
     def __init__(self):
@@ -46,11 +33,16 @@ class PaulPerdicesStrategy:
         # 3. Order Blocks e Imbalances (FVG)
         df = identify_order_blocks(df)
 
-        # 4. RVOL Institucional — gatillo de volumen
-        df = confirm_trigger(df, min_rvol=1.5)
+        # 4. Fibonacci Estructural (Filtro de Descuento v4.0)
+        from engine.indicators.fibonacci import get_current_fibonacci_levels
+        fib = get_current_fibonacci_levels(df)
+        if fib:
+            df['fib_05'] = fib['levels']['0.5']
+        else:
+            df['fib_05'] = None
 
-        # 5. Herencia Criptodamus: RSI, MACD, BB Squeeze
-        df = apply_criptodamus_suite(df)
+        # 5. RVOL Institucional — gatillo de volumen
+        df = confirm_trigger(df, min_rvol=1.5)
 
         return df
 
@@ -60,7 +52,11 @@ class PaulPerdicesStrategy:
         Solo opera en KillZones con OB + Sweep + RVOL confirmado.
         """
         opportunities = []
-
+        
+        # 0. Filtro Macro Global (Capa 1 v4.0)
+        from engine.indicators.macro import get_macro_context
+        macro_bias = get_macro_context().global_bias # LONG_ONLY / SHORT_ONLY / CAUTIOUS / NEUTRAL
+        
         for i in range(1, len(df)):
             current = df.iloc[i]
 
@@ -81,38 +77,52 @@ class PaulPerdicesStrategy:
             # ── LONG: MARKUP / ACCUMULATION con barrida bajista → rebote ─
             if current.get('market_regime') in ('MARKUP', 'ACCUMULATION'):
                 has_ob_bull = current.get('ob_bullish', False)
-                if in_killzone and has_ob_bull and swept_liq and has_volume:
+                
+                # REGLA v4.0: No comprar si el sesgo global es SHORT_ONLY
+                if macro_bias == "SHORT_ONLY":
+                    continue
+                    
+                # REGLA SMC v4.0: Comprar barato (Discount)
+                is_discount = True
+                if current.get('fib_05') is not None:
+                    is_discount = current['close'] < current['fib_05']
+                
+                if in_killzone and has_ob_bull and swept_liq and has_volume and is_discount:
                     entry  = current['close']
-                    nearest_structural = current['low']
                     
                     opportunities.append({
                         "timestamp":        current['timestamp'],
-                        "type":             "LONG 🟢 (SMC FRANCOTIRADOR)",
+                        "type":             "LONG 🟢 (SMC INSTITUTIONAL)",
                         "signal_type":      "LONG",
                         "regime":           current.get('market_regime'),
                         "price":            entry,
                         "trigger":          "KillZone + OB Alcista + Sweep Liquidez + RVOL",
-                        "rsi":              round(current.get('rsi', 0), 2),
-                        "is_squeeze":       current.get('squeeze_active', False),
                         "atr_value":        current.get('atr_value', 0.0)
                     })
 
             # ── SHORT: DISTRIBUTION con barrida alcista → caída ─────────
             elif current.get('market_regime') == 'DISTRIBUTION':
                 has_ob_bear = current.get('ob_bearish', False)
-                if in_killzone and has_ob_bear and swept_high and has_volume:
+                
+                # REGLA v4.0: No vender si el sesgo global es LONG_ONLY
+                if macro_bias == "LONG_ONLY":
+                    continue
+                    
+                # REGLA SMC v4.0: Vender caro (Premium)
+                is_premium = True
+                if current.get('fib_05') is not None:
+                    is_premium = current['close'] > current['fib_05']
+                    
+                if in_killzone and has_ob_bear and swept_high and has_volume and is_premium:
                     entry  = current['close']
-                    nearest_structural = current['high']
                     
                     opportunities.append({
                         "timestamp":        current['timestamp'],
-                        "type":             "SHORT 🔴 (SMC FRANCOTIRADOR)",
+                        "type":             "SHORT 🔴 (SMC INSTITUTIONAL)",
                         "signal_type":      "SHORT",
                         "regime":           current.get('market_regime'),
                         "price":            entry,
                         "trigger":          "KillZone + OB Bajista + Sweep Liquidez + RVOL",
-                        "rsi":              round(current.get('rsi', 0), 2),
-                        "is_squeeze":       current.get('squeeze_active', False),
                         "atr_value":        current.get('atr_value', 0.0)
                     })
 

@@ -92,6 +92,19 @@ async def get_status():
         "total_active": len(registry._broadcasters),
     }
 
+@app.get("/api/v1/ghost")
+async def get_ghost():
+    """Retorna el estado macro/ghost actual (hidratación REST para el frontend)."""
+    from engine.indicators.ghost_data import get_ghost_state
+    from engine.indicators.macro import get_macro_context
+    from dataclasses import asdict
+    ghost = get_ghost_state()
+    macro = get_macro_context()
+    return {
+        "ghost": asdict(ghost),
+        "macro": asdict(macro),
+    }
+
 @app.get("/api/v1/market-states")
 async def get_market_states():
     """Retorna el estado actual de todos los activos (Radar)."""

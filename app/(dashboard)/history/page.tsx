@@ -12,11 +12,12 @@ interface SignalEvent {
     signal_type: string;
     entry_price: number;
     stop_loss: number;
-    take_profit: number;
+    take_profit_3r: number;
     regime: string;
     strategy: string;
     status: string;
-    created_at: string;
+    created_at?: string;
+    timestamp: string;
 }
 
 export default function HistoryPage() {
@@ -167,7 +168,7 @@ export default function HistoryPage() {
                                         className="grid grid-cols-12 gap-4 px-4 py-3 border-b border-white/5 items-center hover:bg-white/[0.02] transition-colors"
                                     >
                                         <div className="col-span-2 text-[10px] text-white/60">
-                                            {new Date(sig.created_at).toLocaleString()}
+                                            {(sig.created_at || sig.timestamp) ? new Date(sig.created_at || sig.timestamp).toLocaleString([], { hour: '2-digit', minute: '2-digit' }) : 'N/A'}
                                         </div>
                                         <div className="col-span-2 flex items-center gap-2">
                                             <span className="text-[11px] font-black text-white/90">{sig.asset}</span>
@@ -177,13 +178,13 @@ export default function HistoryPage() {
                                             <SignalTypeBadge type={sig.signal_type} />
                                         </div>
                                         <div className="col-span-1 text-[11px] font-mono text-white/80">
-                                            ${sig.entry_price.toLocaleString()}
+                                            ${sig.entry_price?.toLocaleString()}
                                         </div>
                                         <div className="col-span-1 text-[11px] font-mono text-neon-green/80 flex items-center gap-1">
-                                            <Target size={10} /> ${sig.take_profit.toLocaleString()}
+                                            <Target size={10} /> ${sig.take_profit_3r?.toLocaleString() || 'N/A'}
                                         </div>
                                         <div className="col-span-1 text-[11px] font-mono text-neon-red/80">
-                                            ${sig.stop_loss.toLocaleString()}
+                                            ${sig.stop_loss?.toLocaleString()}
                                         </div>
                                         <div className="col-span-2 flex flex-col gap-0.5">
                                             <span className="text-[9px] font-bold text-white/60 truncate" title={sig.regime}>{sig.regime}</span>

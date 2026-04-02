@@ -2,6 +2,7 @@ import asyncio
 from typing import List, Dict, Optional
 from engine.api.config import settings
 from engine.api.ws_manager import registry
+import engine.indicators.macro as macro
 from engine.indicators.ghost_data import refresh_ghost_data, load_local_state, get_ghost_state
 from engine.core.session_manager import SessionManager
 from engine.workers.news_worker import NewsWorker
@@ -92,11 +93,25 @@ class SlingshotOrchestrator:
     async def _ghost_worker(self):
         """Worker secundario que refresca los datos macro globales cada 15 min."""
         print("🔮 [ORCHESTRATOR] Sensor Macro (Ghost) activado.")
+        
+        # Sincronización FORZADA al inicio para evitar NEUTRAL por defecto
+        try:
+            await macro.update_macro_context()
+            m_ctx = macro.get_macro_context()
+            await refresh_ghost_data("BTCUSDT", macro_ctx=m_ctx)
+        except Exception as e:
+            print(f"⚠️ [ORCHESTRATOR] Error en sincronización inicial: {e}")
+
         while not self._stop_event.is_set():
             try:
-                # Refrescar datos macro (usando BTC como proxy global)
-                state = await refresh_ghost_data("BTCUSDT")
-                print(f"[ORCHESTRATOR] 🔮 Radar Macro actualizado: {state.macro_bias}")
+                # 1. Actualizar Capa 1: Contexto Global (DXY/NASDAQ) v4.0 PRIMERO
+                await macro.update_macro_context()
+                m_ctx = macro.get_macro_context()
+
+                # 2. Refrescar datos macro (usando BTC como proxy global) DESPUÉS
+                state = await refresh_ghost_data("BTCUSDT", macro_ctx=m_ctx)
+                
+                print(f"[ORCHESTRATOR] 🔮 Radar Macro actualizado: {state.macro_bias} (DXY: {state.dxy_trend})")
             except Exception as e:
                 print(f"⚠️ [ORCHESTRATOR] Error en Radar Macro: {e}")
             

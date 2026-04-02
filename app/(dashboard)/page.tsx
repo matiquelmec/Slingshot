@@ -42,9 +42,11 @@ export default function OverviewPage() {
         neuralLogs, 
         connect, 
         isCalibrating, 
-        advisor_log,
+        advisorLogs,
         marketSummary 
     } = useTelemetryStore();
+
+    const advisor_log = (advisorLogs as Record<string, any>)[activeSymbol] || null;
 
     // ── Lifecycle ─────────────────────────────────────────────────────────────
 
@@ -393,7 +395,7 @@ export default function OverviewPage() {
                                 {advisor_log ? (
                                     <p className="text-[9.5px] text-white/80 leading-relaxed font-mono tracking-tight border-l-2 border-neon-cyan/50 pl-2">
                                         <span className="text-neon-cyan opacity-80 font-bold mr-1">&gt;_</span>
-                                        {advisor_log}
+                                        {typeof advisor_log === 'string' ? advisor_log : (advisor_log as any)?.content ?? 'Analizando...'}
                                     </p>
                                 ) : (
                                     <p className="text-[9px] text-white/30 italic text-center animate-pulse">

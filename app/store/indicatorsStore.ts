@@ -15,19 +15,13 @@ interface IndicatorsState {
 }
 
 export const INDICATOR_DEFAULTS: Indicator[] = [
-    { id: 'ema20', label: 'EMA 20', sublabel: 'Media móvil rápida', enabled: true, color: '#00E5FF' },
-    { id: 'ema50', label: 'EMA 50', sublabel: 'Media móvil media', enabled: true, color: '#FFC107' },
-    { id: 'ema200', label: 'EMA 200', sublabel: 'Media móvil lenta', enabled: false, color: '#EF5350' },
-    { id: 'bb', label: 'Bollinger', sublabel: 'Bandas de volatilidad', enabled: false, color: '#9C27B0' },
-    { id: 'volume', label: 'Volumen', sublabel: 'Barras de volumen', enabled: true, color: '#00FF41' },
-    { id: 'fibonacci', label: 'Autofib', sublabel: 'Retrocesos Algorítmicos', enabled: false, color: '#FF7043' },
-    { id: 'rsi', label: 'RSI (14)', sublabel: 'Fuerza relativa', enabled: false, color: '#FF7043' },
-    { id: 'macd', label: 'MACD', sublabel: 'Convergencia/Divergencia', enabled: false, color: '#26A69A' },
-    { id: 'sr', label: 'Soporte / Resistencia', sublabel: 'Zonas Institucionales (MTF)', enabled: true, color: '#00E5FF' },
-    { id: 'smc', label: 'SMC Blocks', sublabel: 'Estructura Institucional (OBs)', enabled: false, color: '#00FF41' },
-    { id: 'fvg', label: 'Fair Value Gaps', sublabel: 'Vacíos de Liquidez (FVG)', enabled: false, color: '#FFCC00' },
-    { id: 'session', label: 'Sesiones de Mercado', sublabel: 'Brackets & Killzones (Master Sync)', enabled: true, color: '#C084FC' },
-    { id: 'liquidations', label: 'Liquidaciones (Rekt)', sublabel: 'Trapped Money & Liquidity Pools', enabled: true, color: '#FF003C' },
+    { id: 'smc', label: 'SMC Blocks', sublabel: 'Order Blocks (Última vela institucional)', enabled: true, color: '#00FF41' },
+    { id: 'fvg', label: 'Fair Value Gaps', sublabel: 'Vacíos de Liquidez (Desequilibrio)', enabled: true, color: '#FFCC00' },
+    { id: 'sr', label: 'Soporte / Resistencia', sublabel: 'Zonas de Alta Probabilidad (MTF)', enabled: true, color: '#00E5FF' },
+    { id: 'session', label: 'Sesiones de Mercado', sublabel: 'Brackets & Killzones (Power Hour)', enabled: true, color: '#C084FC' },
+    { id: 'liquidations', label: 'Rekt Radar', sublabel: 'Niveles de Liquidación (Trapped)', enabled: true, color: '#FF003C' },
+    { id: 'fibonacci', label: 'Autofib', sublabel: 'Zonas de Descuento (Premium/Discount)', enabled: false, color: '#FF7043' },
+    { id: 'volume', label: 'Volumen', sublabel: 'Flujo de Transacciones', enabled: true, color: '#00FF41' },
 ];
 
 export const useIndicatorsStore = create<IndicatorsState>((set) => ({

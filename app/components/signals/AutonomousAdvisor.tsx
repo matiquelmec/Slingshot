@@ -62,7 +62,17 @@ const AutonomousAdvisor: React.FC<AutonomousAdvisorProps> = ({ advisorLog, strat
             </div>
             <div className="text-white/70 leading-relaxed italic ml-4 border-l border-white/10 pl-2">
                 {advisorLog ? (
-                    <TypewriterText text={advisorLog} speed={30} />
+                    <div className="flex flex-col gap-1">
+                         <TypewriterText 
+                            text={typeof advisorLog === 'string' ? advisorLog : (advisorLog as any)?.content ?? 'Analizando...'} 
+                            speed={30} 
+                        />
+                        {(advisorLog as any)?.updated_at && (
+                            <span className="text-[8px] text-white/20 not-italic uppercase tracking-widest mt-1">
+                                AUDIT CAPTURED: {new Date((advisorLog as any).updated_at).toLocaleTimeString('en-US', { hour12: false })}
+                            </span>
+                        )}
+                    </div>
                 ) : (
                     <span className="text-white/30 animate-pulse">Awaiting candle close for tactical AI briefing...</span>
                 )}

@@ -39,11 +39,6 @@ function SlopeIcon({ slope }: { slope: number | null }) {
 export default function QuantDiagnosticPanel() {
     const { tacticalDecision, latestPrice } = useTelemetryStore();
     const d = tacticalDecision;
-    const diagnostic = d.diagnostic;  // RSI, MACD, BBWP, squeeze_active
-
-    const regimeKey = Object.keys(REGIME_META).find(k => d.regime.includes(k)) ?? 'UNKNOWN';
-    const regimeMeta = REGIME_META[regimeKey];
-
     // Calcular distancia % entre precio y S/R
     const distToResistance = latestPrice && d.nearest_resistance
         ? ((d.nearest_resistance - latestPrice) / latestPrice * 100).toFixed(2)
@@ -52,15 +47,6 @@ export default function QuantDiagnosticPanel() {
         ? ((latestPrice - d.nearest_support) / latestPrice * 100).toFixed(2)
         : null;
 
-    // Squeeze detection
-    const isSqueeze = d.bb_width != null && d.bb_width_mean != null && d.bb_width < (d.bb_width_mean * 0.8);
-    const bbPct = d.bb_width && d.bb_width_mean
-        ? Math.min((d.bb_width / (d.bb_width_mean * 1.5)) * 100, 100)
-        : 0;
-
-    // SMA alignment
-    const smaAligned = d.sma_fast != null && d.sma_slow != null;
-    const smaBullish = smaAligned && d.sma_fast! > d.sma_slow!;
 
     return (
         <div className="bg-[#050B14]/60 backdrop-blur-xl border border-white/5 rounded-2xl shadow-2xl flex flex-col overflow-hidden relative">
@@ -74,28 +60,17 @@ export default function QuantDiagnosticPanel() {
 
             <div className="p-3 flex flex-col gap-3">
 
-                {/* 1. Radar de Régimen Wyckoff */}
-                <div className={`rounded-xl p-3 border ${regimeMeta.bg}`} style={{ boxShadow: `0 0 20px ${regimeMeta.glow}` }}>
-                    <span className="text-[9px] font-bold text-white/40 tracking-[0.2em] block mb-1.5">RÉGIMEN WYCKOFF</span>
-                    <p className={`text-sm font-black tracking-wider ${regimeMeta.color}`}>{regimeMeta.label}</p>
-                    {/* Barra de extensión del precio */}
-                    {d.dist_to_sma200 != null && (
-                        <div className="mt-2">
-                            <div className="flex justify-between text-[9px] text-white/30 mb-1">
-                                <span>Dist. SMA200</span>
-                                <span className={d.dist_to_sma200 > 0 ? 'text-neon-green/70' : 'text-neon-red/70'}>
-                                    {d.dist_to_sma200 > 0 ? '+' : ''}{pct(d.dist_to_sma200)}
-                                </span>
-                            </div>
-                            <div className="h-1 bg-black/40 rounded-full overflow-hidden">
-                                <div
-                                    className={`h-full rounded-full transition-all duration-1000 ${d.dist_to_sma200 > 0 ? 'bg-neon-green/60' : 'bg-neon-red/60'}`}
-                                    style={{ width: `${Math.min(Math.abs(d.dist_to_sma200) / 0.10 * 100, 100)}%` }}
-                                />
-                            </div>
-                        </div>
-                    )}
+                {/* 1. Radar de Sesgo Institucional (SMC) */}
+                <div className={`rounded-xl p-3 border ${d.htf_bias?.direction === 'BULLISH' ? 'bg-neon-green/10 border-neon-green/30 shadow-[0_0_15px_rgba(0,255,136,0.2)]' : d.htf_bias?.direction === 'BEARISH' ? 'bg-neon-red/10 border-neon-red/30 shadow-[0_0_15px_rgba(255,0,60,0.2)]' : 'bg-white/5 border-white/10'}`}>
+                    <span className="text-[9px] font-bold text-white/40 tracking-[0.2em] block mb-1.5">SMC BIAS RADAR</span>
+                    <p className={`text-sm font-black tracking-wider ${d.htf_bias?.direction === 'BULLISH' ? 'text-neon-green' : d.htf_bias?.direction === 'BEARISH' ? 'text-neon-red' : 'text-white/40'}`}>
+                        {d.htf_bias?.direction || 'CALIBRANDO'} {d.htf_bias?.direction === 'BULLISH' ? '↗' : d.htf_bias?.direction === 'BEARISH' ? '↘' : '◈'}
+                    </p>
+                    <div className="mt-2 text-[9px] text-white/40 leading-tight">
+                        {d.htf_bias?.reason || "Escaneando estructura de mercado instititucional..."}
+                    </div>
                 </div>
+
 
                 {/* 2. Topografía Algorítmica — todos los key_levels */}
                 <div className="bg-white/[0.02] border border-white/5 rounded-xl p-3">
@@ -177,122 +152,38 @@ export default function QuantDiagnosticPanel() {
                     </div>
                 </div>
 
-                {/* 3. Indicadores Internos — Suite Completa */}
+                {/* 3. SMC Health & Liquidity Status */}
                 <div className="bg-white/[0.02] border border-white/5 rounded-xl p-3">
-                    <span className="text-[9px] font-bold text-white/40 tracking-[0.2em] block mb-2">INDICADORES INTERNOS</span>
+                    <span className="text-[9px] font-bold text-white/40 tracking-[0.2em] block mb-2">SMC HEALTH CHECK</span>
                     <div className="space-y-3">
-
-                        {/* SMA Alignment */}
+                        {/* OB Count */}
                         <div className="flex items-center justify-between">
-                            <span className="text-[10px] text-white/50">SMA 50/200</span>
+                            <span className="text-[10px] text-white/50">Order Blocks (Bull/Bear)</span>
                             <div className="flex items-center gap-1.5">
-                                <SlopeIcon slope={d.sma_slow_slope} />
-                                <span className={`text-[10px] font-bold ${smaAligned ? (smaBullish ? 'text-neon-green' : 'text-neon-red') : 'text-white/30'}`}>
-                                    {smaAligned ? (smaBullish ? 'ALCISTA' : 'BAJISTA') : 'CALIBRANDO'}
-                                </span>
+                                <span className="text-[10px] font-bold text-neon-green">{(d.smc?.order_blocks?.bullish?.length ?? 0)}</span>
+                                <span className="text-white/20">/</span>
+                                <span className="text-[10px] font-bold text-neon-red">{(d.smc?.order_blocks?.bearish?.length ?? 0)}</span>
                             </div>
                         </div>
 
-                        {/* BB Squeeze */}
-                        <div>
-                            <div className="flex items-center justify-between mb-1">
-                                <span className="text-[10px] text-white/50">Volatilidad BB</span>
-                                <span className={`text-[10px] font-bold ${isSqueeze ? 'text-yellow-400' : 'text-neon-cyan/70'}`}>
-                                    {d.bb_width != null ? (isSqueeze ? '⚠ SQUEEZE' : 'EXPANSIÓN') : '—'}
-                                </span>
-                            </div>
-                            <div className="h-1 bg-black/40 rounded-full overflow-hidden">
-                                <motion.div
-                                    animate={{ width: `${bbPct}%` }}
-                                    transition={{ duration: 0.8 }}
-                                    className={`h-full rounded-full ${isSqueeze ? 'bg-yellow-400/70' : 'bg-neon-cyan/50'}`}
-                                />
-                            </div>
+                        {/* FVG Count */}
+                        <div className="flex items-center justify-between">
+                            <span className="text-[10px] text-white/50">Fair Value Gaps</span>
+                            <span className="text-[10px] font-bold text-yellow-400">
+                                {(d.smc?.fvgs?.bullish?.length ?? 0) + (d.smc?.fvgs?.bearish?.length ?? 0)} Activos
+                            </span>
                         </div>
 
-                        {/* RSI */}
-                        {diagnostic?.rsi != null && (
-                            <div>
-                                <div className="flex items-center justify-between mb-1">
-                                    <span className="text-[10px] text-white/50">RSI (14)</span>
-                                    <div className="flex items-center gap-1.5">
-                                        <span className="text-[10px] font-bold font-mono text-white/70">{diagnostic.rsi.toFixed(1)}</span>
-                                        {diagnostic.rsi_oversold && <span className="text-[8px] font-bold text-neon-green px-1 rounded bg-neon-green/10 border border-neon-green/20">OVERSOLD</span>}
-                                        {diagnostic.rsi_overbought && <span className="text-[8px] font-bold text-neon-red px-1 rounded bg-neon-red/10 border border-neon-red/20">OVERBOUGHT</span>}
-                                        {!diagnostic.rsi_oversold && !diagnostic.rsi_overbought && <span className="text-[8px] text-white/30">NEUTRO</span>}
-                                    </div>
-                                </div>
-                                <div className="h-1.5 w-full bg-black/40 rounded-full overflow-hidden border border-white/5 relative">
-                                    <div className="absolute left-[30%] top-0 bottom-0 w-px bg-white/10 z-10" />
-                                    <div className="absolute left-[70%] top-0 bottom-0 w-px bg-white/10 z-10" />
-                                    <motion.div
-                                        animate={{ width: `${Math.min(100, Math.max(0, diagnostic.rsi))}%` }}
-                                        transition={{ duration: 0.8 }}
-                                        className={`h-full rounded-full ${diagnostic.rsi_oversold ? 'bg-neon-green shadow-[0_0_6px_rgba(0,255,65,0.6)]' : diagnostic.rsi_overbought ? 'bg-neon-red shadow-[0_0_6px_rgba(255,0,60,0.6)]' : 'bg-white/30'}`}
-                                    />
-                                </div>
-                            </div>
-                        )}
-
-                        {/* MACD */}
-                        {diagnostic?.macd_line != null && (
-                            <div className="flex items-center justify-between">
-                                <span className="text-[10px] text-white/50">MACD</span>
-                                <div className="flex items-center gap-2 text-[10px] font-mono">
-                                    <span className={diagnostic.macd_bullish_cross ? 'text-neon-green font-bold' : 'text-white/30'}>
-                                        {diagnostic.macd_bullish_cross ? '↗ CRUCE ALCISTA' : 'Sin cruce'}
-                                    </span>
-                                    <span className="text-white/20">|</span>
-                                    <span className={`font-bold ${(diagnostic.macd_line ?? 0) > 0 ? 'text-neon-green/70' : 'text-neon-red/70'}`}>
-                                        {diagnostic.macd_line?.toFixed(1)}
-                                    </span>
-                                </div>
-                            </div>
-                        )}
-
-                        {/* Divergencias Matemáticas */}
-                        {diagnostic != null && (
-                            <div className="flex items-center justify-between">
-                                <span className="text-[10px] text-white/50">Divergencia (P vs RSI)</span>
-                                <div className="flex items-center">
-                                    {diagnostic.bullish_divergence ? (
-                                        <span className="text-[9px] font-bold text-neon-green px-1.5 py-0.5 rounded bg-neon-green/10 border border-neon-green/20 uppercase tracking-widest shadow-[0_0_10px_rgba(0,255,65,0.2)]">
-                                            🔥 DIV Alcista
-                                        </span>
-                                    ) : diagnostic.bearish_divergence ? (
-                                        <span className="text-[9px] font-bold text-neon-red px-1.5 py-0.5 rounded bg-neon-red/10 border border-neon-red/20 uppercase tracking-widest shadow-[0_0_10px_rgba(255,0,60,0.2)]">
-                                            ⚠️ DIV Bajista
-                                        </span>
-                                    ) : (
-                                        <span className="text-[9px] font-bold text-white/30 px-1.5 py-0.5 rounded border border-white/5 uppercase tracking-widest">
-                                            Inactiva
-                                        </span>
-                                    )}
-                                </div>
-                            </div>
-                        )}
-
-                        {/* BBWP — Squeeze Percentile */}
-                        {diagnostic?.bbwp != null && (
-                            <div>
-                                <div className="flex items-center justify-between mb-1">
-                                    <span className="text-[10px] text-white/50">BBWP — Compresión BB</span>
-                                    <span className={`text-[10px] font-bold ${diagnostic.squeeze_active ? 'text-neon-cyan' : 'text-white/40'}`}>
-                                        {diagnostic.bbwp.toFixed(1)}% {diagnostic.squeeze_active ? '⚡ COMPRIMIDO' : 'Expandido'}
-                                    </span>
-                                </div>
-                                <div className="h-1 bg-black/40 rounded-full overflow-hidden">
-                                    <motion.div
-                                        animate={{ width: `${Math.min(100, diagnostic.bbwp)}%` }}
-                                        transition={{ duration: 0.8 }}
-                                        className={`h-full rounded-full ${diagnostic.squeeze_active ? 'bg-neon-cyan shadow-[0_0_6px_rgba(0,229,255,0.6)]' : 'bg-white/20'}`}
-                                    />
-                                </div>
-                            </div>
-                        )}
-
+                        {/* MS Structure */}
+                        <div className="flex items-center justify-between">
+                            <span className="text-[10px] text-white/50">Estructura MS (1H)</span>
+                            <span className={`text-[10px] font-bold ${d.htf_bias?.direction === 'BULLISH' ? 'text-neon-green' : 'text-neon-red'}`}>
+                                {d.htf_bias?.direction || 'CALIBRANDO'}
+                            </span>
+                        </div>
                     </div>
                 </div>
+
 
                 {/* 4. Fibonacci (si disponible) */}
                 {d.fibonacci && (

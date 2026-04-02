@@ -13,7 +13,7 @@ interface SignalCardItemProps {
 const formatTime = (ts: string) => {
     try {
         const date = new Date(ts);
-        return date.toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     } catch (e) {
         return ts?.split(' ')[1] || ts;
     }
@@ -40,7 +40,7 @@ const SignalCardItem: React.FC<SignalCardItemProps> = ({ signal, currentPrice })
             {/* ── Fila 1: Tiempo + Tipo + Estado ── */}
             <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-2">
-                    <span className="font-mono text-[10px] text-white/40">{formatTime(signal.timestamp)}</span>
+                    <span className="font-mono text-[10px] text-white/40">{formatTime(signal.created_at || signal.timestamp)}</span>
                     {signal.asset && (
                         <span className="text-[10px] font-black text-neon-cyan tracking-tighter bg-neon-cyan/5 px-1.5 py-0.5 rounded border border-neon-cyan/20">
                             {signal.asset}
@@ -57,13 +57,50 @@ const SignalCardItem: React.FC<SignalCardItemProps> = ({ signal, currentPrice })
                 </span>
             </div>
 
-            {/* ── Fila 2: Estado Educativo ── */}
-            <div className={`text-[9px] font-mono px-2 py-1.5 rounded border border-white/5 bg-black/30 mb-2 ${lifecycle.color} leading-relaxed`}>
-                {lifecycle.reason}
+            {/* ── Fila 2: Estado Educativo o Reporte de Auditoría ── */}
+            <div className={`text-[9px] font-mono px-2 py-1.5 rounded border border-white/5 bg-black/30 mb-2 ${lifecycle.color} leading-relaxed relative overflow-hidden group`}>
+                {signal.status?.startsWith('BLOCKED') && (
+                    <div className="absolute left-0 top-0 bottom-0 w-1 bg-red-500/30 group-hover:bg-red-500/60 transition-all" />
+                )}
+                <div className="flex items-start gap-2">
+                    <span className="opacity-80 font-bold uppercase tracking-widest">{lifecycle.label}:</span>
+                    <div className="flex-1 whitespace-pre-wrap">
+                        {lifecycle.reason}
+                    </div>
+                </div>
                 {lifecycle.countdown && (
-                    <span className="block mt-0.5 text-white/30">{lifecycle.countdown}</span>
+                    <span className="block mt-1 text-white/30 border-t border-white/5 pt-1 italic">{lifecycle.countdown}</span>
                 )}
             </div>
+
+            {/* ── SECCIÓN DE EVIDENCIA AUDITORÍA (Solo para bloqueadas) ── */}
+            {signal.status?.startsWith('BLOCKED') && (
+                <div className="mb-2 px-2 py-1.5 bg-red-500/5 rounded border border-red-500/10 text-[8px] font-mono">
+                    <span className="text-red-400 font-bold tracking-widest uppercase mb-1 block">🛡️ AUDIT EVIDENCE</span>
+                    <div className="grid grid-cols-2 gap-x-3 gap-y-1 opacity-70">
+                        <div className="flex justify-between border-b border-white/5 pb-0.5">
+                            <span className="text-white/40">Status:</span>
+                            <span className="text-red-300 font-bold">{signal.status.replace('BLOCKED_BY_', '')}</span>
+                        </div>
+                        <div className="flex justify-between border-b border-white/5 pb-0.5">
+                            <span className="text-white/40">Direction:</span>
+                            <span className="text-white/80">{signal.type?.includes('LONG') ? 'LONG' : 'SHORT'}</span>
+                        </div>
+                        <div className="flex justify-between border-b border-white/5 pb-0.5">
+                            <span className="text-white/40">Confluence:</span>
+                            <span className={signal.confluence?.score && signal.confluence.score >= 70 ? 'text-neon-green' : 'text-white/80'}>
+                                {signal.confluence?.score || signal.confluence_score || 0}%
+                            </span>
+                        </div>
+                        <div className="flex justify-between border-b border-white/5 pb-0.5">
+                            <span className="text-white/40">R:R Ratio:</span>
+                            <span className={signal.rr_ratio && signal.rr_ratio >= 1.8 ? 'text-neon-cyan' : 'text-neon-red'}>
+                                {signal.rr_ratio || 'N/A'}
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* ── Fila 3: Zonas y Target ── */}
             <div className="grid grid-cols-3 gap-2 text-[9px] font-mono mb-2">

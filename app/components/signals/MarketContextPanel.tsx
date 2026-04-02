@@ -163,17 +163,17 @@ const MarketContextPanel: React.FC<MarketContextPanelProps> = ({
                 ))}
             </div>
 
-            {/* Grilla Mínima de Estados */}
+            {/* Grilla Institucional de Coordenadas SMC */}
             <div className="grid grid-cols-4 gap-1.5 pt-2 border-t border-white/5">
                 {[
-                    { name: 'RSI ALGO', val: `${d.rsi?.toFixed(1) ?? '---'}`, ok: d.rsi_oversold || d.rsi_overbought },
-                    { name: 'MACD X', val: d.macd_bullish_cross ? 'BULL' : 'WAIT', ok: d.macd_bullish_cross },
-                    { name: 'BB STAT', val: d.squeeze_active ? 'SQUEEZE' : 'RELAX', ok: d.squeeze_active },
-                    { name: 'BBWP %', val: `${d.bbwp?.toFixed(0) ?? '---'}%`, ok: (d.bbwp ?? 50) < 20 },
+                    { name: 'ALIGNMENT', val: (d as any)?.htf_bias?.direction || 'ANALYZING', ok: (d as any)?.htf_bias?.direction !== 'NEUTRAL' },
+                    { name: 'KILLZONE', val: sessionData?.is_killzone ? 'ACTIVE' : 'OFF', ok: sessionData?.is_killzone },
+                    { name: 'RVOL', val: `${(d?.volume ?? 1).toFixed(2)}x`, ok: (d?.volume ?? 1) >= 1.5 },
+                    { name: 'LIQUIDITY', val: (sessionData?.pdl_swept || sessionData?.pdh_swept) ? 'SWEPT' : 'PENDING', ok: (sessionData?.pdl_swept || sessionData?.pdh_swept) },
                 ].map(({ name, val, ok }) => (
-                    <div key={name} className="flex flex-col items-center gap-0.5 bg-white/[0.02] rounded py-1 px-2">
-                        <span className="text-[7px] text-white/25 tracking-widest">{name}</span>
-                        <span className={`text-[9px] font-black ${ok ? meta.color : 'text-white/50'}`}>{val}</span>
+                    <div key={name} className="flex flex-col items-center gap-0.5 bg-white/[0.02] rounded py-1 px-2 border border-white/5">
+                        <span className="text-[7px] text-white/25 tracking-widest uppercase font-bold">{name}</span>
+                        <span className={`text-[8px] font-black tracking-tighter ${ok ? meta.color : 'text-white/40'}`}>{val}</span>
                     </div>
                 ))}
             </div>

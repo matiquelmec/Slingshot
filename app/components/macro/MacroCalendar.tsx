@@ -31,19 +31,28 @@ const MacroCalendar: React.FC = () => {
     }, [fetchEconomicEvents]);
 
     const processedEvents = useMemo(() => {
-        if (!economicEvents) return [];
-        
         const now = new Date();
+        const LIVE_WINDOW_MS = 60 * 60 * 1000; // 1 hora como Live (intermitencia)
+        const RECENT_WINDOW_MS = 12 * 60 * 60 * 1000; // 12 horas como "Reciente"
         
         return economicEvents
             .map(event => {
                 const eventDate = new Date(event.date);
                 const diffMs = eventDate.getTime() - now.getTime();
                 const isPast = diffMs < 0;
+                
+                // Un evento es "Crítico" si es Futuro O si pasó hace menos de 12 horas y es High Impact
+                const isLive = isPast && Math.abs(diffMs) < LIVE_WINDOW_MS;
+                const isRecentCritical = isPast && Math.abs(diffMs) < RECENT_WINDOW_MS && event.impact === 'High';
+                
                 const diffMinutes = Math.abs(Math.round(diffMs / 60000));
                 
                 let timeLabel = '';
-                if (isPast) {
+                if (isLive) {
+                    timeLabel = `LIVE / HACE ${diffMinutes}m`;
+                } else if (isRecentCritical) {
+                    timeLabel = diffMinutes < 60 ? `hace ${diffMinutes}m` : `HACE ${Math.floor(diffMinutes/60)}h ${diffMinutes%60}m`;
+                } else if (isPast) {
                     timeLabel = diffMinutes < 60 ? `hace ${diffMinutes}m` : `finalizado`;
                 } else {
                     const diffHours = Math.floor(diffMinutes / 60);
@@ -58,7 +67,10 @@ const MacroCalendar: React.FC = () => {
 
                 return {
                     ...event,
-                    isPast,
+                    isPast: isPast && !isLive && !isRecentCritical, // Mantenemos como "No Pasado" si es Crítico Reciente
+                    isActualPast: isPast,
+                    isLive,
+                    isRecentCritical,
                     timeLabel,
                     diffMinutes,
                     rawDate: eventDate
@@ -72,7 +84,7 @@ const MacroCalendar: React.FC = () => {
     }, [processedEvents]);
 
     const criticalEvent = useMemo(() => {
-        // Encontrar el primer evento de alto impacto futuro
+        // Encontrar el primer evento de alto impacto futuro o LIVE
         return upcomingEvents.find(e => e.impact === 'High');
     }, [upcomingEvents]);
 
@@ -132,60 +144,70 @@ const MacroCalendar: React.FC = () => {
                         <span className="text-[10px] font-black text-white/60 tracking-widest uppercase">Target Macro Prioritario</span>
                     </div>
 
-                    {criticalEvent ? (
-                        <motion.div 
-                            initial={{ opacity: 0, scale: 0.98 }}
-                            animate={{ opacity: 1, scale: 1 }}
-                            className="bg-black/60 border border-white/5 rounded-2xl p-5 relative overflow-hidden group border-l-neon-red border-l-2 shadow-2xl"
-                        >
-                            <div className="absolute -right-8 -top-8 p-3 opacity-[0.03] group-hover:opacity-[0.07] group-hover:scale-125 transition-all duration-700">
-                                <ShieldAlert size={140} className="text-neon-red" />
-                            </div>
-                            
-                            <div className="flex justify-between items-start mb-4">
-                                <div className="flex items-center gap-2 px-2.5 py-1 rounded-full bg-neon-red/10 border border-neon-red/20">
-                                    <div className="h-1.5 w-1.5 rounded-full bg-neon-red animate-pulse" />
-                                    <span className="text-[9px] font-black text-neon-red tracking-widest uppercase">ALTO IMPACTO</span>
+                    <div className="flex flex-col gap-3">
+                        {/* ── DRIVER ACTUAL (RECIENTE) ── */}
+                        {processedEvents.find(e => e.isRecentCritical || e.isLive) && (
+                            <motion.div 
+                                initial={{ opacity: 0, scale: 0.98 }}
+                                animate={{ opacity: 1, scale: 1 }}
+                                className="bg-amber-500/5 border border-amber-500/20 rounded-2xl p-4 relative overflow-hidden group border-l-amber-500 border-l-2"
+                            >
+                                <div className="flex justify-between items-start mb-2">
+                                    <div className="flex items-center gap-2 px-2 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/20">
+                                        <div className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-ping" />
+                                        <span className="text-[8px] font-black text-amber-500 tracking-widest uppercase">DRIVER ACTUAL / RECIENTE</span>
+                                    </div>
+                                    <span className="text-[9px] font-mono text-white/30 uppercase">{processedEvents.find(e => e.isRecentCritical || e.isLive)?.country}</span>
                                 </div>
-                                <div className="flex items-center gap-1.5 text-[10px] font-mono text-white/40">
-                                    <Globe size={11} />
-                                    <span>{criticalEvent.country} / {criticalEvent.rawDate.toLocaleDateString([], { weekday: 'short', day: 'numeric' })}</span>
+                                <h3 className="text-sm font-black text-white leading-tight">
+                                    {processedEvents.find(e => e.isRecentCritical || e.isLive)?.title}
+                                </h3>
+                                <div className="mt-2 flex items-center justify-between text-[10px]">
+                                    <div className="flex items-center gap-1.5 text-amber-500/60 font-mono">
+                                        <History size={10} />
+                                        <span>{processedEvents.find(e => e.isRecentCritical || e.isLive)?.timeLabel}</span>
+                                    </div>
+                                    <span className="text-white/20 font-bold uppercase text-[8px]">En proceso de absorción volumétrica</span>
                                 </div>
-                            </div>
+                            </motion.div>
+                        )}
 
-                            <h3 className="text-lg font-black text-white leading-none mb-4 group-hover:text-neon-cyan transition-colors duration-300">
-                                {criticalEvent.title}
-                            </h3>
-
-                            <div className="grid grid-cols-2 gap-4">
-                                <div className="bg-white/[0.03] rounded-xl p-3 border border-white/5 flex flex-col justify-center">
-                                    <span className="text-[8px] font-bold text-white/20 uppercase tracking-widest mb-1">Impacto Temporal</span>
-                                    <div className="flex items-center gap-2 text-neon-cyan drop-shadow-[0_0_10px_rgba(0,229,255,0.3)]">
-                                        <Timer size={14} />
-                                        <span className="text-base font-mono font-black tabular-nums">{criticalEvent.timeLabel}</span>
+                        {/* ── PRÓXIMA AMENAZA (FUTURO) ── */}
+                        {processedEvents.filter(e => !e.isActualPast && e.impact === 'High').length > 0 && (
+                            <motion.div 
+                                initial={{ opacity: 0, scale: 0.98 }}
+                                animate={{ opacity: 1, scale: 1 }}
+                                className="bg-neon-red/5 border border-neon-red/20 rounded-2xl p-4 relative overflow-hidden group border-l-neon-red border-l-2"
+                            >
+                                <div className="flex justify-between items-start mb-2">
+                                    <div className="flex items-center gap-2 px-2 py-0.5 rounded-full bg-neon-red/10 border border-neon-red/20">
+                                        <div className="h-1.5 w-1.5 rounded-full bg-neon-red animate-pulse" />
+                                        <span className="text-[8px] font-black text-neon-red tracking-widest uppercase">PRÓXIMA AMENAZA</span>
+                                    </div>
+                                    <span className="text-[9px] font-mono text-white/30 uppercase">{processedEvents.filter(e => !e.isActualPast && e.impact === 'High')[0].country}</span>
+                                </div>
+                                <h3 className="text-sm font-black text-white leading-tight">
+                                    {processedEvents.filter(e => !e.isActualPast && e.impact === 'High')[0].title}
+                                </h3>
+                                <div className="mt-2 flex items-center justify-between text-[10px]">
+                                    <div className="flex items-center gap-1.5 text-neon-red/60 font-mono font-bold">
+                                        <Timer size={10} />
+                                        <span>{processedEvents.filter(e => !e.isActualPast && e.impact === 'High')[0].timeLabel}</span>
+                                    </div>
+                                    <div className="flex items-center gap-1 text-white/40 font-mono">
+                                        <span>F: {processedEvents.filter(e => !e.isActualPast && e.impact === 'High')[0].forecast || 'TBD'}</span>
                                     </div>
                                 </div>
-                                <div className="bg-white/[0.03] rounded-xl p-3 border border-white/5 flex flex-col justify-center">
-                                    <span className="text-[8px] font-bold text-white/20 uppercase tracking-widest mb-1">Forecast</span>
-                                    <div className="text-[11px] font-mono font-bold text-white/60">
-                                        {criticalEvent.forecast || 'TBD'} <span className="text-white/20 mx-1">/</span> {criticalEvent.previous || 'N/A'}
-                                    </div>
-                                </div>
-                            </div>
+                            </motion.div>
+                        )}
 
-                            <div className="mt-5 p-3 rounded-xl bg-amber-500/[0.03] border border-amber-500/10 flex items-start gap-3">
-                                <AlertTriangle size={14} className="text-amber-500 mt-0.5 flex-shrink-0" />
-                                <p className="text-[9.5px] text-white/50 leading-relaxed font-medium">
-                                    <span className="text-amber-400 font-bold">PROTOCOLO ACTIVADO:</span> Reducir exposición y evitar cierres forzados por spikes de volatilidad a las <span className="text-white/80 font-mono">{criticalEvent.rawDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>.
-                                </p>
+                        {!processedEvents.find(e => (e.isRecentCritical || e.isLive)) && processedEvents.filter(e => !e.isActualPast && e.impact === 'High').length === 0 && (
+                            <div className="bg-white/5 border border-dashed border-white/10 rounded-2xl p-8 flex flex-col items-center justify-center opacity-40">
+                                <ShieldAlert size={24} className="mb-2" />
+                                <p className="text-[10px] font-mono uppercase tracking-widest">No se detectan amenazas críticas próximas</p>
                             </div>
-                        </motion.div>
-                    ) : (
-                        <div className="bg-white/5 border border-dashed border-white/10 rounded-2xl p-8 flex flex-col items-center justify-center opacity-40">
-                            <ShieldAlert size={24} className="mb-2" />
-                            <p className="text-[10px] font-mono uppercase tracking-widest">No se detectan amenazas críticas próximas</p>
-                        </div>
-                    )}
+                        )}
+                    </div>
                 </div>
 
                 {/* ── SECCIÓN "RADAR DE FLUJO" (LISTADO DINÁMICO) ── */}

@@ -1,137 +1,87 @@
 import pandas as pd
 import numpy as np
 
-# Importar indicadores base de nuestro propio motor para no duplicar lógica
-from engine.indicators.momentum import apply_criptodamus_suite
-
 class FeatureEngineer:
     """
     Capa 3B (Machine Learning - Step 1).
-    Transforma datos crudos (OHLCV) en 'Features' (Variables predictivas) 
+    Transforma datos crudos (OHLCV) en 'SMC Features' (Variables predictivas institucionales) 
     para alimentar al modelo XGBoost/LightGBM.
     """
     
     def __init__(self, target_horizon: int = 1):
-        """
-        :param target_horizon: Cuántas velas hacia el futuro queremos predecir (ej: 1 vela = 15m)
-        """
         self.target_horizon = target_horizon
         
     def generate_features(self, df: pd.DataFrame) -> pd.DataFrame:
         """
-        Construye un dataset rico en features estacionarias.
-        (Evitamos pasar precios crudos al ML porque no son estacionarios, 
-        pasamos RETORNOS y DISTANCIAS).
+        Construye un dataset basado exclusivamente en Price Action Institucional.
         """
         df = df.copy()
         
-        # 1. Inyectar suite base de TA (RSI, MACD, BBWP, Divergencias)
-        df = apply_criptodamus_suite(df)
-        
-        # Convertir divergencias booleanas a numéricas (1/0) para el ML
-        if 'bullish_div' in df.columns:
-            df['bullish_div'] = df['bullish_div'].astype(int)
-        if 'bearish_div' in df.columns:
-            df['bearish_div'] = df['bearish_div'].astype(int)
-        
-        # 1.5 Inyectar Smart Money Concepts (El "Cerebro" Institucional)
+        # 1. Inyectar Smart Money Concepts (El "Cerebro" Institucional)
         from engine.indicators.structure import identify_order_blocks
         df = identify_order_blocks(df)
         
         # Convertimos booleanos de SMC a numéricos (1/0)
-        df['ob_bullish'] = df['ob_bullish'].astype(int)
-        df['ob_bearish'] = df['ob_bearish'].astype(int)
-        df['fvg_bullish'] = df['fvg_bullish'].astype(int)
-        df['fvg_bearish'] = df['fvg_bearish'].astype(int)
+        for col in ['ob_bullish', 'ob_bearish', 'fvg_bullish', 'fvg_bearish']:
+            if col in df.columns:
+                df[col] = df[col].astype(int)
         
-        # Crear features de "tiempo desde el último bloque" (Decay)
-        # Esto le enseña al modelo que un bloque recién creado tiene más fuerza
-        # que uno creado hace 50 velas.
+        # 2. Features de Tiempo desde el último bloque (Decay)
         def time_since_last(series):
             return series.groupby(series.cumsum()).cumcount()
         
-        # Llenamos con un número grande (ej. 100) al principio cuando no hay bloques previos
-        df['bars_since_bull_ob'] = time_since_last(df['ob_bullish']).replace(0, np.nan).ffill().fillna(100)
-        df['bars_since_bear_ob'] = time_since_last(df['ob_bearish']).replace(0, np.nan).ffill().fillna(100)
-        
-        # 2. Features de Retorno (Velocidad del precio)
-        # Retorno logarítmico (mejor para ML financiero)
+        if 'ob_bullish' in df.columns:
+            df['bars_since_bull_ob'] = time_since_last(df['ob_bullish']).replace(0, np.nan).ffill().fillna(100)
+        if 'ob_bearish' in df.columns:
+            df['bars_since_bear_ob'] = time_since_last(df['ob_bearish']).replace(0, np.nan).ffill().fillna(100)
+            
+        # 3. Features de Retorno e Intensidad (RVOL)
         df['return_1'] = np.log(df['close'] / df['close'].shift(1))
-        df['return_3'] = np.log(df['close'] / df['close'].shift(3))
         df['return_5'] = np.log(df['close'] / df['close'].shift(5))
         
-        # 3. Features de Volatilidad (ATR simplificado y Rollings)
-        df['high_low_spread'] = (df['high'] - df['low']) / df['open']
-        df['volatility_10'] = df['return_1'].rolling(window=10).std()
-        df['volatility_20'] = df['return_1'].rolling(window=20).std()
+        # Inyectar RVOL si está disponible
+        from engine.indicators.volume import confirm_trigger
+        df = confirm_trigger(df)
+        if 'rvol' in df.columns:
+            df['rvol_feature'] = df['rvol'].fillna(1.0)
         
-        # 4. Features de Distancia (Media Reversión Cues)
-        # ¿Qué tan lejos estamos de las EMAs clave?
-        df['ema_21'] = df['close'].ewm(span=21, adjust=False).mean()
-        df['ema_50'] = df['close'].ewm(span=50, adjust=False).mean()
+        # 4. Estructura de Mercado (Distancia a extremos del rango)
+        window = 50
+        df['rolling_high'] = df['high'].rolling(window=window).max()
+        df['rolling_low'] = df['low'].rolling(window=window).min()
+        df['range_pos_pct'] = (df['close'] - df['rolling_low']) / (df['rolling_high'] - df['rolling_low'])
         
-        df['dist_ema21'] = (df['close'] - df['ema_21']) / df['ema_21']
-        df['dist_ema50'] = (df['close'] - df['ema_50']) / df['ema_50']
+        # 5. Features de Sesión (KillZone binary)
+        from engine.core.session_manager import TimeFilter
+        tf = TimeFilter()
+        df['is_killzone'] = df['timestamp'].apply(lambda x: 1 if tf.is_killzone(x) else 0)
         
-        # 5. Features Categóricas / Temporales (Ciclicidad)
-        # Ayuda al árbol de decisión a saber "A qué hora estamos"
+        # 6. Features Temporales
         if pd.api.types.is_datetime64_any_dtype(df['timestamp']):
              df['hour_sin'] = np.sin(2 * np.pi * df['timestamp'].dt.hour / 24.0)
              df['hour_cos'] = np.cos(2 * np.pi * df['timestamp'].dt.hour / 24.0)
-             df['day_of_week'] = df['timestamp'].dt.dayofweek
              
-        # Limpieza: Descartar valores NaN generados por los rolling windows o time_since_last
+        # Limpieza final de NaN
         df = df.dropna()
         
         return df
         
     def create_labels(self, df: pd.DataFrame, classification: bool = True) -> pd.DataFrame:
-        """
-        Crea la variable 'Y' (Objetivo) que el modelo intentará adivinar.
-        """
         df = df.copy()
-        
-        # Calcular el retorno futuro (Precio en t+horizon / Precio actual)
-        # Shift negativo trae datos del "futuro" a la fila actual
         future_return = (df['close'].shift(-self.target_horizon) - df['close']) / df['close']
         
         if classification:
-            # 1 = Sube (Ganancia > 0.05%), 0 = Rango/Cae
-            # Usamos un pequeño threshold (0.0005 = 0.05%) para evitar considerar ruido como tendencia alcista
             df['TARGET'] = (future_return > 0.0005).astype(int)
         else:
-            # Regresión: predecir el % de retorno exacto
             df['TARGET'] = future_return
             
-        # Al calcular el futuro, las últimas 'target_horizon' velas quedarán con NaN en el TARGET
-        # porque aún no conocemos el futuro real de hoy.
         df = df.dropna(subset=['TARGET'])
-        
         return df
 
     def prepare_dataset(self, df: pd.DataFrame, classification: bool = True) -> pd.DataFrame:
-        """Ejecuta el pipeline completo de ingeniería de variables."""
         df_features = self.generate_features(df)
         df_final = self.create_labels(df_features, classification=classification)
         return df_final
 
 if __name__ == "__main__":
-    from pathlib import Path
-    
-    file_path = Path(__file__).parent.parent.parent / "data" / "btcusdt_15m.parquet"
-    if file_path.exists():
-        data = pd.read_parquet(file_path)
-        
-        engineer = FeatureEngineer(target_horizon=2) # Predecir a 30 min vista (2 velas de 15m)
-        ml_dataset = engineer.prepare_dataset(data)
-        
-        print("🧠 Módulo Feature Engineering (Preparación para XGBoost)")
-        print(f"Dimensiones Originales: {data.shape}")
-        print(f"Dimensiones Transformadas: {ml_dataset.shape}")
-        print(f"Features inyectadas: {[col for col in ml_dataset.columns if col not in data.columns]}")
-        
-        bullish_samples = ml_dataset[ml_dataset['TARGET'] == 1]
-        print(f"\nBalance del Dataset:")
-        print(f"Casos Alcistas (TARGET=1): {len(bullish_samples)}")
-        print(f"Casos Bajistas/Rango (TARGET=0): {len(ml_dataset) - len(bullish_samples)}")
-        print(ml_dataset.iloc[-1][['timestamp', 'close', 'return_1', 'rsi', 'dist_ema50', 'TARGET']])
+    print("🧠 Feature Engineering SMC Purificado.")

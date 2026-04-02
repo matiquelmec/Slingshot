@@ -29,6 +29,9 @@ class MemoryStore:
         # Buffer circular para calendario económico
         self._economic_events = deque(maxlen=100)
         
+        # Caché de Análisis del Advisor (LLM)
+        self._advisor_advice: Dict[str, Dict[str, Any]] = {}
+        
         # Lock de concurrencia para evitar condiciones de carrera
         self._lock = asyncio.Lock()
 
@@ -140,6 +143,16 @@ class MemoryStore:
         async with self._lock:
             return self._liquidation_clusters.get(asset, [])
 
+    async def save_advisor_advice(self, asset: str, advice_data: Dict[str, Any]):
+        """Guarda el análisis del Advisor en el caché local."""
+        async with self._lock:
+            self._advisor_advice[asset] = advice_data
+
+    async def get_advisor_advice(self, asset: str) -> Optional[Dict[str, Any]]:
+        """Recupera el último análisis del Advisor para un activo."""
+        async with self._lock:
+            return self._advisor_advice.get(asset)
+
     async def clear_all(self):
         """Wipe total (Reseteo de sistema)."""
         async with self._lock:
@@ -148,6 +161,7 @@ class MemoryStore:
             self._candle_history.clear()
             self._news_items.clear()
             self._liquidation_clusters.clear()
+            self._advisor_advice.clear()
             print("🧱 [MemoryStore] RAM Liberada. Estado 100% efímero reiniciado.")
 
 # Singleton Global para todo el proceso

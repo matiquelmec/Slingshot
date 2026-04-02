@@ -23,10 +23,12 @@ export interface HTFBias {
 }
 
 export interface Signal {
+    id?: string;
     asset?: string;
     type: string;
     signal_type?: string;
     timestamp: string;
+    created_at?: string;
     price: number;
     stop_loss: number;
     take_profit_3r: number;
@@ -41,6 +43,8 @@ export interface Signal {
     interval_minutes?: number;
     status?: string;
     rejection_reason?: string;
+    blocked_reason?: string;
+    rr_ratio?: number;
     trigger?: string;
     confluence?: ConfluenceData;
     confluence_score?: number;
@@ -146,6 +150,11 @@ export interface GhostData {
     block_longs: boolean;
     block_shorts: boolean;
     reason: string;
+    dxy_trend?: 'BULLISH' | 'BEARISH' | 'NEUTRAL';
+    dxy_price?: number;
+    nasdaq_trend?: 'BULLISH' | 'BEARISH' | 'NEUTRAL';
+    nasdaq_change_pct?: number;
+    risk_appetite?: 'RISK_ON' | 'RISK_OFF' | 'NEUTRAL';
     last_updated?: number;
 }
 
@@ -173,6 +182,7 @@ export interface TacticalDecision {
         swing_low: number;
         levels: Record<string, number>;
     };
+    smc?: SMCDataPayload;
 }
 
 export interface NewsItem {

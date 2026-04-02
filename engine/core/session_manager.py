@@ -429,6 +429,29 @@ class SessionManager:
 
 
 # ──────────────────────────────────────────────────────────────────────────────
-# Instancia global singleton (se importa desde main.py)
+# TimeFilter (Helper para estrategias SMC)
 # ──────────────────────────────────────────────────────────────────────────────
+class TimeFilter:
+    """
+    Versión simplificada para chequeos rápidos en DataFrames.
+    Implementa las KillZones de Londres y Nueva York.
+    """
+    def is_killzone(self, ts: datetime) -> bool:
+        if ts.tzinfo is None:
+            ts = ts.replace(tzinfo=timezone.utc)
+        else:
+            ts = ts.astimezone(timezone.utc)
+            
+        ny_hour = ts.astimezone(_NY_TZ).hour
+        lon_hour = ts.astimezone(_LONDON_TZ).hour
+        
+        # LONDON KILLZONE: 08:00 - 11:00 AM Local
+        if 8 <= lon_hour < 11:
+            return True
+        # NY KILLZONE: 08:00 - 11:00 AM Local
+        if 8 <= ny_hour < 11:
+            return True
+        return False
+
+# Instancia global singleton
 session_manager = SessionManager()
