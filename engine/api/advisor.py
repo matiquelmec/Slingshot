@@ -7,22 +7,24 @@ from engine.api.config import settings
 
 # Configuración de Ollama Local
 OLLAMA_URL = "http://localhost:11434/api/chat"
-DEFAULT_MODEL = "gemma3:4b" # Ajustado al modelo instalado en el sistema local
+DEFAULT_MODEL = "gemma3:4b" 
 
-# Semáforo global para evitar saturación de la CPU
+# Semáforo global para evitar saturación de la CPU (Cola Institucional)
 _ai_semaphore = asyncio.Semaphore(1)
+
+# --- SISTEMA DE CACHÉ ESTRATÉGICO (v4.2 Platinum) ---
+# Almacena el último análisis exitoso por activo para evitar redundancia
+_strategic_memo = {} 
 
 async def check_ollama_status():
     """Verifica si el servidor de Ollama está corriendo."""
     try:
-        async with httpx.AsyncClient(timeout=2.0) as client:
+        async with httpx.AsyncClient(timeout=1.5) as client:
             response = await client.get("http://localhost:11434/api/tags")
             if response.status_code == 200:
-                print(f"[ADVISOR] 📡 Conectado a Ollama Local (Modelo: {DEFAULT_MODEL}).")
                 return True
     except:
         pass
-    print("⚠️ [ADVISOR] Ollama no detectado en localhost:11434. Asegúrate de que esté abierto.")
     return False
 
 async def generate_tactical_advice(
@@ -140,6 +142,33 @@ async def generate_tactical_advice(
     from engine.indicators.ghost_data import get_ghost_state
     ghost = get_ghost_state(asset)
 
+    # 💠 LÓGICA DE SMART CACHE (Slingshot v4.2 Platinum)
+    # Esta capa evita el 'Spam' al motor de IA si el mercado está lateral o los datos son idénticos.
+    current_state = {
+        "price": float(tactical_data.get('current_price', 0)),
+        "support": support,
+        "resistance": resistance,
+        "regime": regime,
+        "strategy": strategy,
+        "ml_prob": ml_prob,
+        "dxy": ghost.dxy_trend,
+        "nasdaq": ghost.nasdaq_trend
+    }
+    
+    # Pre-filtro: Si no hay estructura ni precio (Bootstrap inicial vacío), no llamamos a Ollama
+    if current_state["support"] == "N/A" and current_state["resistance"] == "N/A":
+        return "INFORME SMC V4.1 PLATINUM: ESTRUCTURA INSTITUCIONAL EN FORMACIÓN. Awaiting data hydration."
+
+    prev = _strategic_memo.get(asset)
+    if prev:
+        # Umbrales de estabilidad: 0.05% de precio, misma estructura y mismo sesgo macro
+        price_stable = abs(current_state["price"] - prev["price"]) / prev["price"] < 0.0005 if prev["price"] > 0 else False
+        structure_stable = (current_state["support"] == prev["support"] and current_state["resistance"] == prev["resistance"])
+        context_stable = (current_state["dxy"] == prev["dxy"] and current_state["nasdaq"] == prev["nasdaq"] and current_state["regime"] == prev["regime"])
+        
+        if price_stable and structure_stable and context_stable:
+            return f"[CONSISTENTE CON ÚLTIMA LECTURA] {prev['advice']}"
+
     prompt = f"""
     Eres el 'Asesor Cuantitativo Institucional' del sistema Slingshot v4.0. Tu misión es ejecutar el Algoritmo de Decisión SMC de 5 Fases.
     ERES UNA MÁQUINA LÓGICA REGLAMENTARIA. DEBES OBEDECER ESTAS LEYES INQUEBRANTABLES:
@@ -229,8 +258,11 @@ async def generate_tactical_advice(
                 result = response.json()
                 advice = result.get("message", {}).get("content", "").strip()
                 
-                # Limpieza de seguridad
+                # Limpieza de seguridad y formateo profesional
                 advice = advice.replace('\n', ' ').replace('**', '').strip()
+                
+                # Actualizar Memoria de Corto Plazo
+                _strategic_memo[asset] = {**current_state, "advice": advice}
                 
                 print(f"[ADVISOR] ✅ Análisis generado localmente para {asset} (Ollama)")
                 return advice

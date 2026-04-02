@@ -37,9 +37,12 @@ slingshot_gen1/
 ├── 📁 app/                            # La Terminal de Usuario (Next.js)
 │   ├── 📁 (dashboard)/                # Radar, Signals, Chart, Heatmap, History
 │   └── 📁 components/                 # SignalCardItem (Audit Evidence), UI Components
+├── 📁 docs/                           # Documentación de Arquitectura y Especificación
+│   └── 📁 Conocimientos/              # Memorias Teóricas: Algoritmos SMC y Regímenes
 ├── 📁 scripts/                        # Cajón de Herramientas (Tests & Tools)
+├── 📁 tmp/                            # Almacenamiento local temporal y Forensics JSON
 ├── 📁 .agent/                         # Agentes, Workflows y Skills Consolidados
-└── 📄 start.ps1                       # Lanzador One-Click
+└── 📄 start.ps1                       # Lanzador One-Click (Launcher Maestro)
 ```
 
 ---

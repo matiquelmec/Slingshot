@@ -45,7 +45,9 @@ class MarketMap:
     fibonacci: Optional[dict]
     htf_bias: Optional[dict]
     diagnostic: dict
-    df_analyzed: Any = field(default_factory=dict) # Respaldo para el pipeline de estrategia
+    htf_alignment: bool = False # Gate 1: ¿Alineado con tendencia mayor?
+    displacement_valid: bool = False # Gate 2: ¿Ruptura con volumen real?
+    df_analyzed: Any = field(default_factory=dict) 
 
 
 class MarketAnalyzer:
@@ -106,14 +108,38 @@ class MarketAnalyzer:
                 "h1_regime": htf_bias.h1_regime,
             }
 
-        # ── Paso 7: Diagóstico Macro ─────────────────────────────────────────
+        # ── Paso 7: Diagnóstico Macro y Validación de Gates (v4.1 Platinum) ────
         macro = get_macro_context()
+        
+        # Calcular RVOL (Relative Volume) vs Media de 20 periodos
+        current_vol = float(df["volume"].iloc[-1]) if "volume" in df.columns else 0.0
+        vol_mean = float(df["volume"].rolling(20).mean().iloc[-1]) if "volume" in df.columns else 1.0
+        rvol = current_vol / vol_mean if vol_mean > 0 else 0.0
+
+        # Verificación de Gates
+        # Gate 1: Alignment (Si hay HTF, debe coincidir con el sesgo local de Wyckoff)
+        htf_align = False
+        if htf_bias:
+            # Simplificación: Si Wyckoff es MARKUP, HTF debe ser BULLISH
+            is_local_bullish = current_regime in ['MARKUP', 'ACCUMULATION']
+            is_htf_bullish = str(htf_bias.direction).upper() in ['BULLISH', 'STRONG_BULLISH']
+            is_local_bearish = current_regime in ['MARKDOWN', 'DISTRIBUTION']
+            is_htf_bearish = str(htf_bias.direction).upper() in ['BEARISH', 'STRONG_BEARISH']
+            
+            htf_align = (is_local_bullish == is_htf_bullish) or (is_local_bearish == is_htf_bearish)
+
+        # Gate 2: Displacement (Exigimos RVOL > 1.2 para validar el movimiento)
+        displacement_active = rvol >= 1.2
+
         diagnostic = {
-            "volume": float(df["volume"].iloc[-1]) if "volume" in df.columns else 0.0,
-            "volume_mean": float(df["volume"].rolling(20).mean().iloc[-1]) if "volume" in df.columns else 0.0,
+            "volume": current_vol,
+            "volume_mean": vol_mean,
+            "rvol": round(rvol, 2),
             "macro_bias": macro.global_bias,
             "dxy_trend": macro.dxy_trend,
             "risk_appetite": macro.risk_appetite,
+            "htf_align": htf_align,
+            "displacement_active": displacement_active
         }
         
         # DIAGNÓSTICO FINAL DE SALIDA (v4.3.7)
@@ -122,8 +148,18 @@ class MarketAnalyzer:
         print(f"🛠️  {audit_msg}")
         
         try:
+            import json
+            log_entry = {
+                "ts": time.time(),
+                "asset": asset,
+                "regime": current_regime,
+                "s_level": str(s_val),
+                "kl_count": len(key_levels.get('supports', [])),
+                "rvol": diagnostic.get("rvol", 0.0),
+                "htf_align": htf_align
+            }
             with open("c:/tmp/structural_audit.log", "a") as f:
-                f.write(f"{time.time()}: {audit_msg}\n")
+                f.write(json.dumps(log_entry) + "\n")
         except:
             pass
 
@@ -150,6 +186,8 @@ class MarketAnalyzer:
             fibonacci=fibonacci,
             htf_bias=htf_payload,
             diagnostic=diagnostic,
+            htf_alignment=htf_align,
+            displacement_valid=displacement_active,
             df_analyzed=df,
         )
 

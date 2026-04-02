@@ -1,6 +1,7 @@
 import xgboost as xgb
 import pandas as pd
 import numpy as np
+import time
 from pathlib import Path
 from engine.ml.features import FeatureEngineer
 
@@ -35,9 +36,13 @@ class SlingshotML:
             return {"direction": "ANALIZANDO", "probability": 50, "status": "no_model"}
             
         try:
-            # 1. Generar features para la vela actual (la última del DataFrame)
-            # Pasamos todo el DF a la feature factory porque los indicadores necesitan el histórico (rollings)
-            features_df = self.engineer.generate_features(df)
+            start_time = time.time()
+            
+            # --- OPTIMIZACIÓN DE VENTANA (v4.1 Platinum) ---
+            # Para inferencia live, solo necesitamos las últimas 100 velas para que los indicadores 
+            # (EMAs, ATR, RVOL) tengan suficiente histórico. Procesar todo el DF causa latencia inaceptable.
+            inference_window = df.tail(100).copy()
+            features_df = self.engineer.generate_features(inference_window)
             
             if features_df.empty:
                 return {"direction": "ANALIZANDO", "probability": 50, "status": "insufficient_data"}
@@ -105,12 +110,17 @@ class SlingshotML:
                     reason_parts.append("Micro-estructura favorece debilidad a corto plazo")
                     
             educational_reason = " | ".join(reason_parts)
+            
+            # Cálculo de Latencia de Inferencia
+            inference_ms = round((time.time() - start_time) * 1000, 2)
                 
             return {
                 "direction": direction,
                 "probability": int(confidence),
                 "status": "active",
-                "reason": educational_reason
+                "reason": educational_reason,
+                "inference_ms": inference_ms,
+                "is_confident": confidence >= 60 # Nuevo Gate 3: Confianza mínima IA
             }
             
         except Exception as e:

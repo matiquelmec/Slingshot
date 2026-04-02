@@ -1,8 +1,13 @@
 import math
 
-# Ratio Riesgo/Beneficio mínimo para que una señal sea publicada al dashboard.
-# Si la geometría natural del trade no ofrece al menos 1.8R, se rechaza.
+# Ratio Riesgo/Beneficio mínimo NETO (tras comisiones y slippage)
 MIN_RR_REQUIRED = 1.8
+
+# Factor de Fricción Operativa (0.1% comisión entrada + 0.1% salida + 0.05% slippage estimado)
+FEE_SLIPPAGE_IMPACT = 0.0025 
+
+# Límite de pérdida diaria máxima por cuenta (3%)
+MAX_DAILY_DRAWDOWN_PCT = 0.03
 
 class RiskManager:
     """
@@ -23,48 +28,80 @@ class RiskManager:
         self.account_balance = account_balance
         self.base_risk_pct = base_risk_pct
         self.min_rr = min_rr
-        self.max_leverage = 50.0 # Apalancamiento máximo permitido por el exchange/gestor de riesgo
+        self.max_leverage = 50.0 
+        
+        # --- ESTADO DE AUDITORÍA DIARIA ---
+        self.daily_loss_usd = 0.0
+        self.active_sectors = set() # Ejemplo: {'MAJOR-CRYPTO', 'SOL-ECOSYSTEM'}
+        self.is_locked = False
 
     def validate_signal(self, signal_data: dict) -> dict:
         """
-        [PORTERO INSTITUCIONAL v3.0]
+        [PORTERO INSTITUCIONAL v4.1 Platinum]
         Evalúa si una señal merece ser publicada al Signal Terminal.
-        Calcula el R:R real basándose en los datos de la señal ya procesada.
-        Retorna: { "approved": bool, "rr_ratio": float, "trade_quality": str, "reason": str }
+        Inyecta los 'SMC Gates' para validar volumen y alineación HTF.
         """
         try:
+            # ⛔ 1. Verificación de Hard-Stop Diario (Pilar 4.1)
+            if self.is_locked or self.daily_loss_usd >= (self.account_balance * MAX_DAILY_DRAWDOWN_PCT):
+                self.is_locked = True
+                return {"approved": False, "rr_ratio": 0.0, "trade_quality": "LOCKED", "reason": "📛 HARD-STOP: Límite de pérdida diaria alcanzado (3%)"}
+
+            # ⛔ 2. SMC GATES: Volumen y Alineación (Pilar 2)
+            # Solo si la señal contiene estos diagnósticos del MarketAnalyzer
+            if signal_data.get("htf_alignment") is False:
+                 return {"approved": False, "rr_ratio": 0.0, "trade_quality": "RECHAZADA 🟠", "reason": "TENSIÓN HTF: Contra tendencia mayor detectada."}
+            
+            if signal_data.get("displacement_valid") is False:
+                 rvol = signal_data.get("diagnostic", {}).get("rvol", "N/A")
+                 return {"approved": False, "rr_ratio": 0.0, "trade_quality": "RECHAZADA 🔴", "reason": f"SMC DÉBIL: Ruptura sin volumen real (RVOL {rvol} < 1.2)"}
+
+            # ⛔ 3. VALIDACIÓN DE PRECIOS
             entry = float(signal_data.get("price", 0))
             sl    = float(signal_data.get("stop_loss", 0))
             tp    = float(signal_data.get("take_profit_3r", 0))
+            asset = signal_data.get("asset", "UNKNOWN")
 
             if entry <= 0 or sl <= 0 or tp <= 0:
-                return {"approved": False, "rr_ratio": 0.0, "trade_quality": "INVALID", "reason": "Precios inválidos (SL o TP = 0)"}
+                return {"approved": False, "rr_ratio": 0.0, "trade_quality": "INVALID", "reason": "Precios inválidos"}
 
-            risk   = abs(entry - sl)
-            reward = abs(tp - entry)
+            # --- CÁLCULO DE R:R NETO (v4.1 Platinum) ---
+            raw_risk   = abs(entry - sl)
+            raw_reward = abs(tp - entry)
+            friction_cost = entry * FEE_SLIPPAGE_IMPACT
+            net_risk   = raw_risk + friction_cost
+            net_reward = raw_reward - friction_cost 
 
-            if risk < 0.0001:
-                return {"approved": False, "rr_ratio": 0.0, "trade_quality": "INVALID", "reason": "SL demasiado ajustado al precio de entrada"}
+            if net_risk < 0.0001:
+                return {"approved": False, "rr_ratio": 0.0, "trade_quality": "INVALID", "reason": "Riesgo nulo"}
             
-            rr = round(reward / risk, 2)
+            rr = round(net_reward / net_risk, 2)
             
-            if rr >= 2.5:
-                quality = "A+ (Institutional)"
-            elif rr >= 1.8:
-                quality = "B (Acceptable)"
-            elif rr >= 1.2:
-                quality = "C (Subóptimo)"
-            else:
-                quality = "D (Rechazado)"
+            # --- DETERMINACIÓN DE CALIDAD ---
+            if rr >= 2.5:   quality = "A+ (Institutional)"
+            elif rr >= 1.8: quality = "B (Acceptable)"
+            else:           quality = "D (RECHAZADA 🔴)"
 
+            # Verificación de Exposición Correlacionada (Beta Management)
+            current_risk_multiplier = 1.0
+            if asset in ["BTCUSDT", "ETHUSDT"] and len([s for s in self.active_sectors if s == "MAJOR"]) > 0:
+                current_risk_multiplier = 0.5 
+
+            # GATE FINAL: R:R Mínimo Neto
             approved = rr >= self.min_rr
             reason = (
-                f"R:R {rr:.2f}R >= {self.min_rr}R mínimo → APROBADA 🟢"
+                f"R:R NETO {rr:.2f}R (Fricción: {FEE_SLIPPAGE_IMPACT*100:.2f}%) → APROBADA 🟢"
                 if approved else
-                f"R:R {rr:.2f}R < {self.min_rr}R mínimo → RECHAZADA 🔴"
+                f"R:R NETO {rr:.2f}R < {self.min_rr}R mínimo → RECHAZADA 🔴"
             )
 
-            return {"approved": approved, "rr_ratio": rr, "trade_quality": quality, "reason": reason}
+            return {
+                "approved": approved, 
+                "rr_ratio": rr, 
+                "trade_quality": quality, 
+                "reason": reason,
+                "risk_multiplier": current_risk_multiplier
+            }
 
         except Exception as e:
             return {"approved": False, "rr_ratio": 0.0, "trade_quality": "ERROR", "reason": str(e)}

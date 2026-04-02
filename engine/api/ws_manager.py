@@ -898,7 +898,8 @@ class SymbolBroadcaster:
             "risk_pct":         risk_pct,
             "risk_usd":         risk_usd,
             "position_size":    pos_size,
-            "leverage":         lev
+            "leverage":         lev,
+            "rr_ratio":         round(abs(float(sig.get("take_profit_3r", 0)) - float(sig.get("price", 0))) / abs(float(sig.get("price", 0)) - float(sig.get("stop_loss", 0.001))) if abs(float(sig.get("price", 0)) - float(sig.get("stop_loss", 0))) > 0 else 0, 2)
         }
         
         # Persistencia en Memoria Local
@@ -1193,8 +1194,17 @@ class BroadcasterRegistry:
                 
                 asyncio.create_task(_delayed_cleanup())
             elif broadcaster.subscriber_count() == 0 and broadcaster.persistent:
-                # print(f"[REGISTRY] 🛡️  Broadcaster {key} mantenido en segundo plano (PERSISTENTE)")
                 pass
+
+    async def force_garbage_collection(self):
+        """Purgado manual de RAM para cumplir con el Stress Test Pilar 4.2."""
+        async with self._lock:
+            # Eliminar broadcasters inactivos que ya pasaron su Grace Period
+            for key in list(self._broadcasters.keys()):
+                if self._broadcasters[key].subscriber_count() == 0 and not self._broadcasters[key].persistent:
+                    await self._broadcasters[key].stop()
+                    del self._broadcasters[key]
+                    print(f"[GARBAGE-COLLECTOR] 🧹 Liberada memoria de canal inactivo: {key}")
 
     def status(self) -> dict:
         """Retorna el estado del registry para el endpoint /health."""
