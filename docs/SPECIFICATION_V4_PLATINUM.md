@@ -1,7 +1,7 @@
-# 🛡️ SLINGSHOT v4.3 TITANIUM: ESPECIFICACIÓN TÉCNICA MAESTRA
+# 🛡️ SLINGSHOT v4.3.5 TITANIUM: ESPECIFICACIÓN TÉCNICA MAESTRA
 
 > **"La precisión institucional al servicio del trader individual. Zero Latency, Zero Cloud, Zero Noise."**
-> **Versión:** 4.3 Titanium Edition | **Fecha:** 02 de Abril, 2026 | **Estado:** TOTALMENTE DESPLEGADO ✅
+**Versión:** 4.3.5 Titanium Edition | **Fecha:** 03 de Abril, 2026 | **Estado:** TOTALMENTE DESPLEGADO ✅
 
 ---
 
@@ -66,6 +66,17 @@ Hemos asegurado tiempos de reacción algorítmicos sub-50ms bajo la carga extrem
 2.  **Ultra-Buffer Circular:** Uso de matrices C-Compiled (`collections.deque(maxlen=300)`) descartando recolección de basura OOM.
 3.  **Vectorización Fast-Path:** Solo el Tick Reciente viaja por `pd.to_datetime(...)`, anexándose algebraicamente en Pandas a los dates oxidados pre-cacheados.
 4.  **SMC Slice & Persistencia O(1):** `structure.py` procesa un micro-slice (`df.tail(50)`), fusionándolo dinámicamente con inyecciones de Long-Term Memory SMC tolerantes al envejecimiento temporal.
+
+---
+
+### 💠 Capa 2.6: Protocolos de Supervivencia VPS (Hardening v4.3.5)
+Para despliegues en entornos hostiles (VPS Londres/NY), se han implementado 4 blindajes contra fallos:
+1.  **Stale Guard (Frontend):** Monitorización de gaps en WebSocket (>60s). Al detectar una pestaña "zombie" (tras suspensión), el sistema purga mensajes obsoletos y realiza un resync forzado al `HEAD` de los datos.
+2.  **Advisor Aislado (Timeout 45s):** El motor LLM (Ollama) está configurado con un semáforo de concurrencia e inyección de precio en vivo ($900 sync). Si la IA no responde en 45s, el sistema libera recursos para priorizar la ejecución técnica (Fast Path).
+3.  **Resurrección Automática (systemd):** Configuración `Restart=always` con 5s de delay. En caso de crash de proceso o OOM del VPS, el bot revive en <20s reconstruyendo todo el estado estructural desde el histórico.
+4.  **Blindaje Anti-Alucinación (Sensorized Priority):** Los datos del Radar (RVOL, Killzone status) se inyectan como "Verdad Absoluta" en el prompt. El Advisor tiene prohibido contradecir estos flags (Ej: No puede reportar RVOL bajo si el radar marca 20x).
+
+---
 
 ### 💠 Capa 2.5: La Fusión Predictiva y Protocolo MACRO (V4.3)
 *   **Conflict Manager (SMC vs IA):** Si la estructura SMC difiere de la proyección matemática de la Red Neuronal (XGBoost), la señal se suspende (STAND_BY). Operamos solo bajo Armonía Direccional Total.

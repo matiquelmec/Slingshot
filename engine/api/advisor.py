@@ -58,17 +58,23 @@ async def generate_tactical_advice(
     bear_div = "PRESENTE" if diag.get('bearish_divergence') else "NO"
     rvol = diag.get('rvol', 0) or 0
     
-    # 🔴 ALERTA DE ABSORCIÓN INSTITUCIONAL v4.3.4 (Tiered)
+    # 🔴 DETECCIÓN DE ABSORCIÓN CRÍTICA v4.3.5 (HARDENED)
+    rvol_is_ultra_high = rvol > 10.0
     rvol_alert = ""
-    if rvol > 10.0 and regime in ('RANGING', 'ACCUMULATION', 'DISTRIBUTION'):
-        rvol_alert = f"""🚨 [ABSORCIÓN PROFESIONAL CRÍTICA] RVOL={rvol:.1f}x en régimen {regime}. 
-    Esto indica que las manos fuertes están acumulando/distribuyendo MASIVAMENTE mientras el precio parece estable.
-    EXPANSIÓN DE VOLATILIDAD INMINENTE. DEBES advertir sobre esta absorción en tu veredicto ANTES de dar dirección.
-    Si el régimen es ACCUMULATION o RANGING con soportes cercanos → Expansión probable hacia ARRIBA.
-    Si el régimen es DISTRIBUTION → Expansión probable hacia ABAJO."""
-    elif rvol > 5.0 and regime in ('RANGING', 'ACCUMULATION', 'DISTRIBUTION'):
-        rvol_alert = f"⚠️ ABSORCIÓN INSTITUCIONAL DETECTADA: RVOL={rvol:.1f}x en régimen {regime}. EXPANSIÓN INMINENTE. Preparar entrada agresiva al primer BOS."
+    mandatory_phrase = ""
     
+    if rvol_is_ultra_high and regime in ('RANGING', 'ACCUMULATION', 'DISTRIBUTION', 'UNKNOWN'):
+        mandatory_phrase = "ALERTA: FUEGO INSTITUCIONAL DETECTADO. PREPARAR EXPANSIÓN."
+        rvol_alert = f"""
+        🚨 [ALERTA DE SEGURIDAD CRÍTICA]
+        RVOL DETECTADA POR RADAR: {rvol:.2f}x.
+        ESTADO: ABSORCIÓN PROFESIONAL MASIVA.
+        INSTRUCCIÓN MANDATORIA: DEBES UTILIZAR LA FRASE EXACTA: '{mandatory_phrase}' EN TU VEREDICTO.
+        EXPLICACIÓN: Las instituciones están inyectando volumen sin mover el precio (Absorción). Esto es el precursor de una expansión violenta.
+        """
+    elif rvol > 5.0:
+        rvol_alert = f"⚠️ [VOLUMEN ANORMAL] RVOL de {rvol:.2f}x detectado. Alta probabilidad de manipulación o expansión."
+
     # Extraer data de Estructura (SMC / Soportes)
     smc = tactical_data.get('smc', {})
     obs_bullish = len(smc.get('order_blocks', {}).get('bullish', []))
@@ -159,7 +165,6 @@ async def generate_tactical_advice(
     ghost = get_ghost_state(asset)
 
     # 💠 LÓGICA DE SMART CACHE (Slingshot v4.2 Platinum)
-    # Esta capa evita el 'Spam' al motor de IA si el mercado está lateral o los datos son idénticos.
     current_state = {
         "price": float(tactical_data.get('current_price', 0)),
         "support": support,
@@ -171,83 +176,72 @@ async def generate_tactical_advice(
         "nasdaq": ghost.nasdaq_trend
     }
     
-    # Pre-filtro: Si no hay estructura ni precio (Bootstrap inicial vacío), no llamamos a Ollama
     if current_state["support"] == "N/A" and current_state["resistance"] == "N/A":
         return "INFORME SMC V4.1 PLATINUM: ESTRUCTURA INSTITUCIONAL EN FORMACIÓN. Awaiting data hydration."
 
     prev = _strategic_memo.get(asset)
     if prev:
-        # Umbrales de estabilidad: 0.05% de precio, misma estructura y mismo sesgo macro
-        price_stable = abs(current_state["price"] - prev["price"]) / prev["price"] < 0.0005 if prev["price"] > 0 else False
-        structure_stable = (current_state["support"] == prev["support"] and current_state["resistance"] == prev["resistance"])
-        context_stable = (current_state["dxy"] == prev["dxy"] and current_state["nasdaq"] == prev["nasdaq"] and current_state["regime"] == prev["regime"])
-        
-        if price_stable and structure_stable and context_stable:
-            return f"[CONSISTENTE CON ÚLTIMA LECTURA] {prev['advice']}"
+        price_stable = abs(current_state["price"] - prev["price"]) / prev["price"] < 0.0001 if prev["price"] > 0 else False
+        if price_stable and current_state["support"] == prev["support"] and current_state["regime"] == prev["regime"]:
+            # Solo reutilizar si el RVOL no ha explotado en el ínterin
+            if not rvol_is_ultra_high:
+                return f"[CONSISTENTE CON ÚLTIMA LECTURA] {prev['advice']}"
 
     prompt = f"""
     Eres el 'Asesor Cuantitativo Institucional' del sistema Slingshot v4.3. Tu misión es ejecutar el Algoritmo de Decisión SMC de 5 Fases.
     ERES UNA MÁQUINA LÓGICA REGLAMENTARIA. DEBES OBEDECER ESTAS LEYES INQUEBRANTABLES:
 
     ═══════════════════════════════════════════
+    LEYES DE CONSISTENCIA DE DATOS (MANDATORIAS):
+    ═══════════════════════════════════════════
+    - SI EL RADAR DICE RVOL > 10x, DEBES REPORTARLO COMO TAL. PROHIBIDO REPORTAR UN RVOL BAJO.
+    - SI 'Killzone Activa' es NO, TIENES PROHIBIDO USAR LA KILLZONE COMO ARGUMENTO PARA VALIDAR UNA ENTRADA. SI NO HAY KILLZONE, NO HAY OPERACIÓN.
+    - SI EL PRECIO ESTÁ EN 'RANGING' CON RVOL > 10x, EL VEREDICTO DEBE INDICAR ABSORCIÓN.
+
+    ═══════════════════════════════════════════
     LEYES MACRO (CORRELACIÓN DXY-CRIPTO):
     ═══════════════════════════════════════════
-    - SI DXY ES BULLISH (Dólar fuerte): PROHIBIDO LONG EN CRIPTO. Dólar fuerte = Fuga de capital de activos de riesgo = Cripto cae. SOLO buscar SHORTS o DESCARTAR.
-    - SI DXY ES BEARISH (Dólar débil): BUSCAR LONGS EN CRIPTO. Dólar débil = Inyección de liquidez = Cripto sube. Es correlación INVERSA, NO directa.
-    - SI NASDAQ CAE (BEARISH): PROHIBIDO LONGS EN CRIPTO (correlación directa con risk assets).
-    ⚠️ REGLA ANTI-ALUCINACIÓN: DXY BEARISH = FAVORABLE PARA LONGS EN CRIPTO. NO confundas esta regla. SI en tu análisis dices "DXY Bearish" y luego prohíbes longs, estás VIOLANDO esta ley.
-
-    LEYES DE SESIÓN:
-    - ASIA (20:00-03:00 UTC): ZONA DE ACUMULACIÓN. PROHIBIDO OPERAR.
-    - LONDON (04:00-08:00 UTC): ZONA DE TRAMPA/BARRIDO. ESPERAR MANIPULACIÓN.
-    - NY (09:30-12:00 UTC): ZONA DE EJECUCIÓN (KILLZONE). SÓLO AQUÍ SE OPERA.
-    - OFF_HOURS / AUSENCIA DE KILLZONE: PROHIBIDO OPERAR.
+    - DXY BULLISH (Dólar fuerte) = PELIGRO PARA LONGS. 
+    - DXY BEARISH (Dólar débil) = FAVORABLE PARA LONGS. 
+    ⚠️ LEY DXY: DXY BEARISH = FAVORABLE PARA LONGS EN CRIPTO. SI en tu análisis dices "DXY Bearish" y luego prohíbes longs, estás VIOLANDO esta ley.
 
     ═══════════════════════════════════════════
-    DATOS EN TIEMPO REAL (SNAPSHOT LIVE):
+    DATOS SENSORIZADOS (EL ORÁCULO):
     ═══════════════════════════════════════════
-    🔴 PRECIO ACTUAL EN TIEMPO REAL: ${f_p(live_price)} (Este es el precio LIVE del WebSocket. USA ESTE VALOR como referencia, NO inventes otro.)
-
-    CAPA 1: CONTEXTO GLOBAL MACRO (DXY/NASDAQ)
-    - DXY Trend: {ghost.dxy_trend} | NASDAQ Trend: {ghost.nasdaq_trend}
-    - HTF Global Bias: {htf_dir} (Razón: {htf_reason})
-
-    CAPA 2: NARRATIVA DIARIA (SESIONES)
-    - Sesión Actual: {current_session} | Killzone Activa: {in_killzone}
-
-    CAPA 3: ZONAS INSTITUCIONALES (SMC)
-    - Activo: {asset}
-    - Zonas de Oferta (Bearish): {obs_bearish + fvgs_bearish} | Zonas de Demanda (Bullish): {obs_bullish + fvgs_bullish}
-    - SOPORTE CRÍTICO: {support}
-    - RESISTENCIA CRÍTICA: {resistance}
-    - Fib Level Actual: {fibo_lvl}
-    - RVOL (Volumen Relativo): {rvol:.2f}x {'⚠️ ANORMALMENTE ALTO' if rvol > 5.0 else '(Normal)' if rvol > 0.8 else '⚠️ BAJO'}
+    🔴 PRECIO LIVE: ${f_p(live_price)}
+    🔴 RVOL (VOLUMEN RELATIVO): {rvol:.2f}x (LEER ESTE DATO COMO VERDAD ABSOLUTA)
+    🔴 KILLZONE ACTIVA: {in_killzone} (SI DICE 'NO', NO HAY KILLZONE. NO ALUCINES.)
+    🔴 RÉGIMEN DE MERCADO: {regime}
+    
     {rvol_alert}
 
-    CAPA 4: GATILLO Y MICRO-ESTRUCTURA
-    - Proyección Direccional XGBoost (IA): {ml_dir} ({ml_prob}%)
-
-    REKT MAGNETS (Liquidaciones & Noticias):
-    {liq_text}
-    {news_text}
+    CAPA 1: CONTEXTO GLOBAL MACRO
+    - DXY Trend: {ghost.dxy_trend} | NASDAQ Trend: {ghost.nasdaq_trend}
+    - HTF Global Bias: {htf_dir}
     
-    CALENDARIO ECONÓMICO (Macro Inminente):
-    {cal_text}
+    CAPA 2: NARRATIVA DIARIA
+    - Sesión Actual: {current_session}
+    
+    CAPA 3: ZONAS INSTITUCIONALES (SMC)
+    - SOPORTE: {support} | RESISTENCIA: {resistance}
+    - Zonas: {obs_bullish + fvgs_bullish} Bullish / {obs_bearish + fvgs_bearish} Bearish
+    
+    CAPA 4: GATILLO NEURONAL (IA)
+    - Proyección XGBoost: {ml_dir} ({ml_prob}%)
 
-    ═══════════════════════════════════════════
-    CHECKLIST DE DECISIÓN (Razonamiento en Cadena):
-    ═══════════════════════════════════════════
-    [PASO 1] DEFCON CHECK: Busca en las noticias y calendario: 'Guerra', 'War', 'Bankruptcy', 'Quiebra', 'Hack', 'SEC sue'. SI encuentras alguna → veredicto: "🚨 [DEFCON 1] MERCADO CONTAMINADO. OPERACIONES SUSPENDIDAS." SI NO hay amenazas → responde "[DEFCON CLEAR] Sin cisne negro detectado." PROHIBIDO inventar niveles como 'DEFCON 5' o 'DEFCON 3'. Solo existen dos estados: DEFCON 1 (peligro) o DEFCON CLEAR (seguro).
-    [PASO 2] LEY DXY/MACRO: Evalúa DXY y NASDAQ. Recuerda: DXY BEARISH = FAVORABLE para LONGS cripto. DXY BULLISH = PROHIBIDO LONGS. Verifica que tu conclusión NO contradiga esta ley.
-    [PASO 3] ESTRUCTURA (Precio ${f_p(live_price)} vs S/R): Posición del precio relativa al soporte/resistencia. Si RVOL es alto en RANGING → señalar Absorción Institucional y Expansión Inminente.
-    [PASO 4] SESIÓN & GATILLO: ¿Estamos en Killzone? Evalúa el predictor XGBoost.
-    [PASO 5] VEREDICTO FINAL: Decisión unificada. Si DXY BULLISH y propones LONG → DENEGADO. Si DXY BEARISH y propones LONG → APROBADO (si los demás filtros pasan).
+    CHECKLIST DE DECISIÓN:
+    [PASO 1] DEFCON CHECK: SI hay cisne negro (Guerra/Hack) -> Veredicto: DEFCON 1.
+    [PASO 2] LEY DXY: ¿DXY favorece o prohíbe la dirección deseada?
+    [PASO 3] ABSORCIÓN: Si el RVOL es {rvol:.2f}x y el régimen es {regime} -> ¿Hay Absorción Institucional? 
+    [PASO 4] SESIÓN: ¿Killzone Activa ({in_killzone})? SI ES 'NO', EL VEREDICTO DEBE SER 'DESCARTAR'.
+    [PASO 5] VEREDICTO FINAL: Decisión unificada. {f"MANDATORIO USAR FRASE: '{mandatory_phrase}'" if mandatory_phrase else ""}
 
-    REGLAS DE FORMATO:
-    1. BREVEDAD NIVEL PENTÁGONO. Sin rodeos.
-    2. Tono frío, militar, ultra-profesional. EMPIEZA CON "INFORME SMC V4.3 PLATINUM:".
-    3. AL FINAL incluye: [RIESGO DE SISTEMA: TGT 1:3 MINIMO INNEGOCIABLE]
+    FORMATO:
+    1. EMPIEZA CON "INFORME SMC V4.3.5 TITANIUM:".
+    2. BREVEDAD MILITAR. SIN RODEOS.
+    3. AL FINAL: [RIESGO DE SISTEMA: TGT 1:3 MINIMO INNEGOCIABLE]
     """
+
 
     try:
         logger.info(f"[ADVISOR] ⏳ Reservando motor IA para {asset}...")

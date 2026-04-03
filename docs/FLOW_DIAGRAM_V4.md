@@ -1,7 +1,7 @@
-# 🏹 SLINGSHOT v4.3 — DIAMANTE INSTITUCIONAL (MASTERPLAN)
+# 🏹 SLINGSHOT v4.3.5 — DIAMANTE INSTITUCIONAL (MASTERPLAN)
 
 > **"La precisión no es una opción, es nuestra arquitectura."**
-> **Versión:** 4.3 Platinum Masterplan | **Actualizado:** 02 de Abril, 2026
+> **Versión:** 4.3.5 Titanium Masterplan | **Actualizado:** 03 de Abril, 2026
 
 ---
 
@@ -43,7 +43,7 @@ flowchart TD
     %% --- CAPA DE PERSISTENCIA Y SALIDA ---
     subgraph OUTPUT_LAYER ["🛡️ AUDITORÍA & ACCIÓN"]
         RAM["💾 RAM Store\nZero-Latency"]
-        ADV["🧠 AI Advisor\nBriefing Llamat-3"]
+        ADV["🧠 AI Advisor\nBriefing Gemma-3"]
         TG["📱 Telegram\nInstitutional Alert"]
         UI["🖥️ Terminal UI\nNext.js Dashboard"]
     end
