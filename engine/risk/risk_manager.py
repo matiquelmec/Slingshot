@@ -37,9 +37,9 @@ class RiskManager:
 
     def validate_signal(self, signal_data: dict) -> dict:
         """
-        [PORTERO INSTITUCIONAL v4.1 Platinum]
+        [PORTERO INSTITUCIONAL v4.3.6 Titanium Guard]
         Evalúa si una señal merece ser publicada al Signal Terminal.
-        Inyecta los 'SMC Gates' para validar volumen y alineación HTF.
+        Implementa el Circuit Breaker de RVOL para evitar fallos de sensor.
         """
         try:
             # ⛔ 1. Verificación de Hard-Stop Diario (Pilar 4.1)
@@ -52,9 +52,21 @@ class RiskManager:
             if signal_data.get("htf_alignment") is False:
                  return {"approved": False, "rr_ratio": 0.0, "trade_quality": "RECHAZADA 🟠", "reason": "TENSIÓN HTF: Contra tendencia mayor detectada."}
             
+            # 🔴 CIRCUIT BREAKER v4.3.6: Protección contra Fallo de Sensor (191x Audit)
+            diagnostic = signal_data.get("diagnostic", {})
+            rvol_raw = diagnostic.get("rvol", 0)
+            try:
+                rvol_float = float(rvol_raw)
+            except (ValueError, TypeError):
+                rvol_float = 0.0
+
+            if rvol_float > 50.0:
+                from engine.core.logger import logger
+                logger.error(f"[RISK] 🚨 CIRCUIT BREAKER: RVOL {rvol_float}x detectado. Bloqueo de Seguridad.")
+                return {"approved": False, "rr_ratio": 0.0, "trade_quality": "SENSOR_ERROR_AUDIT ⚠️", "reason": f"BLOQUEO DE SENSOR: RVOL anómalo ({rvol_float}x)."}
+
             if signal_data.get("displacement_valid") is False:
-                 rvol = signal_data.get("diagnostic", {}).get("rvol", "N/A")
-                 return {"approved": False, "rr_ratio": 0.0, "trade_quality": "RECHAZADA 🔴", "reason": f"SMC DÉBIL: Ruptura sin volumen real (RVOL {rvol} < 1.2)"}
+                 return {"approved": False, "rr_ratio": 0.0, "trade_quality": "RECHAZADA 🔴", "reason": f"SMC DÉBIL: Ruptura sin volumen real (RVOL {rvol_float:.2f} < 1.2)"}
 
             # ⛔ 3. VALIDACIÓN DE PRECIOS
             entry = float(signal_data.get("price", 0))

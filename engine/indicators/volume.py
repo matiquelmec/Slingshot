@@ -10,13 +10,12 @@ def calculate_rvol(df: pd.DataFrame, window: int = 20) -> pd.DataFrame:
     """
     df = df.copy()
     
-    # Calcular el Promedio Móvil Simple (SMA) del volumen
-    df['vol_sma'] = df['volume'].rolling(window=window).mean()
+    # 🔴 WARM-UP v4.3.6: Solo calcular si hay historial suficiente (evita picos falsos en boot)
+    df['vol_sma'] = df['volume'].rolling(window=window, min_periods=window).mean()
     
     # Calcular RVOL = Volumen Actual / SMA del Volumen
+    # Si vol_sma es NaN (no hay 20 velas), el RVOL será 0 (Modo Silenciador)
     df['rvol'] = df['volume'] / df['vol_sma']
-    
-    # Limpiar posibles divisiones por cero o nulos tempranos
     df['rvol'] = df['rvol'].fillna(0)
     
     return df
