@@ -461,10 +461,21 @@ class SymbolBroadcaster:
         depth_stream = f"{self.symbol.lower()}@depth20@100ms"
         binance_url  = f"wss://stream.binance.com:9443/stream?streams={kline_stream}/{depth_stream}"
 
+        # 🛡️ PROTECCIÓN DE HANDSHAKE v4.4.4 (Thundering Herd Prevention)
+        # Añadimos un pequeño jitter aleatorio para no colapsar el stack de red al arrancar
+        import random
+        await asyncio.sleep(random.uniform(0.1, 2.0))
+        
         logger.info(f"[BROADCASTER] {self._key} → Conectando a Binance WS: {binance_url}")
 
-        # Heartbeat Robustness: Ping/Pong cada 20s para evitar ghost disconnects
-        async with ws_client.connect(binance_url, ping_interval=20, ping_timeout=20) as binance_ws:
+        # Heartbeat Robustness: Ping/Pong cada 20s y margen de 30s para el apretón de manos (handshake)
+        async with ws_client.connect(
+            binance_url, 
+            ping_interval=20, 
+            ping_timeout=20,
+            open_timeout=30, # Margen extra para red saturada/VPS
+            close_timeout=10
+        ) as binance_ws:
             logger.info(f"[BROADCASTER] {self._key} → Stream EN VIVO 🟢")
             while True:
                 raw = await asyncio.wait_for(binance_ws.recv(), timeout=30.0)

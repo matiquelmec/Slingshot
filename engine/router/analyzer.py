@@ -44,10 +44,11 @@ class MarketMap:
     key_levels: dict
     smc: dict
     fibonacci: Optional[dict]
-    htf_bias: Optional[dict]
-    diagnostic: dict
-    htf_alignment: bool = False # Gate 1: ¿Alineado con tendencia mayor?
-    displacement_valid: bool = False # Gate 2: ¿Ruptura con volumen real?
+    fibonacci_h1: Optional[dict] = None # v4.4 Shadow Mode
+    htf_bias: Optional[dict] = None
+    diagnostic: dict = field(default_factory=dict)
+    htf_alignment: bool = False 
+    displacement_valid: bool = False 
     df_analyzed: Any = field(default_factory=dict) 
 
 
@@ -98,12 +99,9 @@ class MarketAnalyzer:
         # ── Paso 5: Fibonacci Dinámico (v4.4 MTF Shadow Mode) ─────────────────
         fibonacci = self._get_fibonacci(df)
         
-        # 🟢 SHADOW MODE: Calculamos el Fib de 1H si hay data macro
+        # 🟢 SHADOW MODE: El Fib de 1H se proyecta si hay data estructurada (v4.4.1)
         fibonacci_h1 = None
-        if macro_df is not None and not macro_df.empty:
-            fibonacci_h1 = self._get_fibonacci(macro_df)
-            if fibonacci_h1:
-                fibonacci_h1["timeframe"] = "1H"
+        # Pendiente de inyectar macro_df en dispatcher.py para activar la sombra h1 completa
 
         # ── Paso 6: HTF Bias (serializado para JSON) ─────────────────────────
         htf_payload = None

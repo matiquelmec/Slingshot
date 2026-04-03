@@ -1,7 +1,7 @@
-# 🛡️ SLINGSHOT v4.3.5 TITANIUM: ESPECIFICACIÓN TÉCNICA MAESTRA
+# 🛡️ SLINGSHOT v4.4 PLATINUM: ESPECIFICACIÓN TÉCNICA MAESTRA
 
 > **"La precisión institucional al servicio del trader individual. Zero Latency, Zero Cloud, Zero Noise."**
-**Versión:** 4.3.5 Titanium Edition | **Fecha:** 03 de Abril, 2026 | **Estado:** TOTALMENTE DESPLEGADO ✅
+**Versión:** 4.4 Platinum Edition | **Fecha:** 03 de Abril, 2026 | **Estado:** TOTALMENTE DESPLEGADO ✅
 
 ---
 
@@ -74,7 +74,11 @@ Para despliegues en entornos hostiles (VPS Londres/NY), se han implementado 4 bl
 1.  **Stale Guard (Frontend):** Monitorización de gaps en WebSocket (>60s). Al detectar una pestaña "zombie" (tras suspensión), el sistema purga mensajes obsoletos y realiza un resync forzado al `HEAD` de los datos.
 2.  **Advisor Aislado (Timeout 45s):** El motor LLM (Ollama) está configurado con un semáforo de concurrencia e inyección de precio en vivo ($900 sync). Si la IA no responde en 45s, el sistema libera recursos para priorizar la ejecución técnica (Fast Path).
 3.  **Resurrección Automática (systemd):** Configuración `Restart=always` con 5s de delay. En caso de crash de proceso o OOM del VPS, el bot revive en <20s reconstruyendo todo el estado estructural desde el histórico.
-4.  **Blindaje Anti-Alucinación (Sensorized Priority):** Los datos del Radar (RVOL, Killzone status) se inyectan como "Verdad Absoluta" en el prompt. El Advisor tiene prohibido contradecir estos flags (Ej: No puede reportar RVOL bajo si el radar marca 20x).
+4.  **Blindaje Anti-Alucinación (Sensorized Priority):** Los datos del Radar (RVOL, Killzone status) se inyectan como "Verdad Absoluta" en el prompt. El Advisor tiene prohibido contradecir estos flags.
+5.  **Handshake Shield (v4.4):** Protección contra `IP Throttling` mediante un jitter aleatorio de conexión (0.1-2.0s) y un `open_timeout` extendido de 30s para WebSockets masivos en el VPS.
+6.  **Filtro de Ballenas (Whale Filter v4.4):** Validación de Fibonacci basada en volumen. Una pierna estructural solo es procesada si el **volumen acumulado total es > 1.5x** respecto a la media global histórica de 20 periodos.
+7.  **Sincronía GATILLO "EXECUTE":** Mandato mandatorio inyectado en el LLM (`advisor.py`) al detectar un toque de precisión en el **Golden Pocket (0.618-0.66)** de una pierna validada.
+8.  **Resiliencia de Noticias (Regex Fallback):** Capa defensiva contra XML malformado en feeds RSS de terceros, garantizando continuidad de análisis de sentimiento 24/7.
 
 ---
 
