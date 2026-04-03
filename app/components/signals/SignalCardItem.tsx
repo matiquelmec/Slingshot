@@ -147,7 +147,77 @@ const SignalCardItem: React.FC<SignalCardItemProps> = ({ signal, currentPrice })
                 ))}
             </div>
 
-            {/* ── Fila 5: Puntos de Confluencia (Institutional Score) ── */}
+            {/* ── Fila 5: Ejecución Institucional (MT5 / Bitunix) ── */}
+            <div className="flex flex-col gap-2 mb-2">
+                {/* Panel FTMO */}
+                {signal.ftmo_order && (
+                    <div className="px-2 py-2 bg-gradient-to-r from-neon-cyan/10 to-transparent rounded border border-neon-cyan/20 text-[9px] font-mono shadow-[inset_0_0_10px_rgba(0,229,255,0.05)]">
+                        <div className="flex items-center justify-between mb-1.5">
+                            <span className="text-neon-cyan font-black tracking-widest uppercase flex items-center gap-1.5">
+                            <span className="w-1.5 h-1.5 bg-neon-cyan rounded-full animate-pulse" />
+                            EJECUCIÓN FTMO (MT5)
+                            </span>
+                            <span className="text-white/40 text-[7px]">$100K FUNDING</span>
+                        </div>
+                        <div className="grid grid-cols-2 gap-x-4 gap-y-1.5">
+                            <div className="flex justify-between items-center border-b border-white/5 pb-1">
+                                <span className="text-white/30 uppercase text-[7.5px]">Symbol:</span>
+                                <span className="text-white font-bold">{signal.ftmo_order.symbol}</span>
+                            </div>
+                            <div className="flex justify-between items-center border-b border-white/5 pb-1">
+                                <span className="text-white/30 uppercase text-[7.5px]">Volume:</span>
+                                <span className="text-neon-cyan font-black tracking-tighter text-[11px] bg-neon-cyan/10 px-1 rounded">
+                                    {signal.ftmo_order.volume.toFixed(2)} Lots
+                                </span>
+                            </div>
+                            <div className="flex justify-between items-center border-b border-white/5 pb-1">
+                                <span className="text-white/30 uppercase text-[7.5px]">Mode:</span>
+                                <span className={signal.ftmo_order.action === 'BUY' ? 'text-neon-green font-bold' : 'text-neon-red font-bold'}>
+                                    {signal.ftmo_order.action} LIMIT
+                                </span>
+                            </div>
+                            <div className="flex justify-between items-center border-b border-white/5 pb-1">
+                                <span className="text-white/30 uppercase text-[7.5px]">Magic ID:</span>
+                                <span className="text-white/60">{signal.ftmo_order.magic}</span>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* Panel Bitunix */}
+                {signal.bitunix_order && (
+                    <div className="px-2 py-2 bg-gradient-to-r from-purple-500/10 to-transparent rounded border border-purple-500/20 text-[9px] font-mono shadow-[inset_0_0_10px_rgba(168,85,247,0.05)]">
+                        <div className="flex items-center justify-between mb-1.5">
+                            <span className="text-purple-400 font-black tracking-widest uppercase flex items-center gap-1.5">
+                            <span className="w-1.5 h-1.5 bg-purple-400 rounded-full animate-pulse" />
+                            BITUNIX PERPETUALS
+                            </span>
+                            <span className="text-white/40 text-[7px]">ISOLATED MARGIN</span>
+                        </div>
+                        <div className="grid grid-cols-2 gap-x-4 gap-y-1.5">
+                            <div className="flex justify-between items-center border-b border-white/5 pb-1">
+                                <span className="text-white/30 uppercase text-[7.5px]">Quantity:</span>
+                                <span className="text-purple-300 font-bold">{signal.bitunix_order.quantity} {signal.bitunix_order.symbol.replace('USDT','')}</span>
+                            </div>
+                            <div className="flex justify-between items-center border-b border-white/5 pb-1">
+                                <span className="text-white/30 uppercase text-[7.5px]">Leverage:</span>
+                                <span className="text-purple-400 font-black tracking-tighter text-[11px] bg-purple-500/10 px-1 rounded">
+                                    {signal.bitunix_order.leverage}x
+                                </span>
+                            </div>
+                            <div className="flex justify-between items-center col-span-2 border-b border-white/5 pb-1">
+                                <span className="text-white/30 uppercase text-[7.5px]">Margin Reserved:</span>
+                                <span className="text-white/80">{signal.bitunix_order.metadata?.margin_reserved}</span>
+                            </div>
+                        </div>
+                        <div className="mt-1.5 flex items-center justify-between">
+                            <span className="text-[7.5px] text-white/20 italic">Notional Value: {signal.bitunix_order.metadata?.notional_value}</span>
+                        </div>
+                    </div>
+                )}
+            </div>
+
+            {/* ── Fila 6: Puntos de Confluencia (Institutional Score) ── */}
             {signal.confluence && (
                 <div className="border-t border-white/5 pt-2 flex flex-col gap-1.5">
                     <div className="flex items-center gap-3">

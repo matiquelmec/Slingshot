@@ -8,6 +8,7 @@ Monitoriza los parámetros globales de liquidez y apetito por riesgo:
 Filosofía: No operamos contra el flujo de capital global del sistema.
 """
 
+from engine.core.logger import logger
 import os
 import sys
 import io
@@ -94,7 +95,7 @@ async def update_macro_context():
 
     urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
-    print("[MACRO] 🌐 Actualizando contexto global (DXY/NASDAQ)...")
+    logger.info("[MACRO] 🌐 Actualizando contexto global (DXY/NASDAQ)...")
     try:
         # ── 1. DXY (US Dollar Index) ─────────────────────────────────────
         dxy_hist = None
@@ -113,9 +114,9 @@ async def update_macro_context():
 
             _macro_cache.dxy_price = round(float(curr_dxy), 2)
             _macro_cache.dxy_trend = "BULLISH" if curr_dxy > ma_20 else "BEARISH"
-            print(f"[MACRO] 💹 DXY={_macro_cache.dxy_price} ({_macro_cache.dxy_trend}) ← {dxy_source}")
+            logger.info(f"[MACRO] 💹 DXY={_macro_cache.dxy_price} ({_macro_cache.dxy_trend}) ← {dxy_source}")
         else:
-            print(f"[MACRO] ⚠️ DXY inaccesible. Tickers probados: {_DXY_TICKERS}")
+            logger.info(f"[MACRO] ⚠️ DXY inaccesible. Tickers probados: {_DXY_TICKERS}")
             _macro_cache.dxy_trend = "NEUTRAL"
 
         # ── 2. NASDAQ-100 ────────────────────────────────────────────────
@@ -137,9 +138,9 @@ async def update_macro_context():
             _macro_cache.nas100_change_pct = round(float(change), 2)
             _macro_cache.nasdaq_trend = "BULLISH" if change > 0 else "BEARISH"
             _macro_cache.risk_appetite = "RISK_ON" if change > 0 else "RISK_OFF"
-            print(f"[MACRO] 💹 NAS100={_macro_cache.nas100_change_pct:+.2f}% ({_macro_cache.nasdaq_trend}) ← {nas_source}")
+            logger.info(f"[MACRO] 💹 NAS100={_macro_cache.nas100_change_pct:+.2f}% ({_macro_cache.nasdaq_trend}) ← {nas_source}")
         else:
-            print(f"[MACRO] ⚠️ NASDAQ inaccesible. Tickers probados: {_NAS_TICKERS}")
+            logger.info(f"[MACRO] ⚠️ NASDAQ inaccesible. Tickers probados: {_NAS_TICKERS}")
             _macro_cache.nasdaq_trend = "NEUTRAL"
             _macro_cache.risk_appetite = "NEUTRAL"
 
@@ -152,21 +153,21 @@ async def update_macro_context():
             _macro_cache.global_bias = "LONG_ONLY" if _macro_cache.risk_appetite == "RISK_ON" else "NEUTRAL"
 
         _macro_cache.last_updated = time.time()
-        print(f"[MACRO] ✅ Sesgo Global: {_macro_cache.global_bias}")
+        logger.info(f"[MACRO] ✅ Sesgo Global: {_macro_cache.global_bias}")
 
     except Exception as e:
-        print(f"[MACRO] ⚠️ Error en sincronización: {e}")
+        logger.error(f"[MACRO] ⚠️ Error en sincronización: {e}")
 
 
 if __name__ == "__main__":
     async def test():
         await update_macro_context()
         state = get_macro_context()
-        print(f"\n{'='*50}")
-        print(f"  DXY:  {state.dxy_price} ({state.dxy_trend})")
-        print(f"  NAS:  {state.nas100_change_pct:+.2f}% ({state.nasdaq_trend})")
-        print(f"  Risk: {state.risk_appetite}")
-        print(f"  Bias: {state.global_bias}")
-        print(f"{'='*50}")
+        logger.info(f"\n{'='*50}")
+        logger.info(f"  DXY:  {state.dxy_price} ({state.dxy_trend})")
+        logger.info(f"  NAS:  {state.nas100_change_pct:+.2f}% ({state.nasdaq_trend})")
+        logger.info(f"  Risk: {state.risk_appetite}")
+        logger.info(f"  Bias: {state.global_bias}")
+        logger.info(f"{'='*50}")
 
     asyncio.run(test())

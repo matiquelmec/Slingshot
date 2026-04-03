@@ -1,3 +1,4 @@
+from engine.core.logger import logger
 import pandas as pd
 import numpy as np
 import xgboost as xgb
@@ -13,15 +14,15 @@ def train_slingshot_model(data_path: Path, model_dir: Path):
     """
     Entrena el Cerebro de Criptodamus (XGBoost) utilizando datos históricos.
     """
-    print("📈 Cargando datos desde el Data Lake...")
+    logger.info("📈 Cargando datos desde el Data Lake...")
     if not data_path.exists():
-        print(f"Error: No se encontró la data en {data_path}")
+        logger.error(f"Error: No se encontró la data en {data_path}")
         return
         
     df = pd.read_parquet(data_path)
     
     # 1. Feature Engineering
-    print("⚙️ Generando Features Estacionarias (Returns, Volatility, TA)...")
+    logger.info("⚙️ Generando Features Estacionarias (Returns, Volatility, TA)...")
     engineer = FeatureEngineer(target_horizon=2) # Predecir a 2 velas vista
     ml_dataset = engineer.prepare_dataset(df, classification=True)
     
@@ -35,7 +36,7 @@ def train_slingshot_model(data_path: Path, model_dir: Path):
     X = ml_dataset[feature_cols]
     y = ml_dataset['TARGET']
     
-    print(f"📊 Dataset final: {X.shape[0]} muestras, {X.shape[1]} features.")
+    logger.info(f"📊 Dataset final: {X.shape[0]} muestras, {X.shape[1]} features.")
     
     # 3. Time-Series Split (No hacemos un split aleatorio porque filtraríamos el "futuro" al "pasado")
     # Entrenamiento: Primer 80% chronológicamente. Prueba: Último 20%
@@ -44,7 +45,7 @@ def train_slingshot_model(data_path: Path, model_dir: Path):
     y_train, y_test = y.iloc[:split_idx], y.iloc[split_idx:]
     
     # 4. Configurar el Modelo XGBoost
-    print("🧠 Entrenando XGBoost Gradient Boosting Model...")
+    logger.info("🧠 Entrenando XGBoost Gradient Boosting Model...")
     model = xgb.XGBClassifier(
         n_estimators=300,        # Número de árboles
         learning_rate=0.05,      # Cuánto aprende de los errores pasados
@@ -64,22 +65,22 @@ def train_slingshot_model(data_path: Path, model_dir: Path):
     )
     
     # 6. Evaluar
-    print("\n⚖️ Evaluando Precisión en Data No Vista (Test Set)...")
+    logger.info("\n⚖️ Evaluando Precisión en Data No Vista (Test Set)...")
     preds = model.predict(X_test)
     acc = accuracy_score(y_test, preds)
     prec = precision_score(y_test, preds)
     
-    print(f"✅ Accuracy (Acierto General): {acc:.2%}")
-    print(f"🎯 Precision (Cuando dice COMPRA, cuántas veces acierta): {prec:.2%}")
-    print("\nReporte Detallado:")
-    print(classification_report(y_test, preds))
+    logger.info(f"✅ Accuracy (Acierto General): {acc:.2%}")
+    logger.info(f"🎯 Precision (Cuando dice COMPRA, cuántas veces acierta): {prec:.2%}")
+    logger.info("\nReporte Detallado:")
+    logger.info(classification_report(y_test, preds))
     
     # 7. Guardar el Modelo (Exportación Ultrarrápida JSON)
     os.makedirs(model_dir, exist_ok=True)
     model_path = model_dir / "slingshot_xgb_15m_v2.json"
     model.save_model(str(model_path))
     
-    print(f"💾 Modelo guardado exitosamente en: {model_path}")
+    logger.info(f"💾 Modelo guardado exitosamente en: {model_path}")
     
 if __name__ == "__main__":
     # Rutas relativas al proyecto

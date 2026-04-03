@@ -1,4 +1,5 @@
 
+from engine.core.logger import logger
 import asyncio
 import httpx
 from datetime import datetime, timezone
@@ -16,7 +17,7 @@ class CalendarWorker:
         self._stop_event = asyncio.Event()
 
     async def start(self):
-        print("📅 [CALENDAR-WORKER] Iniciando sincronizador de eventos macro...")
+        logger.info("📅 [CALENDAR-WORKER] Iniciando sincronizador de eventos macro...")
         # Ejecución inmediata al arrancar
         await self.fetch_and_process_calendar()
         
@@ -25,10 +26,10 @@ class CalendarWorker:
                 await asyncio.sleep(self.interval)
                 await self.fetch_and_process_calendar()
             except Exception as e:
-                print(f"⚠️ [CALENDAR-WORKER] Error en ciclo de calendario: {e}")
+                logger.error(f"⚠️ [CALENDAR-WORKER] Error en ciclo de calendario: {e}")
 
     async def fetch_and_process_calendar(self):
-        print("🌐 [CALENDAR-WORKER] Descargando calendario económico...")
+        logger.info("🌐 [CALENDAR-WORKER] Descargando calendario económico...")
         headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
         }
@@ -71,14 +72,14 @@ class CalendarWorker:
                                         "previous": event.get("previous", ""),
                                     })
                         except Exception as ee:
-                            print(f"⚠️ [CALENDAR-WORKER] Error procesando evento {event.get('title')}: {ee}")
+                            logger.error(f"⚠️ [CALENDAR-WORKER] Error procesando evento {event.get('title')}: {ee}")
 
                     # Ordenar: Lo más inminente o reciente primero
                     relevant_events.sort(key=lambda x: abs((datetime.fromisoformat(x['date'].replace('Z', '+00:00')) - now).total_seconds()))
                     await store.save_economic_events(relevant_events)
-                    print(f"✅ [CALENDAR-WORKER] {len(relevant_events)} eventos macro sincronizados.")
+                    logger.info(f"✅ [CALENDAR-WORKER] {len(relevant_events)} eventos macro sincronizados.")
                 else:
-                    print(f"⚠️ [CALENDAR-WORKER] Error API ({response.status_code}). Usando caché local...")
+                    logger.error(f"⚠️ [CALENDAR-WORKER] Error API ({response.status_code}). Usando caché local...")
                     raise Exception("API_ERROR")
                     
             except Exception:
@@ -93,11 +94,11 @@ class CalendarWorker:
                         with open(file_path, "r", encoding="utf-8") as f:
                             relevant_events = json.load(f)
                             await store.save_economic_events(relevant_events)
-                            print(f"✅ [CALENDAR-WORKER] {len(relevant_events)} eventos cargados desde CACHE LOCAL.")
+                            logger.info(f"✅ [CALENDAR-WORKER] {len(relevant_events)} eventos cargados desde CACHE LOCAL.")
                     else:
-                        print("❌ [CALENDAR-WORKER] No se encontró caché local ni conexión API.")
+                        logger.info("❌ [CALENDAR-WORKER] No se encontró caché local ni conexión API.")
                 except Exception as fe:
-                    print(f"❌ [CALENDAR-WORKER] Error en fallback local: {fe}")
+                    logger.error(f"❌ [CALENDAR-WORKER] Error en fallback local: {fe}")
 
     def stop(self):
         self._stop_event.set()

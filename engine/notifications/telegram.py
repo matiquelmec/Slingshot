@@ -2,6 +2,7 @@
 Capa 6: Sistema de Notificaciones — Bot de Telegram.
 Envía alertas ricas en formato Markdown cuando Slingshot genera señales reales.
 """
+from engine.core.logger import logger
 import httpx
 import asyncio
 from datetime import datetime
@@ -68,7 +69,7 @@ async def send_signal_async(signal: dict, asset: str, regime: str, strategy: str
     Retorna True si el envío fue exitoso.
     """
     if not _is_configured():
-        print("[TELEGRAM] ⚠️  Bot no configurado (TELEGRAM_BOT_TOKEN o TELEGRAM_CHAT_ID vacíos).")
+        logger.info("[TELEGRAM] ⚠️  Bot no configurado (TELEGRAM_BOT_TOKEN o TELEGRAM_CHAT_ID vacíos).")
         return False
 
     text = _format_signal_message(signal, asset, regime, strategy)
@@ -84,13 +85,13 @@ async def send_signal_async(signal: dict, asset: str, regime: str, strategy: str
         async with httpx.AsyncClient(timeout=10.0) as client:
             resp = await client.post(url, json=payload)
             if resp.status_code == 200:
-                print(f"[TELEGRAM] ✅ Señal enviada: {signal.get('type')} @ ${signal.get('price')}")
+                logger.info(f"[TELEGRAM] ✅ Señal enviada: {signal.get('type')} @ ${signal.get('price')}")
                 return True
             else:
-                print(f"[TELEGRAM] ❌ Error HTTP {resp.status_code}: {resp.text}")
+                logger.error(f"[TELEGRAM] ❌ Error HTTP {resp.status_code}: {resp.text}")
                 return False
     except Exception as e:
-        print(f"[TELEGRAM] ❌ Excepción al enviar: {e}")
+        logger.info(f"[TELEGRAM] ❌ Excepción al enviar: {e}")
         return False
 
 
@@ -125,7 +126,7 @@ async def send_drift_alert_async(drift_info: dict) -> bool:
             resp = await client.post(url, json=payload)
             return resp.status_code == 200
     except Exception as e:
-        print(f"[TELEGRAM] ❌ Error en drift alert: {e}")
+        logger.error(f"[TELEGRAM] ❌ Error en drift alert: {e}")
         return False
 
 
@@ -140,6 +141,6 @@ if __name__ == "__main__":
             'position': 200.0
         }
         ok = await send_signal_async(test_signal, 'BTCUSDT', 'MARKUP', 'TrendFollowingStrategy')
-        print("Test OK" if ok else "Test FALLIDO — revisar credenciales en .env")
+        logger.info("Test OK" if ok else "Test FALLIDO — revisar credenciales en .env")
 
     asyncio.run(_test())

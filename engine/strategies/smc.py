@@ -1,7 +1,6 @@
 import pandas as pd
 from engine.core.session_manager import TimeFilter
 from engine.indicators.sessions import map_sessions_liquidity
-from engine.indicators.structure import identify_order_blocks
 from engine.indicators.volume import confirm_trigger
 
 class SMCInstitutionalStrategy:
@@ -31,15 +30,18 @@ class SMCInstitutionalStrategy:
         df = map_sessions_liquidity(df)
 
         # 3. Order Blocks e Imbalances (FVG)
-        df = identify_order_blocks(df)
+        # Ya procesados por MarketAnalyzer, las columnas existen en df.
 
         # 4. Fibonacci Estructural (Filtro de Descuento v4.0)
-        from engine.indicators.fibonacci import get_current_fibonacci_levels
-        fib = get_current_fibonacci_levels(df)
-        if fib:
-            df['fib_05'] = fib['levels']['0.5']
-        else:
-            df['fib_05'] = None
+        # Ya procesado por MarketAnalyzer, buscar en df.attrs o utilizar el dict en MarketMap (pasado externamente si fuera necesario)
+        # Para mantener compatibilidad con SMCInstitutionalStrategy si fib_05 no existe,
+        # lo calculamos rapido tomando el soporte y resistencia principal, pero usualmente 
+        # MarketMap se encarga.
+        if 'fib_05' not in df.columns:
+            if 'support_level' in df.columns and 'resistance_level' in df.columns:
+                df['fib_05'] = df['support_level'] + (df['resistance_level'] - df['support_level']) * 0.5
+            else:
+                df['fib_05'] = None
 
         # 5. RVOL Institucional — gatillo de volumen
         df = confirm_trigger(df, min_rvol=1.5)

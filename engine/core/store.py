@@ -1,3 +1,4 @@
+from engine.core.logger import logger
 import asyncio
 from collections import deque
 from typing import Dict, List, Any, Optional
@@ -165,7 +166,7 @@ class MemoryStore:
             self._news_items.clear()
             self._liquidation_clusters.clear()
             self._advisor_advice.clear()
-            print("🧱 [MemoryStore] RAM Liberada. Estado 100% efímero reiniciado.")
+            logger.info("🧱 [MemoryStore] RAM Liberada. Estado 100% efímero reiniciado.")
 
 # Singleton Global para todo el proceso
 store = MemoryStore()

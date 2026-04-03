@@ -1,3 +1,4 @@
+from engine.core.logger import logger
 import pandas as pd
 import numpy as np
 
@@ -178,15 +179,15 @@ if __name__ == "__main__":
         # Filtrar cuántas velas tocaron el Golden Pocket
         gp_hits = analyzed_data[analyzed_data['in_golden_pocket']]
         
-        print("📐 Módulo Fibonacci & Golden Pocket Activado")
-        print(f"Total Velas Analizadas: {len(data)}")
-        print(f"🔥 Impactos en el Golden Pocket (0.618 - 0.66): {len(gp_hits)} velas")
+        logger.info("📐 Módulo Fibonacci & Golden Pocket Activado")
+        logger.info(f"Total Velas Analizadas: {len(data)}")
+        logger.info(f"🔥 Impactos en el Golden Pocket (0.618 - 0.66): {len(gp_hits)} velas")
         
         if not gp_hits.empty:
             last_hit = gp_hits.iloc[-1]
-            print(f"\nÚltima interacción con el Golden Pocket:")
-            print(f"Fecha: {last_hit['timestamp']}")
-            print(f"Precio: ${last_hit['close']}")
-            print(f"Swing (Low ${last_hit['swing_low']} -> High ${last_hit['swing_high']})")
+            logger.info(f"\nÚltima interacción con el Golden Pocket:")
+            logger.info(f"Fecha: {last_hit['timestamp']}")
+            logger.info(f"Precio: ${last_hit['close']}")
+            logger.info(f"Swing (Low ${last_hit['swing_low']} -> High ${last_hit['swing_high']})")
     else:
-        print("Data file not found.")
+        logger.info("Data file not found.")

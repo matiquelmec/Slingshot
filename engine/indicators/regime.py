@@ -1,3 +1,4 @@
+from engine.core.logger import logger
 import pandas as pd
 import numpy as np
 
@@ -109,5 +110,5 @@ if __name__ == "__main__":
     
     detector = RegimeDetector()
     results = detector.detect_regime(test_df)
-    print("Regímenes detectados (SMC Pure Price Action):")
-    print(results['market_regime'].value_counts())
+    logger.info("Regímenes detectados (SMC Pure Price Action):")
+    logger.info(results['market_regime'].value_counts())

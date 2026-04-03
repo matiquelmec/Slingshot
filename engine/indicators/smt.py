@@ -10,44 +10,57 @@ Lógica SMT:
 """
 
 import pandas as pd
+from typing import Dict, Union
 
-def detect_smt_divergence(df_primary: pd.DataFrame, df_secondary: pd.DataFrame) -> dict:
+def detect_smt_divergence(df_primary: pd.DataFrame, df_secondary: pd.DataFrame, window: int = 10) -> Dict[str, Union[str, float]]:
     """
-    Compara los extremos recientes de dos activos (ej: BTC y ETH).
-    Retorna un dict con el estado de la divergencia SMT.
+    Compara los extremos recientes de dos activos (ej: BTC y ETH) en una ventana de tiempo.
+    Retorna un dict con el estado de la divergencia SMT y su fuerza (0.0 a 1.0).
     """
-    if len(df_primary) < 2 or len(df_secondary) < 2:
+    if len(df_primary) < window or len(df_secondary) < window:
         return {"divergence": "NONE", "strength": 0}
 
-    # Tomar los últimos dos fractales o mínimos/máximos recientes
-    # (Simplificado: últimas dos velas de 15m para detectar el barrido inmediato)
-    p1_low_0 = df_primary['low'].iloc[-2]
-    p1_low_1 = df_primary['low'].iloc[-1]
-    
-    s1_low_0 = df_secondary['low'].iloc[-2]
-    s1_low_1 = df_secondary['low'].iloc[-1]
+    # Slice a la ventana de observación
+    p_window = df_primary.tail(window)
+    s_window = df_secondary.tail(window)
 
-    # --- SMT ALCISTA (Buscando Fondo) ---
-    # BTC hace Lower Low, pero ETH hace Higher Low
-    if p1_low_1 < p1_low_0 and s1_low_1 > s1_low_0:
+    p_lows = p_window['low'].values
+    s_lows = s_window['low'].values
+    
+    # ── SMT ALCISTA (Buscando Acumulación) ──────────────────────────────────
+    # Activo Primario hace un Lower Low (LL) comparado con el inicio de la ventana
+    # Activo Secundario hace un Higher Low (HL) en el mismo periodo
+    p_ll = p_lows[-1] < p_lows[0]
+    s_hl = s_lows[-1] > s_lows[0]
+    
+    if p_ll and s_hl:
+        # Calcular fuerza basada en la profundidad de la divergencia relativa
+        p_drop = (p_lows[0] - p_lows[-1]) / p_lows[0]
+        s_rise = (s_lows[-1] - s_lows[0]) / s_lows[0]
+        strength = min(1.0, (p_drop + s_rise) * 100) # Sensibilidad 100x
+
         return {
             "divergence": "BULLISH_SMT",
-            "reason": "Activo primario barrió liquidez, secundario mantuvo estructura (Acumulación)",
-            "strength": 0.8
+            "reason": "Smart Money Acumulación: Primario barrió, Secundario aguantó.",
+            "strength": round(max(0.5, strength), 2)
         }
 
-    # --- SMT BAJISTA (Buscando Techo) ---
-    p1_high_0 = df_primary['high'].iloc[-2]
-    p1_high_1 = df_primary['high'].iloc[-1]
+    # ── SMT BAJISTA (Buscando Distribución) ─────────────────────────────────
+    p_highs = p_window['high'].values
+    s_highs = s_window['high'].values
     
-    s1_high_0 = df_secondary['high'].iloc[-2]
-    s1_high_1 = df_secondary['high'].iloc[-1]
+    p_hh = p_highs[-1] > p_highs[0]
+    s_lh = s_highs[-1] < s_highs[0]
+    
+    if p_hh and s_lh:
+        p_pump = (p_highs[-1] - p_highs[0]) / p_highs[0]
+        s_drop = (s_highs[0] - s_highs[-1]) / s_highs[0]
+        strength = min(1.0, (p_pump + s_drop) * 100)
 
-    if p1_high_1 > p1_high_0 and s1_high_1 < s1_high_0:
         return {
             "divergence": "BEARISH_SMT",
-            "reason": "Activo primario barrió liquidez, secundario falló en hacer nuevo High (Distribución)",
-            "strength": 0.8
+            "reason": "Smart Money Distribución: Primario barrió, Secundario falló.",
+            "strength": round(max(0.5, strength), 2)
         }
 
     return {"divergence": "NONE", "strength": 0}

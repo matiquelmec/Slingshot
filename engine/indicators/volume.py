@@ -1,3 +1,4 @@
+from engine.core.logger import logger
 import pandas as pd
 import numpy as np
 
@@ -64,8 +65,8 @@ if __name__ == "__main__":
         # Filtrar velas con RVOL Extremo (> 2.5x lo normal)
         extreme_vol = analyzed_data[analyzed_data['rvol'] >= 2.5]
         
-        print("📊 Nivel 3: Escáner de Volumen Institucional (RVOL):")
-        print(f"Total de velas analizadas: {len(data)}")
-        print(f"🔥 Velas con inyección extrema de capital (RVOL >= 2.5): {len(extreme_vol)}")
+        logger.info("📊 Nivel 3: Escáner de Volumen Institucional (RVOL):")
+        logger.info(f"Total de velas analizadas: {len(data)}")
+        logger.info(f"🔥 Velas con inyección extrema de capital (RVOL >= 2.5): {len(extreme_vol)}")
     else:
-        print("Data file not found.")
+        logger.info("Data file not found.")

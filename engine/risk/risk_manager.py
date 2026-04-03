@@ -6,8 +6,8 @@ MIN_RR_REQUIRED = 1.8
 # Factor de Fricción Operativa (0.1% comisión entrada + 0.1% salida + 0.05% slippage estimado)
 FEE_SLIPPAGE_IMPACT = 0.0025 
 
-# Límite de pérdida diaria máxima por cuenta (3%)
-MAX_DAILY_DRAWDOWN_PCT = 0.03
+# Límite de pérdida diaria máxima por cuenta (3.5%)
+MAX_DAILY_DRAWDOWN_PCT = 0.035
 
 class RiskManager:
     """
@@ -45,7 +45,7 @@ class RiskManager:
             # ⛔ 1. Verificación de Hard-Stop Diario (Pilar 4.1)
             if self.is_locked or self.daily_loss_usd >= (self.account_balance * MAX_DAILY_DRAWDOWN_PCT):
                 self.is_locked = True
-                return {"approved": False, "rr_ratio": 0.0, "trade_quality": "LOCKED", "reason": "📛 HARD-STOP: Límite de pérdida diaria alcanzado (3%)"}
+                return {"approved": False, "rr_ratio": 0.0, "trade_quality": "LOCKED", "reason": "📛 HARD-STOP: Límite de pérdida diaria alcanzado (3.5%)"}
 
             # ⛔ 2. SMC GATES: Volumen y Alineación (Pilar 2)
             # Solo si la señal contiene estos diagnósticos del MarketAnalyzer
@@ -209,10 +209,6 @@ class RiskManager:
         risk = risk if risk > 0 else 0.0001
         structural_rr = reward / risk
         
-        # Si la estructura natural nos da > 3R, excelente.
-        # Pero a veces la estructura da 1.5R. En sistemas rígidos forzamos 3R, 
-        # pero para que el bot no se coma walls, recalcularemos más abajo si vale la pena.
-
         return stop_loss, take_profit, structural_rr
 
     def calculate_position(
@@ -222,66 +218,65 @@ class RiskManager:
         market_regime: str, 
         key_levels: list = None,
         smc_data: dict = None,
-        atr_value: float = 0.0
+        atr_value: float = 0.0,
+        smt_strength: float = 0.0
     ) -> dict:
         """
         Calcula asimétricamente el tamaño de la posición y el apalancamiento exacto.
+        Implementa modo 'Institutional Run' v4.3 si SMT > 0.8.
         """
-        # 1. Definir Fracción de Riesgo (Fractional Kelly)
+        # 1. Fracción de Riesgo (Kelly)
         multiplier = self.get_regime_multiplier(market_regime)
         actual_risk_pct = self.base_risk_pct * multiplier
         risk_amount_usdt = self.account_balance * actual_risk_pct
 
-        # 2. Definir Stop Loss Geográfico y TP Estructural 
+        # 2. Stop Loss Geográfico y TP Estructural
         fallback_atr = atr_value if atr_value and atr_value > 0 else (current_price * 0.005)
-        
         stop_loss_price, take_profit_price, structural_rr = self.calculate_structural_sl_tp(
-            current_price=current_price, 
-            signal_type=signal_type, 
-            key_levels=key_levels,
-            smc_data=smc_data,
-            atr_value=fallback_atr
+            current_price=current_price, signal_type=signal_type, key_levels=key_levels,
+            smc_data=smc_data, atr_value=fallback_atr
         )
 
-        # 3. Distancia del SL en porcentaje
-        sl_distance_pct = abs(current_price - stop_loss_price) / current_price
-        if sl_distance_pct < 0.001:  # Evitar divisiones por cero o SL irracionalmente apretados
-            sl_distance_pct = 0.001 
-
-        # 4. Volatility Target Sizing (Tamaño de Posición Total Nominal)
-        # Position Size = Dinero Arriesgado / Distancia Porcentual del SL
-        position_size_nominal = risk_amount_usdt / sl_distance_pct
-
-        # 5. Apalancamiento Requerido
-        required_leverage = position_size_nominal / self.account_balance
+        # 3. Lógica Institucional de Salida Dinámica (MODO V4.3 TITANIUM)
+        exit_strategy = "ESTÁNDAR"
+        trailing_stop_logic = "NONE"
+        tp1 = take_profit_price
+        tp2 = None
         
-        # Ceil & Clamp al apalancamiento operativo de exchange
-        leverage = math.ceil(required_leverage)
-        leverage = max(1, min(leverage, int(self.max_leverage)))
+        if smt_strength >= 0.8:
+            exit_strategy = "INSTITUTIONAL RUN 🏃"
+            # TP1: Ratio 2.0R (Asegurar 50% de la posición)
+            risk = abs(current_price - stop_loss_price)
+            tp1_rr = 2.0
+            tp1 = current_price + (risk * tp1_rr) if signal_type == "LONG" else current_price - (risk * tp1_rr)
+            
+            # TP2: Liquidez Externa (Muro Estructural Siguiente)
+            # Busco la siguiente barrera más allá de TP1
+            tp2 = take_profit_price # En v3.2 ya busca el primer muro
+            
+            # Trailing Stop Protocol para FTMO
+            trailing_stop_logic = "BE+1_THEN_FVG_TRAIL"
 
-        # 6. Recalcular Position Size real basado en el leverage clipeado (por si excedió el max)
-        actual_position_size = min(position_size_nominal, self.account_balance * leverage)
+        # 4. Cálculo de Sizing
+        sl_distance_pct = abs(current_price - stop_loss_price) / current_price
+        sl_distance_pct = max(0.001, sl_distance_pct)
 
-        # 7. Quality Check del Trade Institucional:
-        # Si la geografía natural me da menos de 2.0R, es un trade subóptimo (mucho riesgo, poco premio real).
-        # En vez de matar el TP ciegamente a 3R, mantenemos el TP en la muralla, 
-        # pero avisamos al frontend que este trade no cumple asimetría pura.
-        trade_quality = "A+" if structural_rr >= 2.5 else ("B" if structural_rr >= 1.5 else "C (Low Reward)")
+        pos_size_nominal = risk_amount_usdt / sl_distance_pct
+        leverage = min(int(self.max_leverage), math.ceil(pos_size_nominal / self.account_balance))
+        actual_pos_size = min(pos_size_nominal, self.account_balance * leverage)
 
         return {
             "account_balance":   round(self.account_balance, 2),
             "risk_amount_usdt":  round(risk_amount_usdt, 2),
             "risk_pct":          round(actual_risk_pct * 100, 2),
             "leverage":          leverage,
-            "position_size_usdt": round(actual_position_size, 2),
-            "entry_price":       round(current_price, 2),
+            "position_size_usdt": round(actual_pos_size, 2),
             "stop_loss":         round(stop_loss_price, 2),
-            "take_profit_3r":    round(take_profit_price, 2),
-            # Zona de entrada: rango del OB (1.5x ATR alrededor del precio de entrada)
-            "entry_zone_top":    round(current_price + (fallback_atr * 0.5), 2),
-            "entry_zone_bottom": round(current_price - (fallback_atr * 0.5), 2)
-              if str(signal_type).upper() == 'LONG'
-              else round(current_price - (fallback_atr * 0.5), 2),
-            # Metadatos de expiración para el frontend
+            "tp1":               round(tp1, 2),
+            "tp2":               round(tp2, 2) if tp2 else None,
+            "take_profit_3r":    round(tp1, 2), # Legacy compatible
+            "exit_strategy":     exit_strategy,
+            "trailing_stop":     trailing_stop_logic,
+            "smt_strength_bonus": smt_strength,
             "expiry_candles":    3,   # La señal es válida por 3 velas (45min en 15m)
         }

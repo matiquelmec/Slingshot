@@ -180,16 +180,50 @@ export const useTelemetryStore = create<TelemetryState>((set, get) => {
 
         };
 
+        // 🔴 STALE GUARD v4.3.5: Track last message time for zombie tab detection
+        let lastMsgTimestamp = Date.now();
+        let staleGuardActive = false;
+
         ws.onmessage = (event) => {
             const currentId = get().activeConnectionId;
             if (connectionId !== currentId) {
-                // Mensaje de una conexión antigua o re-intentada que ya no es la activa
                 return;
             }
 
+            // 🔴 STALE GUARD: Si hubo un gap > 60s (PC suspendida), descartar mensajes viejos
+            // hasta que llegue un 'history' fresco que resincronice el estado
+            const now = Date.now();
+            const gapMs = now - lastMsgTimestamp;
+            lastMsgTimestamp = now;
+
+            if (gapMs > 60_000 && !staleGuardActive) {
+                staleGuardActive = true;
+                console.warn(`[STALE GUARD] Gap de ${(gapMs / 1000).toFixed(0)}s detectado. Purgando mensajes obsoletos...`);
+                set((state) => ({
+                    neuralLogs: [{
+                        id: Math.random().toString(36).substring(7),
+                        timestamp: new Date().toLocaleTimeString('en-US', { hour12: false }),
+                        type: 'SYSTEM' as const,
+                        message: '[SYSTEM] Stale messages purged. Syncing to HEAD...'
+                    }, ...state.neuralLogs].slice(0, 5)
+                }));
+            }
+
+            // Si el stale guard está activo, solo dejamos pasar 'history' (resync completo)
+            // y mensajes de tipo estado global. Los ticks individuales viejos se descartan.
             let data: any;
             try {
                 data = JSON.parse(event.data);
+
+                if (staleGuardActive) {
+                    // Solo aceptar history (resync) o mensajes de estado que traigan snapshot completo
+                    if (data.type === 'history' || data.type === 'ghost_update' || data.type === 'radar_update') {
+                        staleGuardActive = false; // Resync completado
+                        console.log('[STALE GUARD] Resync completado. Flujo normal restaurado.');
+                    } else {
+                        return; // Descartar mensajes stale silenciosamente
+                    }
+                }
 
                 if (data.type === 'history') {
                     // Carga ultrasónica de datos históricos (Batch Processing)

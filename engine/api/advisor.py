@@ -1,3 +1,4 @@
+from engine.core.logger import logger
 import httpx
 import traceback
 import asyncio
@@ -43,6 +44,9 @@ async def generate_tactical_advice(
     strategy = tactical_data.get('active_strategy', 'UNKNOWN')
     regime = tactical_data.get('market_regime', 'UNKNOWN')
     
+    # 🔴 PRECIO LIVE v4.3.4: Usar current_price inyectado por _emit_advisor (latest tick del WS)
+    live_price = float(tactical_data.get('current_price', 0))
+    
     # Extraer data de la matriz de diagnóstico
     diag = tactical_data.get('diagnostic', {}) or {}
     rsi = diag.get('rsi', 50) or 50
@@ -52,6 +56,18 @@ async def generate_tactical_advice(
     in_killzone = "SÍ (Volumen Institucional Alto)" if diag.get('in_killzone', False) else "NO (Volumen Minorista/Lento)"
     bull_div = "PRESENTE" if diag.get('bullish_divergence') else "NO"
     bear_div = "PRESENTE" if diag.get('bearish_divergence') else "NO"
+    rvol = diag.get('rvol', 0) or 0
+    
+    # 🔴 ALERTA DE ABSORCIÓN INSTITUCIONAL v4.3.4 (Tiered)
+    rvol_alert = ""
+    if rvol > 10.0 and regime in ('RANGING', 'ACCUMULATION', 'DISTRIBUTION'):
+        rvol_alert = f"""🚨 [ABSORCIÓN PROFESIONAL CRÍTICA] RVOL={rvol:.1f}x en régimen {regime}. 
+    Esto indica que las manos fuertes están acumulando/distribuyendo MASIVAMENTE mientras el precio parece estable.
+    EXPANSIÓN DE VOLATILIDAD INMINENTE. DEBES advertir sobre esta absorción en tu veredicto ANTES de dar dirección.
+    Si el régimen es ACCUMULATION o RANGING con soportes cercanos → Expansión probable hacia ARRIBA.
+    Si el régimen es DISTRIBUTION → Expansión probable hacia ABAJO."""
+    elif rvol > 5.0 and regime in ('RANGING', 'ACCUMULATION', 'DISTRIBUTION'):
+        rvol_alert = f"⚠️ ABSORCIÓN INSTITUCIONAL DETECTADA: RVOL={rvol:.1f}x en régimen {regime}. EXPANSIÓN INMINENTE. Preparar entrada agresiva al primer BOS."
     
     # Extraer data de Estructura (SMC / Soportes)
     smc = tactical_data.get('smc', {})
@@ -170,18 +186,28 @@ async def generate_tactical_advice(
             return f"[CONSISTENTE CON ÚLTIMA LECTURA] {prev['advice']}"
 
     prompt = f"""
-    Eres el 'Asesor Cuantitativo Institucional' del sistema Slingshot v4.0. Tu misión es ejecutar el Algoritmo de Decisión SMC de 5 Fases.
+    Eres el 'Asesor Cuantitativo Institucional' del sistema Slingshot v4.3. Tu misión es ejecutar el Algoritmo de Decisión SMC de 5 Fases.
     ERES UNA MÁQUINA LÓGICA REGLAMENTARIA. DEBES OBEDECER ESTAS LEYES INQUEBRANTABLES:
-    LEYES MACRO: 
-    - SI DXY ES BULLISH: PROHIBIDO LONG EN CRIPTO. SOLO BUSCAR SHORTS O DESCARTAR (DXY sube = Dólar fuerte = Cripto cae).
-    - SI DXY ES BEARISH: BUSCAR LONGS EN CRIPTO (Dólar débil = Cripto sube).
-    - SI NASDAQ CAE: PROHIBIDO LONGS EN CRIPTO.
+
+    ═══════════════════════════════════════════
+    LEYES MACRO (CORRELACIÓN DXY-CRIPTO):
+    ═══════════════════════════════════════════
+    - SI DXY ES BULLISH (Dólar fuerte): PROHIBIDO LONG EN CRIPTO. Dólar fuerte = Fuga de capital de activos de riesgo = Cripto cae. SOLO buscar SHORTS o DESCARTAR.
+    - SI DXY ES BEARISH (Dólar débil): BUSCAR LONGS EN CRIPTO. Dólar débil = Inyección de liquidez = Cripto sube. Es correlación INVERSA, NO directa.
+    - SI NASDAQ CAE (BEARISH): PROHIBIDO LONGS EN CRIPTO (correlación directa con risk assets).
+    ⚠️ REGLA ANTI-ALUCINACIÓN: DXY BEARISH = FAVORABLE PARA LONGS EN CRIPTO. NO confundas esta regla. SI en tu análisis dices "DXY Bearish" y luego prohíbes longs, estás VIOLANDO esta ley.
+
     LEYES DE SESIÓN:
-    - ASIA (20:00-03:00): ZONA DE ACUMULACIÓN. PROHIBIDO OPERAR.
-    - LONDON (04:00-08:00): ZONA DE TRAMPA/BARRIDO. ESPERAR MANIPULACIÓN.
-    - NY (09:30-12:00): ZONA DE EJECUCIÓN (KILLZONE). SÓLO AQUÍ SE OPERA CONTINUACIÓN.
-    - OFF_HOURS / AUSENCIA DE KILLZONE: PROHIBIDO OPERAR (Falta de liquidez institucional).
-    
+    - ASIA (20:00-03:00 UTC): ZONA DE ACUMULACIÓN. PROHIBIDO OPERAR.
+    - LONDON (04:00-08:00 UTC): ZONA DE TRAMPA/BARRIDO. ESPERAR MANIPULACIÓN.
+    - NY (09:30-12:00 UTC): ZONA DE EJECUCIÓN (KILLZONE). SÓLO AQUÍ SE OPERA.
+    - OFF_HOURS / AUSENCIA DE KILLZONE: PROHIBIDO OPERAR.
+
+    ═══════════════════════════════════════════
+    DATOS EN TIEMPO REAL (SNAPSHOT LIVE):
+    ═══════════════════════════════════════════
+    🔴 PRECIO ACTUAL EN TIEMPO REAL: ${f_p(live_price)} (Este es el precio LIVE del WebSocket. USA ESTE VALOR como referencia, NO inventes otro.)
+
     CAPA 1: CONTEXTO GLOBAL MACRO (DXY/NASDAQ)
     - DXY Trend: {ghost.dxy_trend} | NASDAQ Trend: {ghost.nasdaq_trend}
     - HTF Global Bias: {htf_dir} (Razón: {htf_reason})
@@ -192,9 +218,11 @@ async def generate_tactical_advice(
     CAPA 3: ZONAS INSTITUCIONALES (SMC)
     - Activo: {asset}
     - Zonas de Oferta (Bearish): {obs_bearish + fvgs_bearish} | Zonas de Demanda (Bullish): {obs_bullish + fvgs_bullish}
-    - SOPORTE CRÍTICO (SISTEMA DE ANCLAJE): {support}
-    - RESISTENCIA CRÍTICA (SISTEMA DE ANCLAJE): {resistance}
+    - SOPORTE CRÍTICO: {support}
+    - RESISTENCIA CRÍTICA: {resistance}
     - Fib Level Actual: {fibo_lvl}
+    - RVOL (Volumen Relativo): {rvol:.2f}x {'⚠️ ANORMALMENTE ALTO' if rvol > 5.0 else '(Normal)' if rvol > 0.8 else '⚠️ BAJO'}
+    {rvol_alert}
 
     CAPA 4: GATILLO Y MICRO-ESTRUCTURA
     - Proyección Direccional XGBoost (IA): {ml_dir} ({ml_prob}%)
@@ -206,23 +234,25 @@ async def generate_tactical_advice(
     CALENDARIO ECONÓMICO (Macro Inminente):
     {cal_text}
 
-    EJECUTA ESTE CHECKLIST ESTRICTO MEDIANTE RAZONAMIENTO EN CADENA (Chain of Thought - Responde en este orden):
-    [PASO 1] LEY DE SUPERVIVENCIA (DEFCON 1): Si las noticias o el calendario contienen 'Guerra', 'War', 'Bankruptcy', 'Quiebra', 'Hack' o 'SEC sue', ABORTA TODO INMEDIATAMENTE. Tu veredicto debe ser "🚨 [DEFCON 1] MERCADO CONTAMINADO. OPERACIONES SUSPENDIDAS." y justificarlo.
-    [PASO 2] CONTEXTO DE ALTO NIVEL (HTF/4H): Estandarización de la directriz principal (Ley DXY). Si hay contradicción, infórmalo.
-    [PASO 3] CONTEXTO ESTRUCTURAL (1H/15m): Condición del Precio vs Soportes/Resistencias institucionales. Identifica si es la Zona Extrema.
-    [PASO 4] EL GATILLO Y SESIÓN (1m/5m): Confirma si estamos en Killzone y evalúa el predictor IA (XGBoost).
-    [PASO 5] VEREDICTO FINAL: Decisión unificada e incuestionable. Si DXY es BULLISH y buscas LONG, el veredicto es DENEGADO.
+    ═══════════════════════════════════════════
+    CHECKLIST DE DECISIÓN (Razonamiento en Cadena):
+    ═══════════════════════════════════════════
+    [PASO 1] DEFCON CHECK: Busca en las noticias y calendario: 'Guerra', 'War', 'Bankruptcy', 'Quiebra', 'Hack', 'SEC sue'. SI encuentras alguna → veredicto: "🚨 [DEFCON 1] MERCADO CONTAMINADO. OPERACIONES SUSPENDIDAS." SI NO hay amenazas → responde "[DEFCON CLEAR] Sin cisne negro detectado." PROHIBIDO inventar niveles como 'DEFCON 5' o 'DEFCON 3'. Solo existen dos estados: DEFCON 1 (peligro) o DEFCON CLEAR (seguro).
+    [PASO 2] LEY DXY/MACRO: Evalúa DXY y NASDAQ. Recuerda: DXY BEARISH = FAVORABLE para LONGS cripto. DXY BULLISH = PROHIBIDO LONGS. Verifica que tu conclusión NO contradiga esta ley.
+    [PASO 3] ESTRUCTURA (Precio ${f_p(live_price)} vs S/R): Posición del precio relativa al soporte/resistencia. Si RVOL es alto en RANGING → señalar Absorción Institucional y Expansión Inminente.
+    [PASO 4] SESIÓN & GATILLO: ¿Estamos en Killzone? Evalúa el predictor XGBoost.
+    [PASO 5] VEREDICTO FINAL: Decisión unificada. Si DXY BULLISH y propones LONG → DENEGADO. Si DXY BEARISH y propones LONG → APROBADO (si los demás filtros pasan).
 
-    REGLAS ESTRICTAS PARA TU RESPUESTA:
-    1. BREVEDAD NIVEL PENTÁGONO. Sin rodeos. Redacta el paso a paso exigido arriba.
+    REGLAS DE FORMATO:
+    1. BREVEDAD NIVEL PENTÁGONO. Sin rodeos.
     2. Tono frío, militar, ultra-profesional. EMPIEZA CON "INFORME SMC V4.3 PLATINUM:".
     3. AL FINAL incluye: [RIESGO DE SISTEMA: TGT 1:3 MINIMO INNEGOCIABLE]
     """
 
     try:
-        print(f"[ADVISOR] ⏳ Reservando motor IA para {asset}...")
+        logger.info(f"[ADVISOR] ⏳ Reservando motor IA para {asset}...")
         async with _ai_semaphore:
-            print(f"[ADVISOR] 🚀 Motor IA activo para {asset}. Llamando a Ollama...")
+            logger.info(f"[ADVISOR] 🚀 Motor IA activo para {asset}. Llamando a Ollama...")
             
             # DIAGNÓSTICO PROFESIONAL: ¿Qué le llega realmente a la IA?
             try:
@@ -240,11 +270,11 @@ async def generate_tactical_advice(
                     "stream": False
                 }
                 
-                print(f"--- [DEBUG FULL PROMPT FOR {asset}] ---")
-                print(prompt)
-                print(f"--- [DEBUG TACTICAL DATA FOR {asset}] ---")
-                print(f"Soporte={support} | Resistencia={resistance} | sups={len(sups)} | nearest_s={tactical_data.get('nearest_support')}")
-                print("--- [END DEBUG] ---")
+                logger.info(f"--- [DEBUG FULL PROMPT FOR {asset}] ---")
+                logger.info(prompt)
+                logger.info(f"--- [DEBUG TACTICAL DATA FOR {asset}] ---")
+                logger.info(f"Soporte={support} | Resistencia={resistance} | sups={len(sups)} | nearest_s={tactical_data.get('nearest_support')}")
+                logger.info("--- [END DEBUG] ---")
 
                 response = await client.post(OLLAMA_URL, json=payload)
                 if response.status_code != 200:
@@ -276,14 +306,14 @@ async def generate_tactical_advice(
                     with open(f"c:/tmp/forensics_{asset.lower()}_{int(time.time())}.json", "w", encoding="utf-8") as fb:
                         json.dump(forensics, fb, indent=4, ensure_ascii=False)
                 except Exception as fx:
-                    print(f"[ADVISOR] Forensics dump failed: {fx}")
+                    logger.error(f"[ADVISOR] Forensics dump failed: {fx}")
                 
-                print(f"[ADVISOR] ✅ Análisis generado localmente para {asset} (Ollama)")
+                logger.info(f"[ADVISOR] ✅ Análisis generado localmente para {asset} (Ollama)")
                 return advice
         # El bloque with libera el semáforo automáticamente
 
     except Exception as e:
-        print(f"[ADVISOR] ❌ Error en Ollama Advisor ({asset}): {e}")
+        logger.error(f"[ADVISOR] ❌ Error en Ollama Advisor ({asset}): {e}")
         return "ADVISOR LOG: LOCAL_MODEL_OFFLINE. Verifica si Ollama está corriendo."
 
 async def generate_news_sentiment(headline: str) -> dict:

@@ -13,6 +13,8 @@ Evalúa cada señal contra el arsenal puramente institucional completo:
 
 import pandas as pd
 from datetime import datetime, timezone
+from typing import Dict, Any, Optional
+from engine.core.logger import logger
 
 class ConfluenceManager:
     """
@@ -22,12 +24,12 @@ class ConfluenceManager:
     def evaluate_signal(
         self,
         df: pd.DataFrame,
-        signal: dict,
-        ml_projection: dict = None,
-        session_data: dict = None,
-        correlated_df: pd.DataFrame = None, # Activado v4.0: Para SMT Divergence
-        **kwargs
-    ) -> dict:
+        signal: Dict[str, Any],
+        ml_projection: Optional[Dict[str, Any]] = None,
+        session_data: Optional[Dict[str, Any]] = None,
+        correlated_df: Optional[pd.DataFrame] = None, # Activado v4.0: Para SMT Divergence
+        **kwargs: Any
+    ) -> Dict[str, Any]:
         ml_projection = ml_projection or {}
         session_data  = session_data  or {}
         econ_events   = kwargs.get('economic_events', [])
@@ -184,8 +186,8 @@ class ConfluenceManager:
         if news_score >= 0.7: score += 5
         elif news_score <= 0.3: score -= 5
 
-        # 9. SMT DIVERGENCE (Bono 10) v4.0 (Gema Activada)
-        smt_weight = 10
+        # 9. SMT DIVERGENCE (Bono 25) v4.3 (Confirmación de Elite)
+        smt_weight = 25
         total_weight += smt_weight
         smt_status = "NEUTRAL"
         smt_detail = "Sin activo de comparación"
@@ -194,11 +196,14 @@ class ConfluenceManager:
             from engine.indicators.smt import detect_smt_divergence
             smt_result = detect_smt_divergence(df, correlated_df)
             div_type = smt_result.get('divergence', 'NONE')
+            strength = smt_result.get('strength', 0)
             
             if (is_long and div_type == 'BULLISH_SMT') or (not is_long and div_type == 'BEARISH_SMT'):
-                score += smt_weight
+                # OTORGAMOS PUNTOS ESCALARES (Máximo 25)
+                smt_pts = int(smt_weight * strength)
+                score += smt_pts
                 smt_status = "CONFIRMADO ✅"
-                smt_detail = smt_result['reason']
+                smt_detail = f"{smt_result['reason']} (Fuerza: {strength*100:.0f}%)"
             elif div_type != 'NONE':
                 # Divergencia opuesta (Pelotón de advertencia)
                 smt_status = "DIVERGENTE ⚠️"
@@ -209,12 +214,92 @@ class ConfluenceManager:
                 
         checklist.append({"factor": "SMT Divergence", "status": smt_status, "detail": smt_detail})
 
-        # RESULTADO FINAL
-        final_score = min(100, int((score / total_weight) * 100)) if total_weight > 0 else 0
-        conviction = "ALTA CONVICCIÓN" if final_score >= 70 else "SÓLIDA" if final_score >= 50 else "ESPECULATIVA"
+        # 🚀 10. VETO DE TEMPORALIDAD SUPERIOR (HTF VETO) v4.3 Titanium
+        htf_bias = kwargs.get('htf_bias')
+        multiplier = 1.0
+        if htf_bias:
+            htf_score = htf_bias.strength * 100
+            is_contrary = (is_long and htf_bias.direction == 'BEARISH') or (not is_long and htf_bias.direction == 'BULLISH')
+            
+            if htf_score < 15 or is_contrary:
+                multiplier = 0.0
+                veto_reason = f"HTF Score Bajo ({htf_score:.0f})" if htf_score < 15 else f"Dirección HTF Contraria ({htf_bias.direction})"
+                checklist.append({"factor": "Veto HTF", "status": "DENEGADO", "detail": veto_reason})
+            else:
+                checklist.append({"factor": "Veto HTF", "status": "APROBADO", "detail": f"Fuerza Macro: {htf_score:.0f}%"})
+
+        # 🚀 11. VETO DE VALOR (PREMIUM / DISCOUNT) v4.3 Titanium
+        from engine.indicators.fibonacci import get_current_fibonacci_levels
+        fib_data = get_current_fibonacci_levels(df)
+        price = float(current.get('close', 0))
         
-        print(f"[CONFLUENCE] Asset: {signal.get('pair') or 'BTC'} | Score: {final_score}% (Score: {score} / Total: {total_weight})")
-        print(f"             Regime OK? {regime_ok} | POI? {poi_pts} | Macro Near? {high_impact_near}")
+        if fib_data and 'levels' in fib_data:
+            fib_05 = fib_data['levels'].get('0.5')
+            if fib_05:
+                # REGLA DE ORO SMC: Comprar solo en Discount (<0.5), Vender solo en Premium (>0.5)
+                invalid_value = (is_long and price > fib_05) or (not is_long and price < fib_05)
+                
+                if invalid_value:
+                    multiplier = 0.0
+                    value_zone = "PREMIUM (CARO)" if is_long else "DISCOUNT (BARATO)"
+                    checklist.append({"factor": "Veto de Valor", "status": "DENEGADO", "detail": f"Zona {value_zone}"})
+                else:
+                    value_zone = "DISCOUNT ✅" if is_long else "PREMIUM ✅"
+                    checklist.append({"factor": "Zona de Valor", "status": "CONFIRMADO", "detail": value_zone})
+
+        # 🚀 12. VETO DE VOLATILIDAD MACRO (EVENTOS ECONÓMICOS) v4.3 Titanium
+        if high_impact_near:
+            # Si el evento es en menos de 30 min (0.5 horas), Veto Total
+            is_imminent = False
+            for ev in econ_events:
+                ev_date = ev.get('date', ev.get('timestamp'))
+                if not ev_date: continue
+                ev_time = pd.to_datetime(ev_date, utc=True)
+                diff_m = (ev_time - now).total_seconds() / 60
+                if 0 < diff_m <= 30 and (ev.get('impact') == 'High' or ev.get('impact') == 'HIGH'):
+                    is_imminent = True
+                    event_name = ev.get('title', 'Evento Crítico')
+                    break
+
+            if is_imminent:
+                multiplier = 0.0
+                checklist.append({"factor": "Veto Macro News", "status": "DENEGADO", "detail": f"Imminente: {event_name}"})
+
+        # 🚀 13. RELOJ DE OBSOLESCENCIA (TIME-DECAY) v4.3 Titanium
+        # Las señales de 1m o 5m rotan rápido; si no se mitigan pronto, pierden validez.
+        try:
+            now_ts = df['timestamp'].iloc[-1]
+            sig_ts = pd.to_datetime(signal.get('timestamp'), utc=True)
+            # Aproximamos velas transcurridas (asumiendo que estamos en el mismo DF)
+            candles_elapsed = len(df[df['timestamp'] > sig_ts])
+            
+            decay_mult = 1.0
+            if candles_elapsed > 5:
+                decay_mult = 0.8 # Decaimiento del 20%
+            if candles_elapsed > 12:
+                decay_mult = 0.5 # Decaimiento del 50%
+            if candles_elapsed > 25:
+                decay_mult = 0.0 # VETO TOTAL: Narrativa obsoleta
+                
+            multiplier *= decay_mult
+            
+            if decay_mult < 1.0:
+                status = "OBSOLETO" if decay_mult == 0 else "DECAYENDO"
+                checklist.append({"factor": "Time-Decay", "status": status, "detail": f"{candles_elapsed} velas desde origen"})
+            elif candles_elapsed > 0:
+                checklist.append({"factor": "Timing", "status": "FRESCO", "detail": f"Solo {candles_elapsed} velas de vida"})
+        except Exception as e:
+            logger.error(f"[CONFLUENCE] Error calculando Time-Decay: {e}")
+
+        # RESULTADO FINAL
+        base_score = int((score / total_weight) * 100) if total_weight > 0 else 0
+        final_score = min(100, int(base_score * multiplier))
+        
+        conviction = "ALTA CONVICCIÓN" if final_score >= 70 else "SÓLIDA" if final_score >= 50 else "ESPECULATIVA"
+        if multiplier == 0: conviction = "VETADA"
+        
+        logger.info(f"[CONFLUENCE] Asset: {signal.get('pair') or 'BTC'} | Score: {final_score}% (Multiplier: {multiplier})")
+        logger.info(f"             Regime OK? {regime_ok} | POI? {poi_pts} | Macro Near? {high_impact_near}")
 
         return {
             "score": final_score,
@@ -224,7 +309,7 @@ class ConfluenceManager:
             "rvol": round(rvol, 2)
         }
 
-    def _build_reasoning(self, score, conviction, is_long, regime, ob, rvol, high_impact, event, cluster):
+    def _build_reasoning(self, score: int, conviction: str, is_long: bool, regime: str, ob: bool, rvol: float, high_impact: bool, event: str, cluster: bool) -> str:
         msg = f"Señal {'LONG' if is_long else 'SHORT'} ({score}/100). "
         msg += f"Estructura {regime}. "
         if ob: msg += "POI Institucional validado. "

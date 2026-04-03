@@ -1,3 +1,4 @@
+from engine.core.logger import logger
 import pandas as pd
 import numpy as np
 from pathlib import Path
@@ -386,17 +387,20 @@ def extract_smc_coordinates(df: pd.DataFrame) -> dict:
     active_bullish_fvgs = []
     active_bearish_fvgs = []
     
-    # Extraemos arrays nativos para velocidad extrema (O(N) plano)
-    timestamps = df['timestamp'].values
-    lows = df['low'].values
-    highs = df['high'].values
+    # Extraemos arrays nativos para velocidad extrema
+    # Optimización V4.3 Titanium: Slice para operar únicamente en las últimas 50 velas (Lookback HFT)
+    df_slice = df.tail(50).copy()
     
-    ob_bull = df.get('ob_bullish', pd.Series([False]*len(df))).values
-    ob_bear = df.get('ob_bearish', pd.Series([False]*len(df))).values
-    fvg_bull = df.get('fvg_bullish', pd.Series([False]*len(df))).values
-    fvg_bear = df.get('fvg_bearish', pd.Series([False]*len(df))).values
+    timestamps = df_slice['timestamp'].values
+    lows = df_slice['low'].values
+    highs = df_slice['high'].values
     
-    for loc in range(len(df)):
+    ob_bull = df_slice.get('ob_bullish', pd.Series([False]*len(df_slice))).values
+    ob_bear = df_slice.get('ob_bearish', pd.Series([False]*len(df_slice))).values
+    fvg_bull = df_slice.get('fvg_bullish', pd.Series([False]*len(df_slice))).values
+    fvg_bear = df_slice.get('fvg_bearish', pd.Series([False]*len(df_slice))).values
+    
+    for loc in range(len(df_slice)):
         current_low = float(lows[loc])
         current_high = float(highs[loc])
         ts = timestamps[loc]
@@ -473,8 +477,50 @@ def extract_smc_coordinates(df: pd.DataFrame) -> dict:
         }
     }
 
+def mitigate_smc_state(smc_state: dict, current_low: float, current_high: float) -> dict:
+    """
+    Titanium v4.3 Long-Term Memory: Mitiga un objeto SMC persistente.
+    Destruye aquellas zonas pasadas que el precio actual invalida (cruce del 50%).
+    """
+    obs_bull = [ob for ob in smc_state.get("order_blocks", {}).get("bullish", []) if current_low > (ob['bottom'] + (ob['top'] - ob['bottom']) * 0.5)]
+    obs_bear = [ob for ob in smc_state.get("order_blocks", {}).get("bearish", []) if current_high < (ob['bottom'] + (ob['top'] - ob['bottom']) * 0.5)]
+    
+    fvgs_bull = [fvg for fvg in smc_state.get("fvgs", {}).get("bullish", []) if current_low > (fvg['bottom'] + (fvg['top'] - fvg['bottom']) * 0.5)]
+    fvgs_bear = [fvg for fvg in smc_state.get("fvgs", {}).get("bearish", []) if current_high < (fvg['bottom'] + (fvg['top'] - fvg['bottom']) * 0.5)]
+
+    return {
+        "order_blocks": {"bullish": obs_bull, "bearish": obs_bear},
+        "fvgs": {"bullish": fvgs_bull, "bearish": fvgs_bear}
+    }
+
+def merge_smc_states(old_smc: dict, new_smc: dict) -> dict:
+    """
+    Fusiona dos estados SMC sin duplicar zonas (basado en 'time' de creación).
+    """
+    merged = {"order_blocks": {"bullish": [], "bearish": []}, "fvgs": {"bullish": [], "bearish": []}}
+    
+    for category in ["order_blocks", "fvgs"]:
+        for direction in ["bullish", "bearish"]:
+            seen_times = set()
+            combined = []
+            
+            # 1. Agregar zonas del state viejo (Long-term memory)
+            for z in old_smc.get(category, {}).get(direction, []):
+                combined.append(z)
+                seen_times.add(z["time"])
+                
+            # 2. Agregar zonas detectadas nuevas si no existen
+            for z in new_smc.get(category, {}).get(direction, []):
+                if z["time"] not in seen_times:
+                    combined.append(z)
+                    seen_times.add(z["time"])
+                    
+            merged[category][direction] = combined
+            
+    return merged
+
 if __name__ == "__main__":
-    file_path = Path(__file__).parent.parent.parent / "data" / "btcusdt_15m.parquet"
+    file_path = Path(__file__).parent.parent.parent / "tmp" / "data" / "btcusdt_15m.parquet"
     if file_path.exists():
         data = pd.read_parquet(file_path).tail(200) # Probemos en las últimas 200 velas
         analyzed_data = identify_order_blocks(data)
@@ -484,12 +530,12 @@ if __name__ == "__main__":
         
         coords = extract_smc_coordinates(analyzed_data)
         
-        print(f"Bullish Order Blocks Escaneados: {len(coords['order_blocks']['bullish'])}")
-        print(f"Bearish Order Blocks Escaneados: {len(coords['order_blocks']['bearish'])}")
+        logger.info(f"Bullish Order Blocks Escaneados: {len(coords['order_blocks']['bullish'])}")
+        logger.info(f"Bearish Order Blocks Escaneados: {len(coords['order_blocks']['bearish'])}")
         
         if coords['order_blocks']['bullish']:
             latest_bull = coords['order_blocks']['bullish'][-1]
-            print(f"Último Bull OB: \n{latest_bull}")
+            logger.info(f"Último Bull OB: \n{latest_bull}")
             
     else:
-        print("Data file not found.")
+        logger.info("Data file not found.")

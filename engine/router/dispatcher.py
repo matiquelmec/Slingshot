@@ -10,6 +10,10 @@ from __future__ import annotations
 
 import pandas as pd
 from typing import Any
+from engine.execution.ftmo_bridge import prepare_ftmo_order
+from engine.execution.bitunix_bridge import prepare_bitunix_order
+
+
 
 # Mapa de timeframe → minutos
 _INTERVAL_MINUTES: dict[str, int] = {
@@ -79,4 +83,18 @@ def enrich_signal(signal: dict, risk_data: dict, interval: str) -> dict:
         "expiry_timestamp":  expiry_timestamp_str,
         "interval_minutes":  interval_minutes,
     })
+    
+    # ── FTMO BRIDGE (Titanium v4.3) ───────────────────────────────────────
+    try:
+        # Preparamos la orden para MT5 y la inyectamos en la señal
+        signal["ftmo_order"] = prepare_ftmo_order(signal)
+    except Exception:
+        signal["ftmo_order"] = None
+
+    # ── BITUNIX BRIDGE (Titanium v4.3) ────────────────────────────────────
+    try:
+        signal["bitunix_order"] = prepare_bitunix_order(signal)
+    except Exception:
+        signal["bitunix_order"] = None
+
     return signal

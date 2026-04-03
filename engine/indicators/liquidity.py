@@ -1,3 +1,4 @@
+from engine.core.logger import logger
 import numpy as np
 
 def detect_liquidity_clusters(bids: list, asks: list, top_n: int = 3) -> dict:
@@ -36,5 +37,5 @@ def detect_liquidity_clusters(bids: list, asks: list, top_n: int = 3) -> dict:
         }
         
     except Exception as e:
-        print(f"[Liquidity Engine] Error al procesar Order Book: {e}")
+        logger.error(f"[Liquidity Engine] Error al procesar Order Book: {e}")
         return {"bids": [], "asks": []}

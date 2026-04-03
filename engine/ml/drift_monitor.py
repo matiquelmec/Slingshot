@@ -18,6 +18,7 @@ Usa dos métricas complementarias:
 El monitor emite alertas al WebSocket y opcionalmente al Bot de Telegram.
 """
 
+from engine.core.logger import logger
 import numpy as np
 import pandas as pd
 from dataclasses import dataclass, field
@@ -124,7 +125,7 @@ class DriftMonitor:
                 bins = np.array([vals.min() - 1e-9, vals.mean(), vals.max() + 1e-9])
             self._reference_bins[feat] = bins
 
-        print(f"[DRIFT] ✅ Referencia establecida con {len(self._reference_df)} filas y {len(available)} features.")
+        logger.info(f"[DRIFT] ✅ Referencia establecida con {len(self._reference_df)} filas y {len(available)} features.")
 
     def record_prediction(self, predicted: int, actual: int) -> None:
         """
@@ -174,7 +175,7 @@ class DriftMonitor:
             return self._last_report  # Retornar caché
 
         if self._reference_df is None or len(self._reference_bins) == 0:
-            print("[DRIFT] ⚠️  Sin distribución de referencia. Llamar set_reference() primero.")
+            logger.info("[DRIFT] ⚠️  Sin distribución de referencia. Llamar set_reference() primero.")
             return None
 
         self._last_check_time = now
@@ -239,13 +240,13 @@ class DriftMonitor:
 
         self._last_report = report
 
-        print(
+        logger.info(
             f"[DRIFT] Nivel={report.drift_level} | "
             f"PSI max={report.psi_max:.3f} | "
             f"Accuracy={report.rolling_accuracy*100:.1f}% ({report.predictions_evaluated} preds)"
         )
         if report.alert_triggered:
-            print(f"[DRIFT] 🚨 ALERTA: {report.recommendation}")
+            logger.info(f"[DRIFT] 🚨 ALERTA: {report.recommendation}")
 
         return report
 
@@ -255,7 +256,7 @@ class DriftMonitor:
         self._actual_history.clear()
         self._last_report = None
         self._last_check_time = 0.0
-        print("[DRIFT] Estado reseteado.")
+        logger.info("[DRIFT] Estado reseteado.")
 
 
 # ── Singleton global ──────────────────────────────────────────────────────────
@@ -267,7 +268,7 @@ if __name__ == "__main__":
     import numpy as np
     import pandas as pd
 
-    print("🔬 Test Drift Monitor\n")
+    logger.info("🔬 Test Drift Monitor\n")
 
     # Crear datos de referencia simulados
     np.random.seed(42)
@@ -301,7 +302,7 @@ if __name__ == "__main__":
         monitor.record_prediction(np.random.randint(0, 2), np.random.randint(0, 2))
 
     report = monitor.check(df_live_ok)
-    print(f"\n📊 Caso SIN drift: nivel={report.drift_level}, PSI_max={report.psi_max:.3f}")
+    logger.info(f"\n📊 Caso SIN drift: nivel={report.drift_level}, PSI_max={report.psi_max:.3f}")
 
     # Caso 2: Mercado muy diferente (bear market extremo → drift severo)
     monitor._last_check_time = 0  # Forzar recálculo
@@ -316,6 +317,6 @@ if __name__ == "__main__":
         'atr':        np.abs(np.random.normal(5000, 1000, 500)),      # ATR 3x mayor
     })
     report2 = monitor.check(df_live_drift)
-    print(f"\n📊 Caso CON drift severo: nivel={report2.drift_level}, PSI_max={report2.psi_max:.3f}")
-    print(f"   Features en drift: {report2.features_in_drift}")
-    print(f"   Recomendación: {report2.recommendation}")
+    logger.info(f"\n📊 Caso CON drift severo: nivel={report2.drift_level}, PSI_max={report2.psi_max:.3f}")
+    logger.info(f"   Features en drift: {report2.features_in_drift}")
+    logger.info(f"   Recomendación: {report2.recommendation}")

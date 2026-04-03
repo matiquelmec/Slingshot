@@ -13,6 +13,7 @@ Filosofía: si el contexto macro es adverso → BLOQUEAR señales en esa direcci
 Nunca entra en LONG si el mercado tiene miedo extremo + funding negativo.
 """
 
+from engine.core.logger import logger
 import os
 import asyncio
 import time
@@ -91,9 +92,9 @@ def load_local_state():
                 # Filtrar solo los campos que existen en la dataclass
                 valid_fields = {k: v for k, v in data.items() if k in GhostState.__dataclass_fields__}
                 _cache = GhostState(**valid_fields)
-                print(f"[GHOST] 💾 Estado local cargado (F&G={_cache.fear_greed_value})")
+                logger.info(f"[GHOST] 💾 Estado local cargado (F&G={_cache.fear_greed_value})")
         except Exception as e:
-            print(f"[GHOST] ⚠️ Error cargando estado previo: {e}")
+            logger.error(f"[GHOST] ⚠️ Error cargando estado previo: {e}")
 
 
 def save_local_state(state: GhostState):
@@ -103,7 +104,7 @@ def save_local_state(state: GhostState):
         with open(_STATE_FILE, 'w') as f:
             json.dump(asdict(state), f, indent=2)
     except Exception as e:
-        print(f"[GHOST] ⚠️ Error guardando estado en disco: {e}")
+        logger.error(f"[GHOST] ⚠️ Error guardando estado en disco: {e}")
 
 
 # ── Fetchers individuales ─────────────────────────────────────────────────────
@@ -119,7 +120,7 @@ async def _fetch_fear_greed() -> tuple[int, str]:
             data = r.json()["data"][0]
             return int(data["value"]), data["value_classification"]
     except Exception as e:
-        print(f"[GHOST] ⚠️  Fear & Greed fetch error: {e}")
+        logger.error(f"[GHOST] ⚠️  Fear & Greed fetch error: {e}")
         return 50, "Neutral"
 
 
@@ -134,7 +135,7 @@ async def _fetch_btc_dominance() -> float:
             pct = r.json()["data"]["market_cap_percentage"]["btc"]
             return round(float(pct), 2)
     except Exception as e:
-        print(f"[GHOST] ⚠️  BTC Dominance fetch error: {e}")
+        logger.error(f"[GHOST] ⚠️  BTC Dominance fetch error: {e}")
         return 50.0
 
 
@@ -154,7 +155,7 @@ async def fetch_funding_rate(symbol: str = "BTCUSDT") -> float:
                 return float(data["lastFundingRate"]) * 100  # → porcentaje
             return 0.0
     except Exception as e:
-        print(f"[GHOST] ⚠️  Funding Rate fetch error for {symbol}: {e}")
+        logger.error(f"[GHOST] ⚠️  Funding Rate fetch error for {symbol}: {e}")
         return 0.0
 
 
@@ -385,8 +386,8 @@ def filter_signals_by_macro(signals: list[dict], ghost: GhostState) -> tuple[lis
 
 if __name__ == "__main__":
     async def _test():
-        print("🔮 Testing Ghost Data v4.0...")
+        logger.info("🔮 Testing Ghost Data v4.0...")
         state = await refresh_ghost_data("BTCUSDT")
-        print(f"Bias: {state.macro_bias} | DXY: {state.dxy_trend} | NAS: {state.nasdaq_trend}")
+        logger.info(f"Bias: {state.macro_bias} | DXY: {state.dxy_trend} | NAS: {state.nasdaq_trend}")
 
     asyncio.run(_test())

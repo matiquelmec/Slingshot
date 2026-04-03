@@ -12,6 +12,7 @@ CARACTERÍSTICAS:
 - Real-time: Actualización por tiempo y por ticks
 """
 
+from engine.core.logger import logger
 import json
 import pytz
 from datetime import datetime, timezone, date
@@ -83,10 +84,10 @@ class SessionManager:
             try:
                 with open(self._state_file, "r", encoding="utf-8") as f:
                     data = json.load(f)
-                print(f"[SessionManager:{self._symbol}] 📂 Estado cargado: día={data.get('trading_day')}")
+                logger.info(f"[SessionManager:{self._symbol}] 📂 Estado cargado: día={data.get('trading_day')}")
                 return data
             except Exception as e:
-                print(f"[SessionManager:{self._symbol}] ⚠️  No se pudo leer JSON: {e}. Nuevo estado.")
+                logger.info(f"[SessionManager:{self._symbol}] ⚠️  No se pudo leer JSON: {e}. Nuevo estado.")
         return _empty_state()
 
     def _save(self):
@@ -96,7 +97,7 @@ class SessionManager:
             with open(self._state_file, "w", encoding="utf-8") as f:
                 json.dump(self._state, f, indent=2, default=str)
         except Exception as e:
-            print(f"[SessionManager:{self._symbol}] ⚠️  Error guardando: {e}")
+            logger.error(f"[SessionManager:{self._symbol}] ⚠️  Error guardando: {e}")
 
 
     # ──────────────────────────────────────────────────────────────────────
@@ -204,7 +205,7 @@ class SessionManager:
 
         self._state["trading_day"] = str(today)
         self._save()
-        print(f"[SessionManager] ✅ Bootstrap OK: día={today} | PDH={self._state['pdh']} | "
+        logger.info(f"[SessionManager] ✅ Bootstrap OK: día={today} | PDH={self._state['pdh']} | "
               f"London prev={self._state['london'].get('prev_high')} | NY prev={self._state['ny'].get('prev_high')}")
 
     # ──────────────────────────────────────────────────────────────────────
@@ -226,7 +227,7 @@ class SessionManager:
 
         # ── Rotación de Día ──────────────────────────────────────────────
         if str(today) != self._state.get("trading_day"):
-            print(f"[SessionManager] 🗓  Nuevo día: {today}. Rotando PDH/PDL...")
+            logger.info(f"[SessionManager] 🗓  Nuevo día: {today}. Rotando PDH/PDL...")
             old_asia   = self._state.get("asia",   {})
             old_london = self._state.get("london", {})
             old_ny     = self._state.get("ny",     {})

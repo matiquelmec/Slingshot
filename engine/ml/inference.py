@@ -1,3 +1,4 @@
+from engine.core.logger import logger
 import xgboost as xgb
 import pandas as pd
 import numpy as np
@@ -21,11 +22,11 @@ class SlingshotML:
             try:
                 self.model.load_model(str(model_path))
                 self.is_loaded = True
-                print(f"🧠 [ML ENGINE] Modelo cargado con éxito en memoria: {model_filename}")
+                logger.info(f"🧠 [ML ENGINE] Modelo cargado con éxito en memoria: {model_filename}")
             except Exception as e:
-                print(f"❌ [ML ENGINE] Error cargando el modelo: {e}")
+                logger.error(f"❌ [ML ENGINE] Error cargando el modelo: {e}")
         else:
-            print(f"⚠️ [ML ENGINE] Modelo no encontrado en {model_path}. Operando en modo degrado.")
+            logger.info(f"⚠️ [ML ENGINE] Modelo no encontrado en {model_path}. Operando en modo degrado.")
 
     def predict_live(self, df: pd.DataFrame) -> dict:
         """
@@ -124,7 +125,7 @@ class SlingshotML:
             }
             
         except Exception as e:
-            print(f"⚠️ [ML ENGINE] Error en inferencia en vivo: {e}")
+            logger.error(f"⚠️ [ML ENGINE] Error en inferencia en vivo: {e}")
             import traceback
             traceback.print_exc()
             return {"direction": "ERROR", "probability": 50, "status": "error"}

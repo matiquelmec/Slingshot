@@ -1,3 +1,4 @@
+from engine.core.logger import logger
 import pandas as pd
 import numpy as np
 
@@ -84,4 +85,4 @@ class FeatureEngineer:
         return df_final
 
 if __name__ == "__main__":
-    print("🧠 Feature Engineering SMC Purificado.")
+    logger.info("🧠 Feature Engineering SMC Purificado.")

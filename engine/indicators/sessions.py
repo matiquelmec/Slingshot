@@ -1,3 +1,4 @@
+from engine.core.logger import logger
 import pandas as pd
 import pytz
 
@@ -95,10 +96,10 @@ if __name__ == "__main__":
         ny_sweeps_high = analyzed_data[analyzed_data['sweep_ny_high']]
         ny_sweeps_low = analyzed_data[analyzed_data['sweep_ny_low']]
         
-        print("📊 Detección de Liquidez Institucional (Sweeps):")
-        print(f"Total de velas analizadas: {len(data)}\n")
-        print(f"🗡️ Barridos a Asia (High): {len(asian_sweeps_high)} | (Low): {len(asian_sweeps_low)}")
-        print(f"🗡️ Barridos a Londres (High): {len(london_sweeps_high)} | (Low): {len(london_sweeps_low)}")
-        print(f"🗡️ Barridos a Nueva York (High): {len(ny_sweeps_high)} | (Low): {len(ny_sweeps_low)}")
+        logger.info("📊 Detección de Liquidez Institucional (Sweeps):")
+        logger.info(f"Total de velas analizadas: {len(data)}\n")
+        logger.info(f"🗡️ Barridos a Asia (High): {len(asian_sweeps_high)} | (Low): {len(asian_sweeps_low)}")
+        logger.info(f"🗡️ Barridos a Londres (High): {len(london_sweeps_high)} | (Low): {len(london_sweeps_low)}")
+        logger.info(f"🗡️ Barridos a Nueva York (High): {len(ny_sweeps_high)} | (Low): {len(ny_sweeps_low)}")
     else:
-        print("Data file not found.")
+        logger.info("Data file not found.")

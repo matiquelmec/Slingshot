@@ -14,8 +14,10 @@ Mantiene 100% de compatibilidad con la interface pública anterior:
   router.process_market_data(df, asset, interval, ...)  → dict
 """
 from __future__ import annotations
+from engine.core.logger import logger
 
 import pandas as pd
+import time
 
 from engine.api.config import settings
 from engine.indicators.macro import get_macro_context
@@ -72,11 +74,18 @@ class SlingshotRouter:
         macro_levels=None,
         htf_bias=None,
         silent: bool = False,
+        event_time_ms: int | None = None,
     ) -> dict:
         """
         Pipeline principal: transforma velas OHLCV en señales institucionales.
         Interface pública idéntica a la versión v4.0 para compatibilidad total.
         """
+        # ── Monitor de Latencia (Drift Monitor) ──────────────────────────────
+        if event_time_ms:
+            drift_ms = (time.time() * 1000) - event_time_ms
+            if drift_ms > 300:
+                logger.warning(f"⚠️ [LATENCY] High Latency detectada en el router: {drift_ms:.2f}ms de drift")
+
         # ── Fase 1: Análisis del Mercado ─────────────────────────────────────
         market_map = self._analyzer.analyze(
             df=df,
@@ -133,7 +142,7 @@ class SlingshotRouter:
 
         if gate.approved:
             last = gate.approved[-1]
-            print(
+            logger.info(
                 f"[ROUTER] ✅ Señal APROBADA | {last['type']} @ ${last['price']:.2f}"
                 f" | Score: {last.get('confluence', {}).get('score', '?')}%"
                 f" | Leverage: {last.get('leverage')}x"

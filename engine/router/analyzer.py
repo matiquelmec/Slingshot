@@ -10,6 +10,7 @@ Responsabilidad: transformar OHLCV bruto en el mapa completo del mercado.
   - Fusión de niveles MTF
 """
 from __future__ import annotations
+from engine.core.logger import logger
 
 import pandas as pd
 import numpy as np
@@ -145,7 +146,7 @@ class MarketAnalyzer:
         # DIAGNÓSTICO FINAL DE SALIDA (v4.3.7)
         s_val = df["support_level"].iloc[-1] if "support_level" in df.columns else "MISSING_COL"
         audit_msg = f"[ANALYZER] {asset} | S_Level={s_val} | KL={len(key_levels.get('supports', []))}"
-        print(f"🛠️  {audit_msg}")
+        logger.info(f"🛠️  {audit_msg}")
         
         try:
             import json
@@ -221,7 +222,7 @@ class MarketAnalyzer:
             smc["key_resistances"] = df.attrs.get("key_resistances", [])
             return smc
         except Exception as e:
-            print(f"[ANALYZER] SMC Error: {e}")
+            logger.error(f"[ANALYZER] SMC Error: {e}")
             return {"order_blocks": {"bullish": [], "bearish": []}, "fvgs": {"bullish": [], "bearish": []}}
 
     def _get_fibonacci(self, df: pd.DataFrame) -> Optional[dict]:

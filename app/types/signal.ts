@@ -50,6 +50,35 @@ export interface Signal {
     confluence_score?: number;
     regime?: string;
     atr_value?: number;
+    ftmo_order?: {
+        symbol: string;
+        action: string;
+        type: string;
+        volume: number;
+        price: number;
+        sl: number;
+        tp: number;
+        deviation: number;
+        comment: string;
+        magic: number;
+    };
+    bitunix_order?: {
+        symbol: string;
+        side: string;
+        positionSide: string;
+        type: string;
+        quantity: number;
+        leverage: number;
+        marginType: string;
+        price: number;
+        stopLoss: number;
+        takeProfit: number;
+        metadata?: {
+            notional_value: string;
+            risk_exposure: string;
+            margin_reserved: string;
+        };
+    };
 }
 
 export interface QuantDiagnostic {

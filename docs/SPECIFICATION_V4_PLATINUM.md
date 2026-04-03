@@ -23,23 +23,25 @@ Slingshot v4.0 ha evolucionado de ser un SaaS Retail a una **Terminal de Trading
 3.  **Engine:** `main_router.py` coordina el flujo: Wyckoff → SMC Strategy → Risk Portero.
 4.  **UI:** Next.js 15 + React 19 + Zustand 5 (Consumo masivo de datos WS).
 
-### 📁 Estructura del Proyecto (Sincronizada)
+### 📁 Estructura del Proyecto (Sincronizada a la Realidad Operativa v4.3.4)
 ```text
 slingshot_gen1/
 ├── 📁 engine/                         # El Cerebro Algorítmico (FastAPI)
-│   ├── 📁 core/                       # confluence, store (RAM), session_manager
+│   ├── 📁 core/                       # confluence, store (RAM), session_manager, logger (SRE)
 │   ├── 📁 indicators/                 # Logic: smt, sessions, structure, macro...
+│   ├── 📁 execution/                  # El Puente Mecánico: ftmo_bridge, bitunix_bridge
 │   ├── 📁 ml/                         # Machine Learning: inference, features
-│   ├── 📁 api/                        # advisor (IA), ws_manager, config
+│   ├── 📁 api/                        # advisor (IA), ws_manager, config, json_utils, main
 │   ├── 📁 risk/                       # risk_manager (El Portero Institucional)
 │   ├── 📁 strategies/                 # smc.py (Motor Único de Decisión)
-│   └── main_router.py                 # El Orquestador Maestro
+│   ├── 📁 router/                     # Módulos Especializados: analyzer, dispatcher, gatekeeper
+│   └── main_router.py                 # El Orquestador Maestro (Facade)
 ├── 📁 app/                            # La Terminal de Usuario (Next.js)
 │   ├── 📁 (dashboard)/                # Radar, Signals, Chart, Heatmap, History
 │   └── 📁 components/                 # SignalCardItem (Audit Evidence), UI Components
 ├── 📁 docs/                           # Documentación de Arquitectura y Especificación
 │   └── 📁 Conocimientos/              # Memorias Teóricas: Algoritmos SMC y Regímenes
-├── 📁 scripts/                        # Cajón de Herramientas (Tests & Tools)
+├── 📁 scripts/                        # Cajón de Herramientas (Tests, refactors, downlads)
 ├── 📁 tmp/                            # Almacenamiento local temporal y Forensics JSON
 ├── 📁 .agent/                         # Agentes, Workflows y Skills Consolidados
 └── 📄 start.ps1                       # Lanzador One-Click (Launcher Maestro)
@@ -57,6 +59,13 @@ slingshot_gen1/
 *   **Order Blocks (OB):** Identificados por el motor de estructura como zonas de cacería institucional. Se exije el filtro **Wait For Sweep** (solo OBs Extremos que barrieron liquidez previa).
 *   **Fair Value Gaps (FVG):** Detectados para filtrar entradas con el sesgo correcto.
 *   **Paso 0.50 (Discount/Premium):** Solo Longs en Discount, solo Shorts en Premium.
+
+### 💠 Capa 2.5: Arquitectura Inteligente Zero-Latency (v4.3 Titanium)
+Hemos asegurado tiempos de reacción algorítmicos sub-50ms bajo la carga extrema del WebSocket a través de tácticas maestras:
+1.  **HFT Payload Pruning:** Serialización JSON exenta del histórico inútil mediante `payload.pop('candles')`, aliviando el Event Loop.
+2.  **Ultra-Buffer Circular:** Uso de matrices C-Compiled (`collections.deque(maxlen=300)`) descartando recolección de basura OOM.
+3.  **Vectorización Fast-Path:** Solo el Tick Reciente viaja por `pd.to_datetime(...)`, anexándose algebraicamente en Pandas a los dates oxidados pre-cacheados.
+4.  **SMC Slice & Persistencia O(1):** `structure.py` procesa un micro-slice (`df.tail(50)`), fusionándolo dinámicamente con inyecciones de Long-Term Memory SMC tolerantes al envejecimiento temporal.
 
 ### 💠 Capa 2.5: La Fusión Predictiva y Protocolo MACRO (V4.3)
 *   **Conflict Manager (SMC vs IA):** Si la estructura SMC difiere de la proyección matemática de la Red Neuronal (XGBoost), la señal se suspende (STAND_BY). Operamos solo bajo Armonía Direccional Total.

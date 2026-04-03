@@ -35,8 +35,9 @@ export default function TradingChart() {
     const killzoneSeriesRef = useRef<ISeriesApi<'Baseline'>[]>([]);
 
     const markersSeriesRef = useRef<any>(null);
+    const priceLineRef = useRef<any>(null);
 
-    const { candles, isConnected, smcData, liquidityHeatmap, tacticalDecision, sessionData, liquidations } = useTelemetryStore();
+    const { candles, isConnected, smcData, liquidityHeatmap, tacticalDecision, sessionData, liquidations, latestPrice } = useTelemetryStore();
     const { indicators } = useIndicatorsStore();
 
     const isEnabled = (id: string) => indicators.find(i => i.id === id)?.enabled ?? false;
@@ -131,6 +132,31 @@ export default function TradingChart() {
 
 
     }, [candles, indicators]);
+
+    // ── 🔴 LIVE PRICE LINE v4.3.4: Línea horizontal dinámica del precio actual ──
+    useEffect(() => {
+        const series = candleSeriesRef.current;
+        if (!series || !latestPrice || latestPrice <= 0) return;
+
+        // Eliminar la línea anterior
+        if (priceLineRef.current) {
+            try { series.removePriceLine(priceLineRef.current); } catch (e) { }
+            priceLineRef.current = null;
+        }
+
+        // Determinar color: verde si sube vs open de última vela, rojo si baja
+        const lastCandle = candles.length > 0 ? candles[candles.length - 1] : null;
+        const isUp = lastCandle ? latestPrice >= lastCandle.open : true;
+
+        priceLineRef.current = series.createPriceLine({
+            price: latestPrice,
+            color: isUp ? 'rgba(0, 255, 65, 0.9)' : 'rgba(255, 0, 60, 0.9)',
+            lineWidth: 1,
+            lineStyle: LineStyle.Dotted,
+            axisLabelVisible: true,
+            title: '',
+        });
+    }, [latestPrice]);
 
     // Array de tiempos para alinear la serie a través de todo el gráfico horizontal
     // (useMemo evita recrear innecesariamente)

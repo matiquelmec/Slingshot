@@ -1,3 +1,4 @@
+from engine.core.logger import logger
 import pandas as pd
 import numpy as np
 from engine.indicators.htf_analyzer import HTFAnalyzer
@@ -30,7 +31,7 @@ def test_bullish_bias():
     df_h1 = generate_mock_df('bullish', 250)
     
     bias = analyzer.analyze_bias(df_h4, df_h1)
-    print(f"\nTEST BULLISH: Direction={bias.direction}, Strength={bias.strength}, Reason={bias.reason}")
+    logger.info(f"\nTEST BULLISH: Direction={bias.direction}, Strength={bias.strength}, Reason={bias.reason}")
     assert bias.direction == 'BULLISH'
 
 def test_bearish_bias():
@@ -39,13 +40,13 @@ def test_bearish_bias():
     df_h1 = generate_mock_df('bearish', 250)
     
     bias = analyzer.analyze_bias(df_h4, df_h1)
-    print(f"\nTEST BEARISH: Direction={bias.direction}, Strength={bias.strength}, Reason={bias.reason}")
+    logger.info(f"\nTEST BEARISH: Direction={bias.direction}, Strength={bias.strength}, Reason={bias.reason}")
     assert bias.direction == 'BEARISH'
 
 if __name__ == "__main__":
     try:
         test_bullish_bias()
         test_bearish_bias()
-        print("\n✅ HTFAnalyzer Unit Tests PASSED.")
+        logger.info("\n✅ HTFAnalyzer Unit Tests PASSED.")
     except Exception as e:
-        print(f"\n❌ HTFAnalyzer Unit Tests FAILED: {e}")
+        logger.error(f"\n❌ HTFAnalyzer Unit Tests FAILED: {e}")

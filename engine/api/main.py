@@ -5,6 +5,7 @@ Responsabilidad: Orquestación del motor local y endpoints REST/WS.
 Arquitectura Zero-Redis: Todo el estado vive en engine.core.store.
 """
 
+from engine.core.logger import logger
 from pathlib import Path
 from typing import Optional, List
 import httpx
@@ -61,13 +62,13 @@ async def startup_event():
     asyncio.create_task(check_ollama_status())
     
     asyncio.create_task(global_orchestrator.start())
-    print("[API] Motor Slingshot v3.2 activado. Radar Center en línea.")
+    logger.info("[API] Motor Slingshot v3.2 activado. Radar Center en línea.")
 
 @app.on_event("shutdown")
 async def shutdown_event():
     """Apagado ordenado de workers."""
     global_orchestrator.stop()
-    print("[API] Motor Slingshot desactivado.")
+    logger.info("[API] Motor Slingshot desactivado.")
 
 # Router one-shot para análisis REST (no WebSocket)
 _one_shot_router = SlingshotRouter()
@@ -191,7 +192,7 @@ async def websocket_stream_endpoint(
     broadcaster, client_id = await registry.get_or_create(symbol, interval)
     queue = await broadcaster.subscribe(client_id)
 
-    print(f"[GATEWAY] ✅ Cliente {client_id[:6]} conectado → {symbol.upper()}:{interval} "
+    logger.info(f"[GATEWAY] ✅ Cliente {client_id[:6]} conectado → {symbol.upper()}:{interval} "
           f"({broadcaster.subscriber_count()} suscriptores totales)")
 
     try:
@@ -201,9 +202,9 @@ async def websocket_stream_endpoint(
             await websocket.send_json(msg)
 
     except WebSocketDisconnect:
-        print(f"[GATEWAY] Cliente {client_id[:6]} desconectado → {symbol.upper()}:{interval}")
+        logger.info(f"[GATEWAY] Cliente {client_id[:6]} desconectado → {symbol.upper()}:{interval}")
     except Exception as e:
-        print(f"[GATEWAY] Error inesperado en cliente {client_id[:6]}: {e}")
+        logger.error(f"[GATEWAY] Error inesperado en cliente {client_id[:6]}: {e}")
     finally:
         await registry.release(symbol, interval, client_id)
 
@@ -212,5 +213,5 @@ async def websocket_stream_endpoint(
 
 if __name__ == "__main__":
     import uvicorn
-    print("[SLINGSHOT v3.2] Iniciando en http://0.0.0.0:8000")
+    logger.info("[SLINGSHOT v3.2] Iniciando en http://0.0.0.0:8000")
     uvicorn.run(app, host="0.0.0.0", port=8000)

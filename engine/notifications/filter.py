@@ -3,6 +3,7 @@ Capa 6: Filtro Anti-Spam de Señales.
 Evita que el bot de Telegram spamee al trader con señales repetidas del mismo activo
 en el mismo lado (LONG/SHORT) dentro de una ventana de tiempo configurable.
 """
+from engine.core.logger import logger
 import time
 from typing import Optional
 
@@ -108,11 +109,11 @@ if __name__ == "__main__":
     sig = {'type': 'LONG 🟢 (TREND PULLBACK)', 'price': 95000}
 
     ok, reason = f.should_send('BTCUSDT', sig)
-    print(f"Primera señal: {'✅ Permitida' if ok else '❌ Bloqueada: ' + reason}")
+    logger.info(f"Primera señal: {'✅ Permitida' if ok else '❌ Bloqueada: ' + reason}")
 
     ok, reason = f.should_send('BTCUSDT', sig)
-    print(f"Segunda señal inmediata: {'✅ Permitida' if ok else '❌ Bloqueada: ' + reason}")
+    logger.info(f"Segunda señal inmediata: {'✅ Permitida' if ok else '❌ Bloqueada: ' + reason}")
 
     import time; time.sleep(6)
     ok, reason = f.should_send('BTCUSDT', sig)
-    print(f"Señal post-cooldown: {'✅ Permitida' if ok else '❌ Bloqueada: ' + reason}")
+    logger.info(f"Señal post-cooldown: {'✅ Permitida' if ok else '❌ Bloqueada: ' + reason}")

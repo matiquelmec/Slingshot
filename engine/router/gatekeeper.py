@@ -12,6 +12,7 @@ Una señal rechazada en cualquier filtro NO se descarta:
 se archiva en 'blocked_signals' para el Modo Auditoría del Frontend.
 """
 from __future__ import annotations
+from engine.core.logger import logger
 
 from dataclasses import dataclass, field
 from typing import Any
@@ -79,8 +80,34 @@ class SignalGatekeeper:
         except Exception:
             df_time = df_low = df_high = now_utc = None
 
+        # ── Filtro 0: News Blackout Protocol (FTMO SAFE) ─────────────────
+        # Si estamos dentro de +/- 15 min de una noticia High Impact, Veto Total
+        news_multiplier = 1.0
+        now = pd.Timestamp.now(tz='UTC')
+        
+        if context.economic_events:
+            for ev in context.economic_events:
+                if str(ev.get('impact', '')).upper() == 'HIGH':
+                    ev_date = ev.get('date', ev.get('timestamp'))
+                    if not ev_date: continue
+                    ev_time = pd.to_datetime(ev_date, utc=True)
+                    diff_mins = abs((ev_time - now).total_seconds() / 60)
+                    
+                    if diff_mins <= 15:
+                        news_multiplier = 0.0
+                        event_name = ev.get('title', 'Noticia Crítica')
+                        break
+        
         for sig in signals[-10:]:  # Ventana de las últimas 10 señales
+            if news_multiplier == 0.0:
+                sig["confluence"] = {"score": 0}
+                self._block(sig, "RECHAZADA", f"Protocolo de Noticias Activo: {event_name} (+/- 15m)", result)
+                continue
+
             # ── Filtro 1: Enriquecimiento de Riesgo ──────────────────────────
+            # (SMT_Strength se pasará en el contexto de riesgo si existe)
+            smt_strength = sig.get('confluence', {}).get('smt_strength', 0) if sig.get('confluence') else 0
+            
             risk_data = self._risk.calculate_position(
                 current_price=sig["price"],
                 signal_type=sig.get("signal_type", "LONG"),
@@ -88,20 +115,23 @@ class SignalGatekeeper:
                 key_levels=key_levels,
                 smc_data=smc_map,
                 atr_value=sig.get("atr_value", 0.0),
+                smt_strength=smt_strength
             )
-            # (El enriquecimiento real lo hace el dispatcher; aquí validamos)
+            # Actualizamos la señal con los datos de salida dinámica v4.3
+            sig.update(risk_data)
 
-            # ── Filtro 2: Direccional HTF (Confluencia = 0%) ──────────────────
-            if htf_bias and htf_bias.direction != "NEUTRAL":
-                is_long = "LONG" in str(sig.get("type", "")).upper()
-                if htf_bias.direction == "BULLISH" and not is_long:
-                    sig["confluence"] = {"score": 0}
-                    self._block(sig, "BLOCKED_BY_HTF", f"Contra sesgo HTF Alcista: {htf_bias.reason}", result)
-                    continue
-                if htf_bias.direction == "BEARISH" and is_long:
-                    sig["confluence"] = {"score": 0}
-                    self._block(sig, "BLOCKED_BY_HTF", f"Contra sesgo HTF Bajista: {htf_bias.reason}", result)
-                    continue
+            # ── Filtro 2: Direccional HTF (AHORA DELEGADO AL CONFLUENCE MANAGER v4.3) ──
+            # Se comenta para permitir que el Score registre el Veto de forma oficial
+            # if htf_bias and htf_bias.direction != "NEUTRAL":
+            #     is_long = "LONG" in str(sig.get("type", "")).upper()
+            #     if htf_bias.direction == "BULLISH" and not is_long:
+            #         sig["confluence"] = {"score": 0}
+            #         self._block(sig, "BLOCKED_BY_HTF", f"Contra sesgo HTF Alcista: {htf_bias.reason}", result)
+            #         continue
+            #     if htf_bias.direction == "BEARISH" and is_long:
+            #         sig["confluence"] = {"score": 0}
+            #         self._block(sig, "BLOCKED_BY_HTF", f"Contra sesgo HTF Bajista: {htf_bias.reason}", result)
+            #         continue
 
             # ── Filtro 2.5: Conflict Manager (IA vs SMC) ──────────────────────
             if context.ml_projection and "direction" in context.ml_projection:
@@ -135,10 +165,11 @@ class SignalGatekeeper:
                     news_items=context.news_items,
                     economic_events=context.economic_events,
                     liquidation_clusters=context.liquidation_clusters,
+                    htf_bias=htf_bias,
                 )
                 sig["confluence"] = confluence_result
             except Exception as e:
-                print(f"[GATEKEEPER] ConfluenceManager error: {e}")
+                logger.error(f"[GATEKEEPER] ConfluenceManager error: {e}")
                 sig["confluence"] = None
 
             # ── Filtro 4: R:R Mínimo ──────────────────────────────────────────
@@ -148,7 +179,7 @@ class SignalGatekeeper:
 
             if not rr["approved"]:
                 if not silent:
-                    print(f"[GATEKEEPER] 🔴 R:R insuficiente | {sig.get('signal_type')} | {rr['reason']}")
+                    logger.info(f"[GATEKEEPER] 🔴 R:R insuficiente | {sig.get('signal_type')} | {rr['reason']}")
                 self._block(sig, "BLOCKED_BY_FILTER", rr["reason"], result)
                 continue
 
@@ -156,7 +187,7 @@ class SignalGatekeeper:
             score = sig["confluence"].get("score", 0) if sig.get("confluence") else 0
             if score < 75:
                 if not silent:
-                    print(f"[GATEKEEPER] 🔴 Confluencia {score}% < 75% — señal bloqueada")
+                    logger.info(f"[GATEKEEPER] 🔴 Confluencia {score}% < 75% — señal bloqueada")
                 self._block(sig, "BLOCKED_BY_CONFIDENCE", f"Confianza {score}% < 75%", result)
                 continue
 

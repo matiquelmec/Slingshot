@@ -1,3 +1,4 @@
+from engine.core.logger import logger
 import asyncio
 from typing import List, Dict, Optional
 from engine.api.config import settings
@@ -17,14 +18,14 @@ class SlingshotOrchestrator:
     def __init__(self, radar_assets: Optional[List[str]] = None):
         # Activos dinámicos (se cargarán desde DB en start)
         self.radar_assets: set = set()
-        self.intervals = ["15m"] 
+        self.intervals = ["1m", "5m", "15m"] 
         self._tasks: Dict[str, asyncio.Task] = {}
         self._stop_event = asyncio.Event()
         self.news_worker = NewsWorker()
         self.calendar_worker = CalendarWorker()
 
     async def start(self):
-        print(f"🚀 [ORCHESTRATOR] Iniciando Motor Local Master (Modo 100% Dinámico)...")
+        logger.info(f"🚀 [ORCHESTRATOR] Iniciando Motor Local Master (Modo 100% Dinámico)...")
         
         # Sincronización inicial para poblar radar_assets
         load_local_state() # Cargar datos macro previos si existen
@@ -41,11 +42,12 @@ class SlingshotOrchestrator:
         
         # Si la DB está vacía, podemos poner BTC por defecto para que el motor no esté ocioso
         if not self.radar_assets:
-            print("ℹ️ [ORCHESTRATOR] Watchlist vacía. Usando BTCUSDT como activo de guardia.")
-            await self.spawn_persistent_broadcaster("BTCUSDT", "15m")
+            logger.info("ℹ️ [ORCHESTRATOR] Watchlist vacía. Usando BTCUSDT como activo de guardia.")
+            for interval in self.intervals:
+                await self.spawn_persistent_broadcaster("BTCUSDT", interval)
             self.radar_assets.add("BTCUSDT")
 
-        print(f"✅ [ORCHESTRATOR] Malla de vigilancia activa para: {self.radar_assets}")
+        logger.info(f"✅ [ORCHESTRATOR] Malla de vigilancia activa para: {self.radar_assets} en {self.intervals}")
         
         # Loop de auditoría y mantenimiento
         while not self._stop_event.is_set():
@@ -53,7 +55,7 @@ class SlingshotOrchestrator:
                 await self.sync_watchlists()
                 await self.audit_health()
             except Exception as e:
-                print(f"⚠️ [ORCHESTRATOR] Error en mantenimiento: {e}")
+                logger.error(f"⚠️ [ORCHESTRATOR] Error en mantenimiento: {e}")
             
             await asyncio.sleep(30) # Sincronización cada 30 segundos
 
@@ -62,23 +64,31 @@ class SlingshotOrchestrator:
         try:
             broadcaster, client_id = await registry.get_or_create(symbol, interval, persistent=True)
             key = f"{symbol.upper()}:{interval}"
-            print(f"📦 [ORCHESTRATOR] Sensor {key} garantizado en background.")
+            logger.info(f"📦 [ORCHESTRATOR] Sensor {key} garantizado en background.")
         except Exception as e:
-            print(f"❌ [ORCHESTRATOR] No se pudo activar {symbol}: {e}")
+            logger.info(f"❌ [ORCHESTRATOR] No se pudo activar {symbol}:{interval}: {e}")
 
     async def sync_watchlists(self):
         """
-        En v3.0 (Local Master), los activos del radar se cargan 
-        desde una configuración local o listado VIP hardcodeado.
+        En v4.3, restringimos estrictamente la vigilancia a los activos VIP
+        para garantizar latencia cero y optimización de recursos.
         """
         vip_assets = {"BTCUSDT", "ETHUSDT", "SOLUSDT", "PAXGUSDT"}
         
+        # 1. Eliminar activos que ya no son VIP (si existieran)
+        to_remove = self.radar_assets - vip_assets
+        for sym in to_remove:
+            logger.info(f"🧹 [ORCHESTRATOR] Removiendo activo no-VIP: {sym}")
+            # En v3.0 simplemente dejamos de vigilarlos, el registry limpiará si no hay clientes
+            self.radar_assets.remove(sym)
+
+        # 2. Asegurar que todos los VIP estén activos en todas las temporalidades
         new_assets = vip_assets - self.radar_assets
         if new_assets:
-            print(f"✨ [ORCHESTRATOR] Nuevos activos detectados en Watchlist VIP Local: {new_assets}")
+            logger.info(f"✨ [ORCHESTRATOR] Activando Sensores VIP: {new_assets}")
             for sym in new_assets:
-                # Disparamos fire-and-forget para no bloquear el loop principal
-                asyncio.create_task(self.spawn_persistent_broadcaster(sym, "15m"))
+                for interval in self.intervals:
+                    asyncio.create_task(self.spawn_persistent_broadcaster(sym, interval))
                 self.radar_assets.add(sym)
 
     async def audit_health(self):
@@ -87,12 +97,12 @@ class SlingshotOrchestrator:
             for interval in self.intervals:
                 key = f"{symbol.upper()}:{interval}"
                 if key not in registry._broadcasters:
-                    print(f"🚨 [ORCHESTRATOR] Alerta: Sensor {key} caído. Reiniciando...")
+                    logger.info(f"🚨 [ORCHESTRATOR] Alerta: Sensor {key} caído. Reiniciando...")
                     await self.spawn_persistent_broadcaster(symbol, interval)
 
     async def _ghost_worker(self):
         """Worker secundario que refresca los datos macro globales cada 15 min."""
-        print("🔮 [ORCHESTRATOR] Sensor Macro (Ghost) activado.")
+        logger.info("🔮 [ORCHESTRATOR] Sensor Macro (Ghost) activado.")
         
         # Sincronización FORZADA al inicio para evitar NEUTRAL por defecto
         try:
@@ -100,7 +110,7 @@ class SlingshotOrchestrator:
             m_ctx = macro.get_macro_context()
             await refresh_ghost_data("BTCUSDT", macro_ctx=m_ctx)
         except Exception as e:
-            print(f"⚠️ [ORCHESTRATOR] Error en sincronización inicial: {e}")
+            logger.error(f"⚠️ [ORCHESTRATOR] Error en sincronización inicial: {e}")
 
         while not self._stop_event.is_set():
             try:
@@ -111,16 +121,16 @@ class SlingshotOrchestrator:
                 # 2. Refrescar datos macro (usando BTC como proxy global) DESPUÉS
                 state = await refresh_ghost_data("BTCUSDT", macro_ctx=m_ctx)
                 
-                print(f"[ORCHESTRATOR] 🔮 Radar Macro actualizado: {state.macro_bias} (DXY: {state.dxy_trend})")
+                logger.info(f"[ORCHESTRATOR] 🔮 Radar Macro actualizado: {state.macro_bias} (DXY: {state.dxy_trend})")
             except Exception as e:
-                print(f"⚠️ [ORCHESTRATOR] Error en Radar Macro: {e}")
+                logger.error(f"⚠️ [ORCHESTRATOR] Error en Radar Macro: {e}")
             
             # Esperar 15 minutos (900s) para el próximo ciclo macro
             await asyncio.sleep(900)
 
     async def _session_worker(self):
         """Worker que sincroniza el estado de las sesiones globales cada minuto."""
-        print("🕒 [ORCHESTRATOR] Sincronizador de Sesiones Globales activo.")
+        logger.info("🕒 [ORCHESTRATOR] Sincronizador de Sesiones Globales activo.")
         last_session = None
         
         while not self._stop_event.is_set():
@@ -131,7 +141,7 @@ class SlingshotOrchestrator:
                 
                 # Solo hacer broadcast si la sesión cambió o cada 5 minutos por seguridad
                 if current != last_session:
-                    print(f"[ORCHESTRATOR] 🌎 Cambio de Sesión detectado: {current}")
+                    logger.info(f"[ORCHESTRATOR] 🌎 Cambio de Sesión detectado: {current}")
                     last_session = current
                     
                     # Hacer broadcast a todos los broadcasters activos
@@ -140,7 +150,7 @@ class SlingshotOrchestrator:
                         await broadcaster._broadcast(payload)
                         
             except Exception as e:
-                print(f"⚠️ [ORCHESTRATOR] Error en Worker de Sesiones: {e}")
+                logger.error(f"⚠️ [ORCHESTRATOR] Error en Worker de Sesiones: {e}")
             
             # Revisar cada 1 minuto (60s)
             await asyncio.sleep(60)
@@ -148,7 +158,7 @@ class SlingshotOrchestrator:
     def stop(self):
         """Parada coordinada."""
         self._stop_event.set()
-        print("[ORCHESTRATOR] Deteniendo motor maestro...")
+        logger.info("[ORCHESTRATOR] Deteniendo motor maestro...")
 
 async def run_orchestrator():
     orchestrator = SlingshotOrchestrator()
