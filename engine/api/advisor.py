@@ -113,14 +113,34 @@ async def generate_tactical_advice(
     except:
         ml_prob = 50.0
     
-    # Extraer Data de Fibonacci
+    # 📐 FIBONACCI GATILLO v4.4
     fibo = tactical_data.get('fibonacci')
+    price_in_gp = False
+    is_whale = False
+    fibo_lvl = 'N/A'
+    
     if fibo:
-        sh = f_p(fibo.get('swing_high', 0))
-        sl = f_p(fibo.get('swing_low', 0))
-        fibo_lvl = f"Swing High: ${sh} | Swing Low: ${sl}"
-    else:
-        fibo_lvl = 'N/A'
+        sh = fibo.get('swing_high', 0)
+        sl = fibo.get('swing_low', 0)
+        levels = fibo.get('levels', {})
+        is_whale = fibo.get('is_whale_leg', False)
+        
+        # Golden Pocket: 0.618 a 0.66
+        gp_top = levels.get('0.618', 0)
+        gp_bottom = levels.get('0.66', 0)
+        
+        # Asegurar orden (en shorts el GP sube)
+        low_gp = min(gp_top, gp_bottom)
+        high_gp = max(gp_top, gp_bottom)
+        
+        price_in_gp = (live_price >= low_gp) and (live_price <= high_gp)
+        fibo_lvl = f"Swing High: ${f_p(sh)} | Swing Low: ${f_p(sl)} (GP: ${f_p(low_gp)}-${f_p(high_gp)})"
+    
+    # 🐋 WHALE EXECUTION: Si estamos en GP de una pierna Whale, cambiamos el tono a EXECUTE
+    if price_in_gp and is_whale:
+        mandatory_phrase = "⚠️ GATILLO DE ENTRADA DETECTADO (GP + WHALE LEG). ACCIÓN: EXECUTE."
+    elif price_in_gp:
+         mandatory_phrase = "⚠️ ZONA DE INTERÉS (GP). MONITOREAR RECHAZO."
     
     # Procesar Noticias Recientes (Sentimiento Híbrido)
     news_text = "SIN NOTICIAS RECIENTES DE ALTO IMPACTO."

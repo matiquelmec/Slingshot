@@ -1,8 +1,8 @@
 {
   "fear_greed_value": 9,
   "fear_greed_label": "Extreme Fear",
-  "btc_dominance": 56.14,
-  "funding_rate": 0.001904,
+  "btc_dominance": 56.12,
+  "funding_rate": 0.002023,
   "funding_symbol": "BTCUSDT",
   "macro_bias": "BULLISH",
   "block_longs": false,
@@ -15,6 +15,6 @@
   "risk_appetite": "RISK_ON",
   "news_sentiment": 0.5,
   "active_event": "",
-  "last_updated": 1775244648.9187012,
+  "last_updated": 1775245008.7562556,
   "is_stale": false
 }

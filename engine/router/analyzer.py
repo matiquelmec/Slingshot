@@ -95,8 +95,15 @@ class MarketAnalyzer:
         if macro_levels:
             key_levels = consolidate_mtf_levels(key_levels, macro_levels)
 
-        # ── Paso 5: Fibonacci Dinámico ───────────────────────────────────────
+        # ── Paso 5: Fibonacci Dinámico (v4.4 MTF Shadow Mode) ─────────────────
         fibonacci = self._get_fibonacci(df)
+        
+        # 🟢 SHADOW MODE: Calculamos el Fib de 1H si hay data macro
+        fibonacci_h1 = None
+        if macro_df is not None and not macro_df.empty:
+            fibonacci_h1 = self._get_fibonacci(macro_df)
+            if fibonacci_h1:
+                fibonacci_h1["timeframe"] = "1H"
 
         # ── Paso 6: HTF Bias (serializado para JSON) ─────────────────────────
         htf_payload = None
@@ -185,6 +192,7 @@ class MarketAnalyzer:
             key_levels=key_levels,
             smc=smc_data,
             fibonacci=fibonacci,
+            fibonacci_h1=fibonacci_h1,
             htf_bias=htf_payload,
             diagnostic=diagnostic,
             htf_alignment=htf_align,

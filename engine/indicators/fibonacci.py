@@ -123,6 +123,18 @@ def _get_fibonacci_major_leg(df: pd.DataFrame, n_bars: int = 5, lookback_pivots:
 
     final_is_uptrend = major_pl_idx < major_ph_idx
     
+    # 🐋 WHALE FILTER v4.4: Validación de Intención por Volumen
+    # Calculamos el volumen total de la pierna (Low -> High o High -> Low)
+    start_idx = min(major_pl_idx, major_ph_idx)
+    end_idx = max(major_pl_idx, major_ph_idx)
+    leg_df = df.loc[start_idx:end_idx]
+    
+    total_leg_volume = leg_df['volume'].sum()
+    avg_global_volume = df['volume'].mean() * len(leg_df) # Volumen esperado para esa duración
+    
+    whale_ratio = total_leg_volume / avg_global_volume if avg_global_volume > 0 else 0
+    is_whale_leg = whale_ratio >= 1.5
+    
     if major_ph_val == major_pl_val:
         return None
         
@@ -130,6 +142,8 @@ def _get_fibonacci_major_leg(df: pd.DataFrame, n_bars: int = 5, lookback_pivots:
     return {
         "swing_high": major_ph_val,
         "swing_low": major_pl_val,
+        "is_whale_leg": is_whale_leg,
+        "whale_ratio": round(whale_ratio, 2),
         "levels": levels
     }
 
