@@ -1,13 +1,13 @@
-# 🏹 SLINGSHOT v5.7.155 Master Gold — DIAMANTE UNIFICADO (MASTERPLAN)
+# 🏹 SLINGSHOT v5.7.15 Master Gold — DIAMANTE UNIFICADO (MASTERPLAN)
 
 > **"La precisión no es una opción, es nuestra arquitectura."**
-> **Versión:** 5.4.3 Unified Platinum | **Actualizado:** 05 de Abril, 2026
+> **Versión:** 5.7.15 Master Gold | **Actualizado:** 05 de Abril, 2026
 
 ---
 
 ## 💎 Visión General del Sistema (Arquitectura O(1))
 
-Este diagrama representa el flujo de datos de latencia ultra-baja (Ultra-Low Latency) desde la captura del tick por WebSocket hasta la ejecución de la señal filtrada por el **Garante Institucional v5.4**.
+Este diagrama representa el flujo de datos de latencia ultra-baja (Ultra-Low Latency) desde la captura del tick por WebSocket hasta la ejecución de la señal filtrada por el **Garante Institucional v5.7.15**.
 
 ---
 
@@ -29,8 +29,8 @@ flowchart TD
     end
 
     %% --- MOTOR DE INTELIGENCIA (EL CEREBRO) ---
-    subgraph ENGINE_LAYER ["🧠 MOTOR DE INTELIGENCIA PLATINUM v5.4"]
-        SMC["🏛️ SMC Core v5.4\nOB/FVG/Dynamic Fib"]
+    subgraph ENGINE_LAYER ["🧠 MOTOR DE INTELIGENCIA MASTER GOLD v5.7.15"]
+        SMC["🏛️ SMC Core v5.7.15\nOB/FVG/Dynamic Fib"]
         RVOL["📈 RVOL Z-Score\n(Outlier Detection)"]
         HTF["🔭 HTF Bias\nInstitucional H1/H4"]
     end
@@ -47,7 +47,7 @@ flowchart TD
     subgraph OUTPUT_LAYER ["🛡️ AUDITORÍA & ACCIÓN"]
         RAM["💾 Zustand 5 Store\nO(1) Reactive Map"]
         ADV["🧠 AI Advisor\nBriefing Local-LLM"]
-        UI["🖥️ Terminal UI v5.4\nNext.js 15 + React 19"]
+        UI["🖥️ Terminal UI v5.7.15\nNext.js 15 + React 19"]
     end
 
     %% --- CONEXIONES ---
@@ -85,10 +85,11 @@ flowchart TD
 
 ---
 
-## 🏆 Hitos Logrados (v5.7.155 Master Gold Diamante)
+## 🏆 Hitos Logrados (v5.7.15 Master Gold)
 
 | Estado | Módulo | Descripción |
 |:---:|---|---|
+| ✅ | **Heatmap Neural** | Renderizado GL de Muros Institucionales integrales en TradingChart. |
 | ✅ | **OS Optimization** | Automatización de Prioridad HIGH para el motor Python y Ollama. |
 | ✅ | **RVOL Z-Score** | Filtro de ruidos institucionales (Outliers) en datos de volumen. |
 | ✅ | **O(1) Reactivity** | Migración completa a Zustand 5 Maps para rendimiento instantáneo. |
@@ -97,11 +98,10 @@ flowchart TD
 
 ---
 
-## 🔭 Roadmap Siguiente Nivel (v5.5+)
+## 🔭 Roadmap Siguiente Nivel (v5.8+)
 
 1.  **Integración SMT Profunda**: Alertas de divergencia correlacionada entre activos maestros (BTC vs ETH/SOL).
 2.  **Backtest de Deriva**: Simulación automática de señales en tiempo real al detectar degradación en el modelo.
-3.  **Heatmap Neural**: Inyectar los datos del Order Book directamente en el contexto del AI Advisor.
 
 ---
-*Actualizado por Antigravity — v5.7.155 Master Gold — 05 Abril 2026*
+*Actualizado por Antigravity — v5.7.15 Master Gold — 05 Abril 2026*
