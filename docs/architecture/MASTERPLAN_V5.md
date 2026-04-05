@@ -91,6 +91,8 @@ flowchart TD
 |:---:|---|---|
 | ✅ | **Heatmap Neural** | Renderizado GL de Muros Institucionales integrales en TradingChart. |
 | ✅ | **OS Optimization** | Automatización de Prioridad HIGH para el motor Python y Ollama. |
+| ✅ | **Lattice Scanner** | Selector de activos de latencia ultrabaja O(1) con filtros de sesión global. |
+| ✅ | **Retina Técnica** | Panel de Diagnóstico Cuantitativo inmerso en la arquitectura UI de 3 Columnas. |
 | ✅ | **RVOL Z-Score** | Filtro de ruidos institucionales (Outliers) en datos de volumen. |
 | ✅ | **O(1) Reactivity** | Migración completa a Zustand 5 Maps para rendimiento instantáneo. |
 | ✅ | **Dynamic Fibonacci** | Detección automática de Swing Legs y Zonas de Valor Premium/Discount. |

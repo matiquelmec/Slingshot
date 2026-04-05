@@ -35,10 +35,16 @@ Evalúa cada señal contra 4 capas estructurales:
 
 ## 🎨 3. LA TERMINAL DE USUARIO (REACTIVE FRONTEND)
 
+### 📊 Workflow Institucional a 3 Columnas (Cero Ruido)
+La interfaz v5.7.15 abandona el paradigma jerárquico tradicional en favor de un panel panorámico de control concurrente:
+1.  **Columna Izquierda (Lattice Scanner):** Centro de comando y selección de pares O(1). Rastrea en tiempo real el estado global (Sesiones, Regímenes) y agrupa la lista de vigilancia sin sobrecarga visual.
+2.  **Columna Central (TradingChart & Neural Heatmap):** Visor inmersivo (Canvas API) optimizado a 60FPS. Alberga el gráfico nativo fusionado con el mapeo de Muros de Liquidez Institucional (Heatmap).
+3.  **Columna Derecha (Retina Técnica & IA):** Herramienta de alta precisión cuantitativa, el `QuantDiagnosticPanel`, que muestra la Confluencia SMC, y el `Advisor` renderizando los fallos del `Master Router` directo del LLM.
+
 ### 📊 Reactive Store (Zustand 5)
-*   **O(1) Mapping:** Las señales se gestionan mediante `Map` de IDs en lugar de `Array`. Renderizado instantáneo de alertas históricas.
+*   **O(1) Mapping:** Las señales se gestionan mediante `Map` de IDs. Renderizado instantáneo de alertas históricas.
 *   **Real-time Price:** Sincronización del `latestPrice` en cada vela y actualización táctica para eliminar el estado "CALCULANDO".
-*   **Radar Feed & Heatmap:** Visualización global unificada con el Auditor de Señales en tiempo real, con trazado inteligente de zonas de liquidez profunda.
+*   **Gestión de Foco:** Conmutación atómica de símbolos entre el Lattice Scanner y el motor de WebSockets para garantizar latencia local inferior a 50ms.
 
 ---
 
