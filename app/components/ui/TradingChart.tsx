@@ -122,11 +122,15 @@ export default function TradingChart() {
         // ─ Volume ─
         if (volumeRef.current) {
             volumeRef.current.applyOptions({ visible: on('volume') });
-            if (on('volume')) {
-                volumeRef.current.setData(candles.map(c => ({
-                    time: c.time, value: c.volume,
-                    color: c.close >= c.open ? 'rgba(0,255,65,0.4)' : 'rgba(255,0,60,0.4)',
-                })) as any);
+            if (on('volume') && candles?.length > 0) {
+                try {
+                    volumeRef.current.setData(candles.map(c => ({
+                        time: c.time, value: c.volume,
+                        color: c.close >= c.open ? 'rgba(0,255,65,0.4)' : 'rgba(255,0,60,0.4)',
+                    })) as any);
+                } catch (err) {
+                    console.warn("[Chart] Failed to set volume data", err);
+                }
             }
         }
 
@@ -160,7 +164,7 @@ export default function TradingChart() {
 
     // Array de tiempos para alinear la serie a través de todo el gráfico horizontal
     // (useMemo evita recrear innecesariamente)
-    const times = React.useMemo(() => candles.map(c => c.time), [candles.length]);
+    const times = React.useMemo(() => (candles || []).map(c => c.time), [candles?.length]);
     const candleCount = candles.length;
 
     // ── SMC & FVG visualization (Creative Transparent Zones) ──
@@ -280,7 +284,14 @@ export default function TradingChart() {
     const liquidityLinesRef = useRef<any[]>([]);
 
     useEffect(() => {
-        if (!chartRef.current || !liquidityHeatmap || !candleSeriesRef.current || times.length === 0) return;
+        if (!chartRef.current || !liquidityHeatmap || !candleSeriesRef.current || times.length === 0 || !isEnabled('heatmap')) {
+            // Limpiar si está desactivado o no hay datos
+            liquidityLinesRef.current.forEach(line => {
+                try { candleSeriesRef.current?.removePriceLine(line); } catch (e) { }
+            });
+            liquidityLinesRef.current = [];
+            return;
+        }
 
         // Limpiar líneas de liquidez anteriores
         liquidityLinesRef.current.forEach(line => {
@@ -288,34 +299,38 @@ export default function TradingChart() {
         });
         liquidityLinesRef.current = [];
 
-        // Función auxiliar para normalizar el volumen y calcular opacidad
-        const maxBidVol = Math.max(...liquidityHeatmap.bids.map(b => b.volume), 1);
-        const maxAskVol = Math.max(...liquidityHeatmap.asks.map(a => a.volume), 1);
+        const bids = liquidityHeatmap.bids || (liquidityHeatmap as any).hot_bids || [];
+        const asks = liquidityHeatmap.asks || (liquidityHeatmap as any).hot_asks || [];
+
+        if (bids.length === 0 && asks.length === 0) return;
+
+        const maxBidVol = Math.max(...bids.map((b: any) => b.volume), 1);
+        const maxAskVol = Math.max(...asks.map((a: any) => a.volume), 1);
 
         // Bids (Soportes en verde)
-        liquidityHeatmap.bids.forEach(bid => {
-            const intensity = 0.1 + (0.3 * (bid.volume / maxBidVol)); // Opacidad muy sutil
+        bids.forEach((bid: any) => {
+            const intensity = 0.15 + (0.55 * (bid.volume / maxBidVol)); // Opacidad dinámica
             const line = candleSeriesRef.current?.createPriceLine({
                 price: bid.price,
                 color: `rgba(0, 255, 65, ${intensity})`,
-                lineWidth: 1, // Línea fina
+                lineWidth: 1, 
                 lineStyle: LineStyle.Solid,
-                axisLabelVisible: false, // Ocultar etiqueta en el eje Y para no molestar
-                title: `BID: ${bid.volume.toFixed(2)} Vol`
+                axisLabelVisible: false, 
+                title: `WALL: ${bid.volume?.toFixed(0) || '0'}V`
             });
             if (line) liquidityLinesRef.current.push(line);
         });
 
         // Asks (Resistencias en rojo)
-        liquidityHeatmap.asks.forEach(ask => {
-            const intensity = 0.1 + (0.3 * (ask.volume / maxAskVol)); // Opacidad muy sutil
+        asks.forEach((ask: any) => {
+            const intensity = 0.15 + (0.55 * (ask.volume / maxAskVol)); 
             const line = candleSeriesRef.current?.createPriceLine({
                 price: ask.price,
                 color: `rgba(255, 0, 60, ${intensity})`,
-                lineWidth: 1, // Línea fina
+                lineWidth: 1,
                 lineStyle: LineStyle.Solid,
-                axisLabelVisible: false, // Ocultar etiqueta en el eje Y
-                title: `ASK: ${ask.volume.toFixed(2)} Vol`
+                axisLabelVisible: false,
+                title: `WALL: ${ask.volume?.toFixed(0) || '0'}V`
             });
             if (line) liquidityLinesRef.current.push(line);
         });
@@ -395,10 +410,10 @@ export default function TradingChart() {
                 }
             };
 
-            const { resistances, supports } = tacticalDecision.key_levels;
+            const { resistances = [], supports = [] } = tacticalDecision?.key_levels || {};
 
             // Renderizar Resistencias
-            resistances.forEach((r, i) => {
+            resistances.forEach((r: any, i: number) => {
                 const rank = i + 1;
                 const alpha = touchesToAlpha(r.touches, r.mtf_confluence ?? false);
                 const w = touchesToWidth(r);

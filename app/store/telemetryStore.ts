@@ -18,6 +18,7 @@ export type Timeframe = '1m' | '3m' | '5m' | '15m' | '30m' | '1h' | '2h' | '4h' 
 // Las interfaces NeuralLog, KeyLevel, TacticalDecision, SessionInfo, SessionData, OrderBlockData, SMCDataPayload y GhostData 
 // han sido movidas a ../types/signal.ts para centralizar la lógica de tipos.
 
+export const MASTER_WATCHLIST = ["BTCUSDT", "ETHUSDT", "SOLUSDT", "PAXGUSDT"];
 
 interface TelemetryState {
     advisorLogs: Record<string, any>; // 🧠 Mapeo de análisis por activo (v4.4)
@@ -225,7 +226,8 @@ export const useTelemetryStore = create<TelemetryState>((set, get) => {
                         timestamp: new Date().toLocaleTimeString('en-US', { hour12: false }),
                         type: 'SYSTEM' as const,
                         message: '[SYSTEM] Stale messages purged. Syncing to HEAD...'
-                    }, ...state.neuralLogs].slice(0, 5)
+                    }, ...state.neuralLogs].slice(0, 5),
+                    tacticalDecision: { ...state.tacticalDecision, is_stale: true }
                 }));
             }
 
@@ -328,36 +330,41 @@ export const useTelemetryStore = create<TelemetryState>((set, get) => {
                 } else if (data.type === 'tactical_update') {
                     const d = data.data;
                     const incomingSignals: Signal[] = d.signals ?? [];
+                    const isElite = MASTER_WATCHLIST.includes(d.asset);
+
                     set((state) => {
-                        const { data: newHistoryData, ids: newHistoryIds } = incomingSignals.length > 0
-                            ? _mergeSignals(state.signalHistory, state.signalIds, incomingSignals)
+                        // Protocolo v5.7.2: Una Sola Señal Maestra (El Mejor Cuadro)
+                        // Filtro de Supervivencia: Solo ACTIVE, RR > 2.0, Confluence >= 70%
+                        const activeSignalsOnly = incomingSignals.filter(s => 
+                            s.status === 'ACTIVE' && 
+                            (s.confluence?.score || 0) >= 70 &&
+                            (s.rr_ratio || 0) >= 2.0
+                        );
+                        
+                        // OMEGA: Anti-Repetición en la UI (Top 1 por Asset en la cola visual)
+                        const { data: newHistoryData, ids: newHistoryIds } = activeSignalsOnly.length > 0
+                            ? _mergeSignals(state.signalHistory, state.signalIds, activeSignalsOnly)
                             : { data: state.signalHistory, ids: state.signalIds };
+                        
+                        // Si es Elite, forzamos actualización de advisor inmediata
+                        const updatedAdvisorLogs = { ...state.advisorLogs };
+                        if (d.advisor_log) {
+                            updatedAdvisorLogs[d.asset] = d.advisor_log;
+                        }
+
                         return {
                             isCalibrating: false,
                             tacticalDecision: {
+                                ...state.tacticalDecision,
+                                asset: d.asset,
                                 regime: d.market_regime ?? 'UNKNOWN',
                                 strategy: d.active_strategy ?? 'STANDBY',
-                                reasoning: `Régimen: ${d.market_regime}. Soportes mapeados. Dist SMA200: ${d.dist_to_sma200 != null ? (d.dist_to_sma200 * 100).toFixed(2) + '%' : 'N/A'}`,
+                                reasoning: `Régimen: ${d.market_regime}. Soportes mapeados.`,
                                 current_price: d.current_price ?? null,
-                                nearest_support: d.nearest_support ?? null,
-                                nearest_resistance: d.nearest_resistance ?? null,
-                                sma_fast: d.sma_fast ?? null,
-                                sma_slow: d.sma_slow ?? null,
-                                sma_slow_slope: d.sma_slow_slope ?? null,
-                                bb_width: d.bb_width ?? null,
-                                bb_width_mean: d.bb_width_mean ?? null,
-                                dist_to_sma200: d.dist_to_sma200 ?? null,
-                                signals: incomingSignals,
-                                key_levels: d.key_levels ?? { resistances: [], supports: [] },
-                                fibonacci: d.fibonacci ?? undefined,
-                                diagnostic: d.diagnostic ?? undefined,
-                                htf_bias: d.htf_bias ?? undefined,
-                                smc: d.smc ?? undefined,
+                                signal_history: incomingSignals,
+                                ...d // Spread remaining data
                             },
-                            advisorLogs: {
-                                ...state.advisorLogs,
-                                [state.activeSymbol]: d.advisor_log ?? state.advisorLogs[state.activeSymbol]
-                            },
+                            advisorLogs: updatedAdvisorLogs,
                             htfBias: d.htf_bias ?? state.htfBias,
                             latestPrice: d.current_price ?? state.latestPrice, 
                             signalHistory: newHistoryData,
@@ -369,6 +376,12 @@ export const useTelemetryStore = create<TelemetryState>((set, get) => {
 
                     const sig = data.data as Signal;
                     set((state) => {
+                        // DELTA: Limpieza del Renderizador Auditado
+                        // No mostramos NADA por debajo del 70% o RR < 2.0 incluso en auditoría.
+                        if ((sig.confluence?.score || 0) < 70 || (sig.rr_ratio || 0) < 2.0) {
+                             return state; 
+                        }
+
                         const id = sig.id || `${sig.timestamp}-${sig.asset}`;
                         if (state.auditedSignals[id]) return state;
 

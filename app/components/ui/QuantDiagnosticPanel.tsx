@@ -71,6 +71,36 @@ export default function QuantDiagnosticPanel() {
                     </div>
                 </div>
 
+                {/* 1.5 PULSO INSTITUCIONAL (RVOL + ABSORCIÓN) - 💎 v5.4.3 */}
+                <div className="grid grid-cols-2 gap-2">
+                    <div className="bg-white/[0.03] border border-white/10 rounded-xl p-2.5 flex flex-col justify-between">
+                        <span className="text-[7px] font-black text-white/20 tracking-[0.2em] block mb-1 uppercase text-center">RVOL ROBUSTO</span>
+                        <div className="flex flex-col items-center">
+                            <span className={`text-[12px] font-black font-mono tracking-widest ${d.diagnostic?.rvol && d.diagnostic.rvol >= 1.5 ? 'text-neon-cyan' : 'text-white/60'}`}>
+                                {d.diagnostic?.rvol?.toFixed(2) || '0.00'}x
+                            </span>
+                            <div className="w-full h-1 bg-white/5 rounded-full overflow-hidden mt-1.5 flex gap-0.5">
+                                <div className={`h-full ${d.diagnostic?.rvol && d.diagnostic.rvol >= 1.0 ? 'bg-neon-cyan' : 'bg-white/10'}`} style={{ width: '33%' }} />
+                                <div className={`h-full ${d.diagnostic?.rvol && d.diagnostic.rvol >= 1.5 ? 'bg-neon-cyan' : 'bg-white/5'}`} style={{ width: '33%' }} />
+                                <div className={`h-full ${d.diagnostic?.rvol && d.diagnostic.rvol >= 2.5 ? 'bg-neon-cyan animate-pulse' : 'bg-white/5'}`} style={{ width: '34%' }} />
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className={`border rounded-xl p-2.5 flex flex-col justify-between transition-colors ${d.diagnostic?.is_absorption_elite ? 'bg-yellow-400/10 border-yellow-400/40 shadow-[0_0_15px_rgba(250,204,21,0.1)]' : 'bg-white/[0.03] border-white/10'}`}>
+                        <span className="text-[7px] font-black text-white/20 tracking-[0.2em] block mb-1 uppercase text-center">ABSORCIÓN (Z)</span>
+                        <div className="flex flex-col items-center">
+                             <span className={`text-[12px] font-black font-mono tracking-widest ${d.diagnostic?.is_absorption_elite ? 'text-yellow-400' : 'text-white/60'}`}>
+                                {d.diagnostic?.absorption_score?.toFixed(2) || '0.00'}σ
+                            </span>
+                            <div className="w-full h-1 bg-white/5 rounded-full overflow-hidden mt-1.5 flex gap-0.5">
+                                <div className={`h-full ${d.diagnostic?.absorption_score && d.diagnostic.absorption_score >= 1.0 ? (d.diagnostic.is_absorption_elite ? 'bg-yellow-400' : 'bg-neon-cyan/60') : 'bg-white/10'}`} style={{ width: '50%' }} />
+                                <div className={`h-full ${d.diagnostic?.is_absorption_elite ? 'bg-yellow-400 shadow-[0_0_8px_rgba(250,204,21,0.4)]' : 'bg-white/10'}`} style={{ width: '50%' }} />
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
 
                 {/* 2. Topografía Algorítmica — todos los key_levels */}
                 <div className="bg-white/[0.02] border border-white/5 rounded-xl p-3">

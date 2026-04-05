@@ -94,10 +94,29 @@ class RiskManager:
             net_risk   = raw_risk + friction_cost
             net_reward = raw_reward - friction_cost 
 
+            # ⛔ [OMEGA v5.7] VALIDACIÓN DE SPREAD DE PRECISIÓN (ATR FILTER)
+            atr_20 = float(signal_data.get("atr_value", 0.0))
+            if raw_risk < atr_20:
+                 return {
+                     "approved": False, 
+                     "rr_ratio": 0.0, 
+                     "trade_quality": "NOISE_REJECTED 🔇", 
+                     "reason": f"PRECISIÓN IRREAL: SL ({raw_risk:.4f}) < ATR ({atr_20:.4f})"
+                 }
+
             if net_risk < 0.0001:
                 return {"approved": False, "rr_ratio": 0.0, "trade_quality": "INVALID", "reason": "Riesgo nulo"}
             
             rr = round(net_reward / net_risk, 2)
+            
+            # --- [SIGMA/DELTA v5.7.1] HARD-GATE R:R 2.0 ---
+            if rr < 2.0:
+                return {
+                    "approved": False,
+                    "rr_ratio": rr,
+                    "trade_quality": "POOR_RR ⛔",
+                    "reason": f"R:R Insuficiente ({rr} < 2.0). Descartado por Seguridad Financiera."
+                }
             
             # --- DETERMINACIÓN DE CALIDAD ---
             if rr >= 2.5:   quality = "A+ (Institutional)"
@@ -287,6 +306,16 @@ class RiskManager:
         leverage = min(int(self.max_leverage), math.ceil(pos_size_nominal / self.account_balance))
         actual_pos_size = min(pos_size_nominal, self.account_balance * leverage)
 
+        # 5. Entry Zone Calculation (v4.1 Platinum)
+        # Define el "Área de Carga" óptima para evitar Front-running excesivo
+        entry_buffer = abs(current_price - stop_loss_price) * 0.1 # 10% del riesgo como buffer de entrada
+        if signal_type == "LONG":
+            entry_zone_top = current_price + entry_buffer
+            entry_zone_bottom = current_price - (entry_buffer * 0.5)
+        else:
+            entry_zone_top = current_price + (entry_buffer * 0.5)
+            entry_zone_bottom = current_price - entry_buffer
+
         return {
             "account_balance":   round(self.account_balance, 2),
             "risk_amount_usdt":  round(risk_amount_usdt, 2),
@@ -297,6 +326,8 @@ class RiskManager:
             "tp1":               round(tp1, 2),
             "tp2":               round(tp2, 2) if tp2 else None,
             "take_profit_3r":    round(tp1, 2), # Legacy compatible
+            "entry_zone_top":    round(entry_zone_top, 2),
+            "entry_zone_bottom": round(entry_zone_bottom, 2),
             "exit_strategy":     exit_strategy,
             "trailing_stop":     trailing_stop_logic,
             "smt_strength_bonus": smt_strength,

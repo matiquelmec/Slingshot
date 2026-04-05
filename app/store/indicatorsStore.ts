@@ -22,6 +22,7 @@ export const INDICATOR_DEFAULTS: Indicator[] = [
     { id: 'liquidations', label: 'Rekt Radar', sublabel: 'Niveles de Liquidación (Trapped)', enabled: true, color: '#FF003C' },
     { id: 'fibonacci', label: 'Autofib', sublabel: 'Zonas de Descuento (Premium/Discount)', enabled: false, color: '#FF7043' },
     { id: 'volume', label: 'Volumen', sublabel: 'Flujo de Transacciones', enabled: true, color: '#00FF41' },
+    { id: 'heatmap', label: 'Heatmap Neural', sublabel: 'Muros de Liquidez (Order Book)', enabled: true, color: '#BF00FF' },
 ];
 
 export const useIndicatorsStore = create<IndicatorsState>((set) => ({

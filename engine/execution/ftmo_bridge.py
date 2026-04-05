@@ -81,7 +81,7 @@ def calculate_dynamic_lots(
     
     return lots
 
-def prepare_ftmo_order(signal_data: Dict[str, Any]) -> Dict[str, Any]:
+def prepare_ftmo_order(signal_data: Dict[str, Any], silent: bool = True) -> Dict[str, Any]:
     """
     Prepara el payload JSON final para el puente de ejecución MT5.
     Transforma la señal táctica SMC en una orden institucional.
@@ -116,7 +116,8 @@ def prepare_ftmo_order(signal_data: Dict[str, Any]) -> Dict[str, Any]:
         "magic":     43000, # Titanium Magic ID para Slingshot
     }
     
-    logger.info(f"⚖️ [FTMO_BRIDGE] Preparando orden {symbol} @ {lots} lotes | Riesgo: ${risk_usd:.2f}")
+    if not silent:
+        logger.info(f"⚖️ [FTMO_BRIDGE] Preparando orden {symbol} @ {lots} lotes | Riesgo: ${risk_usd:.2f}")
     
     return order
 

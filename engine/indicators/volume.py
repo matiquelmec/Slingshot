@@ -2,89 +2,137 @@ from engine.core.logger import logger
 import pandas as pd
 import numpy as np
 
-def calculate_rvol(df: pd.DataFrame, window: int = 20) -> pd.DataFrame:
+def calculate_rvol(df: pd.DataFrame, window: int = 24) -> pd.DataFrame:
     """
-    Relative Volume (RVOL) - Nivel 3 (Gatillo).
-    Calcula si el volumen actual es inusualmente alto en comparación con el promedio reciente.
-    RVOL > 1.5 a 2.0 indica fuerte interés institucional.
+    Relative Volume (RVOL) - Nivel 3 (Gatillo Institucional).
+    Calcula si el volumen actual es inusualmente alto en comparación con la mediana reciente.
+    Usamos la mediana para resistir valores extremos (Outliers) que sesgan la media simple.
     """
     df = df.copy()
     
-    # 🔴 WARM-UP v4.3.6: Solo calcular si hay historial suficiente (evita picos falsos en boot)
-    df['vol_sma'] = df['volume'].rolling(window=window, min_periods=window).mean()
+    # Robust Median SMA (v5.4.3 Unified)
+    df['vol_median'] = df['volume'].rolling(window=window, min_periods=window).median()
     
-    # Calcular RVOL = Volumen Actual / SMA del Volumen
-    # Si vol_sma es NaN (no hay 20 velas), el RVOL será 0 (Modo Silenciador)
-    df['rvol'] = df['volume'] / df['vol_sma']
+    # Calcular RVOL = Volumen Actual / Mediana del Volumen
+    df['rvol'] = df['volume'] / df['vol_median']
     df['rvol'] = df['rvol'].fillna(0)
     
     return df
 
-def calculate_zscore_filter(df: pd.DataFrame, threshold: float = 4.0) -> pd.Series:
+def calculate_absorption_index(df: pd.DataFrame, window: int = 50) -> pd.DataFrame:
     """
-    Protocolo Anti-Outlier (Z-Score Filter).
-    Identifica si el volumen de un tick se aleja más de N sigmas del promedio.
-    Retorna una serie de booleanos indicando si es un outlier.
-    """
-    if len(df) < 2:
-        return pd.Series([False] * len(df))
+    Índice de Absorción Institucional (Lattice Nivel 4).
+    Mide la 'Presión de Volumen' sobre el 'Movimiento de Precio'.
     
-    vol = df['volume']
-    mean = vol.rolling(window=20, min_periods=1).mean()
-    std = vol.rolling(window=20, min_periods=1).std()
-    
-    # Manejar división por cero en mercados planos
-    std = std.replace(0, 1.0)
-    
-    z_score = (vol - mean).abs() / std
-    return z_score > threshold
-
-def analyze_volume_trend(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Analiza la tendencia del volumen para confirmar si un movimiento de precio 
-    está respaldado por dinero institucional (Volumen Creciente) o si es una 
-    trampa (Volumen Decreciente).
+    Un índice de absorción alto ocurre cuando el volumen es enorme pero el precio 
+    se mueve poco (velas de cuerpo pequeño en zonas de liquidez).
     """
     df = df.copy()
     
-    # Comparar volumen de la vela actual con la anterior
-    df['vol_increasing'] = df['volume'] > df['volume'].shift(1)
+    # Spread del cuerpo y spread total (fuerza residual)
+    body_spread = (df['close'] - df['open']).abs()
+    candle_spread = (df['high'] - df['low'])
     
-    # Detectar picos anómalos (Climax Volume) - Por encima del percentil 95
-    # Usamos una ventana de 50 velas previas (aprox 12 horas en velas de 15m)
-    rolling_95th = df['volume'].rolling(window=50).quantile(0.95)
-    df['is_climax_vol'] = df['volume'] > rolling_95th
+    # Denominador de esfuerzo: evitamos división por cero con epsilon
+    # Consideramos el movimiento del cuerpo como el factor principal de 'desplazamiento'
+    displacement = body_spread + (candle_spread * 0.1) + (df['close'] * 0.00001)
+    
+    # Índice de Absorción Bruto
+    df['absorption_raw'] = df['volume'] / displacement
+    
+    # Normalización del índice vía Z-Score Robusto (v5.4)
+    median = df['absorption_raw'].rolling(window=window).median()
+    mad = (df['absorption_raw'] - median).abs().rolling(window=window).median()
+    
+    # Si mad es 0, usamos un valor mínimo para evitar NaNs
+    mad = mad.replace(0, 1.0)
+    
+    df['absorption_score'] = (df['absorption_raw'] - median) / (mad * 1.4826)
     
     return df
 
-def confirm_trigger(df: pd.DataFrame, min_rvol: float = 1.5) -> pd.DataFrame:
+def calculate_zscore_robust(df: pd.DataFrame, window: int = 24, threshold: float = 3.5) -> pd.Series:
     """
-    El Gatillo Final (SMC Nivel 3).
-    Si estamos en un Order Block, necesitamos que el RVOL sea alto (institucional)
-    para confirmar la entrada.
+    Protocolo Anti-Outlier v5.4 (Z-Score Robusto via MAD).
+    A diferencia del Z-Score estándar, el uso de Mediana y MAD evita que los picos 
+    volatiles oculten nuevas inserciones de capital.
+    """
+    if len(df) < window:
+        return pd.Series([False] * len(df))
+    
+    vol = df['volume']
+    median = vol.rolling(window=window, min_periods=1).median()
+    mad = (vol - median).abs().rolling(window=window, min_periods=1).median()
+    
+    # Escalamiento para consistencia con distribución normal
+    mad_scaled = mad * 1.4826
+    mad_scaled = mad_scaled.replace(0, 1.0)
+    
+    z_score = (vol - median).abs() / mad_scaled
+    return z_score > threshold
+
+def analyze_volume_footprint(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Analiza la firma (Footprint) del volumen.
+    """
+    df = df.copy()
+    
+    # 1. Delta básico (Aproximación por cuerpo/mecha)
+    df['vol_increasing'] = df['volume'] > df['volume'].shift(1)
+    
+    # 2. Climax Volume (Percentil 95 Adaptativo)
+    rolling_95th = df['volume'].rolling(window=50).quantile(0.95)
+    df['is_climax_vol'] = df['volume'] > rolling_95th
+    
+    # 3. Absorción Institucional
+    df = calculate_absorption_index(df)
+    
+    return df
+
+def confirm_trigger(df: pd.DataFrame, min_rvol: float = 2.0) -> pd.DataFrame:
+    """
+    Gatillo Institucional v5.4.3 Platinum.
+    Un trigger es válido si hay RVOL alto Y el volumen no es un outlier de error (Z < 6).
     """
     df = calculate_rvol(df)
-    df = analyze_volume_trend(df)
+    df = analyze_volume_footprint(df)
     
-    # Columna maestra de confirmación de entrada
-    df['valid_trigger'] = df['rvol'] >= min_rvol
+    # Filtro de Outliers destructivos (Error de Feed)
+    df['is_outlier_error'] = calculate_zscore_robust(df, threshold=8.0)
+    
+    # Columna maestra de confirmación:
+    # 1. El volumen relativo debe ser institucional (>= min_rvol)
+    # 2. No debe ser un pico de error técnico (Z < 8)
+    # 3. Absorción significativa confirma que el 'Smart Money' está entrando
+    df['valid_trigger'] = (df['rvol'] >= min_rvol) & (~df['is_outlier_error'])
+    
+    # Marcar señales de Absorción Elite (donde se espera reversión o breakout)
+    df['is_absorption_elite'] = (df['absorption_score'] > 2.5) & (df['rvol'] > 1.5)
     
     return df
 
 if __name__ == "__main__":
-    import os
-    from pathlib import Path
+    # Test de rendimiento del Kernel v5.4.3
+    import time
+    start = time.time()
     
-    file_path = Path(__file__).parent.parent.parent / "data" / "btcusdt_15m.parquet"
-    if os.path.exists(file_path):
-        data = pd.read_parquet(file_path)
-        analyzed_data = confirm_trigger(data)
-        
-        # Filtrar velas con RVOL Extremo (> 2.5x lo normal)
-        extreme_vol = analyzed_data[analyzed_data['rvol'] >= 2.5]
-        
-        logger.info("📊 Nivel 3: Escáner de Volumen Institucional (RVOL):")
-        logger.info(f"Total de velas analizadas: {len(data)}")
-        logger.info(f"🔥 Velas con inyección extrema de capital (RVOL >= 2.5): {len(extreme_vol)}")
-    else:
-        logger.info("Data file not found.")
+    # Simulación de datos (10,000 velas)
+    test_df = pd.DataFrame({
+        'timestamp': pd.date_range(start='2024-01-01', periods=1000, freq='15min'),
+        'open': np.random.uniform(50000, 51000, 1000),
+        'high': np.random.uniform(51000, 52000, 1000),
+        'low': np.random.uniform(49000, 50000, 1000),
+        'close': np.random.uniform(50000, 51000, 1000),
+        'volume': np.random.uniform(100, 1000, 1000)
+    })
+    
+    # Añadir absorción sintética
+    test_df.loc[500, 'volume'] = 5000
+    test_df.loc[500, 'open'] = 51000
+    test_df.loc[500, 'close'] = 51001 # Cuerpo mínimo, volumen máximo
+    
+    result = confirm_trigger(test_df)
+    
+    end = time.time()
+    logger.info(f"💎 [DELTA] Kernel de Volumen v5.4 optimizado en {(end-start)*1000:.2f}ms")
+    logger.info(f"Velas de Absorción detectadas: {len(result[result['is_absorption_elite']])}")

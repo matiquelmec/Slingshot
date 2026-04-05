@@ -21,6 +21,11 @@ import pandas as pd
 
 from engine.core.confluence import confluence_manager
 from engine.risk.risk_manager import RiskManager
+from collections import deque
+import time
+
+# --- CACHE DE AUDITORÍA v5.7 ---
+SIGNALS_HISTORY = {} # {asset: deque([(timestamp, signal_type)])}
 
 
 @dataclass
@@ -35,6 +40,7 @@ class GatekeeperContext:
     economic_events: list = field(default_factory=list)
     liquidation_clusters: list = field(default_factory=list)
     onchain_bias: str = "NEUTRAL"
+    heatmap: dict = field(default_factory=dict) # v5.7 Neural Heatmap
 
 
 @dataclass
@@ -134,7 +140,42 @@ class SignalGatekeeper:
             #         self._block(sig, "BLOCKED_BY_HTF", f"Contra sesgo HTF Bajista: {htf_bias.reason}", result)
             #         continue
 
-            # ── Filtro 2.5: Conflict Manager (IA vs SMC) ──────────────────────
+            # ── Filtro 2.5: Jerarquía de Timeframes (SIGMA v5.7) ──────────────
+            if interval in ["1m", "5m"]:
+                if not htf_bias or htf_bias.direction == "NEUTRAL":
+                    self._block(sig, "BLOCKED_BY_SILENCE", f"Protocolo v5.7: Señal {interval} sin alineación HTF clara.", result)
+                    continue
+                
+                is_long = "LONG" in str(sig.get("signal_type", sig.get("type", ""))).upper()
+                if (htf_bias.direction == "BULLISH" and not is_long) or \
+                   (htf_bias.direction == "BEARISH" and is_long):
+                    self._block(sig, "AUTODESTRUCTED", f"Conflicto de Jerarquía: {interval} contra-tendencia {htf_bias.direction}", result)
+                    continue
+
+            # ── Filtro 2.7: Anti-Spam de Volatilidad (OMEGA v5.7) ─────────────
+            asset = sig.get("asset", "UNKNOWN")
+            now_ts = time.time()
+            if asset not in SIGNALS_HISTORY:
+                SIGNALS_HISTORY[asset] = deque(maxlen=20)
+            
+            sig_type = "LONG" if "LONG" in str(sig.get("signal_type", sig.get("type", ""))).upper() else "SHORT"
+            recent_for_asset = list(SIGNALS_HISTORY[asset])
+            
+            # Contar señales contradictorias en los últimos 15 min (900 seg)
+            contradictory_count = 0
+            for ts, old_type in recent_for_asset:
+                if now_ts - ts < 900 and old_type != sig_type:
+                    contradictory_count += 1
+            
+            if contradictory_count >= 2:
+                self._block(sig, "STRUCTURAL_INCONSISTENCY", "[OMEGA] Bloqueo por Ruido/Choppy: >2 señales contradictorias en 15m.", result)
+                # No registramos esta para no alimentar el spam
+                continue
+            
+            # Registrar éxito parcial (luego de pasar filtros estructurales base)
+            SIGNALS_HISTORY[asset].append((now_ts, sig_type))
+
+            # Original Filter 2.5: Conflict Manager (IA vs SMC)
             if context.ml_projection and "direction" in context.ml_projection:
                 ml_dir = str(context.ml_projection["direction"]).upper()
                 is_long = "LONG" in str(sig.get("signal_type", sig.get("type", ""))).upper()
@@ -167,7 +208,8 @@ class SignalGatekeeper:
                     economic_events=context.economic_events,
                     liquidation_clusters=context.liquidation_clusters,
                     htf_bias=htf_bias,
-                    onchain_bias=context.onchain_bias
+                    onchain_bias=context.onchain_bias,
+                    heatmap=context.heatmap # v5.7 Neural Heatmap alignment
                 )
                 sig["confluence"] = confluence_result
             except Exception as e:
@@ -185,16 +227,14 @@ class SignalGatekeeper:
                 self._block(sig, "BLOCKED_BY_FILTER", rr["reason"], result)
                 continue
 
-            # ── Filtro 5: Score de Confluencia (Umbral Dinámico v4.7.1) ─────────
-            # Requisito base 75%. Si es RANGING, subimos el listón a 85% para filtrar ruido.
+            # ── Filtro 5: Score de Confluencia (Umbral v5.7.1 — Nivel de Mando) ──
             score = sig["confluence"].get("score", 0) if sig.get("confluence") else 0
-            regime = str(sig.get("regime", "UNKNOWN")).upper()
-            min_score = 85 if regime == "RANGING" else 75
+            min_score = 70 # Solo renderizamos si la confluencia es > 70%. Si es 0%, el sistema no molesta.
             
             if score < min_score:
                 if not silent:
-                    logger.info(f"[GATEKEEPER] 🔴 Confluencia {score}% < {min_score}% ({regime}) — bloqueada")
-                self._block(sig, "BLOCKED_BY_CONFIDENCE", f"Confianza {score}% < {min_score}% en {regime}", result)
+                    logger.info(f"[GATEKEEPER] 🔇 SILENCIO SELECTIVO: {score}% < {min_score}% — señal autodestruida")
+                self._block(sig, "BLOCKED_BY_CONFIDENCE", f"Confianza {score}% < {min_score}%", result)
                 continue
 
             # ── Filtro 6: Path Traversal — ¿Sigue Viva? ──────────────────────
@@ -204,7 +244,51 @@ class SignalGatekeeper:
 
             result.approved.append(sig)
 
+        # ── [SIGMA v5.7.1] AGRUPACIÓN POR ZONA (0.5%) & LÍMITE OMEGA ──
+        if result.approved:
+             result.approved = self._apply_master_filter(result.approved)
+
         return result
+
+    def _apply_master_filter(self, approved_signals: list[dict]) -> list[dict]:
+        """
+        [DELL v5.7.2 - MANDO ABSOLUTO]
+        1. Agrupa por Símbolo / Timeframe.
+        2. Si están en +-0.5% del precio, fusionar.
+        3. Solo permitir EL MEJOR cuadro (Top 1) por Activo.
+        """
+        from collections import defaultdict
+        
+        # Paso 1: Agrupar por Asset
+        by_asset = defaultdict(list)
+        for sig in approved_signals:
+            by_asset[sig["asset"]].append(sig)
+            
+        final_list = []
+        
+        for asset, sigs in by_asset.items():
+            # Ordenar por Score descendente para priorizar la de mayor confluencia
+            sigs.sort(key=lambda x: x.get("confluence", {}).get("score", 0), reverse=True)
+            
+            merged_sigs = []
+            for s in sigs:
+                is_clustered = False
+                for m in merged_sigs:
+                    # Comprobar si el precio está dentro del 0.5% para fusión de zona
+                    price_diff = abs(s["price"] - m["price"]) / m["price"]
+                    if price_diff <= 0.005 and s["signal_type"] == m["signal_type"]:
+                        is_clustered = True
+                        m["reasoning"] = f"[Zona Institucional 🛡️] {m.get('reasoning', '')}"
+                        break
+                if not is_clustered:
+                    merged_sigs.append(s)
+            
+            # [OMEGA v5.7.2] ANTI-REPETICIÓN: Solo el TOP 1 por activo
+            # No queremos 10 cuadros de SOL, queremos EL MEJOR.
+            if merged_sigs:
+                final_list.append(merged_sigs[0])
+            
+        return final_list
 
     # ── Helpers privados ─────────────────────────────────────────────────────
 

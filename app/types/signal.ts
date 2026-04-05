@@ -98,6 +98,8 @@ export interface QuantDiagnostic {
     projected_volume?: number;
     secs_elapsed?: number;
     progress_ratio?: number;
+    absorption_score?: number;     // 💎 v5.4.3
+    is_absorption_elite?: boolean; // 🔥 v5.4.3
 }
 
 export interface MLProjection {
@@ -233,6 +235,9 @@ export interface TacticalDecision {
         levels: Record<string, number>;
     };
     smc?: SMCDataPayload;
+    is_stale?: boolean; // 🔴 Stale Guard Protection
+    inference_latency?: number; // Latencia C++ Bridge en ms
+    gguf_sync_score?: number;   // Score de confianza Platinum (0-1)
 }
 
 export interface NewsItem {

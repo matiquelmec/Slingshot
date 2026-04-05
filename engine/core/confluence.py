@@ -157,7 +157,6 @@ class ConfluenceManager:
             else:
                 score += econ_weight
                 checklist.append({"factor": "Sesgo Macro", "status": "CONFIRMADO", "detail": f"Alineado con {event_name}"})
-        else:
             score += econ_weight
             checklist.append({"factor": "Sesgo Macro", "status": "CONFIRMADO", "detail": "Sin anomalías macro"})
 
@@ -214,6 +213,43 @@ class ConfluenceManager:
                 
         checklist.append({"factor": "SMT Divergence", "status": smt_status, "detail": smt_detail})
 
+        # 🚀 9.5. NEURAL HEATMAP (Peso 20) v5.7 Platinum
+        heatmap_weight = 20
+        total_weight += heatmap_weight
+        heatmap = kwargs.get('heatmap', {})
+        
+        if heatmap and heatmap.get('imbalance') is not None:
+            imbalance = heatmap.get('imbalance', 0)
+            h_bids = heatmap.get('hot_bids', [])
+            h_asks = heatmap.get('hot_asks', [])
+            
+            h_score = 0
+            h_detail = "Neutral"
+            
+            # A. Alineación de Desequilibrio
+            if (is_long and imbalance > 0.1) or (not is_long and imbalance < -0.1):
+                h_score += 10
+                h_detail = "Desequilibrio a favor"
+            elif (is_long and imbalance < -0.1) or (not is_long and imbalance > 0.1):
+                h_score -= 10
+                h_detail = "Advertencia: Contra-flujo"
+            
+            # B. Alineación con Muros (Proximidad < 0.5%)
+            proximity_bonus = False
+            for hb in (h_bids if is_long else h_asks):
+                if abs(price - hb['price']) / price < 0.005:
+                    proximity_bonus = True
+                    break
+            
+            if proximity_bonus:
+                h_score += 10
+                h_detail += " + Muro cercano"
+            
+            score += max(-15, min(20, h_score)) # Clamp
+            checklist.append({"factor": "Neural Heatmap", "status": "CONFIRMADO" if h_score > 0 else "PELIGRO" if h_score < 0 else "NEUTRAL", "detail": h_detail})
+        else:
+            checklist.append({"factor": "Neural Heatmap", "status": "CALIBRANDO", "detail": "Datos insuficientes"})
+
         # 🚀 10. VETO DE TEMPORALIDAD SUPERIOR (HTF VETO) v4.3 Titanium
         htf_bias = kwargs.get('htf_bias')
         multiplier = 1.0
@@ -268,8 +304,10 @@ class ConfluenceManager:
         # 🚀 13. RELOJ DE OBSOLESCENCIA (TIME-DECAY) v4.3 Titanium
         # Las señales de 1m o 5m rotan rápido; si no se mitigan pronto, pierden validez.
         try:
-            now_ts = df['timestamp'].iloc[-1]
-            sig_ts = pd.to_datetime(signal.get('timestamp'), utc=True)
+            # Estandarizamos a UTC Naive para evitar TypeErrors entre datetime64 y Timestamps aware
+            now_ts = pd.to_datetime(df['timestamp'].iloc[-1]).tz_localize(None)
+            sig_ts = pd.to_datetime(signal.get('timestamp')).tz_localize(None)
+            
             # Aproximamos velas transcurridas (asumiendo que estamos en el mismo DF)
             candles_elapsed = len(df[df['timestamp'] > sig_ts])
             

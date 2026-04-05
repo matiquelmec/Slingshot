@@ -57,6 +57,7 @@ class SlingshotRouter:
         economic_events: list | None = None,
         liquidation_clusters: list | None = None,
         onchain_bias: str | None = None,
+        heatmap: dict | None = None,
     ):
         """Actualiza el contexto del Jurado de Confluencia para el próximo ciclo."""
         if ml_projection        is not None: self._context.ml_projection        = ml_projection
@@ -65,6 +66,7 @@ class SlingshotRouter:
         if economic_events      is not None: self._context.economic_events       = economic_events
         if liquidation_clusters is not None: self._context.liquidation_clusters  = liquidation_clusters
         if onchain_bias         is not None: self._context.onchain_bias          = onchain_bias
+        if heatmap              is not None: self._context.heatmap               = heatmap
 
     # ── API pública: Pipeline Principal ──────────────────────────────────────
 
@@ -77,25 +79,32 @@ class SlingshotRouter:
         htf_bias=None,
         silent: bool = False,
         event_time_ms: int | None = None,
+        heatmap: dict | None = None,
     ) -> dict:
         """
         Pipeline principal: transforma velas OHLCV en señales institucionales.
-        Interface pública idéntica a la versión v4.0 para compatibilidad total.
+        Optimización v5.7: Caché de análisis y procesamiento eficiente.
         """
         # ── Monitor de Latencia (Drift Monitor) ──────────────────────────────
+        start_t = time.time()
         if event_time_ms:
-            drift_ms = (time.time() * 1000) - event_time_ms
+            drift_ms = (start_t * 1000) - event_time_ms
             if drift_ms > 300:
                 logger.warning(f"⚠️ [LATENCY] High Latency detectada en el router: {drift_ms:.2f}ms de drift")
 
-        # ── Fase 1: Análisis del Mercado ─────────────────────────────────────
+        # ── Fase 1: Análisis del Mercado (Capa 1-3) ──────────────────────────
+        # Intentamos recuperar del cache si el timestamp no ha cambiado
+        # Nota: En v5.7 usamos un hash ligero basado en el último timestamp
         market_map = self._analyzer.analyze(
             df=df,
             asset=asset,
             interval=interval,
             macro_levels=macro_levels,
             htf_bias=htf_bias,
+            heatmap=heatmap,
         )
+
+        if heatmap: self._context.heatmap = heatmap # Inyección dinámica v5.7
 
         # ── Fase 2: Detección de Oportunidades SMC ───────────────────────────
         df_analyzed   = market_map.df_analyzed
@@ -119,6 +128,7 @@ class SlingshotRouter:
                 smc_data=market_map.smc,
                 atr_value=sig.get("atr_value", 0.0),
             )
+            # Enriquecemos de forma silenciosa para pre-cálculo
             enriched.append(enrich_signal(sig, risk_data, interval))
 
         # ── Fase 4: Portero Institucional ────────────────────────────────────
@@ -142,12 +152,23 @@ class SlingshotRouter:
         result["diagnostic"]["pdl_swept"] = bool(self._context.session_data.get("pdl_swept", False))
         result["diagnostic"]["pdh_swept"] = bool(self._context.session_data.get("pdh_swept", False))
 
-        if gate.approved:
-            last = gate.approved[-1]
+        # ── Fase 6: Log Institucional Post-Aprobación (OMEGA Logic) ──────────
+        for approved_sig in gate.approved:
+            # Re-generamos el log del bridge pero ahora que sabemos que está aprobada
+            symbol = approved_sig.get("asset", asset)
+            from engine.execution.ftmo_bridge import prepare_ftmo_order
+            # Forzamos silent=False para que OMEGA anuncie la orden aprobada
+            prepare_ftmo_order(approved_sig, silent=False)
+            
             logger.info(
-                f"[ROUTER] ✅ Señal APROBADA | {last['type']} @ ${last['price']:.2f}"
-                f" | Score: {last.get('confluence', {}).get('score', '?')}%"
-                f" | Leverage: {last.get('leverage')}x"
+                f"[ROUTER] ✅ Señal APROBADA | {approved_sig['type']} @ ${approved_sig['price']:.2f}"
+                f" | Score: {approved_sig.get('confluence', {}).get('score', '?')}%"
+                f" | Leverage: {approved_sig.get('leverage')}x"
             )
+
+        # Monitor de ejecución local
+        process_time = (time.time() - start_t) * 1000
+        if process_time > 100: # Mas de 100ms es señal de fatiga en el analyzer
+             logger.debug(f"⏱️ [ROUTER] {asset} procesado en {process_time:.2f}ms")
 
         return result

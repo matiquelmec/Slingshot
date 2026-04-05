@@ -43,7 +43,7 @@ from engine.indicators.structure import (
     mitigate_smc_state, merge_smc_states
 )
 from engine.indicators.liquidations import estimate_liquidation_clusters
-from engine.indicators.liquidity import detect_liquidity_clusters
+from engine.indicators.liquidity import detect_liquidity_clusters, analyze_neural_heatmap
 from engine.indicators.ghost_data import (
     refresh_ghost_data, get_ghost_state, filter_signals_by_macro, 
     is_cache_fresh, fetch_funding_rate, compute_symbol_ghost
@@ -57,6 +57,17 @@ from engine.api.advisor import generate_tactical_advice
 from engine.core.store import store
 from engine.indicators.htf_analyzer import HTFAnalyzer
 from engine.indicators.onchain import OnChainSentinel
+
+# ──────────────────────────────────────────────────────────────────────────────
+# CONFIGURACIÓN DE ÉLITE v5.7 (OPERACIÓN MASTER WATCHLIST)
+# ──────────────────────────────────────────────────────────────────────────────
+MASTER_WATCHLIST = ["BTCUSDT", "ETHUSDT", "SOLUSDT", "PAXGUSDT"]
+
+# 🛡️ PROTECCIÓN DE OVERLOAD AI v5.7.15 (Sigma Sync)
+# Limita las llamadas simultáneas a Ollama para prevenir picos de latencia masivos.
+# En un VPS estándar, 1 es el máximo recomendado para Gemma-3 para evitar Drift >1000ms.
+GLOBAL_AI_SEMAPHORE = asyncio.Semaphore(1)
+# ──────────────────────────────────────────────────────────────────────────────
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -108,6 +119,7 @@ class SymbolBroadcaster:
         self._task: Optional[asyncio.Task] = None
 
         # Estado interno del broadcaster (compartido entre todas las velas)
+        self._store           = store # Inyección de Élite v5.7.15 (Sigma Sync)
         self._router         = SlingshotRouter()
         self._session_manager = SessionManager(symbol=self.symbol)
         self._history: list  = []
@@ -120,6 +132,7 @@ class SymbolBroadcaster:
         self._candle_closes  = 0
         self._last_pulse_ts  = 0.0
         self._liquidity      = {"bids": [], "asks": []}
+        self._heatmap        = {"hot_bids": [], "hot_asks": [], "imbalance": 0.0} # Neural Heatmap v5.7
         
         # ML Tracking Buffer: guarda la predicción de la vela anterior para evaluarla en el cierre (v4.3)
         self._last_ml_prediction = None
@@ -167,11 +180,14 @@ class SymbolBroadcaster:
         if history_to_send:
             await queue.put({"type": "history", "data": history_to_send})
         
-        # ✅ SYNC INSTANTÁNEO: Enviar últimas 20 señales auditadas para poblar el Terminal de inmediato
+        # ✅ SYNC INSTANTÁNEO: Enviar últimas señales ACTIVAS de alta calidad (v5.7.2)
         last_signals = await store.get_signals(asset=self.symbol)
-        # Tomamos las últimas 20 y las enviamos en orden cronológico inverso (o según el buffer)
+        # [DELTA v5.7.2] Solo sincronizar señales que sobreviven al Filtro de Supervivencia
         for sig in list(last_signals)[-20:]:
-            await queue.put({"type": "signal_auditor_update", "data": sig})
+            sig_score = sig.get("confluence", {}).get("score", 0) if sig.get("confluence") else 0
+            sig_rr = sig.get("rr_ratio", 0)
+            if sig.get("status") == "ACTIVE" and sig_score >= 70 and sig_rr >= 2.0:
+                await queue.put({"type": "signal_auditor_update", "data": sig})
 
         # ✅ SYNC INSTANTÁNEO: Radar Center (Global Context)
         if registry._last_radar_summary:
@@ -465,7 +481,7 @@ class SymbolBroadcaster:
                     tactical["advisor_log"] = self._last_advisor
                 elif self.symbol:
                     # Intentar buscarlo en el store si no está en la instancia (ej: tras reinicio del registry)
-                    cached = await store.get_advisor_advice(self.symbol)
+                    cached = await self._store.get_advisor_advice(self.symbol)
                     if cached:
                         tactical["advisor_log"] = cached
 
@@ -515,13 +531,19 @@ class SymbolBroadcaster:
                 stream_type = data.get("stream", "")
                 payload_data = data.get("data", {})
 
-                # ── Order Book Depth ──────────────────────────────────────────
+                # ── Order Book Depth (Neural Heatmap v5.7) ────────────────────
                 if stream_type == depth_stream:
-                    self._liquidity = detect_liquidity_clusters(
+                    price = self.latest_price or 1.0
+                    self._heatmap = analyze_neural_heatmap(
                         bids=payload_data.get("bids", []),
                         asks=payload_data.get("asks", []),
-                        top_n=3
+                        current_price=price
                     )
+                    # Mantener compatibilidad legacy para filtros básicos
+                    self._liquidity = {
+                        "bids": [{"price": b["price"], "volume": b["volume"]} for b in self._heatmap.get("hot_bids", [])],
+                        "asks": [{"price": a["price"], "volume": a["volume"]} for a in self._heatmap.get("hot_asks", [])]
+                    }
                     continue
 
                 # ── Kline (vela) ──────────────────────────────────────────────
@@ -553,12 +575,13 @@ class SymbolBroadcaster:
                 # ── FAST PATH (Dinámico: 1s a 5s) ─────────────────────────────
                 now = time.time()
                 
-                # Definir intervalo de pulso dinámico
-                pulse_interval = 1.0  # Default (TRENDING o alta actividad)
-                regime = self._last_tactical.get("data", {}).get("market_regime", "UNKNOWN") if self._last_tactical else "UNKNOWN"
+                # --- RECALIBRACIÓN v5.7: FOCO DE ÉLITE ---
+                is_elite = self.symbol in MASTER_WATCHLIST
+                pulse_interval = 0.5 if is_elite else 1.0 
                 
-                if regime in ["CHOPPY", "ACCUMULATION", "DISTRIBUTION"]:
-                    pulse_interval = 3.0  # Reducir frecuencia en mercados laterales
+                regime = self._last_tactical.get("data", {}).get("market_regime", "UNKNOWN") if self._last_tactical else "UNKNOWN"
+                if not is_elite and regime in ["CHOPPY", "ACCUMULATION", "DISTRIBUTION"]:
+                    pulse_interval = 3.0  # Los activos no-élite se ralentizan en rango
                 
                 if now - self._last_pulse_ts >= pulse_interval:
                     self._last_pulse_ts = now
@@ -656,6 +679,7 @@ class SymbolBroadcaster:
                                 interval=self.interval,
                                 macro_levels=self._macro_levels,
                                 htf_bias=self._htf_bias,
+                                heatmap=self._heatmap, # v5.7 Neural Heatmap
                                 silent=True,
                                 event_time_ms=data.get("data", {}).get("E")
                             )
@@ -708,7 +732,8 @@ class SymbolBroadcaster:
                         "type": "neural_pulse",
                         "data": {
                             "ml_projection": self._last_ml,
-                            "liquidity_heatmap": self._liquidity,
+                            "liquidity_heatmap": self._heatmap, # Enviar heatmap completo v5.7
+                            "legacy_liquidity": self._liquidity,
                             "log": {
                                 "type": "SENSOR",
                                 "message": f"[Fast Path] Precio: ${float(kline['c']):.2f}"
@@ -723,6 +748,10 @@ class SymbolBroadcaster:
                     
                     self._live_buffer.append(candle_payload)
                     self._candle_closes += 1
+                    
+                    # ── Bootstrap del Slow Path (v5.7.15 Hardening) ───────────────
+                    final_tactical = self._last_tactical or {}
+                    session_state  = self._last_session or {}
 
                     df_live = pd.DataFrame([i["data"] for i in self._live_buffer])
                     df_live["timestamp"] = pd.to_datetime(df_live["timestamp"], unit="s")
@@ -776,8 +805,8 @@ class SymbolBroadcaster:
 
                     # Pipeline táctico final (vela cerrada = máxima precisión)
                     try:
-                        news_items   = await store.get_news()
-                        econ_events  = await store.get_economic_events(limit=5)
+                        news_items   = await self._store.get_news()
+                        econ_events  = await self._store.get_economic_events(limit=5)
                         
                         self._router.set_context(
                             ml_projection=self._last_ml,
@@ -806,6 +835,7 @@ class SymbolBroadcaster:
                     # Sesión con cierre confirmado
                     try:
                         session_state = self._session_manager.update(candle_payload["data"], is_closed=True)
+                        self._last_session = session_state # Persistir en la instancia
                         await self._broadcast(session_state)
                     except Exception as e:
                         logger.error(f"[BROADCASTER] {self._key} → Session Slow Path error: {e}")
@@ -822,7 +852,10 @@ class SymbolBroadcaster:
                     
                     if current_candle_ts != last_advisor_ts_safe:
                         self._last_advisor_ts = current_candle_ts
-                        asyncio.create_task(self._emit_advisor(final_tactical, session_state))
+                        if final_tactical and session_state:
+                            asyncio.create_task(self._emit_advisor(final_tactical, session_state))
+                        else:
+                            logger.warning(f"[BROADCASTER] {self._key} → Advisor cancelado: Datos incompletos en Slow Path.")
                     else:
                         logger.info(f"[BROADCASTER] {self._key} → 🧠 Advisor omitido (ya analizado para esta vela)")
 
@@ -916,17 +949,18 @@ class SymbolBroadcaster:
         for sig in final_approved:
             asyncio.create_task(self._persist_signal(sig, tactical, status="ACTIVE", silent=silent))
 
-        # ──────── PROCESAR BLOQUEADAS POR MACRO/FILTRO (Auditoría) ────────
+        # ──────── [DELTA v5.7.2] SEÑALES BLOQUEADAS: SOLO LOG INTERNO, CERO UI ────────
+        # Macro-blocked y router-blocked se registran en logs del servidor,
+        # pero NUNCA se envían al Dashboard. Limpieza visual absoluta.
         for sig in macro_blocked:
-            motivo = sig.get("blocked_reason", "Bloqueada por filtro macro (miedo/funding/dominancia)")
-            status = "BLOCKED_BY_MACRO" if "macro" in motivo.lower() or "miedo" in motivo.lower() else "BLOCKED_BY_FILTER"
-            asyncio.create_task(self._persist_signal(sig, tactical, status=status, rejection_reason=motivo, silent=silent))
+            motivo = sig.get("blocked_reason", "Bloqueada por filtro macro")
+            if not silent:
+                logger.info(f"[GATEKEEPER] 🔇 Señal macro-bloqueada ({self.symbol}): {motivo}")
 
-        # ──────── PROCESAR BLOQUEADAS POR EL ROUTER (Audit Mode: R:R o HTF) ────────
         for sig in unique_blocked:
             motivo = sig.get("blocked_reason", "Rechazada por filtro táctico")
-            status = sig.get("status", "BLOCKED_BY_FILTER")
-            asyncio.create_task(self._persist_signal(sig, tactical, status=status, rejection_reason=motivo, silent=silent))
+            if not silent:
+                logger.info(f"[GATEKEEPER] 🔇 Señal router-bloqueada ({self.symbol}): {motivo}")
 
     async def _check_drift(self, df_live: pd.DataFrame):
         """
@@ -1048,11 +1082,14 @@ class SymbolBroadcaster:
             "rr_ratio":         round(abs(float(sig.get("take_profit_3r", 0)) - float(sig.get("price", 0))) / abs(float(sig.get("price", 0)) - float(sig.get("stop_loss", 0.001))) if abs(float(sig.get("price", 0)) - float(sig.get("stop_loss", 0))) > 0 else 0, 2)
         }
         
-        # Persistencia en Memoria Local
-        asyncio.create_task(store.save_signal(realtime_data))
+        # Persistencia en Memoria Local (siempre, para logs internos)
+        asyncio.create_task(self._store.save_signal(realtime_data))
         
-        # Emitir evento visual de auditoría al UI para que el Terminal HFT pestañee.
-        await self._broadcast({"type": "signal_auditor_update", "data": realtime_data})
+        # [DELTA v5.7.2] Solo emitir al Dashboard si la señal es ACTIVA y de alta calidad
+        # Señales FILTER/SILENCE/BLOCKED se quedan en logs del servidor, fuera de la UI.
+        sig_score = realtime_data.get("confluence", {}).get("score", 0) if realtime_data.get("confluence") else 0
+        if status == "ACTIVE" and sig_score >= 70 and realtime_data.get("rr_ratio", 0) >= 2.0:
+            await self._broadcast({"type": "signal_auditor_update", "data": realtime_data})
         
         # En v3.0, solo guardamos en memoria. Print de confirmación local.
         icon = "✅" if status == "ACTIVE" else "🚫"
@@ -1103,7 +1140,7 @@ class SymbolBroadcaster:
         
         # Si ya existe un análisis para este activo en el store, no volvemos a llamar a Ollama.
         # EXCEPCIÓN: Si el análisis guardado es un error (trae N/A o estructura no identificada), lo ignoramos.
-        existing_advice = await store.get_advisor_advice(self.symbol)
+        existing_advice = await self._store.get_advisor_advice(self.symbol)
         if existing_advice and existing_advice.get("timestamp") == current_candle_ts:
             content = existing_advice.get("content", "")
             if "N/A" not in content and "ESTRUCTURA NO IDENTIFICADA" not in content:
@@ -1167,9 +1204,9 @@ class SymbolBroadcaster:
             self._advisor_task = asyncio.current_task()
 
             # Obtener datos adicionales del store para el LLM
-            news_items = await store.get_news(limit=5)
-            liqs = await store.get_liquidation_clusters(self.symbol)
-            econ_events = await store.get_economic_events(limit=5)
+            news_items = await self._store.get_news(limit=5)
+            liqs = await self._store.get_liquidation_clusters(self.symbol)
+            econ_events = await self._store.get_economic_events(limit=5)
 
             # ✅ SERIALIZACIÓN ROBUSTA (v4.6.5)
             # Convertimos tipos de Numpy a Python nativo (Evita el bug del N/A)
@@ -1190,18 +1227,20 @@ class SymbolBroadcaster:
             sanitized_tactical = sanitize(payload)
 
             # Timeout de 45 segundos para VPS — liberar recursos si la IA no responde
-            advice = await asyncio.wait_for(
-                generate_tactical_advice(self.symbol, 
-                    tactical_data=sanitized_tactical,
-                    current_session=session_state.get("data", {}).get("current_session", "UNKNOWN"),
-                    ml_projection=self._last_ml,
-                    news=news_items,
-                    liquidations=liqs,
-                    economic_events=econ_events,
-                    onchain_data=self._last_onchain.get("data") if self._last_onchain else None
-                ),
-                timeout=45.0
-            ) 
+            # 🛡️ Uso del Semáforo Global para prevenir Drift por saturación de CPU/GPU (v5.7.15)
+            async with GLOBAL_AI_SEMAPHORE:
+                advice = await asyncio.wait_for(
+                    generate_tactical_advice(self.symbol, 
+                        tactical_data=sanitized_tactical,
+                        current_session=session_state.get("data", {}).get("current_session", "UNKNOWN"),
+                        ml_projection=self._last_ml,
+                        news=news_items,
+                        liquidations=liqs,
+                        economic_events=econ_events,
+                        onchain_data=self._last_onchain.get("data") if self._last_onchain else None
+                    ),
+                    timeout=45.0
+                ) 
             logger.info(f"[BROADCASTER] ✅ Análisis LLM completado para {self.symbol}")
             
             # ✅ PERSISTENCIA EN EL STORE (v4.2)
@@ -1212,7 +1251,7 @@ class SymbolBroadcaster:
                 "content": advice,
                 "updated_at": datetime.now(timezone.utc).isoformat()
             }
-            await store.save_advisor_advice(self.symbol, advice_obj)
+            await self._store.save_advisor_advice(self.symbol, advice_obj)
             
             # self._last_advisor será actualizado por _broadcast
             await self._broadcast({"type": "advisor_update", "data": advice_obj})

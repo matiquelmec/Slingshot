@@ -1,13 +1,8 @@
 """
-engine/router/analyzer.py — Slingshot v4.1 Platinum
+engine/router/analyzer.py — Slingshot v5.4.3 Unified Platinum
 ======================================================
 Capa de Análisis Puro (sin efectos secundarios).
 Responsabilidad: transformar OHLCV bruto en el mapa completo del mercado.
-  - Topografía de S/R
-  - Régimen de Wyckoff
-  - Detección de OBs, FVGs y POIs (SMC)
-  - Fibonacci Dinámico
-  - Fusión de niveles MTF
 """
 from __future__ import annotations
 import time
@@ -16,7 +11,6 @@ from engine.core.logger import logger
 
 import pandas as pd
 import numpy as np
-import time
 from dataclasses import dataclass, field
 from typing import Optional, Any
 
@@ -29,6 +23,7 @@ from engine.indicators.structure import (
 )
 from engine.indicators.fibonacci import get_current_fibonacci_levels
 from engine.indicators.macro import get_macro_context
+from engine.indicators.volume import calculate_rvol, calculate_absorption_index, calculate_zscore_robust
 
 
 @dataclass
@@ -46,7 +41,7 @@ class MarketMap:
     key_levels: dict
     smc: dict
     fibonacci: Optional[dict]
-    fibonacci_h1: Optional[dict] = None # v4.4 Shadow Mode
+    fibonacci_h1: Optional[dict] = None
     htf_bias: Optional[dict] = None
     diagnostic: dict = field(default_factory=dict)
     htf_alignment: bool = False 
@@ -56,12 +51,21 @@ class MarketMap:
 
 class MarketAnalyzer:
     """
-    Módulo de análisis puro. No filtra señales ni calcula riesgo.
-    Solo transforma OHLCV → MarketMap institucional.
+    Módulo de análisis puro v5.4.
+    Transforma OHLCV → MarketMap institucional con métricas de absorción.
     """
 
-    def __init__(self):
+    def __init__(self, cache_size: int = 100):
         self._regime_detector = RegimeDetector()
+        self._cache = {} # LRU Cache: (asset, interval, ts) -> MarketMap
+        self._cache_size = cache_size
+
+    def _get_cache_key(self, asset: str, interval: str, df: pd.DataFrame) -> str:
+        try:
+            ts = str(df["timestamp"].iloc[-1])
+            return f"{asset}_{interval}_{ts}"
+        except:
+            return f"{asset}_{interval}_{time.time()}"
 
     def analyze(
         self,
@@ -70,133 +74,63 @@ class MarketAnalyzer:
         interval: str = "15m",
         macro_levels=None,
         htf_bias=None,
+        heatmap: dict | None = None,
     ) -> MarketMap:
-        """
-        Pipeline de análisis completo.
-        Retorna un MarketMap con toda la topografía institucional.
-        """
+        """Pipeline de análisis completo v5.4 con soporte de Caché LRU."""
+        
+        # ── Intento de recuperación de Caché (Optimización SIGMA) ─────────────
+        cache_key = self._get_cache_key(asset, interval, df)
+        if cache_key in self._cache:
+            return self._cache[cache_key]
+
         df = df.copy()
 
-        # ── Paso 0: Normalización de Tipos (v5.4.2) ─────────────────────────
-        # Aseguramos que OHLCV sea numérico para evitar fallos en cálculos vectorizados
+        # ── Paso 0: Normalización de Tipos ─────────────────────────
         for col in ["open", "high", "low", "close", "volume"]:
             if col in df.columns:
                 df[col] = pd.to_numeric(df[col], errors="coerce")
 
-        # ── Paso 1: Soporte / Resistencia Topográfico ────────────────────────
+        # ── Paso 1: Soporte / Resistencia ──────────────────────────
         df = identify_support_resistance(df, interval=interval)
-        # PRESERVACIÓN CRÍTICA: Salvar attrs antes de que df.copy() los borre en pasos siguientes
         saved_attrs = df.attrs.copy()
 
-        # ── Paso 2: Régimen de Wyckoff ───────────────────────────────────────
+        # ── Paso 2: Régimen de Wyckoff ─────────────────────────────
         df = self._regime_detector.detect_regime(df)
-        df.attrs.update(saved_attrs) # Restaurar tras detección
+        df.attrs.update(saved_attrs)
         current_regime = df["market_regime"].iloc[-1]
 
-        # ── Paso 3: SMC — OBs, FVGs y confluencia con S/R ───────────────────
-        # _extract_smc requiere los S/R en df.attrs para calcular 'ob_confluence'
+        # ── Paso 3: SMC — Estructura Fractal ───────────────────────
         smc_data = self._extract_smc(df)
-        df.attrs.update(saved_attrs) # Asegurar persistencia para el siguiente paso
+        df.attrs.update(saved_attrs)
         key_levels = get_key_levels(df) 
 
-        # ── Paso 4: Niveles Clave con fusión MTF opcional ────────────────────
+        # ── Paso 4: Fusión MTF ─────────────────────────────────────
         from engine.indicators.structure import consolidate_mtf_levels
         if macro_levels:
             key_levels = consolidate_mtf_levels(key_levels, macro_levels)
 
-        # ── Paso 5: Fibonacci Dinámico (v4.4 MTF Shadow Mode) ─────────────────
+        # ── Paso 5: Fibonacci ──────────────────────────────────────
         fibonacci = self._get_fibonacci(df)
         
-        # 🟢 SHADOW MODE: El Fib de 1H se proyecta si hay data estructurada (v4.4.1)
-        fibonacci_h1 = None
-        # Pendiente de inyectar macro_df en dispatcher.py para activar la sombra h1 completa
-
-        # ── Paso 6: HTF Bias (serializado para JSON) ─────────────────────────
+        # ── Paso 6: HTF Bias ───────────────────────────────────────
         htf_payload = None
         if htf_bias:
             htf_payload = {
                 "direction": htf_bias.direction,
                 "strength": htf_bias.strength,
-                "reason": htf_bias.reason,
-                "h4_regime": htf_bias.h4_regime,
-                "h1_regime": htf_bias.h1_regime,
+                "reason": htf_bias.reason
             }
 
-        # ── Paso 7: Diagnóstico Macro y Validación de Gates (v4.7 Platinum) ────
-        macro = get_macro_context()
+        # ── Paso 7: Diagnóstico de Volumen v5.4 (SIGMA/DELTA Logic) ──
+        # Inyectamos el robusto Kernel de Volumen
+        df = calculate_rvol(df)
+        df = calculate_absorption_index(df)
         
-        # RVOL v4.7: Re-Ingeniería de Proyección Temporal para evitar picos falsos
-        # Fórmula: RVOL = (Current_Vol / (Seconds_Elapsed / 900)) / max(SMA_20, VOL_FLOOR)
-        current_vol = float(df["volume"].iloc[-1]) if "volume" in df.columns else 0.0
+        rvol = float(df['rvol'].iloc[-1])
+        absorption_score = float(df['absorption_score'].iloc[-1]) if 'absorption_score' in df.columns else 0.0
+        is_high_absorption = bool(df.get('is_absorption_elite', pd.Series([False]*len(df))).iloc[-1])
         
-        # 1. Definir Base Temporal Dinámica (Protocolo Generalización v4.7.1)
-        time_map = {
-            '1m': 60, '3m': 180, '5m': 300, '15m': 900, '30m': 1800, 
-            '1h': 3600, '2h': 7200, '4h': 14400, '1d': 86400
-        }
-        tf_seconds = time_map.get(interval, 900)
-        
-        # 2. Calcular tiempo transcurrido en la vela actual
-        try:
-            # Si el DF tiene timestamp, calculamos el drift real
-            last_ts = df["timestamp"].iloc[-1].timestamp()
-            secs_elapsed = max(time.time() - last_ts, 1) # Mínimo 1s
-            # Limitar secs_elapsed al máximo del timeframe para evitar ratios invertidos
-            secs_elapsed = min(secs_elapsed, tf_seconds)
-        except Exception:
-            secs_elapsed = tf_seconds # Fallback: velas cerradas
-            
-        # 3. Proyectar volumen actual al cierre de la vela (Normalization)
-        # 🔴 v4.7.2 Optimization: Projection Damping (Anti-Outlier Shield)
-        # Si la vela acaba de empezar (< 2% de progreso), la proyección matemática es inestable.
-        # Implementamos un amortiguador (Damping) para evitar que el primer tick distorsione el Radar.
-        progress_ratio = secs_elapsed / tf_seconds
-        
-        # 4. Adaptive Floor (Pilar 4.8: Resiliencia Multi-Asset)
-        vol_history_20 = df["volume"].rolling(window=min(len(df), 20), min_periods=1).mean()
-        vol_mean_20 = float(vol_history_20.iloc[-1]) if not vol_history_20.empty else 1.0
-        
-        # Calculamos SMA200 para el suelo adaptativo
-        vol_history_200 = df["volume"].rolling(window=min(len(df), 200), min_periods=1).mean()
-        vol_sma200 = float(vol_history_200.iloc[-1]) if not vol_history_200.empty else 1.0
-        vol_floor = 0.1 * vol_sma200
-        
-        baseline = max(vol_mean_20, vol_floor)
-        
-        if progress_ratio < 0.02: # Primeros 18s en 15m
-            # En el arranque, el volumen proyectado tiende al promedio histórico para evitar ruido.
-            projected_vol = (vol_mean_20 * 0.9) + (current_vol / max(progress_ratio, 0.001) * 0.1)
-        else:
-            projected_vol = current_vol / progress_ratio
-            
-        rvol = projected_vol / baseline
-
-        # 6. [HARDENING] Z-Score Outlier Detection (v5.2 Platinum)
-        from engine.indicators.volume import calculate_zscore_filter
-        z_scores = calculate_zscore_filter(df, threshold=5.0)
-        z_score = float(z_scores.iloc[-1]) if len(df) > 1 else 0.0
-        is_soft_outlier = bool(calculate_zscore_filter(df, threshold=4.0).iloc[-1]) if len(df) > 1 else False
-        is_hard_outlier = bool(z_scores.iloc[-1] > 5.0) if len(df) > 1 else False
-        
-        # [ANOMALY LOGGING]
-        # [RVOL_DEBUG] | Secs_Elapsed: {s}s | Vol_Crudo: {v} | Vol_Proyectado: {vp} | SMA_Baseline: {b} | RESULT: {r}x
-        debug_log = f"[RVOL_DEBUG] | Secs_Elapsed: {int(secs_elapsed)}s | Vol_Crudo: {round(current_vol, 2)} | Vol_Proyectado: {round(projected_vol, 2)} | SMA_Baseline: {round(baseline, 2)} | RESULT: {rvol:.2f}x"
-        print(debug_log) # Consola real para el usuario
-
-        if is_hard_outlier:
-            logger.warning(f"🛑 [HARD_OUTLIER] Anomalía detectada en {asset} ({current_vol}). Capped to 5.0x")
-            # Registro Institucional de Anomalías
-            try:
-                os.makedirs("logs", exist_ok=True)
-                with open("logs/anomalies.log", "a") as f:
-                    f.write(f"[{pd.Timestamp.now()}] ASSET: {asset} | RAW_VOL: {current_vol} | PROJ_VOL: {projected_vol} | Z-SCORE ALERT | ACTION: CAP 5.0x\n")
-            except Exception as e:
-                logger.error(f"Error escribiendo en anomalies.log: {e}")
-            
-            rvol = min(rvol, 5.0)
-
         # Verificación de Gates
-        # Gate 1: Alignment (Si hay HTF, debe coincidir con el sesgo local de Wyckoff)
         htf_align = False
         if htf_bias:
             is_local_bullish = current_regime in ['MARKUP', 'ACCUMULATION']
@@ -205,31 +139,23 @@ class MarketAnalyzer:
             is_htf_bearish = str(htf_bias.direction).upper() in ['BEARISH', 'STRONG_BEARISH']
             htf_align = (is_local_bullish == is_htf_bullish) or (is_local_bearish == is_htf_bearish)
 
-        # Gate 2: Displacement (Exigimos RVOL > 1.2 para validar el movimiento)
-        displacement_active = rvol >= 1.2
-
+        macro = get_macro_context()
+        
         diagnostic = {
-            "volume": current_vol,
-            "projected_volume": round(projected_vol, 2),
-            "volume_24h": float(df['volume'].sum()), 
-            "volume_mean": vol_mean_20,
-            "rvol": round(rvol, 2),  # SSOT: This is the value sent to Radar
-            "is_outlier": is_soft_outlier,
-            "is_hard_outlier": is_hard_outlier,
-            "secs_elapsed": int(secs_elapsed),
-            "progress_ratio": round(progress_ratio, 4),
+            "volume": float(df["volume"].iloc[-1]),
+            "rvol": round(rvol, 2),
+            "absorption_score": round(absorption_score, 2),
+            "is_absorption_elite": is_high_absorption,
             "macro_bias": macro.global_bias,
-            "dxy_trend": macro.dxy_trend,
-            "risk_appetite": macro.risk_appetite,
             "htf_align": htf_align,
-            "displacement_active": displacement_active
+            "displacement_active": rvol >= 1.5,
+            "imbalance_neural": (heatmap or {}).get("imbalance", 0.0)
         }
         
-        # DIAGNÓSTICO FINAL DE SALIDA
-        s_val = df["support_level"].iloc[-1] if "support_level" in df.columns else "MISSING_COL"
-        logger.info(f"🛠️  [ANALYZER] {asset} | S_Level={s_val} | KL={len(key_levels.get('supports', []))}")
+        logger.info(f"🛠️ [ANALYZER] {asset} | RVOL: {rvol:.2f} | Abs: {absorption_score:.2f} | HTF Align: {htf_align}")
 
-        return MarketMap(
+        # ── Finalización y Caché ─────────────────────────────────────────────
+        m_map = MarketMap(
             asset=asset,
             interval=interval,
             timestamp=str(df["timestamp"].iloc[-1]),
@@ -250,18 +176,24 @@ class MarketAnalyzer:
             key_levels=key_levels,
             smc=smc_data,
             fibonacci=fibonacci,
-            fibonacci_h1=fibonacci_h1,
             htf_bias=htf_payload,
             diagnostic=diagnostic,
             htf_alignment=htf_align,
-            displacement_valid=displacement_active,
+            displacement_valid=rvol >= 1.5,
             df_analyzed=df,
         )
 
-    # ── Helpers privados ─────────────────────────────────────────────────────
+        # ── Guardar en Caché ─────────────────────────────────────────────────
+        if len(self._cache) >= self._cache_size:
+            # Desalojo simple: limpiar todo para evitar overhead de gestión compleja
+            self._cache.clear()
+        
+        self._cache[cache_key] = m_map
+
+        return m_map
 
     def _extract_smc(self, df: pd.DataFrame) -> dict:
-        """Extrae OBs y FVGs, y funde su confluencia con S/R."""
+        """Extrae OBs y FVGs v5.4."""
         try:
             atr_val = df.attrs.get("atr_value", float(df["close"].iloc[-1]) * 0.003)
             df_ob = identify_order_blocks(df)
