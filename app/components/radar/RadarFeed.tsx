@@ -47,7 +47,7 @@ export default function RadarFeed() {
     const displayMap = new Map();
     globalSignals.forEach(s => displayMap.set(s.id || `${s.timestamp}-${s.asset}`, s));
     Object.values(auditedSignals).forEach(s => {
-        // Normalización v5.4.3: El Auditor de Zustand usa 'price' pero el Radar local usa 'entry_price'
+        // Normalización v5.7.155 Master Gold: El Auditor de Zustand usa 'price' pero el Radar local usa 'entry_price'
         const normalized: RadarSignal = {
             ...s,
             entry_price: (s as any).price || (s as any).entry_price || 0,

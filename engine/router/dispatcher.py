@@ -1,5 +1,5 @@
 """
-engine/router/dispatcher.py — Slingshot v4.1 Platinum
+engine/router/dispatcher.py — v5.7.155 Master Gold
 =======================================================
 Capa de Despacho y Enriquecimiento de Señales.
 Responsabilidad: tomar una oportunidad bruta del Strategy y enriquecerla
@@ -42,7 +42,7 @@ def build_base_result(market_map) -> dict:
         "range_pos_pct": mm.range_pos_pct,
         "bb_width_mean": None,   # Reservado para futuras ampliaciones
         "dist_to_sma200": None,  # Reservado para futuras ampliaciones
-        "active_strategy": "SMC v4.1 Platinum (Liquidity & OBs)",
+        "active_strategy": "SMC v5.7.155 Master Gold (Liquidity & OBs)",
         "key_levels": mm.key_levels,
         "smc": mm.smc,
         "fibonacci": mm.fibonacci,
@@ -84,14 +84,14 @@ def enrich_signal(signal: dict, risk_data: dict, interval: str) -> dict:
         "interval_minutes":  interval_minutes,
     })
     
-    # ── FTMO BRIDGE (Titanium v4.3) ───────────────────────────────────────
+    # ── FTMO BRIDGE (Titanium v5.7.155 Master Gold) ───────────────────────────────────────
     try:
         # Preparamos la orden para MT5 y la inyectamos en la señal
         signal["ftmo_order"] = prepare_ftmo_order(signal)
     except Exception:
         signal["ftmo_order"] = None
 
-    # ── BITUNIX BRIDGE (Titanium v4.3) ────────────────────────────────────
+    # ── BITUNIX BRIDGE (Titanium v5.7.155 Master Gold) ────────────────────────────────────
     try:
         signal["bitunix_order"] = prepare_bitunix_order(signal)
     except Exception:

@@ -7,7 +7,7 @@ from engine.api.config import settings
 
 class OnChainSentinel:
     """
-    On-Chain Sentinel v4.6 — The Whale & Liquidity Watcher.
+    On-Chain Sentinel v5.7.155 Master Gold — The Whale & Liquidity Watcher.
     Monitorea Open Interest, Funding Rates y grandes flujos de capital hacia exchanges.
     """
 
@@ -32,7 +32,7 @@ class OnChainSentinel:
                       news_sentiment: Optional[str] = "NEUTRAL") -> Dict:
         """
         Refresca métricas on-chain (OI, Funding) y trackea ballenas.
-        Se ejecuta idealmente cada 30 segundos (v5.3.1 Force Refresh).
+        Se ejecuta idealmente cada 30 segundos (v5.7.15 Force Refresh).
         avg_tick_volume: SMA_20 del volumen por tick para el trigger dinámico.
         news_sentiment: Multiplicador de riesgo basado en [NEWS-WORKER].
         """

@@ -1,5 +1,5 @@
 """
-engine/execution/bitunix_bridge.py — Slingshot v4.3 Titanium
+engine/execution/bitunix_bridge.py — v5.7.155 Master Gold Titanium
 ===========================================================
 Adaptador de Ejecución para Bitunix Futures (USDT-M).
 Enfocado en: Maximización de Colateral + Protección de Liquidación.

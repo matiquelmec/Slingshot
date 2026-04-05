@@ -1,5 +1,5 @@
 """
-engine/router/gatekeeper.py — Slingshot v4.1 Platinum
+engine/router/gatekeeper.py — v5.7.155 Master Gold
 =======================================================
 El Portero Institucional — 3 capas de filtrado en secuencia.
 
@@ -124,10 +124,10 @@ class SignalGatekeeper:
                 atr_value=sig.get("atr_value", 0.0),
                 smt_strength=smt_strength
             )
-            # Actualizamos la señal con los datos de salida dinámica v4.3
+            # Actualizamos la señal con los datos de salida dinámica v5.7.155 Master Gold
             sig.update(risk_data)
 
-            # ── Filtro 2: Direccional HTF (AHORA DELEGADO AL CONFLUENCE MANAGER v4.3) ──
+            # ── Filtro 2: Direccional HTF (AHORA DELEGADO AL CONFLUENCE MANAGER v5.7.155 Master Gold) ──
             # Se comenta para permitir que el Score registre el Veto de forma oficial
             # if htf_bias and htf_bias.direction != "NEUTRAL":
             #     is_long = "LONG" in str(sig.get("type", "")).upper()
@@ -227,7 +227,7 @@ class SignalGatekeeper:
                 self._block(sig, "BLOCKED_BY_FILTER", rr["reason"], result)
                 continue
 
-            # ── Filtro 5: Score de Confluencia (Umbral v5.7.1 — Nivel de Mando) ──
+            # ── Filtro 5: Score de Confluencia (Umbral v5.7.15 — Nivel de Mando) ──
             score = sig["confluence"].get("score", 0) if sig.get("confluence") else 0
             min_score = 70 # Solo renderizamos si la confluencia es > 70%. Si es 0%, el sistema no molesta.
             
@@ -244,7 +244,7 @@ class SignalGatekeeper:
 
             result.approved.append(sig)
 
-        # ── [SIGMA v5.7.1] AGRUPACIÓN POR ZONA (0.5%) & LÍMITE OMEGA ──
+        # ── [SIGMA v5.7.15] AGRUPACIÓN POR ZONA (0.5%) & LÍMITE OMEGA ──
         if result.approved:
              result.approved = self._apply_master_filter(result.approved)
 
@@ -252,7 +252,7 @@ class SignalGatekeeper:
 
     def _apply_master_filter(self, approved_signals: list[dict]) -> list[dict]:
         """
-        [DELL v5.7.2 - MANDO ABSOLUTO]
+        [DELL v5.7.15 - MANDO ABSOLUTO]
         1. Agrupa por Símbolo / Timeframe.
         2. Si están en +-0.5% del precio, fusionar.
         3. Solo permitir EL MEJOR cuadro (Top 1) por Activo.
@@ -283,7 +283,7 @@ class SignalGatekeeper:
                 if not is_clustered:
                     merged_sigs.append(s)
             
-            # [OMEGA v5.7.2] ANTI-REPETICIÓN: Solo el TOP 1 por activo
+            # [OMEGA v5.7.15] ANTI-REPETICIÓN: Solo el TOP 1 por activo
             # No queremos 10 cuadros de SOL, queremos EL MEJOR.
             if merged_sigs:
                 final_list.append(merged_sigs[0])

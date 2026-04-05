@@ -1,5 +1,5 @@
 """
-Capa 1: Contexto Macro (DXY & NASDAQ) - Slingshot v4.0
+Capa 1: Contexto Macro (DXY & NASDAQ) - v5.7.155 Master Gold
 ======================================================
 Monitoriza los parámetros globales de liquidez y apetito por riesgo:
 - DXY (Índice del Dólar): El 'termómetro' de la liquidez global.

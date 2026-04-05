@@ -114,7 +114,7 @@ class ConfluenceManager:
         else:
             checklist.append({"factor": "Predicción IA", "status": "NEUTRAL", "detail": "IA Observando"})
 
-        # 6. CALENDARIO ECONÓMICO Y NARRATIVA RECIENTE (Peso 20) v4.1 Platinum
+        # 6. CALENDARIO ECONÓMICO Y NARRATIVA RECIENTE (Peso 20) v5.7.155 Master Gold
         econ_weight = 20
         total_weight += econ_weight
         high_impact_near = False
@@ -139,7 +139,7 @@ class ConfluenceManager:
                     recent_impact_active = True
                     event_name = ev.get('title', 'Evento Macro Reciente')
 
-        # 6.1 Cálculo de News Sentiment (Reparado v4.1)
+        # 6.1 Cálculo de News Sentiment (Reparado v5.7.155 Master Gold)
         news_score = 0.5
         if news_items:
             sent_map = {"BULLISH": 1.0, "NEUTRAL": 0.5, "BEARISH": 0.0}
@@ -185,7 +185,7 @@ class ConfluenceManager:
         if news_score >= 0.7: score += 5
         elif news_score <= 0.3: score -= 5
 
-        # 9. SMT DIVERGENCE (Bono 25) v4.3 (Confirmación de Elite)
+        # 9. SMT DIVERGENCE (Bono 25) v5.7.155 Master Gold (Confirmación de Elite)
         smt_weight = 25
         total_weight += smt_weight
         smt_status = "NEUTRAL"
@@ -250,7 +250,7 @@ class ConfluenceManager:
         else:
             checklist.append({"factor": "Neural Heatmap", "status": "CALIBRANDO", "detail": "Datos insuficientes"})
 
-        # 🚀 10. VETO DE TEMPORALIDAD SUPERIOR (HTF VETO) v4.3 Titanium
+        # 🚀 10. VETO DE TEMPORALIDAD SUPERIOR (HTF VETO) v5.7.155 Master Gold Titanium
         htf_bias = kwargs.get('htf_bias')
         multiplier = 1.0
         if htf_bias:
@@ -264,7 +264,7 @@ class ConfluenceManager:
             else:
                 checklist.append({"factor": "Veto HTF", "status": "APROBADO", "detail": f"Fuerza Macro: {htf_score:.0f}%"})
 
-        # 🚀 11. VETO DE VALOR (PREMIUM / DISCOUNT) v4.3 Titanium
+        # 🚀 11. VETO DE VALOR (PREMIUM / DISCOUNT) v5.7.155 Master Gold Titanium
         from engine.indicators.fibonacci import get_current_fibonacci_levels
         fib_data = get_current_fibonacci_levels(df)
         price = float(current.get('close', 0))
@@ -283,7 +283,7 @@ class ConfluenceManager:
                     value_zone = "DISCOUNT ✅" if is_long else "PREMIUM ✅"
                     checklist.append({"factor": "Zona de Valor", "status": "CONFIRMADO", "detail": value_zone})
 
-        # 🚀 12. VETO DE VOLATILIDAD MACRO (EVENTOS ECONÓMICOS) v4.3 Titanium
+        # 🚀 12. VETO DE VOLATILIDAD MACRO (EVENTOS ECONÓMICOS) v5.7.155 Master Gold Titanium
         if high_impact_near:
             # Si el evento es en menos de 30 min (0.5 horas), Veto Total
             is_imminent = False
@@ -301,7 +301,7 @@ class ConfluenceManager:
                 multiplier = 0.0
                 checklist.append({"factor": "Veto Macro News", "status": "DENEGADO", "detail": f"Imminente: {event_name}"})
 
-        # 🚀 13. RELOJ DE OBSOLESCENCIA (TIME-DECAY) v4.3 Titanium
+        # 🚀 13. RELOJ DE OBSOLESCENCIA (TIME-DECAY) v5.7.155 Master Gold Titanium
         # Las señales de 1m o 5m rotan rápido; si no se mitigan pronto, pierden validez.
         try:
             # Estandarizamos a UTC Naive para evitar TypeErrors entre datetime64 y Timestamps aware
@@ -329,7 +329,7 @@ class ConfluenceManager:
         except Exception as e:
             logger.error(f"[CONFLUENCE] Error calculando Time-Decay: {e}")
 
-        # 🚀 14. ON-CHAIN SENTINEL (Peso 15) v4.6
+        # 🚀 14. ON-CHAIN SENTINEL (Peso 15) v5.7.155 Master Gold
         onchain_weight = 15
         total_weight += onchain_weight
         onchain_bias = kwargs.get('onchain_bias', 'NEUTRAL')

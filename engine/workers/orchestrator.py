@@ -70,7 +70,7 @@ class SlingshotOrchestrator:
 
     async def sync_watchlists(self):
         """
-        En v4.3, restringimos estrictamente la vigilancia a los activos VIP
+        En v5.7.155 Master Gold, restringimos estrictamente la vigilancia a los activos VIP
         para garantizar latencia cero y optimización de recursos.
         """
         vip_assets = {"BTCUSDT", "ETHUSDT", "SOLUSDT", "PAXGUSDT"}

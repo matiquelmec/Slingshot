@@ -137,7 +137,7 @@ export default function TradingChart() {
 
     }, [candles, indicators]);
 
-    // ── 🔴 LIVE PRICE LINE v4.3.4: Línea horizontal dinámica del precio actual ──
+    // ── 🔴 LIVE PRICE LINE v5.7.155 Master Gold: Línea horizontal dinámica del precio actual ──
     useEffect(() => {
         const series = candleSeriesRef.current;
         if (!series || !latestPrice || latestPrice <= 0) return;

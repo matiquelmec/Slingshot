@@ -1,5 +1,5 @@
 """
-engine/main_router.py — Slingshot v5.4.3 Unified Platinum
+engine/main_router.py — v5.7.155 Master Gold
 =========================================================
 SlingshotRouter: El Orquestador Maestro.
 

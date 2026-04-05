@@ -25,7 +25,7 @@ def save_forensic_snapshot(asset: str, signal: dict, full_context: dict):
             "metadata": {
                 "asset": asset,
                 "timestamp_utc": datetime.now(timezone.utc).isoformat(),
-                "system_version": "Slingshot v4.7.1 Platinum",
+                "system_version": "v5.7.155 Master Gold",
                 "maturity_level": 5
             },
             "signal": signal,

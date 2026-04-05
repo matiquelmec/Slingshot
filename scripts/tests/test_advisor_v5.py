@@ -15,7 +15,7 @@ logging.basicConfig(level=logging.INFO)
 
 async def test_advisor_v5_output():
     print("\n" + "="*60)
-    print(" 🧪 SIMULACIÓN DE INFORME IA v5.4.3 UNIFIED PLATINUM")
+    print(" 🧪 SIMULACIÓN DE INFORME IA v5.7.155 Master Gold UNIFIED PLATINUM")
     print("="*60)
     
     # Datos Sintéticos de Alta Fidelidad (v5)
@@ -59,7 +59,7 @@ async def test_advisor_v5_output():
     
     print("\n🚀 Generando análisis con Ollama (Prioridad HIGH)...")
     
-    # Llamar al advisor real con la firma v5.4.3
+    # Llamar al advisor real con la firma v5.7.155 Master Gold
     advice = await generate_tactical_advice(
         asset="BTCUSDT",
         tactical_data=tactical_data,
@@ -68,7 +68,7 @@ async def test_advisor_v5_output():
     )
     
     print("\n" + "─"*60)
-    print(f"📄 RESULTADO DEL ADVISOR (MOTOR v5.4.3 PLATINUM):")
+    print(f"📄 RESULTADO DEL ADVISOR (MOTOR v5.7.155 Master Gold PLATINUM):")
     if not advice or len(advice.strip()) < 10:
         print("⚠️  ADVERTENCIA: La IA devolvió un informe vacío o demasiado corto.")
     else:

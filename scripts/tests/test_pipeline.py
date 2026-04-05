@@ -1,5 +1,5 @@
 """
-scripts/tests/test_pipeline.py — Slingshot v4.1 Platinum
+scripts/tests/test_pipeline.py — v5.7.155 Master Gold
 =========================================================
 Test End-to-End del pipeline completo.
 Descarga velas reales de Binance y verifica el pipeline SMC íntegro.
@@ -41,7 +41,7 @@ def _section(title: str):
 
 
 async def main():
-    _section(f"🔬 TEST END-TO-END — SLINGSHOT v4.1 PLATINUM")
+    _section(f"🔬 TEST END-TO-END — SLINGSHOT v5.7.155 Master Gold PLATINUM")
     print(f"⏱  {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
 
     # ── 1. Datos reales de Binance ────────────────────────────────────────────
@@ -115,7 +115,7 @@ async def main():
     except Exception as e:
         print(f"⚠️  GhostData no disponible (puede ser normal): {e}")
 
-    _section("✅ TEST COMPLETADO — SLINGSHOT v4.1 PLATINUM")
+    _section("✅ TEST COMPLETADO — SLINGSHOT v5.7.155 Master Gold PLATINUM")
 
 
 if __name__ == "__main__":

@@ -14,7 +14,7 @@ DEFAULT_MODEL = "gemma3:4b"
 # Semáforo global para evitar saturación de la CPU (Cola Institucional)
 _ai_semaphore = asyncio.Semaphore(1)
 
-# --- SISTEMA DE CACHÉ ESTRATÉGICO v4.6 (SEMANTIC CACHE) ---
+# --- SISTEMA DE CACHÉ ESTRATÉGICO v5.7.155 Master Gold (SEMANTIC CACHE) ---
 # Almacena el último análisis exitoso por activo para evitar redundancia
 _strategic_memo = {} 
 _semantic_cache = {} # Hash -> Advice mapping
@@ -42,12 +42,12 @@ async def generate_tactical_advice(
 ) -> str:
     """
     Genera un consejo cuantitativo breve usando Ollama Local de forma asíncrona.
-    v4.6: Implementa Pre-digested Context y Semantic Caching para latencia mínima.
+    v5.7.155 Master Gold: Implementa Pre-digested Context y Semantic Caching para latencia mínima.
     """
     strategy = tactical_data.get('active_strategy', 'UNKNOWN')
     regime = tactical_data.get('market_regime', 'UNKNOWN')
     
-    # 🔴 PRECIO LIVE v4.3.4: Usar current_price inyectado por _emit_advisor (latest tick del WS)
+    # 🔴 PRECIO LIVE v5.7.155 Master Gold: Usar current_price inyectado por _emit_advisor (latest tick del WS)
     live_price = float(tactical_data.get('current_price', 0))
     
     # Extraer data de la matriz de diagnóstico
@@ -59,7 +59,7 @@ async def generate_tactical_advice(
     in_killzone = "SÍ (Volumen Institucional Alto)" if session_manager.is_killzone_active() else "NO (Volumen Minorista/Lento)"
     bull_div = "PRESENTE" if diag.get('bullish_divergence') else "NO"
     bear_div = "PRESENTE" if diag.get('bearish_divergence') else "NO"
-    # 📊 VOLUMEN INSTITUCIONAL v5.4.3 (PRODUCCIÓN)
+    # 📊 VOLUMEN INSTITUCIONAL v5.7.155 Master Gold (PRODUCCIÓN)
     rvol = diag.get('rvol', 0) or 0
     z_score = diag.get('z_score', 0) or 0
     
@@ -99,7 +99,7 @@ async def generate_tactical_advice(
         except:
             return "N/A"
 
-    # 1. SOPORTES Y RESISTENCIAS (Triple Canal de Búsqueda v4.6)
+    # 1. SOPORTES Y RESISTENCIAS (Triple Canal de Búsqueda v5.7.155 Master Gold)
     kl = tactical_data.get('key_levels', {})
     smc_raw = tactical_data.get('smc', {})
     
@@ -119,7 +119,7 @@ async def generate_tactical_advice(
     except:
         ml_prob = 50.0
     
-    # 📐 FIBONACCI GATILLO v4.4
+    # 📐 FIBONACCI GATILLO v5.7.155 Master Gold
     fibo = tactical_data.get('fibonacci')
     price_in_gp = False
     is_whale = False
@@ -190,7 +190,7 @@ async def generate_tactical_advice(
     from engine.indicators.ghost_data import get_ghost_state
     ghost = get_ghost_state(asset)
 
-    # 💠 LÓGICA DE SMART CACHE (Slingshot v4.6 Semantic)
+    # 💠 LÓGICA DE SMART CACHE (v5.7.155 Master Gold Semantic)
     current_state = {
         "price": float(tactical_data.get('current_price', 0)),
         "support": support,
@@ -208,7 +208,7 @@ async def generate_tactical_advice(
     semantic_hash = hashlib.md5(state_str.encode()).hexdigest()
 
     if current_state["support"] == "N/A" and current_state["resistance"] == "N/A":
-        return "INFORME UNIFICADO v5.4.3: ESTRUCTURA INSTITUCIONAL EN FORMACIÓN. Awaiting data hydration."
+        return "INFORME UNIFICADO v5.7.155 Master Gold: ESTRUCTURA INSTITUCIONAL EN FORMACIÓN. Awaiting data hydration."
 
     if semantic_hash in _semantic_cache:
         # Validamos si el precio no se ha movido violentamente (>0.1%)
@@ -217,7 +217,7 @@ async def generate_tactical_advice(
         if price_diff < 0.001 and not rvol_is_ultra_high:
             return f"[SEMANTIC CACHE HIT] {cached['advice']}"
 
-    # 🧠 PRE-DIGESTED CONTEXT (Prompt Engineering v4.6)
+    # 🧠 PRE-DIGESTED CONTEXT (Prompt Engineering v5.7.155 Master Gold)
     # En lugar de enviar todo el historial, enviamos conclusiones procesadas.
     onchain_text = f"Bias On-Chain: {current_state['onchain_bias']} | OI Delta: {onchain_data.get('oi_delta_pct', 0)}%" if onchain_data else "On-Chain: No data."
     
@@ -232,7 +232,7 @@ async def generate_tactical_advice(
     """
 
     prompt = f"""
-    Eres el 'Asesor Cuantitativo Institucional' del sistema Slingshot v5.4.3 Unified Platinum. Tu misión es ejecutar el Algoritmo de Decisión SMC de 5 Fases.
+    Eres el 'Asesor Cuantitativo Institucional' del sistema v5.7.155 Master Gold. Tu misión es ejecutar el Algoritmo de Decisión SMC de 5 Fases.
     ERES UNA MÁQUINA LÓGICA REGLAMENTARIA. DEBES OBEDECER ESTAS LEYES INQUEBRANTABLES:
 
     ═══════════════════════════════════════════
@@ -284,7 +284,7 @@ async def generate_tactical_advice(
     ⚠️ RECORDATORIO: Si Killzone es 'NO', el Veredicto es 'DESCARTAR'. Si Killzone es 'SÍ', integra SMC y {f"MANDATORIO USAR FRASE: '{mandatory_phrase}'" if mandatory_phrase else "Veredicto Técnico"}.
 
     FORMATO DE RESPUESTA:
-    1. INICIO: "INFORME UNIFICADO v5.4.3 PLATINUM: [TU VEREDICTO EN 1 PALABRA: DESCARTAR | COMPRAR | VENDER]"
+    1. INICIO: "INFORME UNIFICADO v5.7.155 Master Gold PLATINUM: [TU VEREDICTO EN 1 PALABRA: DESCARTAR | COMPRAR | VENDER]"
     2. CUERPO: 2 oraciones máximo explicando la confluencia (o la falta de Killzone).
     3. CIERRE: [RIESGO TGT 1:3]
     """

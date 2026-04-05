@@ -1,5 +1,5 @@
 """
-engine/execution/ftmo_bridge.py — Slingshot v4.3 Titanium
+engine/execution/ftmo_bridge.py — v5.7.155 Master Gold Titanium
 =========================================================
 Módulo de Traducción Institucional para el fondeo FTMO ($100,000 USD).
 Traduce señales estratégicas filtradas por el Portero de Riesgo en

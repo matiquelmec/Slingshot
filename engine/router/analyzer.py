@@ -1,5 +1,5 @@
 """
-engine/router/analyzer.py — Slingshot v5.4.3 Unified Platinum
+engine/router/analyzer.py — v5.7.155 Master Gold
 ======================================================
 Capa de Análisis Puro (sin efectos secundarios).
 Responsabilidad: transformar OHLCV bruto en el mapa completo del mercado.

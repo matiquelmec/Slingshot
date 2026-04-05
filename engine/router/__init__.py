@@ -1,5 +1,5 @@
 """
-engine/router/__init__.py — Slingshot v4.1 Platinum
+engine/router/__init__.py — v5.7.155 Master Gold
 ====================================================
 Paquete del Pipeline de Señales Modular.
 Exporta las interfaces públicas para uso externo.

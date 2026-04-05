@@ -42,7 +42,7 @@ class RiskManager:
 
     def validate_signal(self, signal_data: dict) -> dict:
         """
-        [PORTERO INSTITUCIONAL v4.3.6 Titanium Guard]
+        [PORTERO INSTITUCIONAL v5.7.155 Master Gold]
         Evalúa si una señal merece ser publicada al Signal Terminal.
         Implementa el Circuit Breaker de RVOL para evitar fallos de sensor.
         """
@@ -62,7 +62,7 @@ class RiskManager:
             if signal_data.get("htf_alignment") is False:
                  return {"approved": False, "rr_ratio": 0.0, "trade_quality": "RECHAZADA 🟠", "reason": "TENSIÓN HTF: Contra tendencia mayor detectada."}
             
-            # 🔴 CIRCUIT BREAKER v4.3.6: Protección contra Fallo de Sensor (191x Audit)
+            # 🔴 CIRCUIT BREAKER v5.7.155 Master Gold: Protección contra Fallo de Sensor (191x Audit)
             diagnostic = signal_data.get("diagnostic", {})
             rvol_raw = diagnostic.get("rvol", 0)
             try:
@@ -87,7 +87,7 @@ class RiskManager:
             if entry <= 0 or sl <= 0 or tp <= 0:
                 return {"approved": False, "rr_ratio": 0.0, "trade_quality": "INVALID", "reason": "Precios inválidos"}
 
-            # --- CÁLCULO DE R:R NETO (v4.1 Platinum) ---
+            # --- CÁLCULO DE R:R NETO (v5.7.155 Master Gold) ---
             raw_risk   = abs(entry - sl)
             raw_reward = abs(tp - entry)
             friction_cost = entry * FEE_SLIPPAGE_IMPACT
@@ -109,7 +109,7 @@ class RiskManager:
             
             rr = round(net_reward / net_risk, 2)
             
-            # --- [SIGMA/DELTA v5.7.1] HARD-GATE R:R 2.0 ---
+            # --- [SIGMA/DELTA v5.7.15] HARD-GATE R:R 2.0 ---
             if rr < 2.0:
                 return {
                     "approved": False,
@@ -264,7 +264,7 @@ class RiskManager:
     ) -> dict:
         """
         Calcula asimétricamente el tamaño de la posición y el apalancamiento exacto.
-        Implementa modo 'Institutional Run' v4.3 si SMT > 0.8.
+        Implementa modo 'Institutional Run' v5.7.155 Master Gold si SMT > 0.8.
         """
         # 1. Fracción de Riesgo (Kelly)
         multiplier = self.get_regime_multiplier(market_regime)
@@ -306,7 +306,7 @@ class RiskManager:
         leverage = min(int(self.max_leverage), math.ceil(pos_size_nominal / self.account_balance))
         actual_pos_size = min(pos_size_nominal, self.account_balance * leverage)
 
-        # 5. Entry Zone Calculation (v4.1 Platinum)
+        # 5. Entry Zone Calculation (v5.7.155 Master Gold)
         # Define el "Área de Carga" óptima para evitar Front-running excesivo
         entry_buffer = abs(current_price - stop_loss_price) * 0.1 # 10% del riesgo como buffer de entrada
         if signal_type == "LONG":

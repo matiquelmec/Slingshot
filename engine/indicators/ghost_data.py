@@ -62,7 +62,7 @@ class GhostState:
     nasdaq_change_pct: float        = 0.0         # % cambio del NASDAQ
     risk_appetite: str              = "NEUTRAL"   # RISK_ON / RISK_OFF / NEUTRAL
 
-    # Capa 2 v4.1: Narrativa & Sentimiento
+    # Capa 2 v5.7.155 Master Gold: Narrativa & Sentimiento
     news_sentiment: float           = 0.5         # 0.0 (Bearish) a 1.0 (Bullish)
     active_event: str               = ""          # Nombre del evento macro dominante
     
@@ -186,7 +186,7 @@ def _compute_bias(
         reasons.append("NASDAQ Bajista: Risk-Off")
         if funding > 0.05: block_shorts = False # Permitir shorts si hay euforia en caída
 
-    # 💠 Reglas de Narrativa v4.1 (Persistence Layer)
+    # 💠 Reglas de Narrativa v5.7.155 Master Gold (Persistence Layer)
     if active_event:
         if news_sentiment < 0.4:
             block_longs = True
@@ -244,7 +244,7 @@ async def refresh_ghost_data(symbol: str = "BTCUSDT", macro_ctx: Optional[MacroS
     funding   = results[2] if not isinstance(results[2], Exception) else 0.0
     fng_val, fng_label = fng_tuple
 
-    # Integración con Capa 1 y 2 v4.1 (Narrativa & Store)
+    # Integración con Capa 1 y 2 v5.7.155 Master Gold (Narrativa & Store)
     from engine.core.store import MemoryStore
     store = MemoryStore()
     events = await store.get_economic_events(limit=5)

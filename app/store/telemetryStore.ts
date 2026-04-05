@@ -21,7 +21,7 @@ export type Timeframe = '1m' | '3m' | '5m' | '15m' | '30m' | '1h' | '2h' | '4h' 
 export const MASTER_WATCHLIST = ["BTCUSDT", "ETHUSDT", "SOLUSDT", "PAXGUSDT"];
 
 interface TelemetryState {
-    advisorLogs: Record<string, any>; // 🧠 Mapeo de análisis por activo (v4.4)
+    advisorLogs: Record<string, any>; // 🧠 Mapeo de análisis por activo (v5.7.155 Master Gold)
     isConnected: boolean;
     isCalibrating: boolean;
     activeSymbol: string;
@@ -159,7 +159,7 @@ export const useTelemetryStore = create<TelemetryState>((set, get) => {
                 sessionData: null,
                 latestPrice: null,
                 liquidityHeatmap: null,
-                // advisorLogs: {},  <-- REMOVED: Mantener caché entre símbolos para hidratación instantánea v4.5
+                // advisorLogs: {},  <-- REMOVED: Mantener caché entre símbolos para hidratación instantánea v5.7.155 Master Gold
                 mlProjection: { direction: 'NEUTRAL', probability: 50, reason: "Aguardando conexión de telemetría..." },
                 tacticalDecision: {
                     regime: "ANALIZANDO NUEVO RIESGO...", strategy: "STANDBY",
@@ -201,7 +201,7 @@ export const useTelemetryStore = create<TelemetryState>((set, get) => {
             set({ isConnected: true });
         };
 
-        // 🔴 STALE GUARD v4.3.5: Track last message time for zombie tab detection
+        // 🔴 STALE GUARD v5.7.155 Master Gold: Track last message time for zombie tab detection
         let lastMsgTimestamp = Date.now();
         let staleGuardActive = false;
 
@@ -333,7 +333,7 @@ export const useTelemetryStore = create<TelemetryState>((set, get) => {
                     const isElite = MASTER_WATCHLIST.includes(d.asset);
 
                     set((state) => {
-                        // Protocolo v5.7.2: Una Sola Señal Maestra (El Mejor Cuadro)
+                        // Protocolo v5.7.15: Una Sola Señal Maestra (El Mejor Cuadro)
                         // Filtro de Supervivencia: Solo ACTIVE, RR > 2.0, Confluence >= 70%
                         const activeSignalsOnly = incomingSignals.filter(s => 
                             s.status === 'ACTIVE' && 

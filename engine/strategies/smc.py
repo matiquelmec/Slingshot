@@ -5,7 +5,7 @@ from engine.inference.volume_pattern import VolumePatternScheduler
 
 class SMCInstitutionalStrategy:
     """
-    SMC Institutional Strategy (v5.5.4 Platinum)
+    SMC Institutional Strategy (v5.7.155 Master Gold)
     Repara el pipeline de MainRouter dividiendo el Procesamiento e Identificación.
     """
 

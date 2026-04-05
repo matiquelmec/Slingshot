@@ -290,7 +290,7 @@ def identify_support_resistance(
         key=lambda x: x['price'], reverse=True   # más cercano primero
     )[:num_levels]
 
-    # ── 7. Fallback de Emergencia: Extremos Absolutos (v4.3.4 Platinum) ───────
+    # ── 7. Fallback de Emergencia: Extremos Absolutos (v5.7.155 Master Gold) ───────
     # Si tras todo el análisis (Pivots + Clusters + RR) seguimos sin niveles,
     # usamos los extremos absolutos de la ventana para garantizar datos.
     abs_high = float(df['high'].max())
@@ -479,7 +479,7 @@ def extract_smc_coordinates(df: pd.DataFrame) -> dict:
 
 def mitigate_smc_state(smc_state: dict, current_low: float, current_high: float) -> dict:
     """
-    Titanium v4.3 Long-Term Memory: Mitiga un objeto SMC persistente.
+    Titanium v5.7.155 Master Gold Long-Term Memory: Mitiga un objeto SMC persistente.
     Destruye aquellas zonas pasadas que el precio actual invalida (cruce del 50%).
     """
     obs_bull = [ob for ob in smc_state.get("order_blocks", {}).get("bullish", []) if current_low > (ob['bottom'] + (ob['top'] - ob['bottom']) * 0.5)]

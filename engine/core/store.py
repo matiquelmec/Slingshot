@@ -153,7 +153,7 @@ class MemoryStore:
             self._advisor_advice[asset] = advice_data
 
     async def flush_symbol(self, asset: str):
-        """Limpia el estado de un símbolo específico para evitar contaminación cruzada (v4.7.1)."""
+        """Limpia el estado de un símbolo específico para evitar contaminación cruzada (v5.7.155 Master Gold)."""
         async with self._lock:
             if asset in self._market_states:
                 del self._market_states[asset]

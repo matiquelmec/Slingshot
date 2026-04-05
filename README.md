@@ -1,4 +1,4 @@
-# 🛡️ SLINGSHOT v4.3.5 TITANIUM EDITION
+# 🛡️ SLINGSHOT v5.7.155 Master Gold TITANIUM EDITION
 > **"Institutional-Grade Algorithmic Terminal. Zero Latency. Zero Noise. Full Sovereignty."**
 
 ![Status](https://img.shields.io/badge/Status-TOTALMENTE_DESPLEGADO-0d2a1a?style=for-the-badge&logo=codeproject&logoColor=fff)
@@ -24,7 +24,7 @@ El sistema utiliza un orquestador **WebSocket** que inyecta datos directamente d
 ---
 
 ## 🛡️ Blindaje de Supervivencia (VPS Londres/NY Ready)
-La versión **v4.3.5 Titanium** introduce 4 protocolos de endurecimiento para entornos hostiles:
+La versión **v5.7.155 Master Gold Titanium** introduce 4 protocolos de endurecimiento para entornos hostiles:
 
 - **Stale Guard (Frontend):** Detección de "Pestañas Zombie" tras suspensión de PC; purga de mensajes obsoletos y resync automático al HEAD.
 - **Advisor Isolation:** Protección del Event Loop con timeouts de 45s y semáforos de CPU concurrente.
@@ -65,7 +65,7 @@ docker-compose up -d --build
 slingshot_gen1/
 ├── 📁 engine/          # El Cerebro Algorítmico (FastAPI + SMC Strategy)
 ├── 📁 app/             # La Terminal UI (Next.js + Zustand 5)
-├── 📁 docs/            # Especificación Técnica Maestra (v4.3.5 Titanium)
+├── 📁 docs/            # Especificación Técnica Maestra (v5.7.155 Master Gold Titanium)
 ├── 📁 deploy/          # Artefactos de VPS: Dockerfiles, systemd, Watchdogs
 └── 📄 start.ps1        # El Orquestador de Lanzamiento
 ```
@@ -75,5 +75,5 @@ Para auditorías forenses o especificaciones de bajo nivel, consulta:
 👉 **[docs/SPECIFICATION_V4_PLATINUM.md](file:///c:/Users/Mat%C3%ADas%20Riquelme/Desktop/Proyectos%20documentados/Slingshot_Trading/docs/SPECIFICATION_V4_PLATINUM.md)**
 
 ---
-*Slingshot v4.3.5 Titanium — El Estándar Maestro de la Terminal Algorítmica Local.*
+*v5.7.155 Master Gold Titanium — El Estándar Maestro de la Terminal Algorítmica Local.*
 *Unified by Antigravity — April 03, 2026*

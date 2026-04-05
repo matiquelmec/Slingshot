@@ -63,7 +63,7 @@ from engine.indicators.onchain import OnChainSentinel
 # ──────────────────────────────────────────────────────────────────────────────
 MASTER_WATCHLIST = ["BTCUSDT", "ETHUSDT", "SOLUSDT", "PAXGUSDT"]
 
-# 🛡️ PROTECCIÓN DE OVERLOAD AI v5.7.15 (Sigma Sync)
+# 🛡️ PROTECCIÓN DE OVERLOAD AI v5.7.155 (Sigma Sync)
 # Limita las llamadas simultáneas a Ollama para prevenir picos de latencia masivos.
 # En un VPS estándar, 1 es el máximo recomendado para Gemma-3 para evitar Drift >1000ms.
 GLOBAL_AI_SEMAPHORE = asyncio.Semaphore(1)
@@ -119,7 +119,7 @@ class SymbolBroadcaster:
         self._task: Optional[asyncio.Task] = None
 
         # Estado interno del broadcaster (compartido entre todas las velas)
-        self._store           = store # Inyección de Élite v5.7.15 (Sigma Sync)
+        self._store           = store # Inyección de Élite v5.7.155 (Sigma Sync)
         self._router         = SlingshotRouter()
         self._session_manager = SessionManager(symbol=self.symbol)
         self._history: list  = []
@@ -134,7 +134,7 @@ class SymbolBroadcaster:
         self._liquidity      = {"bids": [], "asks": []}
         self._heatmap        = {"hot_bids": [], "hot_asks": [], "imbalance": 0.0} # Neural Heatmap v5.7
         
-        # ML Tracking Buffer: guarda la predicción de la vela anterior para evaluarla en el cierre (v4.3)
+        # ML Tracking Buffer: guarda la predicción de la vela anterior para evaluarla en el cierre (v5.7.155 Master Gold)
         self._last_ml_prediction = None
 
         # HTF Top-Down Analysis (v4.0)
@@ -143,7 +143,7 @@ class SymbolBroadcaster:
         self._last_htf_ts  = 0.0        
         
         self._last_onchain_ts = 0.0 # Forza refresh inmediato
-        self._last_whale_scan_ts = 0.0 # v5.3.1 DOM Scanner
+        self._last_whale_scan_ts = 0.0 # v5.7.15 DOM Scanner
         self._onchain_sentinel = OnChainSentinel(symbol=self.symbol)
         self._last_onchain = None
         self._last_onchain_ts = 0.0
@@ -161,7 +161,7 @@ class SymbolBroadcaster:
         self._processed_signals_this_candle = set()
         self._last_advisor_ts = 0
         self._advisor_task: Optional[asyncio.Task] = None
-        self._live_rvol: float = 0.0  # 🔴 v4.3.4: RVOL en tiempo real del Fast Path
+        self._live_rvol: float = 0.0  # 🔴 v5.7.155 Master Gold: RVOL en tiempo real del Fast Path
 
         logger.info(f"[BROADCASTER] ✅ Creado: {self._key}")
 
@@ -180,9 +180,9 @@ class SymbolBroadcaster:
         if history_to_send:
             await queue.put({"type": "history", "data": history_to_send})
         
-        # ✅ SYNC INSTANTÁNEO: Enviar últimas señales ACTIVAS de alta calidad (v5.7.2)
+        # ✅ SYNC INSTANTÁNEO: Enviar últimas señales ACTIVAS de alta calidad (v5.7.15)
         last_signals = await store.get_signals(asset=self.symbol)
-        # [DELTA v5.7.2] Solo sincronizar señales que sobreviven al Filtro de Supervivencia
+        # [DELTA v5.7.15] Solo sincronizar señales que sobreviven al Filtro de Supervivencia
         for sig in list(last_signals)[-20:]:
             sig_score = sig.get("confluence", {}).get("score", 0) if sig.get("confluence") else 0
             sig_rr = sig.get("rr_ratio", 0)
@@ -476,7 +476,7 @@ class SymbolBroadcaster:
                     macro_levels=self._macro_levels,
                     htf_bias=self._htf_bias
                 )
-                # Inyectar último análisis cacheado para hidratación instantánea (Zero-Latency) v4.3
+                # Inyectar último análisis cacheado para hidratación instantánea (Zero-Latency) v5.7.155 Master Gold
                 if hasattr(self, '_last_advisor') and self._last_advisor:
                     tactical["advisor_log"] = self._last_advisor
                 elif self.symbol:
@@ -509,7 +509,7 @@ class SymbolBroadcaster:
         depth_stream = f"{self.symbol.lower()}@depth20@100ms"
         binance_url  = f"wss://stream.binance.com:9443/stream?streams={kline_stream}/{depth_stream}"
 
-        # 🛡️ PROTECCIÓN DE HANDSHAKE v4.4.4 (Thundering Herd Prevention)
+        # 🛡️ PROTECCIÓN DE HANDSHAKE v5.7.155 Master Gold (Thundering Herd Prevention)
         # Añadimos un pequeño jitter aleatorio para no colapsar el stack de red al arrancar
         import random
         await asyncio.sleep(random.uniform(0.1, 2.0))
@@ -586,7 +586,7 @@ class SymbolBroadcaster:
                 if now - self._last_pulse_ts >= pulse_interval:
                     self._last_pulse_ts = now
 
-                    # 1. Whale Sensor: [WHALE_SCAN] (v5.3.1 DOM Intelligence)
+                    # 1. Whale Sensor: [WHALE_SCAN] (v5.7.15 DOM Intelligence)
                     if now - self._last_whale_scan_ts >= 5.0: # Cada 5s
                         self._last_whale_scan_ts = now
                         try:
@@ -609,14 +609,14 @@ class SymbolBroadcaster:
                     if now - self._last_htf_ts > 1800: # 30 min
                          asyncio.create_task(self._refresh_htf_bias())
 
-                    # Refresco On-Chain (cada 30s - v5.3.1 Force Refresh)
+                    # Refresco On-Chain (cada 30s - v5.7.15 Force Refresh)
                     if now - self._last_onchain_ts > 30: # 30s
                         try:
                             # Cálculo de SMA_20 Volumen para el Dynamic Whale Trigger (v5.3)
                             vols = [float(i["data"].get("volume", 0)) for i in list(self._live_buffer)[-20:]]
                             avg_vol_tick = (sum(vols) / len(vols)) if vols else 1.0
                             
-                            # News Integration: Risk Multiplier (v5.3.1)
+                            # News Integration: Risk Multiplier (v5.7.15)
                             from engine.core.store import store
                             latest_news = await store.get_news(limit=1)
                             news_sentiment = latest_news[0].get("sentiment", "NEUTRAL") if latest_news else "NEUTRAL"
@@ -637,7 +637,7 @@ class SymbolBroadcaster:
                     if len(current_buffer) > 50:
                         df_tick = pd.DataFrame(current_buffer)
                         
-                        # Optimización Titanium v4.3: Ejecutar pd.to_datetime solo en el nuevo tick (Fast Path)
+                        # Optimización Titanium v5.7.155 Master Gold: Ejecutar pd.to_datetime solo en el nuevo tick (Fast Path)
                         if not hasattr(self, "_cached_live_dates") or len(self._cached_live_dates) != len(self._live_buffer):
                             base_dt = pd.to_datetime([i["data"]["timestamp"] for i in self._live_buffer], unit="s")
                             self._cached_live_dates = pd.Series(base_dt)
@@ -685,7 +685,7 @@ class SymbolBroadcaster:
                             )
                             await self._broadcast({"type": "tactical_update", "data": live_tactical})
 
-                            # 🔴 v4.3.4: Capturar RVOL live del Fast Path para inyectarlo al Advisor
+                            # 🔴 v5.7.155 Master Gold: Capturar RVOL live del Fast Path para inyectarlo al Advisor
                             fast_rvol = (live_tactical.get('diagnostic') or {}).get('rvol', 0)
                             if fast_rvol and fast_rvol > 0:
                                 self._live_rvol = float(fast_rvol)
@@ -703,7 +703,7 @@ class SymbolBroadcaster:
 
                                 status_msg = f"[SCAN] Sesgo: {self._htf_bias.direction if self._htf_bias else 'NEUTRAL'} | Régimen: {live_tactical.get('market_regime')} | Filtros OK"
                                 
-                                # 🔴 ALERTA DE ABSORCIÓN (v5.3.1 Priority Audit)
+                                # 🔴 ALERTA DE ABSORCIÓN (v5.7.15 Priority Audit)
                                 # Si el RVOL llega a 3.5x, forzamos al Advisor incluso si no es cierre de vela o estamos fuera de Killzone.
                                 if self._live_rvol >= 3.5:
                                     last_advisor_ts_safe = str(self._last_advisor_ts) if self._last_advisor_ts else ""
@@ -749,14 +749,14 @@ class SymbolBroadcaster:
                     self._live_buffer.append(candle_payload)
                     self._candle_closes += 1
                     
-                    # ── Bootstrap del Slow Path (v5.7.15 Hardening) ───────────────
+                    # ── Bootstrap del Slow Path (v5.7.155 Hardening) ───────────────
                     final_tactical = self._last_tactical or {}
                     session_state  = self._last_session or {}
 
                     df_live = pd.DataFrame([i["data"] for i in self._live_buffer])
                     df_live["timestamp"] = pd.to_datetime(df_live["timestamp"], unit="s")
 
-                    # --- ML Accuracy Tracker para Drift Monitor (v4.3) ---
+                    # --- ML Accuracy Tracker para Drift Monitor (v5.7.155 Master Gold) ---
                     # Registramos el resultado de la vela que acaba de cerrar vs la predicción de la anterior.
                     if len(df_live) > 2:
                         last_c = df_live.iloc[-1]
@@ -840,7 +840,7 @@ class SymbolBroadcaster:
                     except Exception as e:
                         logger.error(f"[BROADCASTER] {self._key} → Session Slow Path error: {e}")
 
-                    # 🚨 DRIFT MONITOR: Evaluación de salud del modelo ML (v4.1)
+                    # 🚨 DRIFT MONITOR: Evaluación de salud del modelo ML (v5.7.155 Master Gold)
                     # Se ejecuta cada 100 velas (aprox 25h en 15m) para detectar obsolescencia.
                     if self._candle_closes % 100 == 0:
                         asyncio.create_task(self._check_drift(df_live.copy()))
@@ -949,7 +949,7 @@ class SymbolBroadcaster:
         for sig in final_approved:
             asyncio.create_task(self._persist_signal(sig, tactical, status="ACTIVE", silent=silent))
 
-        # ──────── [DELTA v5.7.2] SEÑALES BLOQUEADAS: SOLO LOG INTERNO, CERO UI ────────
+        # ──────── [DELTA v5.7.15] SEÑALES BLOQUEADAS: SOLO LOG INTERNO, CERO UI ────────
         # Macro-blocked y router-blocked se registran en logs del servidor,
         # pero NUNCA se envían al Dashboard. Limpieza visual absoluta.
         for sig in macro_blocked:
@@ -1085,7 +1085,7 @@ class SymbolBroadcaster:
         # Persistencia en Memoria Local (siempre, para logs internos)
         asyncio.create_task(self._store.save_signal(realtime_data))
         
-        # [DELTA v5.7.2] Solo emitir al Dashboard si la señal es ACTIVA y de alta calidad
+        # [DELTA v5.7.15] Solo emitir al Dashboard si la señal es ACTIVA y de alta calidad
         # Señales FILTER/SILENCE/BLOCKED se quedan en logs del servidor, fuera de la UI.
         sig_score = realtime_data.get("confluence", {}).get("score", 0) if realtime_data.get("confluence") else 0
         if status == "ACTIVE" and sig_score >= 70 and realtime_data.get("rr_ratio", 0) >= 2.0:
@@ -1112,16 +1112,16 @@ class SymbolBroadcaster:
         return hashlib.md5(state_str.encode()).hexdigest()
 
     async def _emit_advisor(self, tactical: dict, session_state: dict, is_absorption_alert: bool = False):
-        """Llama al LLM Advisor y broadcast el resultado (v4.3.4 Live Price Injection)."""
+        """Llama al LLM Advisor y broadcast el resultado (v5.7.155 Master Gold Live Price Injection)."""
         
-        # 🔴 FIX CRÍTICO v4.3.4: Inyectar datos LIVE antes de enviar al LLM
+        # 🔴 FIX CRÍTICO v5.7.155 Master Gold: Inyectar datos LIVE antes de enviar al LLM
         # El tactical dict fue capturado como snapshot en el momento del cierre de vela.
         # Si Ollama tarda 30-60s, el precio puede haber movido $500-$900.
         live_overrides = {}
         if self.latest_price and self.latest_price > 0:
             live_overrides["current_price"] = self.latest_price
         
-        # 🔴 FIX RVOL v4.3.4: El RVOL del Slow Path es de la vela CERRADA (ej: 0.15x).
+        # 🔴 FIX RVOL v5.7.155 Master Gold: El RVOL del Slow Path es de la vela CERRADA (ej: 0.15x).
         # El RVOL del Fast Path es de la vela EN FORMACIÓN (ej: 33.36x).
         # El Advisor debe ver el RVOL más alto de ambos para detectar Absorción Institucional.
         if self._live_rvol > 0:
@@ -1134,7 +1134,7 @@ class SymbolBroadcaster:
         if live_overrides:
             tactical = {**tactical, **live_overrides}
         
-        # ✅ VERIFICACIÓN DE CACHÉ INTERNO (SMC v4.2)
+        # ✅ VERIFICACIÓN DE CACHÉ INTERNO (SMC v5.7.155 Master Gold)
         # Si ya tenemos un análisis para esta vela en el Store, lo reutilizamos.
         current_candle_ts = tactical.get("candles", [{}])[-1].get("timestamp", 0) if tactical.get("candles") else 0
         
@@ -1151,7 +1151,7 @@ class SymbolBroadcaster:
             else:
                 logger.info(f"[BROADCASTER] 🔃 Re-generando análisis para {self.symbol} (Caché previo era inválido/incompleto)")
 
-        # ✅ VERIFICACIÓN PREVENTIVA (Ollama) v4.3
+        # ✅ VERIFICACIÓN PREVENTIVA (Ollama) v5.7.155 Master Gold
         # Si el motor IA no responde rápido, informamos al usuario de inmediato en vez de colgar el sistema.
         if not self.check_ollama():
             logger.info(f"[BROADCASTER] ⚠️ Ollama no disponible para {self.symbol}")
@@ -1208,7 +1208,7 @@ class SymbolBroadcaster:
             liqs = await self._store.get_liquidation_clusters(self.symbol)
             econ_events = await self._store.get_economic_events(limit=5)
 
-            # ✅ SERIALIZACIÓN ROBUSTA (v4.6.5)
+            # ✅ SERIALIZACIÓN ROBUSTA (v5.7.155 Master Gold)
             # Convertimos tipos de Numpy a Python nativo (Evita el bug del N/A)
             import numpy as np
             def sanitize(obj):
@@ -1227,7 +1227,7 @@ class SymbolBroadcaster:
             sanitized_tactical = sanitize(payload)
 
             # Timeout de 45 segundos para VPS — liberar recursos si la IA no responde
-            # 🛡️ Uso del Semáforo Global para prevenir Drift por saturación de CPU/GPU (v5.7.15)
+            # 🛡️ Uso del Semáforo Global para prevenir Drift por saturación de CPU/GPU (v5.7.155)
             async with GLOBAL_AI_SEMAPHORE:
                 advice = await asyncio.wait_for(
                     generate_tactical_advice(self.symbol, 
@@ -1243,7 +1243,7 @@ class SymbolBroadcaster:
                 ) 
             logger.info(f"[BROADCASTER] ✅ Análisis LLM completado para {self.symbol}")
             
-            # ✅ PERSISTENCIA EN EL STORE (v4.2)
+            # ✅ PERSISTENCIA EN EL STORE (v5.7.155 Master Gold)
             # Guardamos el análisis con el timestamp de la vela para el debouncing global
             advice_obj = {
                 "timestamp": current_candle_ts,
@@ -1289,7 +1289,7 @@ class SymbolBroadcaster:
             # 3. Calcular Bias híbrido
             ghost = compute_symbol_ghost(global_ghost, self.symbol, local_funding)
             
-            # 4. 🔴 SESGO UNIFICADO v4.3.4 (Conflict Resolution)
+            # 4. 🔴 SESGO UNIFICADO v5.7.155 Master Gold (Conflict Resolution)
             # Reconcilia Macro (Ghost) + Estructura (SMC/Wyckoff) + ML en un veredicto único.
             # Si hay contradicción → STAND_BY. Evita que el frontend muestre señales conflictivas.
             ml_dir = (self._last_ml or {}).get("direction", "NEUTRAL")
@@ -1422,7 +1422,7 @@ class BroadcasterRegistry:
 
         async with self._lock:
             if key not in self._broadcasters:
-                # ── PROTOCOLO CROSS-PAIR SAFETY v4.7.1 ──
+                # ── PROTOCOLO CROSS-PAIR SAFETY v5.7.155 Master Gold ──
                 # Antes de arrancar el broadcaster, limpiamos basura de sesiones previas en el Store
                 # para este activo, garantizando que el análisis empiece de cero (Flush & Sync).
                 await store.flush_symbol(symbol.upper())
@@ -1453,7 +1453,7 @@ class BroadcasterRegistry:
 
             await broadcaster.unsubscribe(client_id)
 
-            # 🚀 REGLA DE LINGER (Grace Period v4.2)
+            # 🚀 REGLA DE LINGER (Grace Period v5.7.155 Master Gold)
             # No eliminamos el broadcaster inmediatamente. Esperamos 60 segundos por si el usuario recarga la página.
             if broadcaster.subscriber_count() == 0 and not broadcaster.persistent:
                 async def _delayed_cleanup():

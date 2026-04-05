@@ -123,7 +123,7 @@ def _get_fibonacci_major_leg(df: pd.DataFrame, n_bars: int = 5, lookback_pivots:
 
     final_is_uptrend = major_pl_idx < major_ph_idx
     
-    # 🐋 WHALE FILTER v4.4: Validación de Intención por Volumen
+    # 🐋 WHALE FILTER v5.7.155 Master Gold: Validación de Intención por Volumen
     # Calculamos el volumen total de la pierna (Low -> High o High -> Low)
     start_idx = min(major_pl_idx, major_ph_idx)
     end_idx = max(major_pl_idx, major_ph_idx)

@@ -102,7 +102,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                     })}
                 </motion.nav>
 
-                {/* Main Content Area — Scrollable v5.7.13 */}
+                {/* Main Content Area — Scrollable v5.7.155 Master Gold */}
                 <main className="flex-1 overflow-y-auto custom-scrollbar relative bg-black/10 flex flex-col">
                     <div className="flex-1 h-full">
                         {children}

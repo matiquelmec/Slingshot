@@ -5,7 +5,7 @@ from engine.core.confluence import ConfluenceManager
 from engine.api.advisor import generate_tactical_advice
 
 async def test_confluence_assertions():
-    print("--- INICIANDO SUITE DE PRUEBAS ON-CHAIN (v4.6) ---\n")
+    print("--- INICIANDO SUITE DE PRUEBAS ON-CHAIN (v5.7.155 Master Gold) ---\n")
     confluence = ConfluenceManager()
 
     # Base DataFrame para evitar errores
@@ -25,7 +25,7 @@ async def test_confluence_assertions():
     }
 
     print("Escenario A: Breakout con Volumen Whale (Bullish + Whale Inflow)")
-    # En On-Chain v4.6, Bullish Accumulation es un evento on-chain válido
+    # En On-Chain v5.7.155 Master Gold, Bullish Accumulation es un evento on-chain válido
     res_a = confluence.evaluate_signal(
         df=df,
         signal=signal_base,

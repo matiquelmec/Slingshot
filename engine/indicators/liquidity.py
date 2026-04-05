@@ -66,8 +66,8 @@ def analyze_neural_heatmap(bids: list, asks: list, current_price: float) -> dict
             "total_asks": round(total_asks_vol, 2),
             "hot_bids": hot_bids,
             "hot_asks": hot_asks,
-            "bids": hot_bids, # Aliases de compatibilidad v5.7.15
-            "asks": hot_asks, # Aliases de compatibilidad v5.7.15
+            "bids": hot_bids, # Aliases de compatibilidad v5.7.155
+            "asks": hot_asks, # Aliases de compatibilidad v5.7.155
             "sentiment": "BULLISH" if imbalance > 0.15 else "BEARISH" if imbalance < -0.15 else "NEUTRAL",
             "timestamp": time.time() if 'time' in globals() else 0
         }

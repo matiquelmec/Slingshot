@@ -10,7 +10,7 @@ def calculate_rvol(df: pd.DataFrame, window: int = 24) -> pd.DataFrame:
     """
     df = df.copy()
     
-    # Robust Median SMA (v5.4.3 Unified)
+    # Robust Median SMA (v5.7.155 Master Gold Unified)
     df['vol_median'] = df['volume'].rolling(window=window, min_periods=window).median()
     
     # Calcular RVOL = Volumen Actual / Mediana del Volumen
@@ -91,7 +91,7 @@ def analyze_volume_footprint(df: pd.DataFrame) -> pd.DataFrame:
 
 def confirm_trigger(df: pd.DataFrame, min_rvol: float = 2.0) -> pd.DataFrame:
     """
-    Gatillo Institucional v5.4.3 Platinum.
+    Gatillo Institucional v5.7.155 Master Gold.
     Un trigger es válido si hay RVOL alto Y el volumen no es un outlier de error (Z < 6).
     """
     df = calculate_rvol(df)
@@ -112,7 +112,7 @@ def confirm_trigger(df: pd.DataFrame, min_rvol: float = 2.0) -> pd.DataFrame:
     return df
 
 if __name__ == "__main__":
-    # Test de rendimiento del Kernel v5.4.3
+    # Test de rendimiento del Kernel v5.7.155 Master Gold
     import time
     start = time.time()
     

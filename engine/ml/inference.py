@@ -39,7 +39,7 @@ class SlingshotML:
         try:
             start_time = time.time()
             
-            # --- OPTIMIZACIÓN DE VENTANA (v4.1 Platinum) ---
+            # --- OPTIMIZACIÓN DE VENTANA (v5.7.155 Master Gold) ---
             # Para inferencia live, solo necesitamos las últimas 100 velas para que los indicadores 
             # (EMAs, ATR, RVOL) tengan suficiente histórico. Procesar todo el DF causa latencia inaceptable.
             inference_window = df.tail(100).copy()

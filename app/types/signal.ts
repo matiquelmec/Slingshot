@@ -98,8 +98,8 @@ export interface QuantDiagnostic {
     projected_volume?: number;
     secs_elapsed?: number;
     progress_ratio?: number;
-    absorption_score?: number;     // 💎 v5.4.3
-    is_absorption_elite?: boolean; // 🔥 v5.4.3
+    absorption_score?: number;     // 💎 v5.7.155 Master Gold
+    is_absorption_elite?: boolean; // 🔥 v5.7.155 Master Gold
 }
 
 export interface MLProjection {

@@ -71,7 +71,7 @@ export default function QuantDiagnosticPanel() {
                     </div>
                 </div>
 
-                {/* 1.5 PULSO INSTITUCIONAL (RVOL + ABSORCIÓN) - 💎 v5.4.3 */}
+                {/* 1.5 PULSO INSTITUCIONAL (RVOL + ABSORCIÓN) - 💎 v5.7.155 Master Gold */}
                 <div className="grid grid-cols-2 gap-2">
                     <div className="bg-white/[0.03] border border-white/10 rounded-xl p-2.5 flex flex-col justify-between">
                         <span className="text-[7px] font-black text-white/20 tracking-[0.2em] block mb-1 uppercase text-center">RVOL ROBUSTO</span>
