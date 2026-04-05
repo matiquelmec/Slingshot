@@ -22,6 +22,7 @@ import asyncio
 import json
 import time
 import traceback
+import hashlib
 from collections import deque
 from datetime import datetime, timezone
 from typing import Dict, Optional
@@ -55,6 +56,7 @@ from engine.notifications.filter import signal_filter
 from engine.api.advisor import generate_tactical_advice
 from engine.core.store import store
 from engine.indicators.htf_analyzer import HTFAnalyzer
+from engine.indicators.onchain import OnChainSentinel
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -126,6 +128,13 @@ class SymbolBroadcaster:
         self._htf_analyzer = HTFAnalyzer()
         self._htf_bias     = None
         self._last_htf_ts  = 0.0        
+        
+        self._last_onchain_ts = 0.0 # Forza refresh inmediato
+        self._last_whale_scan_ts = 0.0 # v5.3.1 DOM Scanner
+        self._onchain_sentinel = OnChainSentinel(symbol=self.symbol)
+        self._last_onchain = None
+        self._last_onchain_ts = 0.0
+
         # Caché del último estado para nuevos suscriptores
         self._last_ghost     = None
         self._last_smc       = None
@@ -174,6 +183,7 @@ class SymbolBroadcaster:
         if self._last_session:  await queue.put(self._last_session)
         if self._last_advisor:  await queue.put(self._last_advisor)
         if self._last_liquidations: await queue.put(self._last_liquidations)
+        if self._last_onchain:      await queue.put(self._last_onchain)
 
         return queue
 
@@ -276,6 +286,8 @@ class SymbolBroadcaster:
         elif msg_type == "candle":
             await store.save_candle(self.symbol, self.interval, clean)
             await store.update_market_state(self.symbol, {"price": float(clean["data"].get("close", 0))})
+        elif msg_type == "onchain_update":
+            self._last_onchain = clean
         
         dead  = []
         async with self._lock:
@@ -429,6 +441,17 @@ class SymbolBroadcaster:
             except Exception as e:
                 logger.error(f"[BROADCASTER] {self._key} → SMC inicial error: {e}")
 
+            # On-Chain inicial
+            try:
+                onchain_summary = await self._onchain_sentinel.refresh(
+                    current_price=self.latest_price,
+                    market_regime=df_init["market_regime"].iloc[-1] if "market_regime" in df_init.columns else "UNKNOWN"
+                )
+                await self._broadcast({"type": "onchain_update", "data": onchain_summary})
+                self._last_onchain_ts = time.time()
+            except Exception as e:
+                logger.error(f"[BROADCASTER] {self._key} → On-Chain inicial error: {e}")
+
             # Pipeline táctico inicial
             try:
                 self._router.set_context(session_data=self._session_manager.get_current_state().get("data", {}))
@@ -456,7 +479,16 @@ class SymbolBroadcaster:
     # ── Stream en tiempo real (Fase 2 del stream) ────────────────────────────
 
     async def _stream_live(self):
-        """Conexión al stream multiplexado de Binance (klines + depth)."""
+        """Conexión al stream multiplexado de Binance (Spot + Futures Mark Price Check)."""
+        # 1. Source Check: Futures Mark Price (v5.3 Audit)
+        try:
+            futures_stream_url = f"wss://fstream.binance.com/ws/{self.symbol.lower()}@markPrice"
+            async with ws_client.connect(futures_stream_url, open_timeout=10) as fws:
+                await fws.recv() # Wait for first frame
+                logger.info(f"[SOURCE_CHECK] fapi.binance.com (Futures) CONECTADO → markPriceStream recibido.")
+        except Exception as e:
+            logger.warning(f"[SOURCE_CHECK] Fallo al verificar fapi.binance.com: {e}")
+
         kline_stream = f"{self.symbol.lower()}@kline_{self.interval}"
         depth_stream = f"{self.symbol.lower()}@depth20@100ms"
         binance_url  = f"wss://stream.binance.com:9443/stream?streams={kline_stream}/{depth_stream}"
@@ -531,6 +563,20 @@ class SymbolBroadcaster:
                 if now - self._last_pulse_ts >= pulse_interval:
                     self._last_pulse_ts = now
 
+                    # 1. Whale Sensor: [WHALE_SCAN] (v5.3.1 DOM Intelligence)
+                    if now - self._last_whale_scan_ts >= 5.0: # Cada 5s
+                        self._last_whale_scan_ts = now
+                        try:
+                            # Buscar el muro más grande en el Order Book
+                            all_bids = self._liquidity.get("bids", [])
+                            all_asks = self._liquidity.get("asks", [])
+                            max_bid = max([float(b["volume"]) for b in all_bids]) if all_bids else 0.0
+                            max_ask = max([float(a["volume"]) for a in all_asks]) if all_asks else 0.0
+                            whale_size = max(max_bid, max_ask)
+                            if whale_size > 0:
+                                logger.info(f"[WHALE_SCAN] Order Book Muro Máximo: {whale_size:.2f} {self.symbol.replace('USDT', '')}")
+                        except: pass
+
                     # Sincronización con Ghost Data Centralizado
                     ghost = get_ghost_state()
                     if not ghost.is_stale and (not self._last_ghost or ghost.last_updated > self._last_ghost.get("data", {}).get("last_updated", 0)):
@@ -539,6 +585,29 @@ class SymbolBroadcaster:
                     # Refresco Periódico de HTF Bias (cada 30 min)
                     if now - self._last_htf_ts > 1800: # 30 min
                          asyncio.create_task(self._refresh_htf_bias())
+
+                    # Refresco On-Chain (cada 30s - v5.3.1 Force Refresh)
+                    if now - self._last_onchain_ts > 30: # 30s
+                        try:
+                            # Cálculo de SMA_20 Volumen para el Dynamic Whale Trigger (v5.3)
+                            vols = [float(i["data"].get("volume", 0)) for i in list(self._live_buffer)[-20:]]
+                            avg_vol_tick = (sum(vols) / len(vols)) if vols else 1.0
+                            
+                            # News Integration: Risk Multiplier (v5.3.1)
+                            from engine.core.store import store
+                            latest_news = await store.get_news(limit=1)
+                            news_sentiment = latest_news[0].get("sentiment", "NEUTRAL") if latest_news else "NEUTRAL"
+                            
+                            onchain_summary = await self._onchain_sentinel.refresh(
+                                current_price=float(kline['c']),
+                                market_regime=regime,
+                                avg_tick_volume=avg_vol_tick,
+                                news_sentiment=news_sentiment
+                            )
+                            await self._broadcast({"type": "onchain_update", "data": onchain_summary})
+                            self._last_onchain_ts = now
+                        except Exception as e:
+                            logger.error(f"[BROADCASTER] {self._key} → On-Chain refresh error: {e}")
 
                     # ML Inference (XGBoost, <50ms)
                     current_buffer = [i["data"] for i in self._live_buffer] + [candle_payload["data"]]
@@ -609,6 +678,19 @@ class SymbolBroadcaster:
                                     self._last_advisor_ts = live_tactical.get("timestamp", 0)
 
                                 status_msg = f"[SCAN] Sesgo: {self._htf_bias.direction if self._htf_bias else 'NEUTRAL'} | Régimen: {live_tactical.get('market_regime')} | Filtros OK"
+                                
+                                # 🔴 ALERTA DE ABSORCIÓN (v5.3.1 Priority Audit)
+                                # Si el RVOL llega a 3.5x, forzamos al Advisor incluso si no es cierre de vela o estamos fuera de Killzone.
+                                if self._live_rvol >= 3.5:
+                                    last_advisor_ts_safe = str(self._last_advisor_ts) if self._last_advisor_ts else ""
+                                    current_ts = live_tactical.get("timestamp", 0)
+                                    # Debouncing: No spamear el Advisor si ya lo enviamos en los últimos 2 minutos por esta alerta
+                                    if str(current_ts) != last_advisor_ts_safe:
+                                        logger.warning(f"[BROADCASTER] 🚨 ALERTA DE ABSORCIÓN (RVOL {self._live_rvol}x) para {self.symbol}. Prioridad Máxima.")
+                                        session_state = SessionManager.get_global_session_status()
+                                        asyncio.create_task(self._emit_advisor(live_tactical, session_state, is_absorption_alert=True))
+                                        self._last_advisor_ts = current_ts
+
                                 await self._broadcast({"type": "neural_log", "data": {
                                     "type": "SYSTEM",
                                     "message": status_msg
@@ -735,10 +817,10 @@ class SymbolBroadcaster:
 
                     # LLM Advisor (no bloqueante -v4.0)
                     # Solo disparamos el análisis una vez por cierre real de vela para evitar spam.
-                    current_candle_ts = float(candle_payload["data"]["timestamp"])
-                    last_advisor_ts_safe = float(self._last_advisor_ts) if self._last_advisor_ts else 0.0
+                    current_candle_ts = str(candle_payload["data"]["timestamp"])
+                    last_advisor_ts_safe = str(self._last_advisor_ts) if self._last_advisor_ts else ""
                     
-                    if current_candle_ts > last_advisor_ts_safe:
+                    if current_candle_ts != last_advisor_ts_safe:
                         self._last_advisor_ts = current_candle_ts
                         asyncio.create_task(self._emit_advisor(final_tactical, session_state))
                     else:
@@ -977,7 +1059,22 @@ class SymbolBroadcaster:
         if not silent:
             logger.info(f"[LOCAL STORE] {icon} Señal ({status}) persistida: {realtime_data['signal_type']} {self.symbol} @ ${realtime_data['entry_price']:.2f}")
 
-    async def _emit_advisor(self, tactical: dict, session_state: dict):
+    def _get_tactical_hash(self, tactical: dict) -> str:
+        """Genera un hash MD5 del estado táctico (excluyendo datos volátiles)."""
+        # Extraemos solo lo estructural para el caché semántico
+        stable_keys = {
+            "market_regime", "active_strategy", "macro_bias", 
+            "htf_bias", "smc", "diagnostic", "key_levels"
+        }
+        state = {k: v for k, v in tactical.items() if k in stable_keys}
+        
+        # Redondear niveles de Fibonacci y OBs para evitar invalidación por micro-pips
+        # (Opcional, pero ayuda al hit-rate del caché)
+        
+        state_str = json.dumps(state, sort_keys=True, default=str)
+        return hashlib.md5(state_str.encode()).hexdigest()
+
+    async def _emit_advisor(self, tactical: dict, session_state: dict, is_absorption_alert: bool = False):
         """Llama al LLM Advisor y broadcast el resultado (v4.3.4 Live Price Injection)."""
         
         # 🔴 FIX CRÍTICO v4.3.4: Inyectar datos LIVE antes de enviar al LLM
@@ -1027,6 +1124,26 @@ class SymbolBroadcaster:
                 "updated_at": datetime.now(timezone.utc).isoformat()
             }})
             return
+
+        # ✅ CACHÉ SEMÁNTICO MD5 (v5.4 Optimization)
+        # Si la estructura no ha mutado, reutilizamos el consejo para ahorrar CPU (Gemma-3).
+        tactical_hash = self._get_tactical_hash(tactical)
+        
+        # Bypasseamos el caché si es una ALERTA DE ABSORCIÓN crítica
+        cache_hit = hasattr(self, '_last_tactical_hash') and self._last_tactical_hash == tactical_hash
+        
+        if cache_hit and not is_absorption_alert:
+            logger.info(f"[BROADCASTER] 🧠 Cache Semántico HIT para {self.symbol}. Contexto idéntico.")
+            if self._last_advisor:
+                await self._broadcast({"type": "advisor_update", "data": self._last_advisor})
+                return
+
+        self._last_tactical_hash = tactical_hash
+
+        if is_absorption_alert:
+            logger.info(f"[BROADCASTER] 🧪 Inyectando Etiqueta de ABSORCIÓN INSTITUCIONAL en el payload...")
+            tactical["alert_type"] = "ALERTA DE ABSORCIÓN"
+            tactical["priority"] = "MAXIMA"
 
         logger.info(f"[BROADCASTER] 🧠 Iniciando análisis LLM para {self.symbol}...")
         
@@ -1080,7 +1197,8 @@ class SymbolBroadcaster:
                     ml_projection=self._last_ml,
                     news=news_items,
                     liquidations=liqs,
-                    economic_events=econ_events
+                    economic_events=econ_events,
+                    onchain_data=self._last_onchain.get("data") if self._last_onchain else None
                 ),
                 timeout=45.0
             ) 
@@ -1265,6 +1383,11 @@ class BroadcasterRegistry:
 
         async with self._lock:
             if key not in self._broadcasters:
+                # ── PROTOCOLO CROSS-PAIR SAFETY v4.7.1 ──
+                # Antes de arrancar el broadcaster, limpiamos basura de sesiones previas en el Store
+                # para este activo, garantizando que el análisis empiece de cero (Flush & Sync).
+                await store.flush_symbol(symbol.upper())
+
                 broadcaster = SymbolBroadcaster(symbol, interval, persistent=persistent)
                 self._broadcasters[key] = broadcaster
                 await broadcaster.start()

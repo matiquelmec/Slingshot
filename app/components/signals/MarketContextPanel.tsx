@@ -4,7 +4,7 @@ import React, { useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { BookOpen, Target, Clock, ArrowUpCircle, ArrowDownCircle, Pause, Layers, Eye } from 'lucide-react';
 import { buildConditions, Condition } from '../../utils/signalLogic';
-import { QuantDiagnostic, SessionData } from '../../types/signal';
+import { QuantDiagnostic, SessionData, TacticalDecision } from '../../types/signal';
 
 // ─── Tipos ─────────────────────────────────────────────────────────────────
 interface MarketContextPanelProps {
@@ -15,6 +15,7 @@ interface MarketContextPanelProps {
     nearestSupport?: number | null;
     nearestResistance?: number | null;
     sessionData?: SessionData | null;
+    fibonacci?: TacticalDecision['fibonacci'];
 }
 
 // ─── Configuración de Régimen (Limpiando Ternary Hells) ─────────────────────
@@ -89,7 +90,7 @@ StatusDot.displayName = 'StatusDot';
 
 // ─── Componente Principal Optimizado ───────────────────────────────────────
 const MarketContextPanel: React.FC<MarketContextPanelProps> = ({
-    regime, activeStrategy, diagnostic, currentPrice, nearestSupport, nearestResistance, sessionData
+    regime, activeStrategy, diagnostic, currentPrice, nearestSupport, nearestResistance, sessionData, fibonacci
 }) => {
 
     // Memoizamos el render para evitar cálculos intensivos inútiles
@@ -97,12 +98,12 @@ const MarketContextPanel: React.FC<MarketContextPanelProps> = ({
         const k = (regime ?? 'UNKNOWN').toUpperCase();
         const m = REGIME_META[k] ?? REGIME_META['UNKNOWN'];
         const conds = buildConditions(
-            k, diagnostic, currentPrice ?? null, nearestSupport ?? null, nearestResistance ?? null, sessionData ?? null
+            k, diagnostic, currentPrice ?? null, nearestSupport ?? null, nearestResistance ?? null, sessionData ?? null, fibonacci
         );
         const diagData = diagnostic || {} as QuantDiagnostic;
 
         return { key: k, meta: m, conditions: conds, d: diagData };
-    }, [regime, diagnostic, currentPrice, nearestSupport, nearestResistance, sessionData]);
+    }, [regime, diagnostic, currentPrice, nearestSupport, nearestResistance, sessionData, fibonacci]);
 
     return (
         <motion.div
@@ -168,7 +169,7 @@ const MarketContextPanel: React.FC<MarketContextPanelProps> = ({
                 {[
                     { name: 'ALIGNMENT', val: (d as any)?.htf_bias?.direction || 'ANALYZING', ok: (d as any)?.htf_bias?.direction !== 'NEUTRAL' },
                     { name: 'KILLZONE', val: sessionData?.is_killzone ? 'ACTIVE' : 'OFF', ok: sessionData?.is_killzone },
-                    { name: 'RVOL', val: `${(d?.volume ?? 1).toFixed(2)}x`, ok: (d?.volume ?? 1) >= 1.5 },
+                    { name: 'RVOL', val: (d?.rvol ?? 0) > 50 ? `>50x (ANOMALY)` : `${(d?.rvol ?? 1).toFixed(2)}x`, ok: (d?.rvol ?? 1) >= 1.5 },
                     { name: 'LIQUIDITY', val: (sessionData?.pdl_swept || sessionData?.pdh_swept) ? 'SWEPT' : 'PENDING', ok: (sessionData?.pdl_swept || sessionData?.pdh_swept) },
                 ].map(({ name, val, ok }) => (
                     <div key={name} className="flex flex-col items-center gap-0.5 bg-white/[0.02] rounded py-1 px-2 border border-white/5">

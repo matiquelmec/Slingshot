@@ -92,8 +92,12 @@ export interface QuantDiagnostic {
     macd_bullish_cross: boolean;
     bbwp: number;
     squeeze_active: boolean;
-    volume: number;
-    volume_mean?: number;
+    volume: number;        // Volumen crudo (actual)
+    rvol: number;          // RVOL Proyectado (v5.1)
+    volume_mean?: number;  // SMA Baseline
+    projected_volume?: number;
+    secs_elapsed?: number;
+    progress_ratio?: number;
 }
 
 export interface MLProjection {
@@ -166,6 +170,23 @@ export interface SMCDataPayload {
         bullish: OrderBlockData[];
         bearish: OrderBlockData[];
     };
+}
+
+export interface OnChainMetrics {
+    symbol: string;
+    oi_delta_pct: number;
+    funding_rate: number;
+    whale_alerts_count: number;
+    last_whale_alert?: {
+        amount: number;
+        symbol: string;
+        from: string;
+        to: string;
+        inflow_to_exchange: boolean;
+        timestamp: number;
+    } | null;
+    onchain_bias: string;
+    ts: number;
 }
 
 export interface GhostData {

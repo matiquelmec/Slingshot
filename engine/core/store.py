@@ -152,6 +152,23 @@ class MemoryStore:
         async with self._lock:
             self._advisor_advice[asset] = advice_data
 
+    async def flush_symbol(self, asset: str):
+        """Limpia el estado de un símbolo específico para evitar contaminación cruzada (v4.7.1)."""
+        async with self._lock:
+            if asset in self._market_states:
+                del self._market_states[asset]
+            if asset in self._advisor_advice:
+                del self._advisor_advice[asset]
+            if asset in self._liquidation_clusters:
+                del self._liquidation_clusters[asset]
+            
+            # Limpiar historiales de velas
+            keys_to_del = [k for k in self._candle_history.keys() if k.startswith(f"{asset}:")]
+            for k in keys_to_del:
+                del self._candle_history[k]
+                
+            logger.info(f"🧹 [MemoryStore] Flush de seguridad completado para {asset}.")
+
     async def get_advisor_advice(self, asset: str) -> Optional[Dict[str, Any]]:
         """Recupera el último análisis del Advisor para un activo."""
         async with self._lock:

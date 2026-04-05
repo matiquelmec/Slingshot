@@ -9,6 +9,11 @@ FEE_SLIPPAGE_IMPACT = 0.0025
 # Límite de pérdida diaria máxima por cuenta (3.5%)
 MAX_DAILY_DRAWDOWN_PCT = 0.035
 
+# Límite de ejecuciones diarias para evitar factor humano (Maturity v5.0)
+MAX_DAILY_TRADES = 3
+
+from engine.core.session_manager import session_manager # Para control de CAP global
+
 class RiskManager:
     """
     State-of-the-Art Risk Management Engine v3.0 (Local Master Edition).
@@ -46,6 +51,11 @@ class RiskManager:
             if self.is_locked or self.daily_loss_usd >= (self.account_balance * MAX_DAILY_DRAWDOWN_PCT):
                 self.is_locked = True
                 return {"approved": False, "rr_ratio": 0.0, "trade_quality": "LOCKED", "reason": "📛 HARD-STOP: Límite de pérdida diaria alcanzado (3.5%)"}
+
+            # ⛔ 1.1 Verificación de CAP de Sesión (v5.0)
+            trades_done = session_manager.get_trades_today()
+            if trades_done >= MAX_DAILY_TRADES:
+                return {"approved": False, "rr_ratio": 0.0, "trade_quality": "CAP_LIMIT", "reason": f"🛑 DAILY CAP: Límite de {MAX_DAILY_TRADES} trades diarios alcanzado para evitar error humano."}
 
             # ⛔ 2. SMC GATES: Volumen y Alineación (Pilar 2)
             # Solo si la señal contiene estos diagnósticos del MarketAnalyzer

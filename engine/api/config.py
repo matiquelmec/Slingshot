@@ -18,6 +18,9 @@ class Settings(BaseSettings):
     # Gemini AI (LLM Advisor)
     GEMINI_API_KEY: Optional[str] = None
 
+    # Whale Alert
+    WHALE_ALERT_API_KEY: Optional[str] = None
+
     # Removido: REDIS y SUPABASE en entorno local
 
     # Security

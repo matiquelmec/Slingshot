@@ -1,6 +1,6 @@
 import React from 'react';
 import { TrendingUp, TrendingDown, Crosshair } from 'lucide-react';
-import { Signal, QuantDiagnostic, SessionData } from '../types/signal';
+import { Signal, QuantDiagnostic, SessionData, TacticalDecision } from '../types/signal';
 
 // =============== ESTRATEGIAS VISUALES DE SEÑALES ===============
 
@@ -157,7 +157,8 @@ export function buildConditions(
     price: number | null,
     support: number | null,
     resistance: number | null,
-    sessionData: SessionData | null = null
+    sessionData: SessionData | null = null,
+    fibonacci: TacticalDecision['fibonacci'] | null = null
 ): Condition[] {
 
     // SMC Data (Order Blocks & FVGs)
@@ -166,12 +167,13 @@ export function buildConditions(
     const bearOBs = smc.order_blocks?.bearish?.length || 0;
     const activeFVGs = (smc.fvgs?.bullish?.length || 0) + (smc.fvgs?.bearish?.length || 0);
 
-    // RVOL (Volume Institucional)
-    const rvol = d?.volume || 1.0;
+    // RVOL (Volume Institucional v5.2) - SSOT
+    const rvol = d?.rvol || 1.0;
     
     // Macro Bias & HTF
     const htf = (d as any)?.htf_bias || { direction: 'NEUTRAL', strength: 0 };
     const macro = (d as any)?.macro_bias || 'NEUTRAL';
+    const fib = fibonacci;
 
     switch (regime) {
         case 'ACCUMULATION':
@@ -209,6 +211,14 @@ export function buildConditions(
                     status: rvol >= 1.5 ? 'MET' : rvol >= 1.2 ? 'PARTIAL' : 'WAITING',
                     currentValue: `RVOL: ${rvol.toFixed(2)}x`,
                     meaning: rvol >= 1.5 ? '✅ Participación institucional confirmada por volumen.' : 'Esperando intención volumétrica real.',
+                },
+                {
+                    label: 'Zona de Valor: Fibonacci Dinámico (v5.4)',
+                    status: (fib && price && price < (fib.swing_low + (fib.swing_high - fib.swing_low) * 0.5)) ? 'MET' : 'WARNING',
+                    currentValue: fib && price ? (price < (fib.swing_low + (fib.swing_high - fib.swing_low) * 0.5) ? 'DISCOUNT (COMPRA)' : 'PREMIUM (CARO)') : (!fib ? 'CALCULANDO' : 'FIB_WAIT'),
+                    meaning: (fib && price && price < (fib.swing_low + (fib.swing_high - fib.swing_low) * 0.5)) 
+                        ? '✅ Precio en zona de descuento institucional (Fair Value). Óptimo para Longs.' 
+                        : '⚠️ Precio en zona Premium. Riesgo de retroceso antes de expansión.',
                 },
             ];
         }
@@ -248,6 +258,14 @@ export function buildConditions(
                     status: rvol >= 1.5 ? 'MET' : 'WAITING',
                     currentValue: `RVOL: ${rvol.toFixed(2)}x`,
                     meaning: rvol >= 1.5 ? '✅ Anomalía de volumen confirma la distribución.' : 'Volumen minorista (bajo). No hay confirmación institucional.',
+                },
+                {
+                    label: 'Zona de Valor: Fibonacci Dinámico (v5.4)',
+                    status: (fib && price && price > (fib.swing_low + (fib.swing_high - fib.swing_low) * 0.5)) ? 'MET' : 'WARNING',
+                    currentValue: fib && price ? (price > (fib.swing_low + (fib.swing_high - fib.swing_low) * 0.5) ? 'PREMIUM (VENTA)' : 'DISCOUNT (BARATO)') : (!fib ? 'CALCULANDO' : 'FIB_WAIT'),
+                    meaning: (fib && price && price > (fib.swing_low + (fib.swing_high - fib.swing_low) * 0.5)) 
+                        ? '✅ Precio en zona Premium. Óptimo para capturar la distribución Institucional.' 
+                        : '⚠️ Precio en zona de descuento. Peligro de atrapar picos ante demanda latente.',
                 },
             ];
         }

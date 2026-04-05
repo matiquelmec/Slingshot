@@ -1,8 +1,8 @@
 """
-scripts/tests/test_router_smoke.py --- Slingshot v4.1 Platinum
-=============================================================
-Smoke Test modular: verifica cada capa de la nueva arquitectura
-con datos sinteticos (sin conexion a Binance).
+scripts/tests/test_router_smoke.py --- Slingshot v5.4.3 Unified Platinum
+=========================================================================
+Smoke Test modular: verifica cada capa de la arquitectura v5.x
+con datos sintéticos (sin conexión a Binance).
 Compatible con Windows (sin emojis en stdout).
 """
 import sys
@@ -125,7 +125,7 @@ def test_slingshot_router_smoke():
 
 if __name__ == "__main__":
     print("=" * 60)
-    print("  SMOKE TEST --- SLINGSHOT v4.1 PLATINUM")
+    print("  SMOKE TEST --- SLINGSHOT v5.4.3 UNIFIED")
     print("=" * 60)
 
     suite = [

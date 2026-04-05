@@ -6,13 +6,15 @@ import { Network, ShieldAlert, Check } from 'lucide-react';
 import { useSearchParams } from 'next/navigation';
 // Store & Types
 import { useTelemetryStore } from '../../store/telemetryStore';
-import { TacticalDecision, MLProjection, SessionData } from '../../types/signal';
+import { buildConditions, Condition } from '../../utils/signalLogic';
+import { QuantDiagnostic, SessionData, TacticalDecision, MLProjection } from '../../types/signal';
 
 // Micro-Componentes (Memoizados)
 import DiagnosticGridModule from './DiagnosticGridModule';
 import MarketContextPanel from './MarketContextPanel';
 import AutonomousAdvisor from './AutonomousAdvisor';
 import SignalCardItem from './SignalCardItem';
+import OnChainMetricsPanel from './OnChainMetricsPanel';
 
 export default function SignalTerminal() {
     const searchParams = useSearchParams();
@@ -22,6 +24,7 @@ export default function SignalTerminal() {
     const currentPrice_live = useTelemetryStore(state => state.latestPrice);
     const signalHistory = useTelemetryStore(state => state.signalHistory);
     const auditedSignals = useTelemetryStore(state => state.auditedSignals);
+    const onchainMetrics = useTelemetryStore(state => state.onchainMetrics);
 
     const tacticalDecision = useTelemetryStore(state => state.tacticalDecision as TacticalDecision);
     const mlProjection = useTelemetryStore(state => state.mlProjection as MLProjection);
@@ -59,9 +62,9 @@ export default function SignalTerminal() {
 
     // Combinación Híbrida: Base de Datos Local + Transmisión de WS (Zustand)
     const displayMap = new Map();
-    [...signalHistory, ...globalSignals].forEach(s => displayMap.set(s.id || `${s.timestamp}-${s.asset}`, s));
+    [...Object.values(signalHistory), ...globalSignals].forEach(s => displayMap.set(s.id || `${s.timestamp}-${s.asset}`, s));
     // El WS de Zustand (Auditor) SIEMPRE tiene la prioridad absolutaa (sobrescribe pasados)
-    auditedSignals.forEach(s => displayMap.set(s.id || `${s.timestamp}-${s.asset}`, s));
+    Object.values(auditedSignals).forEach(s => displayMap.set(s.id || `${s.timestamp}-${s.asset}`, s));
     
     // Sort descendente por tiempo
     const displaySignals = Array.from(displayMap.values())
@@ -106,16 +109,22 @@ export default function SignalTerminal() {
                     sessionData={sessionData}
                 />
 
-                <div className="flex-none px-4 pb-3 border-b border-white/5">
-                    <MarketContextPanel
-                        regime={tacticalDecision?.market_regime ?? tacticalDecision?.regime ?? null}
-                        activeStrategy={tacticalDecision?.active_strategy ?? null}
-                        diagnostic={tacticalDecision?.diagnostic ?? null}
-                        currentPrice={tacticalDecision?.current_price ?? currentPrice_live ?? null}
-                        nearestSupport={tacticalDecision?.nearest_support ?? null}
-                        nearestResistance={tacticalDecision?.nearest_resistance ?? null}
-                        sessionData={sessionData}
-                    />
+                <div className="flex-none px-4 pb-3 border-b border-white/5 grid grid-cols-1 lg:grid-cols-4 gap-4">
+                    <div className="lg:col-span-3">
+                        <MarketContextPanel
+                            regime={tacticalDecision?.market_regime ?? tacticalDecision?.regime ?? null}
+                            activeStrategy={tacticalDecision?.active_strategy ?? null}
+                            diagnostic={tacticalDecision?.diagnostic ?? null}
+                            currentPrice={tacticalDecision?.current_price ?? currentPrice_live ?? null}
+                            nearestSupport={tacticalDecision?.nearest_support ?? null}
+                            nearestResistance={tacticalDecision?.nearest_resistance ?? null}
+                            sessionData={sessionData}
+                            fibonacci={tacticalDecision?.fibonacci}
+                        />
+                    </div>
+                    <div className="lg:col-span-1 border-l border-white/5 pl-4">
+                        <OnChainMetricsPanel metrics={onchainMetrics} />
+                    </div>
                 </div>
 
                 <div className="flex-none max-h-[150px] overflow-y-auto custom-scrollbar">

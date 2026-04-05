@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { Network, BarChart3, Radar, BrainCircuit, Clock } from 'lucide-react';
+import { Network, BarChart3, Radar, BrainCircuit, Clock, Info } from 'lucide-react';
 import { MLProjection, SessionData, TacticalDecision } from '../../types/signal';
 
 interface DiagnosticGridProps {
@@ -22,7 +22,7 @@ const DiagnosticGridModule: React.FC<DiagnosticGridProps> = ({
     const activeFVGs = (smc.fvgs?.bullish?.length || 0) + (smc.fvgs?.bearish?.length || 0);
     
     // RVOL (Volume Institucional)
-    const rvol = tacticalDecision?.diagnostic?.volume || 1.0;
+    const rvol = tacticalDecision?.diagnostic?.rvol || 1.0;
     const isHighVolume = rvol >= 1.5;
 
     const getMlColor = () => {
@@ -98,9 +98,17 @@ const DiagnosticGridModule: React.FC<DiagnosticGridProps> = ({
                         <div className={`relative inline-flex rounded-full h-3 w-3 ${isHighVolume ? 'bg-neon-green shadow-[0_0_10px_rgba(0,255,65,1)]' : 'bg-white/10'}`} />
                     </div>
                     <div className="flex flex-col">
-                        <span className="text-[10px] font-bold tracking-widest text-white/60">RVOL (RELATIVE VOL)</span>
-                        <span className={`text-[11px] font-black ${isHighVolume ? 'text-neon-green' : 'text-white/30'}`}>
-                            {rvol.toFixed(2)}x {isHighVolume ? 'ALTO' : 'NORMAL'}
+                        <span 
+                            className={`text-[11px] font-black ${isHighVolume ? 'text-neon-green' : 'text-white/30'} flex items-center gap-1`}
+                            title={`Debug Projection:
+  - Secs Elapsed: ${tacticalDecision?.diagnostic?.secs_elapsed || 0}s
+  - Volume Raw: ${tacticalDecision?.diagnostic?.volume || 0}
+  - Vol Projected: ${tacticalDecision?.diagnostic?.projected_volume || 0}
+  - SMA Baseline: ${tacticalDecision?.diagnostic?.volume_mean || 0}
+  - Progress: ${(tacticalDecision?.diagnostic?.progress_ratio * 100 || 0).toFixed(1)}%`}
+                        >
+                            {rvol > 50 ? '>50x (ANOMALY)' : `${rvol.toFixed(2)}x`} {isHighVolume ? 'ALTO' : 'NORMAL'}
+                            <Info size={10} className="opacity-40 cursor-help" />
                         </span>
                     </div>
                 </div>

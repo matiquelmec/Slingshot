@@ -34,6 +34,7 @@ class GatekeeperContext:
     news_items: list = field(default_factory=list)
     economic_events: list = field(default_factory=list)
     liquidation_clusters: list = field(default_factory=list)
+    onchain_bias: str = "NEUTRAL"
 
 
 @dataclass
@@ -166,6 +167,7 @@ class SignalGatekeeper:
                     economic_events=context.economic_events,
                     liquidation_clusters=context.liquidation_clusters,
                     htf_bias=htf_bias,
+                    onchain_bias=context.onchain_bias
                 )
                 sig["confluence"] = confluence_result
             except Exception as e:
@@ -183,12 +185,16 @@ class SignalGatekeeper:
                 self._block(sig, "BLOCKED_BY_FILTER", rr["reason"], result)
                 continue
 
-            # ── Filtro 5: Score de Confluencia ≥ 75% ─────────────────────────
+            # ── Filtro 5: Score de Confluencia (Umbral Dinámico v4.7.1) ─────────
+            # Requisito base 75%. Si es RANGING, subimos el listón a 85% para filtrar ruido.
             score = sig["confluence"].get("score", 0) if sig.get("confluence") else 0
-            if score < 75:
+            regime = str(sig.get("regime", "UNKNOWN")).upper()
+            min_score = 85 if regime == "RANGING" else 75
+            
+            if score < min_score:
                 if not silent:
-                    logger.info(f"[GATEKEEPER] 🔴 Confluencia {score}% < 75% — señal bloqueada")
-                self._block(sig, "BLOCKED_BY_CONFIDENCE", f"Confianza {score}% < 75%", result)
+                    logger.info(f"[GATEKEEPER] 🔴 Confluencia {score}% < {min_score}% ({regime}) — bloqueada")
+                self._block(sig, "BLOCKED_BY_CONFIDENCE", f"Confianza {score}% < {min_score}% en {regime}", result)
                 continue
 
             # ── Filtro 6: Path Traversal — ¿Sigue Viva? ──────────────────────

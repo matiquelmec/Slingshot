@@ -2,6 +2,7 @@ import pandas as pd
 from engine.core.session_manager import TimeFilter
 from engine.indicators.sessions import map_sessions_liquidity
 from engine.indicators.volume import confirm_trigger
+from engine.indicators.fibonacci import get_current_fibonacci_levels
 
 class SMCInstitutionalStrategy:
     """
@@ -32,12 +33,15 @@ class SMCInstitutionalStrategy:
         # 3. Order Blocks e Imbalances (FVG)
         # Ya procesados por MarketAnalyzer, las columnas existen en df.
 
-        # 4. Fibonacci Estructural (Filtro de Descuento v4.0)
-        # Ya procesado por MarketAnalyzer, buscar en df.attrs o utilizar el dict en MarketMap (pasado externamente si fuera necesario)
-        # Para mantener compatibilidad con SMCInstitutionalStrategy si fib_05 no existe,
-        # lo calculamos rapido tomando el soporte y resistencia principal, pero usualmente 
-        # MarketMap se encarga.
-        if 'fib_05' not in df.columns:
+        # 4. Fibonacci Dinámico (v5.4): Swing Leg en formación
+        # Analizamos el rango actual para determinar zonas de Premium/Discount
+        fib_data = get_current_fibonacci_levels(df)
+        if fib_data:
+            df['swing_high'] = fib_data['swing_high']
+            df['swing_low'] = fib_data['swing_low']
+            df['fib_05'] = fib_data['levels'].get('0.5')
+            df['is_whale_leg'] = fib_data.get('is_whale_leg', False)
+        else:
             if 'support_level' in df.columns and 'resistance_level' in df.columns:
                 df['fib_05'] = df['support_level'] + (df['resistance_level'] - df['support_level']) * 0.5
             else:

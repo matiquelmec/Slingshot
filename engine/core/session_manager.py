@@ -45,6 +45,7 @@ def _empty_session() -> dict:
 def _empty_state(trading_day: str = "") -> dict:
     return {
         "trading_day": trading_day,
+        "trades_today": 0, # CAP DE SESIÓN v5.0 (Máximo 3 trades diarios)
         "asia":   _empty_session(),
         "london": _empty_session(),
         "ny":     _empty_session(),
@@ -287,6 +288,17 @@ class SessionManager:
 
         return self._build_payload(ts)
 
+    # ── GESTIÓN DE CAP DE SESIÓN v5.0 ───────────────────────────────────────────
+    def get_trades_today(self) -> int:
+        """Retorna el contador de ejecuciones del día actual."""
+        return self._state.get("trades_today", 0)
+
+    def increment_trades(self):
+        """Aumenta el contador de trades y persiste el cambio."""
+        self._state["trades_today"] = self.get_trades_today() + 1
+        self._save()
+        logger.info(f"[SessionManager] 📊 Trade ejecutado en {self._symbol}. Contador: {self.get_trades_today()}")
+
     # ──────────────────────────────────────────────────────────────────────
     # PAYLOAD PARA WEBSOCKET
     # ──────────────────────────────────────────────────────────────────────
@@ -384,6 +396,14 @@ class SessionManager:
         """Retorna el estado actual de sesiones sin necesitar un candle nuevo."""
         now_utc = datetime.now(timezone.utc)
         return self._build_payload(now_utc)
+
+    def is_killzone_active(self) -> bool:
+        """Sincronía Maestro: Verifica si el tiempo actual gatilla una Killzone Institucional."""
+        now_utc = datetime.now(timezone.utc)
+        ny_hour  = now_utc.astimezone(_NY_TZ).hour
+        lon_hour = now_utc.astimezone(_LONDON_TZ).hour
+        # Londres: 8-11 AM | NY: 8-11 AM
+        return (8 <= lon_hour < 11) or (8 <= ny_hour < 11)
 
     # ──────────────────────────────────────────────────────────────────────
     # GLOBAL SESSION MASTERY (v2)

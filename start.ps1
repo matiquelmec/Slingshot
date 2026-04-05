@@ -59,10 +59,18 @@ Start-Process powershell -ArgumentList `
     "-NoExit", `
     "-Command", "Set-Location -LiteralPath '$PSScriptRoot'; node .\node_modules\next\dist\bin\next dev"
 
+# --- Optimización de Latencia Institucional (v5.4.3) ---
+Write-Host "  [3/3] Optimizando prioridad del S.O. para trading..." -ForegroundColor Yellow
+Start-Sleep -Seconds 5
+if (Test-Path "$PSScriptRoot\scripts\optimize_os.ps1") {
+    powershell -ExecutionPolicy Bypass -File "$PSScriptRoot\scripts\optimize_os.ps1"
+}
+
 Write-Host ""
-Write-Host "  OK - Slingshot Gen 1 iniciado correctamente" -ForegroundColor Green
+Write-Host "  ✅ SLINGSHOT GEN 1 OPERATIVO" -ForegroundColor Green
 Write-Host "     Backend  -> http://localhost:8000/docs" -ForegroundColor White
 Write-Host "     Frontend -> http://localhost:3000" -ForegroundColor White
 Write-Host ""
+Write-Host "  MODO: ALTA PRIORIDAD ACTIVADO" -ForegroundColor Cyan
 Write-Host "  NOTA: Desactiva el VPN para que Binance funcione." -ForegroundColor DarkYellow
 Write-Host ""

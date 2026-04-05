@@ -189,28 +189,102 @@ export default function QuantDiagnosticPanel() {
                 {d.fibonacci && (
                     <div className="bg-white/[0.02] border border-white/5 rounded-xl p-3">
                         <span className="text-[9px] font-bold text-white/40 tracking-[0.2em] block mb-2">FIBONACCI DINÁMICO</span>
-                        <div className="space-y-1">
-                            {Object.entries(d.fibonacci.levels ?? {})
-                                .filter(([k]) => ['0.236', '0.382', '0.5', '0.618', '0.786'].includes(k))
-                                .map(([level, price]) => {
-                                    const p = price as number;
-                                    const isGP = level === '0.618' || level === '0.5';
-                                    const isCurrent = latestPrice ? Math.abs(p - latestPrice) / latestPrice < 0.005 : false;
-                                    return (
-                                        <div key={level} className={`flex items-center justify-between rounded px-1.5 py-0.5 ${isCurrent ? 'bg-neon-cyan/10 border border-neon-cyan/20' : ''}`}>
-                                            <span className={`text-[9px] font-bold ${isGP ? 'text-yellow-400' : 'text-white/40'}`}>
+                        <div className="space-y-0.5">
+                            {(() => {
+                                const entries = Object.entries(d.fibonacci.levels ?? {})
+                                    .filter(([k]) => ['0.236', '0.382', '0.5', '0.618', '0.66', '0.786'].includes(k))
+                                    .sort(([a], [b]) => parseFloat(b) - parseFloat(a)) // DESC: nivel más alto primero
+                                    .map(([level, price]) => ({ level, price: price as number }));
+
+                                // Invertir orden si la pierna es bajista (niveles suben con el ratio)
+                                const swingHigh = d.fibonacci.swing_high ?? 0;
+                                const swingLow = d.fibonacci.swing_low ?? 0;
+                                const isUptrend = swingLow < swingHigh;
+
+                                // Ordenar DESC por precio (el precio más alto arriba) independiente de uptrend/downtrend
+                                const sorted = [...entries].sort((a, b) => b.price - a.price);
+
+                                const rows: React.ReactNode[] = [];
+                                let priceInserted = false;
+
+                                sorted.forEach((entry, idx) => {
+                                    const { level, price } = entry;
+                                    const nextEntry = sorted[idx + 1];
+                                    const isGP = level === '0.618' || level === '0.66';
+                                    const labelColor = isGP
+                                        ? 'text-yellow-400'
+                                        : level === '0.786' ? 'text-neon-red/60'
+                                        : level === '0.236' ? 'text-white/30'
+                                        : 'text-white/40';
+
+                                    rows.push(
+                                        <div key={level} className={`flex items-center justify-between rounded px-1.5 py-0.5 ${isGP ? 'bg-yellow-400/5' : ''}`}>
+                                            <span className={`text-[9px] font-bold ${labelColor}`}>
                                                 {level} {isGP ? '★GP' : ''}
                                             </span>
-                                            <span className="text-[9px] font-mono text-white/70">{fmt(p, '$', 0)}</span>
+                                            <span className={`text-[9px] font-mono ${isGP ? 'text-yellow-400/90' : 'text-white/60'}`}>{fmt(price, '$', 0)}</span>
                                         </div>
                                     );
-                                })}
-                            <div className="text-[8px] text-white/20 pt-1">
+
+                                    // Insertar línea del precio si cae entre este nivel y el siguiente
+                                    if (!priceInserted && latestPrice && nextEntry) {
+                                        const isBelow = latestPrice <= price && latestPrice > nextEntry.price;
+                                        if (isBelow) {
+                                            const distToAbove = ((price - latestPrice) / latestPrice * 100).toFixed(2);
+                                            const distToBelow = ((latestPrice - nextEntry.price) / latestPrice * 100).toFixed(2);
+                                            priceInserted = true;
+                                            rows.push(
+                                                <div key="current-price" className="flex items-center justify-between bg-neon-cyan/10 border border-neon-cyan/30 rounded px-1.5 py-1 my-0.5 shadow-[0_0_8px_rgba(0,229,255,0.2)]">
+                                                    <div className="flex items-center gap-1">
+                                                        <span className="text-neon-cyan text-[10px]">▶</span>
+                                                        <span className="text-[9px] font-bold text-neon-cyan">PRECIO</span>
+                                                    </div>
+                                                    <div className="text-right">
+                                                        <span className="text-[10px] font-mono font-black text-neon-cyan">{fmt(latestPrice, '$', 0)}</span>
+                                                        <p className="text-[7px] text-white/30">↑{distToAbove}% · ↓{distToBelow}%</p>
+                                                    </div>
+                                                </div>
+                                            );
+                                        }
+                                    }
+
+                                    // Edge case: precio por debajo de todos los niveles
+                                    if (!priceInserted && latestPrice && idx === sorted.length - 1 && latestPrice <= price) {
+                                        priceInserted = true;
+                                        rows.push(
+                                            <div key="current-price" className="flex items-center justify-between bg-neon-cyan/10 border border-neon-cyan/30 rounded px-1.5 py-1 my-0.5">
+                                                <div className="flex items-center gap-1">
+                                                    <span className="text-neon-cyan text-[10px]">▶</span>
+                                                    <span className="text-[9px] font-bold text-neon-cyan">PRECIO</span>
+                                                </div>
+                                                <span className="text-[10px] font-mono font-black text-neon-cyan">{fmt(latestPrice, '$', 0)}</span>
+                                            </div>
+                                        );
+                                    }
+                                });
+
+                                // Edge case: precio por encima de todos los niveles
+                                if (!priceInserted && latestPrice) {
+                                    rows.unshift(
+                                        <div key="current-price" className="flex items-center justify-between bg-neon-cyan/10 border border-neon-cyan/30 rounded px-1.5 py-1 my-0.5">
+                                            <div className="flex items-center gap-1">
+                                                <span className="text-neon-cyan text-[10px]">▶</span>
+                                                <span className="text-[9px] font-bold text-neon-cyan">PRECIO</span>
+                                            </div>
+                                            <span className="text-[10px] font-mono font-black text-neon-cyan">{fmt(latestPrice, '$', 0)}</span>
+                                        </div>
+                                    );
+                                }
+
+                                return rows;
+                            })()}
+                            <div className="text-[8px] text-white/20 pt-1 border-t border-white/5 mt-1">
                                 Swing: {fmt(d.fibonacci.swing_low, '$', 0)} → {fmt(d.fibonacci.swing_high, '$', 0)}
                             </div>
                         </div>
                     </div>
                 )}
+
 
                 {/* 5. Estrategia activa */}
                 <div className="bg-white/[0.02] border border-white/5 rounded-xl p-3">

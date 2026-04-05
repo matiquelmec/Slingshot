@@ -1,10 +1,11 @@
 from engine.core.logger import logger
 import httpx
-import traceback
 import asyncio
 import json
 import numpy as np
+import hashlib
 from engine.api.config import settings
+from engine.core.session_manager import session_manager
 
 # Configuración de Ollama Local
 OLLAMA_URL = "http://localhost:11434/api/chat"
@@ -13,9 +14,10 @@ DEFAULT_MODEL = "gemma3:4b"
 # Semáforo global para evitar saturación de la CPU (Cola Institucional)
 _ai_semaphore = asyncio.Semaphore(1)
 
-# --- SISTEMA DE CACHÉ ESTRATÉGICO (v4.2 Platinum) ---
+# --- SISTEMA DE CACHÉ ESTRATÉGICO v4.6 (SEMANTIC CACHE) ---
 # Almacena el último análisis exitoso por activo para evitar redundancia
 _strategic_memo = {} 
+_semantic_cache = {} # Hash -> Advice mapping
 
 async def check_ollama_status():
     """Verifica si el servidor de Ollama está corriendo."""
@@ -35,11 +37,12 @@ async def generate_tactical_advice(
     ml_projection: dict = None,
     news: list = None,
     liquidations: list = None,
-    economic_events: list = None
+    economic_events: list = None,
+    onchain_data: dict = None
 ) -> str:
     """
     Genera un consejo cuantitativo breve usando Ollama Local de forma asíncrona.
-    Incorpora sentimiento de noticias y zonas de liquidación para máxima precisión.
+    v4.6: Implementa Pre-digested Context y Semantic Caching para latencia mínima.
     """
     strategy = tactical_data.get('active_strategy', 'UNKNOWN')
     regime = tactical_data.get('market_regime', 'UNKNOWN')
@@ -53,21 +56,24 @@ async def generate_tactical_advice(
     macd_cross = "BULLISH" if diag.get('macd_bullish_cross') else "BEARISH/NEUTRAL"
     bbwp = diag.get('bbwp', 0)
     squeeze = "ACTIVE" if diag.get('squeeze_active') else "INACTIVE"
-    in_killzone = "SÍ (Volumen Institucional Alto)" if diag.get('in_killzone', False) else "NO (Volumen Minorista/Lento)"
+    in_killzone = "SÍ (Volumen Institucional Alto)" if session_manager.is_killzone_active() else "NO (Volumen Minorista/Lento)"
     bull_div = "PRESENTE" if diag.get('bullish_divergence') else "NO"
     bear_div = "PRESENTE" if diag.get('bearish_divergence') else "NO"
+    # 📊 VOLUMEN INSTITUCIONAL v5.4.3 (PRODUCCIÓN)
     rvol = diag.get('rvol', 0) or 0
+    z_score = diag.get('z_score', 0) or 0
     
-    # 🔴 DETECCIÓN DE ABSORCIÓN CRÍTICA v4.3.5 (HARDENED)
-    rvol_is_ultra_high = rvol > 10.0
+    # 🔴 DETECCIÓN DE ANOMALÍAS CRÍTICAS (Z-Score > 5.0)
+    # El Z-Score es más preciso que el RVOL para detectar "Flash Pumps" ruidosos.
+    is_anomaly = z_score > 5.0 or rvol > 10.0
     rvol_alert = ""
     mandatory_phrase = ""
     
-    if rvol_is_ultra_high and regime in ('RANGING', 'ACCUMULATION', 'DISTRIBUTION', 'UNKNOWN'):
-        mandatory_phrase = "ALERTA: FUEGO INSTITUCIONAL DETECTADO. PREPARAR EXPANSIÓN."
+    if is_anomaly and regime in ('RANGING', 'ACCUMULATION', 'DISTRIBUTION', 'UNKNOWN'):
+        mandatory_phrase = "ALERTA: ANOMALÍA INSTITUCIONAL (Z-SCORE > 5.0). ABSORCIÓN DETECTADA."
         rvol_alert = f"""
         🚨 [ALERTA DE SEGURIDAD CRÍTICA]
-        RVOL DETECTADA POR RADAR: {rvol:.2f}x.
+        Z-SCORE RADAR: {z_score:.2f}σ | RVOL: {rvol:.2f}x.
         ESTADO: ABSORCIÓN PROFESIONAL MASIVA.
         INSTRUCCIÓN MANDATORIA: DEBES UTILIZAR LA FRASE EXACTA: '{mandatory_phrase}' EN TU VEREDICTO.
         EXPLICACIÓN: Las instituciones están inyectando volumen sin mover el precio (Absorción). Esto es el precursor de una expansión violenta.
@@ -172,7 +178,7 @@ async def generate_tactical_advice(
             cal_lines.append(f"{status_tag} {ev.get('country')}: {ev.get('title')} ({date_time}) -> Impacto: {ev.get('impact')}")
         cal_text = "\n    ".join(cal_lines)
 
-    # Definir R:R dinámico basado en la estrategia
+    # 2. DEFINICIÓN ESTRATÉGICA
     recommended_rr = "1:2" if "REVERSION" in strategy else "1:3"
 
     # Extraer Sesgo Institucional (HTF)
@@ -184,7 +190,7 @@ async def generate_tactical_advice(
     from engine.indicators.ghost_data import get_ghost_state
     ghost = get_ghost_state(asset)
 
-    # 💠 LÓGICA DE SMART CACHE (Slingshot v4.2 Platinum)
+    # 💠 LÓGICA DE SMART CACHE (Slingshot v4.6 Semantic)
     current_state = {
         "price": float(tactical_data.get('current_price', 0)),
         "support": support,
@@ -193,22 +199,40 @@ async def generate_tactical_advice(
         "strategy": strategy,
         "ml_prob": ml_prob,
         "dxy": ghost.dxy_trend,
-        "nasdaq": ghost.nasdaq_trend
+        "nasdaq": ghost.nasdaq_trend,
+        "onchain_bias": onchain_data.get("onchain_bias", "NEUTRAL") if onchain_data else "NEUTRAL"
     }
     
-    if current_state["support"] == "N/A" and current_state["resistance"] == "N/A":
-        return "INFORME SMC V4.1 PLATINUM: ESTRUCTURA INSTITUCIONAL EN FORMACIÓN. Awaiting data hydration."
+    # CÁLCULO DE HASH SEMÁNTICO (Ignoramos pequeñas variaciones de precio < 0.05%)
+    state_str = f"{asset}_{regime}_{strategy}_{support}_{resistance}_{ml_dir}_{current_state['onchain_bias']}"
+    semantic_hash = hashlib.md5(state_str.encode()).hexdigest()
 
-    prev = _strategic_memo.get(asset)
-    if prev:
-        price_stable = abs(current_state["price"] - prev["price"]) / prev["price"] < 0.0001 if prev["price"] > 0 else False
-        if price_stable and current_state["support"] == prev["support"] and current_state["regime"] == prev["regime"]:
-            # Solo reutilizar si el RVOL no ha explotado en el ínterin
-            if not rvol_is_ultra_high:
-                return f"[CONSISTENTE CON ÚLTIMA LECTURA] {prev['advice']}"
+    if current_state["support"] == "N/A" and current_state["resistance"] == "N/A":
+        return "INFORME UNIFICADO v5.4.3: ESTRUCTURA INSTITUCIONAL EN FORMACIÓN. Awaiting data hydration."
+
+    if semantic_hash in _semantic_cache:
+        # Validamos si el precio no se ha movido violentamente (>0.1%)
+        cached = _semantic_cache[semantic_hash]
+        price_diff = abs(current_state["price"] - cached["price"]) / cached["price"] if cached["price"] > 0 else 1.0
+        if price_diff < 0.001 and not rvol_is_ultra_high:
+            return f"[SEMANTIC CACHE HIT] {cached['advice']}"
+
+    # 🧠 PRE-DIGESTED CONTEXT (Prompt Engineering v4.6)
+    # En lugar de enviar todo el historial, enviamos conclusiones procesadas.
+    onchain_text = f"Bias On-Chain: {current_state['onchain_bias']} | OI Delta: {onchain_data.get('oi_delta_pct', 0)}%" if onchain_data else "On-Chain: No data."
+    
+    digest = f"""
+    RESUMEN TÁCTICO: {asset} @ ${f_p(live_price)}
+    Régimen: {regime} | Estrategia: {strategy} | Killzone: {in_killzone}
+    Veredicto Técnico: RSI={rsi}, MACD={macd_cross}, RVOL={rvol:.2f}x, Z-Score={z_score:.2f}σ
+    Estructura: S={support}, R={resistance} | Fibo: {fibo_lvl}
+    Proyección ML: {ml_dir} ({ml_prob}%)
+    Macro: DXY {ghost.dxy_trend}, NASDAQ {ghost.nasdaq_trend}
+    On-Chain: {onchain_text}
+    """
 
     prompt = f"""
-    Eres el 'Asesor Cuantitativo Institucional' del sistema Slingshot v4.3. Tu misión es ejecutar el Algoritmo de Decisión SMC de 5 Fases.
+    Eres el 'Asesor Cuantitativo Institucional' del sistema Slingshot v5.4.3 Unified Platinum. Tu misión es ejecutar el Algoritmo de Decisión SMC de 5 Fases.
     ERES UNA MÁQUINA LÓGICA REGLAMENTARIA. DEBES OBEDECER ESTAS LEYES INQUEBRANTABLES:
 
     ═══════════════════════════════════════════
@@ -228,10 +252,7 @@ async def generate_tactical_advice(
     ═══════════════════════════════════════════
     DATOS SENSORIZADOS (EL ORÁCULO):
     ═══════════════════════════════════════════
-    🔴 PRECIO LIVE: ${f_p(live_price)}
-    🔴 RVOL (VOLUMEN RELATIVO): {rvol:.2f}x (LEER ESTE DATO COMO VERDAD ABSOLUTA)
-    🔴 KILLZONE ACTIVA: {in_killzone} (SI DICE 'NO', NO HAY KILLZONE. NO ALUCINES.)
-    🔴 RÉGIMEN DE MERCADO: {regime}
+    {digest}
     
     {rvol_alert}
 
@@ -249,17 +270,23 @@ async def generate_tactical_advice(
     CAPA 4: GATILLO NEURONAL (IA)
     - Proyección XGBoost: {ml_dir} ({ml_prob}%)
 
-    CHECKLIST DE DECISIÓN:
-    [PASO 1] DEFCON CHECK: SI hay cisne negro (Guerra/Hack) -> Veredicto: DEFCON 1.
-    [PASO 2] LEY DXY: ¿DXY favorece o prohíbe la dirección deseada?
-    [PASO 3] ABSORCIÓN: Si el RVOL es {rvol:.2f}x y el régimen es {regime} -> ¿Hay Absorción Institucional? 
-    [PASO 4] SESIÓN: ¿Killzone Activa ({in_killzone})? SI ES 'NO', EL VEREDICTO DEBE SER 'DESCARTAR'.
-    [PASO 5] VEREDICTO FINAL: Decisión unificada. {f"MANDATORIO USAR FRASE: '{mandatory_phrase}'" if mandatory_phrase else ""}
+    CHECKLIST DE DECISIÓN (ORDEN DE PRIORIDAD):
+    [PASO 1] REGLA DE SUPERVIVENCIA (SITREP): SI hay cisne negro (Guerra/Noticias Catastróficas) -> Veredicto: 'DEFCON 1 (DESCARTAR)'.
+    
+    [PASO 2] GATE DE CANALIZACIÓN (EL MURO): ¿Killzone Activa ({in_killzone})? 
+    ⚠️ LEY INQUEBRANTABLE: SI LA KILLZONE ES 'NO', DETÉN TODO ANÁLISIS. TU VEREDICTO DEBE SER 'DESCARTAR' SIN IMPORTAR CUALQUER OTRA MÉTRICA (NI RVOL, NI SMC, NI ML). NO JUSTIFIQUES. SOLO DESCARTA.
+    
+    [PASO 3] LEY DXY: ¿DXY favorece la dirección? DXY BULLISH = BLOQUEO DE LONGS.
+    
+    [PASO 4] ABSORCIÓN INSTITUCIONAL: Si llegaste aquí y el RVOL es {rvol:.2f}x (Régimen: {regime}) -> ¿Hay Absorción? Si el RVOL es Ultra-Alto (>10x), prioriza la acumulación.
 
-    FORMATO:
-    1. EMPIEZA CON "INFORME SMC V4.3.5 TITANIUM:".
-    2. BREVEDAD MILITAR. SIN RODEOS.
-    3. AL FINAL: [RIESGO DE SISTEMA: TGT 1:3 MINIMO INNEGOCIABLE]
+    [PASO 5] VEREDICTO FINAL: Decisión unificada. 
+    ⚠️ RECORDATORIO: Si Killzone es 'NO', el Veredicto es 'DESCARTAR'. Si Killzone es 'SÍ', integra SMC y {f"MANDATORIO USAR FRASE: '{mandatory_phrase}'" if mandatory_phrase else "Veredicto Técnico"}.
+
+    FORMATO DE RESPUESTA:
+    1. INICIO: "INFORME UNIFICADO v5.4.3 PLATINUM: [TU VEREDICTO EN 1 PALABRA: DESCARTAR | COMPRAR | VENDER]"
+    2. CUERPO: 2 oraciones máximo explicando la confluencia (o la falta de Killzone).
+    3. CIERRE: [RIESGO TGT 1:3]
     """
 
 
@@ -267,14 +294,7 @@ async def generate_tactical_advice(
         logger.info(f"[ADVISOR] ⏳ Reservando motor IA para {asset}...")
         async with _ai_semaphore:
             logger.info(f"[ADVISOR] 🚀 Motor IA activo para {asset}. Llamando a Ollama...")
-            
-            # DIAGNÓSTICO PROFESIONAL: ¿Qué le llega realmente a la IA?
-            try:
-                with open("c:/tmp/ai_prompt_sent.log", "w", encoding="utf-8") as f:
-                    f.write(f"--- PROMPT PARA {asset} ---\n{prompt}\n---------------------------")
-            except:
-                pass
-                
+
             async with httpx.AsyncClient(timeout=30.0) as client:
                 payload = {
                     "model": DEFAULT_MODEL,
@@ -283,48 +303,23 @@ async def generate_tactical_advice(
                     ],
                     "stream": False
                 }
-                
-                logger.info(f"--- [DEBUG FULL PROMPT FOR {asset}] ---")
-                logger.info(prompt)
-                logger.info(f"--- [DEBUG TACTICAL DATA FOR {asset}] ---")
-                logger.info(f"Soporte={support} | Resistencia={resistance} | sups={len(sups)} | nearest_s={tactical_data.get('nearest_support')}")
-                logger.info("--- [END DEBUG] ---")
 
                 response = await client.post(OLLAMA_URL, json=payload)
                 if response.status_code != 200:
                     return f"ADVISOR LOG: OLLAMA_SERVICER_ERROR ({response.status_code})"
-                
+
                 result = response.json()
                 advice = result.get("message", {}).get("content", "").strip()
-                
-                # Limpieza de seguridad y formateo profesional
-                advice = advice.replace('\n', ' ').replace('**', '').strip()
-                
-                # Actualizar Memoria de Corto Plazo
+
+                # Formateo institucional: Limpiar markdown pesado pero mantener estructura
+                advice = advice.replace('**', '').replace('###', '').strip()
+
+                # Actualizar Memoria y Semantic Cache
                 _strategic_memo[asset] = {**current_state, "advice": advice}
-                
-                # --- SNAPSHOT FORENSICS POST-TRADE (Nivel Auditoría Black-Box) ---
-                try:
-                    import time
-                    forensics = {
-                        "ts_ms": int(time.time() * 1000),
-                        "asset": asset,
-                        "session": current_session,
-                        "state_snapshot": current_state,
-                        "raw_ml": ml_dir,
-                        "news_feed": news_text,
-                        "macro_cal": cal_text,
-                        "prompt_sent": prompt,
-                        "raw_llm_response": advice
-                    }
-                    with open(f"c:/tmp/forensics_{asset.lower()}_{int(time.time())}.json", "w", encoding="utf-8") as fb:
-                        json.dump(forensics, fb, indent=4, ensure_ascii=False)
-                except Exception as fx:
-                    logger.error(f"[ADVISOR] Forensics dump failed: {fx}")
-                
-                logger.info(f"[ADVISOR] ✅ Análisis generado localmente para {asset} (Ollama)")
+                _semantic_cache[semantic_hash] = {"price": current_state["price"], "advice": advice}
+
+                logger.info(f"[ADVISOR] ✅ Análisis generado para {asset} | Hash: {semantic_hash[:8]}")
                 return advice
-        # El bloque with libera el semáforo automáticamente
 
     except Exception as e:
         logger.error(f"[ADVISOR] ❌ Error en Ollama Advisor ({asset}): {e}")

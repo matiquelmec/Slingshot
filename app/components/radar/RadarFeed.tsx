@@ -5,18 +5,10 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Activity, Bell, Target, TrendingUp, TrendingDown, Clock, Search, ExternalLink, AlertOctagon } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useTelemetryStore } from '../../store/telemetryStore';
-interface RadarSignal {
-    id: string;
-    asset: string;
-    signal_type: string;
-    entry_price: number;
-    regime: string;
-    confluence?: any;
-    confluence_score?: number;
-    status: string;
-    rejection_reason?: string;
-    created_at: string;
-    timestamp?: string;
+import { Signal } from '../../types/signal';
+// Local augmentation for Radar metadata
+interface RadarSignal extends Signal {
+    entry_price: number; 
 }
 
 export default function RadarFeed() {
@@ -25,7 +17,7 @@ export default function RadarFeed() {
     const [filter, setFilter] = useState('');
     const router = useRouter();
     
-    const auditedSignals = useTelemetryStore(state => state.auditedSignals) as unknown as RadarSignal[];
+    const auditedSignals = useTelemetryStore(state => state.auditedSignals) as unknown as Record<string, Signal>;
 
     useEffect(() => {
         const fetchInitialHydration = async () => {
@@ -54,7 +46,15 @@ export default function RadarFeed() {
     // Híbrido: Caché Base + Websocket Maestro
     const displayMap = new Map();
     globalSignals.forEach(s => displayMap.set(s.id || `${s.timestamp}-${s.asset}`, s));
-    auditedSignals.forEach(s => displayMap.set(s.id || `${s.timestamp}-${s.asset}`, s));
+    Object.values(auditedSignals).forEach(s => {
+        // Normalización v5.4.3: El Auditor de Zustand usa 'price' pero el Radar local usa 'entry_price'
+        const normalized: RadarSignal = {
+            ...s,
+            entry_price: (s as any).price || (s as any).entry_price || 0,
+            asset: s.asset || ''
+        } as RadarSignal;
+        displayMap.set(s.id || `${s.timestamp}-${s.asset}`, normalized);
+    });
     
     // Sort descendente por tiempo (las más nuevas primero)
     const signals = Array.from(displayMap.values())

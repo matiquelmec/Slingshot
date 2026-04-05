@@ -10,7 +10,9 @@
     "dev": "node ./node_modules/.bin/next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "test": "python scripts/test_engine.py",
+    "doctor": "python scripts/doctor.py"
   },
   "dependencies": {
     "framer-motion": "^12.34.3",

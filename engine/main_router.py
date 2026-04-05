@@ -1,10 +1,10 @@
 """
-engine/main_router.py — Slingshot v4.1 Platinum
-================================================
+engine/main_router.py — Slingshot v5.4.3 Unified Platinum
+=========================================================
 SlingshotRouter: El Orquestador Maestro.
 
-ANTES (v4.0): 400 líneas mezclando análisis, riesgo y despacho.
-AHORA  (v4.1): ~80 líneas. Delega cada responsabilidad a su módulo:
+ANTES (v4.x): Arquitectura monolítica.
+AHORA  (v5.4): Arquitectura desacoplada de alto rendimiento.
 
   MarketAnalyzer  → Capas 1-3 (S/R, Wyckoff, SMC, Fibonacci)
   SignalGatekeeper → 4 porteros institucionales en cadena
@@ -56,6 +56,7 @@ class SlingshotRouter:
         news_items:    list | None = None,
         economic_events: list | None = None,
         liquidation_clusters: list | None = None,
+        onchain_bias: str | None = None,
     ):
         """Actualiza el contexto del Jurado de Confluencia para el próximo ciclo."""
         if ml_projection        is not None: self._context.ml_projection        = ml_projection
@@ -63,6 +64,7 @@ class SlingshotRouter:
         if news_items           is not None: self._context.news_items            = news_items
         if economic_events      is not None: self._context.economic_events       = economic_events
         if liquidation_clusters is not None: self._context.liquidation_clusters  = liquidation_clusters
+        if onchain_bias         is not None: self._context.onchain_bias          = onchain_bias
 
     # ── API pública: Pipeline Principal ──────────────────────────────────────
 

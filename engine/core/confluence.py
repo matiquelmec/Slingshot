@@ -291,6 +291,41 @@ class ConfluenceManager:
         except Exception as e:
             logger.error(f"[CONFLUENCE] Error calculando Time-Decay: {e}")
 
+        # 🚀 14. ON-CHAIN SENTINEL (Peso 15) v4.6
+        onchain_weight = 15
+        total_weight += onchain_weight
+        onchain_bias = kwargs.get('onchain_bias', 'NEUTRAL')
+        
+        onchain_pts = 0
+        onchain_status = "NEUTRAL"
+        onchain_detail = "Datos On-Chain estables"
+
+        if onchain_bias == "BULLISH_ACCUMULATION":
+            if is_long:
+                onchain_pts = onchain_weight
+                onchain_status = "CONFIRMADO ✅"
+                onchain_detail = "Acumulación ballena en rango (Aumento OI)"
+            else:
+                onchain_pts = -5
+                onchain_status = "DIVERGENTE ⚠️"
+                onchain_detail = "Posible trampa de liquidez en Short"
+        elif onchain_bias == "BEARISH_WARNING":
+            onchain_status = "ALERTA 🔴"
+            onchain_detail = "Alta entrada de capital a Exchanges (> $10M)"
+            if not is_long:
+                onchain_pts = onchain_weight
+            else:
+                onchain_pts = -15
+                multiplier *= 0.5 # Reducción drástica por flujo Bearish
+        elif onchain_bias == "OVERLEVERAGED_LONGS":
+            onchain_status = "PRECAUCIÓN ⚠️"
+            onchain_detail = "Sobreapalancamiento detectado (Funding Alto)"
+            if is_long: 
+                multiplier *= 0.7 # Riesgo de Long Squeeze
+
+        score += onchain_pts
+        checklist.append({"factor": "On-Chain Sentinel", "status": onchain_status, "detail": onchain_detail})
+
         # RESULTADO FINAL
         base_score = int((score / total_weight) * 100) if total_weight > 0 else 0
         final_score = min(100, int(base_score * multiplier))

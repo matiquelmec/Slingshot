@@ -20,6 +20,25 @@ def calculate_rvol(df: pd.DataFrame, window: int = 20) -> pd.DataFrame:
     
     return df
 
+def calculate_zscore_filter(df: pd.DataFrame, threshold: float = 4.0) -> pd.Series:
+    """
+    Protocolo Anti-Outlier (Z-Score Filter).
+    Identifica si el volumen de un tick se aleja más de N sigmas del promedio.
+    Retorna una serie de booleanos indicando si es un outlier.
+    """
+    if len(df) < 2:
+        return pd.Series([False] * len(df))
+    
+    vol = df['volume']
+    mean = vol.rolling(window=20, min_periods=1).mean()
+    std = vol.rolling(window=20, min_periods=1).std()
+    
+    # Manejar división por cero en mercados planos
+    std = std.replace(0, 1.0)
+    
+    z_score = (vol - mean).abs() / std
+    return z_score > threshold
+
 def analyze_volume_trend(df: pd.DataFrame) -> pd.DataFrame:
     """
     Analiza la tendencia del volumen para confirmar si un movimiento de precio 

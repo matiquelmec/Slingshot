@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { Signal, NeuralLog, KeyLevel, TacticalDecision, SessionData, SMCDataPayload, GhostData, HTFBias, NewsItem, LiquidationCluster, EconomicEvent } from '../types/signal';
+import { Signal, NeuralLog, KeyLevel, TacticalDecision, SessionData, SMCDataPayload, GhostData, HTFBias, NewsItem, LiquidationCluster, EconomicEvent, OnChainMetrics } from '../types/signal';
 
 
 export interface CandleData {
@@ -39,8 +39,11 @@ interface TelemetryState {
     liquidations: LiquidationCluster[];
     marketSummary: Record<string, { asset: string, price: number | null, regime: string, strategy: string, bias: string, trend: number }>;
     economicEvents: EconomicEvent[];
-    signalHistory: Signal[];   // ← Historial persistente de señales (sobrevive HMR y navegación)
-    auditedSignals: Signal[];  // ← Todas las señales de la sesión actual: ACTIVE y BLOCKED
+    onchainMetrics: OnChainMetrics | null;
+    signalHistory: Record<string, Signal>; // 🏹 O(1) Map para búsqueda instantánea (v5.4)
+    signalIds: string[];                    // 📜 Índice ordenado para renderizado
+    auditedSignals: Record<string, Signal>; // 🏹 O(1) Map para auditoría (v5.4)
+    auditedIds: string[];                   // 📜 Índice ordenado para auditoría
     activeConnectionId: string | null;
     connect: (symbol: string, timeframe?: Timeframe) => void;
     disconnect: () => void;
@@ -56,56 +59,74 @@ export const useTelemetryStore = create<TelemetryState>((set, get) => {
     const MAX_RETRIES = 5;
 
     // Cargar historial de señales desde localStorage al iniciar
-    const _loadSignalHistory = (): Signal[] => {
+    const _loadSignalHistory = (): { data: Record<string, Signal>, ids: string[] } => {
         try {
-            const raw = localStorage.getItem('slingshot_signal_history');
-            if (!raw) return [];
+            const raw = localStorage.getItem('slingshot_signal_history_v2');
+            if (!raw) return { data: {}, ids: [] };
             const parsed = JSON.parse(raw);
+            const data = parsed.data || {};
+            const ids = parsed.ids || [];
+
             // Helper to ensure timezone-naive strings are parsed as UTC
             const getUtcTime = (ts: string) => {
                 if (ts.includes('Z') || ts.includes('+')) return new Date(ts).getTime();
                 return new Date(ts.replace(' ', 'T') + 'Z').getTime();
             };
 
-            // GARBAGE COLLECTOR: Eliminar 'Zombies' cacheados de más de 2 horas
             const now = Date.now();
-            return parsed.filter((s: Signal) => {
+            const validIds = ids.filter((id: string) => {
+                const s = data[id];
+                if (!s) return false;
                 const age = now - getUtcTime(s.timestamp);
-                return age < 2 * 60 * 60 * 1000;
+                return age < 2 * 60 * 60 * 1000; // 2 horas max caching
             });
+
+            const validData: Record<string, Signal> = {};
+            validIds.forEach((id: string) => {
+                validData[id] = data[id];
+            });
+
+            return { data: validData, ids: validIds };
         } catch {
-            return [];
+            return { data: {}, ids: [] };
         }
     };
 
-    const _saveSignalHistory = (history: Signal[]) => {
+    const _saveSignalHistory = (data: Record<string, Signal>, ids: string[]) => {
         try {
-            localStorage.setItem('slingshot_signal_history', JSON.stringify(history));
+            localStorage.setItem('slingshot_signal_history_v2', JSON.stringify({ data, ids }));
         } catch { /* quota exceeded — ignorar */ }
     };
 
-    const _mergeSignals = (prev: Signal[], incoming: Signal[]): Signal[] => {
-        // Helper to ensure timezone-naive strings are parsed as UTC
+    const _mergeSignals = (prevData: Record<string, Signal>, prevIds: string[], incoming: Signal[]): { data: Record<string, Signal>, ids: string[] } => {
+        const newData = { ...prevData };
+        const newIds = [...prevIds];
+
+        incoming.forEach(sig => {
+            const id = sig.id || `${sig.timestamp}-${sig.asset}`;
+            if (!newData[id]) {
+                newIds.unshift(id);
+            }
+            newData[id] = sig;
+        });
+
+        // Garbage collector (2 horas)
+        const now = Date.now();
         const getUtcTime = (ts: string) => {
             if (ts.includes('Z') || ts.includes('+')) return new Date(ts).getTime();
             return new Date(ts.replace(' ', 'T') + 'Z').getTime();
         };
 
-        // GARBAGE COLLECTOR: Al fusionar nuevas señales, borramos las que tengan más de 2 horas
-        const now = Date.now();
-        const activePrev = prev.filter((s: Signal) => {
-            const age = now - getUtcTime(s.timestamp);
-            return age < 2 * 60 * 60 * 1000; // 2 horas max caching
-        });
+        const finalIds = newIds.filter(id => {
+            const s = newData[id];
+            return s && (now - getUtcTime(s.timestamp) < 2 * 60 * 60 * 1000);
+        }).slice(0, 100);
 
-        const existingKeys = new Set(activePrev.map((s: Signal) => s.id || `${s.timestamp}-${s.type}`));
-        const newOnes = incoming.filter((s: Signal) => !existingKeys.has(s.id || `${s.timestamp}-${s.type}`));
+        const finalData: Record<string, Signal> = {};
+        finalIds.forEach(id => { finalData[id] = newData[id]; });
 
-        if (newOnes.length === 0 && activePrev.length === prev.length) return prev;
-
-        const merged = [...newOnes.reverse(), ...activePrev].slice(0, 50);
-        _saveSignalHistory(merged);
-        return merged;
+        _saveSignalHistory(finalData, finalIds);
+        return { data: finalData, ids: finalIds };
     };
 
     const doConnect = (symbol: string, timeframe: Timeframe, isRetry = false) => {
@@ -150,7 +171,8 @@ export const useTelemetryStore = create<TelemetryState>((set, get) => {
                 },
                 htfBias: null,
                 ghostData: null, // Restablecer al desconectar
-                auditedSignals: [] // Limpiar al conectar a un nuevo activo
+                auditedSignals: {}, 
+                auditedIds: []
             });
 
             // 🚀 Hidratación REST asíncrona: evita que el Frontend parpadee en "Sincronizando..." 
@@ -176,8 +198,6 @@ export const useTelemetryStore = create<TelemetryState>((set, get) => {
 
         ws.onopen = () => {
             set({ isConnected: true });
-            console.log(`Telemetry connected: ${symbol} @ ${timeframe}`);
-
         };
 
         // 🔴 STALE GUARD v4.3.5: Track last message time for zombie tab detection
@@ -219,7 +239,6 @@ export const useTelemetryStore = create<TelemetryState>((set, get) => {
                     // Solo aceptar history (resync) o mensajes de estado que traigan snapshot completo
                     if (data.type === 'history' || data.type === 'ghost_update' || data.type === 'radar_update') {
                         staleGuardActive = false; // Resync completado
-                        console.log('[STALE GUARD] Resync completado. Flujo normal restaurado.');
                     } else {
                         return; // Descartar mensajes stale silenciosamente
                     }
@@ -243,9 +262,10 @@ export const useTelemetryStore = create<TelemetryState>((set, get) => {
                     rawItems.forEach((c: any) => uniqueCandlesMap.set(c.time, c));
                     const sortedCandles = Array.from(uniqueCandlesMap.values()).sort((a, b) => (a.time as number) - (b.time as number));
 
+                    const lastPrice = sortedCandles.length > 0 ? Number(sortedCandles[sortedCandles.length - 1].close) : null;
                     set({
                         candles: sortedCandles,
-                        latestPrice: sortedCandles.length > 0 ? sortedCandles[sortedCandles.length - 1].close : null
+                        latestPrice: lastPrice
                     });
                 } else if (data.type === 'candle') {
                     const newCandle: CandleData = {
@@ -280,10 +300,9 @@ export const useTelemetryStore = create<TelemetryState>((set, get) => {
                             currentCandles.push(newCandle); // Primera vela
                         }
 
-                        // Desactivamos la simulación (Mock Data). Ahora esperamos 'neural_pulse' y 'tactical_update' reales.
                         return {
                             candles: currentCandles,
-                            latestPrice: newCandle.close
+                            latestPrice: Number(newCandle.close)
                         };
                     });
                 } else if (data.type === 'neural_pulse') {
@@ -310,9 +329,9 @@ export const useTelemetryStore = create<TelemetryState>((set, get) => {
                     const d = data.data;
                     const incomingSignals: Signal[] = d.signals ?? [];
                     set((state) => {
-                        const newHistory = incomingSignals.length > 0
-                            ? _mergeSignals(state.signalHistory, incomingSignals)
-                            : state.signalHistory;
+                        const { data: newHistoryData, ids: newHistoryIds } = incomingSignals.length > 0
+                            ? _mergeSignals(state.signalHistory, state.signalIds, incomingSignals)
+                            : { data: state.signalHistory, ids: state.signalIds };
                         return {
                             isCalibrating: false,
                             tacticalDecision: {
@@ -340,19 +359,26 @@ export const useTelemetryStore = create<TelemetryState>((set, get) => {
                                 [state.activeSymbol]: d.advisor_log ?? state.advisorLogs[state.activeSymbol]
                             },
                             htfBias: d.htf_bias ?? state.htfBias,
-                            signalHistory: newHistory,
+                            latestPrice: d.current_price ?? state.latestPrice, 
+                            signalHistory: newHistoryData,
+                            signalIds: newHistoryIds,
                         };
                     });
                 } else if (data.type === 'signal_auditor_update') {
                     // Evento específico inyectado en WS desde v3.3 (Audit Mode)
+
                     const sig = data.data as Signal;
                     set((state) => {
-                        // Anti-duplicación por ID único (permite a la señal mutar narrativamente)
-                        const isDuplicate = state.auditedSignals.some(s => s.id === sig.id);
-                        if (isDuplicate) return state;
+                        const id = sig.id || `${sig.timestamp}-${sig.asset}`;
+                        if (state.auditedSignals[id]) return state;
 
-                        const newAudited = [sig, ...state.auditedSignals].slice(0, 100); 
-                        return { auditedSignals: newAudited };
+                        const newAuditedData = { ...state.auditedSignals, [id]: sig };
+                        const newAuditedIds = [id, ...state.auditedIds].slice(0, 100); 
+
+                        return { 
+                            auditedSignals: newAuditedData,
+                            auditedIds: newAuditedIds
+                        };
                     });
                 } else if (data.type === 'advisor_update') {
                     const advice = data.data;
@@ -434,6 +460,11 @@ export const useTelemetryStore = create<TelemetryState>((set, get) => {
                     }));
                 } else if (data.type === 'liquidation_update') {
                     set({ liquidations: data.data as LiquidationCluster[] });
+                } else if (data.type === 'onchain_update') {
+                    const metrics = data.data as OnChainMetrics;
+                    if (metrics.symbol === get().activeSymbol) {
+                        set({ onchainMetrics: metrics });
+                    }
                 }
             } catch (err) {
                 console.error("Critical error in WS message handler:", {
@@ -496,9 +527,12 @@ export const useTelemetryStore = create<TelemetryState>((set, get) => {
         economicEvents: [],
         marketSummary: {},
         liquidityHeatmap: null,
-        signalHistory: typeof window !== 'undefined' ? _loadSignalHistory() : [],
-        auditedSignals: [],
+        signalHistory: typeof window !== 'undefined' ? _loadSignalHistory().data : {},
+        signalIds: typeof window !== 'undefined' ? _loadSignalHistory().ids : [],
+        auditedSignals: {},
+        auditedIds: [],
         activeConnectionId: null,
+        onchainMetrics: null,
 
         connect: (symbol: string, timeframe?: Timeframe) => {
             const tf = timeframe ?? get().activeTimeframe;

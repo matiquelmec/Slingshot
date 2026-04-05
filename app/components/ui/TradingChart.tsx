@@ -553,24 +553,38 @@ export default function TradingChart() {
             });
         }
 
-        // ── Fibonacci (Autofib) ─────────────────────────────────────────────
         if (isEnabled('fibonacci') && tacticalDecision?.fibonacci) {
-            const { levels } = tacticalDecision.fibonacci;
+            const { levels, swing_high, swing_low } = tacticalDecision.fibonacci;
+            const isUptrend = (swing_low ?? 0) < (swing_high ?? 0);
+
             Object.entries(levels).forEach(([label, price]) => {
-                // Golden Pocket (0.618 - 0.66)
-                if (label === '0.618' || label === '0.66') {
-                    addLine(price, 'rgba(0, 229, 255, 0.9)', `Fib ${label} 🌟`, LineStyle.Solid, 2);
+                const p = price as number;
+                // ── Golden Pocket (0.618 – 0.66): Cian institucional brillante ──
+                if (label === '0.618') {
+                    addLine(p, 'rgba(0, 229, 255, 1.0)', `0.618 ★GP`, LineStyle.Solid, 2);
                 }
-                // Extremos (0 y 1)
-                else if (label === '0.0' || label === '1.0') {
-                    addLine(price, 'rgba(255,255,255,0.8)', `Fib ${label}`, LineStyle.Solid, 2);
+                else if (label === '0.66') {
+                    addLine(p, 'rgba(0, 229, 255, 0.7)', `0.66  ★GP`, LineStyle.Dashed, 2);
                 }
-                // Niveles intermedios clásicos
+                // ── Extremos de la pierna ──────────────────────────────────────
+                else if (label === '0.0') {
+                    addLine(p, 'rgba(255,255,255,0.8)', isUptrend ? `Swing High` : `Swing Low`, LineStyle.Solid, 2);
+                }
+                else if (label === '1.0') {
+                    addLine(p, 'rgba(255,255,255,0.8)', isUptrend ? `Swing Low` : `Swing High`, LineStyle.Solid, 2);
+                }
+                // ── 0.786: zona roja de invalidación ──────────────────────────
+                else if (label === '0.786') {
+                    addLine(p, 'rgba(255,80,80,0.6)', `Fib 0.786`, LineStyle.Dotted, 1);
+                }
+                // ── Niveles intermedios ────────────────────────────────────────
                 else {
-                    addLine(price, 'rgba(255,255,255,0.4)', `Fib ${label}`, LineStyle.Dashed, 1);
+                    addLine(p, 'rgba(255,255,255,0.4)', `Fib ${label}`, LineStyle.Dashed, 1);
                 }
             });
         }
+
+
     }, [tacticalDecision, sessionData, indicators]);
 
     return (
