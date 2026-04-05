@@ -456,6 +456,12 @@ class TimeFilter:
     Implementa las KillZones de Londres y Nueva York.
     """
     def is_killzone(self, ts: datetime) -> bool:
+        # OMEGA FIX: Guarda contra NaT (Trident Audit v5.7.15)
+        try:
+            if ts is None or (hasattr(ts, 'year') and str(ts) == 'NaT'):
+                return False
+        except (ValueError, TypeError):
+            return False
         if ts.tzinfo is None:
             ts = ts.replace(tzinfo=timezone.utc)
         else:

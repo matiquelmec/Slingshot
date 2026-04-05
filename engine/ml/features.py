@@ -55,7 +55,7 @@ class FeatureEngineer:
         # 5. Features de Sesión (KillZone binary)
         from engine.core.session_manager import TimeFilter
         tf = TimeFilter()
-        df['is_killzone'] = df['timestamp'].apply(lambda x: 1 if tf.is_killzone(x) else 0)
+        df['is_killzone'] = df['timestamp'].apply(lambda x: 1 if tf.is_killzone(x) else 0, na_action='ignore').fillna(0).astype(int)
         
         # 6. Features Temporales
         if pd.api.types.is_datetime64_any_dtype(df['timestamp']):
