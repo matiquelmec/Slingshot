@@ -899,12 +899,13 @@ class SymbolBroadcaster:
 
     # ── Handlers auxiliares ───────────────────────────────────────────────────
 
-    def check_ollama(self) -> bool:
-        """Prueba rápida sincrónica para ver si Ollama responde en localhost:11434."""
-        import requests
+    async def check_ollama(self) -> bool:
+        """Prueba rápida asincrónica para ver si Ollama responde en localhost:11434."""
+        import httpx
         try:
-            r = requests.get("http://localhost:11434/api/tags", timeout=1.0)
-            return r.status_code == 200
+            async with httpx.AsyncClient(timeout=1.0) as client:
+                r = await client.get("http://localhost:11434/api/tags")
+                return r.status_code == 200
         except:
             return False
 
@@ -1172,7 +1173,7 @@ class SymbolBroadcaster:
 
         # ✅ VERIFICACIÓN PREVENTIVA (Ollama) v5.7.155 Master Gold
         # Si el motor IA no responde rápido, informamos al usuario de inmediato en vez de colgar el sistema.
-        if not self.check_ollama():
+        if not await self.check_ollama():
             logger.info(f"[BROADCASTER] ⚠️ Ollama no disponible para {self.symbol}")
             await self._broadcast({"type": "advisor_update", "data": {
                 "content": "⚠️ MOTOR IA OFFLINE: El motor Ollama no responde en localhost:11434. Asegúrate de que Ollama esté abierto.",
