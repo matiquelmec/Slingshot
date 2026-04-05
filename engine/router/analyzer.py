@@ -59,6 +59,9 @@ class MarketAnalyzer:
         self._regime_detector = RegimeDetector()
         self._cache = {} # LRU Cache: (asset, interval, ts) -> MarketMap
         self._cache_size = cache_size
+        # DELTA FIX: Caché de RVOL/Absorption para evitar recalcular rolling medians en cada tick (Trident Audit v5.7.15)
+        self._rvol_cache_key: str = ""
+        self._rvol_cached_cols: dict = {}  # {"rvol": Series, "vol_median": Series, "absorption_score": Series}
 
     def _get_cache_key(self, asset: str, interval: str, df: pd.DataFrame) -> str:
         try:
@@ -121,12 +124,29 @@ class MarketAnalyzer:
                 "reason": htf_bias.reason
             }
 
-        # ── Paso 7: Diagnóstico de Volumen v5.4 (SIGMA/DELTA Logic) ──
-        # Inyectamos el robusto Kernel de Volumen
-        df = calculate_rvol(df)
-        df = calculate_absorption_index(df)
+        # ── Paso 7: Diagnóstico de Volumen v5.7.15 (DELTA FIX: Cached Rolling Medians) ──
+        # Solo recalculamos RVOL/Absorption cuando la última vela ha cambiado (cierre real).
+        # En el Fast Path (mismo timestamp), reutilizamos las columnas cacheadas.
+        vol_cache_key = f"{asset}_{str(df['timestamp'].iloc[-1])}"
         
-        rvol = float(df['rvol'].iloc[-1])
+        if vol_cache_key == self._rvol_cache_key and self._rvol_cached_cols:
+            # Hit de caché: inyectar columnas sin recalcular
+            for col_name, col_data in self._rvol_cached_cols.items():
+                if len(col_data) == len(df):
+                    df[col_name] = col_data.values
+        else:
+            # Miss de caché: recalcular y persistir
+            df = calculate_rvol(df)
+            df = calculate_absorption_index(df)
+            self._rvol_cache_key = vol_cache_key
+            self._rvol_cached_cols = {
+                "rvol": df["rvol"].copy(),
+                "vol_median": df["vol_median"].copy(),
+                "absorption_score": df["absorption_score"].copy() if "absorption_score" in df.columns else pd.Series([0.0]*len(df)),
+                "absorption_raw": df["absorption_raw"].copy() if "absorption_raw" in df.columns else pd.Series([0.0]*len(df)),
+            }
+        
+        rvol = float(df['rvol'].iloc[-1]) if 'rvol' in df.columns else 0.0
         absorption_score = float(df['absorption_score'].iloc[-1]) if 'absorption_score' in df.columns else 0.0
         is_high_absorption = bool(df.get('is_absorption_elite', pd.Series([False]*len(df))).iloc[-1])
         

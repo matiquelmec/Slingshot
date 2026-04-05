@@ -59,11 +59,23 @@ from engine.indicators.htf_analyzer import HTFAnalyzer
 from engine.indicators.onchain import OnChainSentinel
 
 # ──────────────────────────────────────────────────────────────────────────────
-# CONFIGURACIÓN DE ÉLITE v5.7 (OPERACIÓN MASTER WATCHLIST)
+# CONFIGURACIÓN DE ÉLITE v5.7.15 (OPERACIÓN MASTER WATCHLIST — TIERED PRIORITY)
 # ──────────────────────────────────────────────────────────────────────────────
 MASTER_WATCHLIST = ["BTCUSDT", "ETHUSDT", "SOLUSDT", "PAXGUSDT"]
 
-# 🛡️ PROTECCIÓN DE OVERLOAD AI v5.7.155 (Sigma Sync)
+# 🏛️ SIGMA FIX: Tiers de Prioridad de CPU (v5.7.15 Trident Audit)
+# Tier 1 (Alta Volatilidad): Cada 0.5s — Activos primarios de SMC
+# Tier 2 (Media Volatilidad): Cada 1.5s — Activos secundarios
+# Tier 3 (Baja Volatilidad):  Cada 5.0s — Commodities tokenizados (no gastar CPU)
+PRIORITY_TIERS = {
+    "BTCUSDT": 0.5,   # Tier 1
+    "SOLUSDT": 0.5,   # Tier 1
+    "ETHUSDT": 1.5,   # Tier 2
+    "PAXGUSDT": 5.0,  # Tier 3 — Oro tokenizado, volatilidad ~0.05%
+}
+DEFAULT_PULSE_INTERVAL = 2.0  # Para activos fuera de la watchlist
+
+# 🛡️ PROTECCIÓN DE OVERLOAD AI v5.7.15 (Sigma Sync)
 # Limita las llamadas simultáneas a Ollama para prevenir picos de latencia masivos.
 # En un VPS estándar, 1 es el máximo recomendado para Gemma-3 para evitar Drift >1000ms.
 GLOBAL_AI_SEMAPHORE = asyncio.Semaphore(1)
@@ -572,16 +584,17 @@ class SymbolBroadcaster:
                 session_state = self._session_manager.get_current_state()
                 await self._broadcast(session_state)
 
-                # ── FAST PATH (Dinámico: 1s a 5s) ─────────────────────────────
+                # ── FAST PATH (Dinámico: Tiered Priority v5.7.15) ──────────────
                 now = time.time()
                 
-                # --- RECALIBRACIÓN v5.7: FOCO DE ÉLITE ---
+                # --- SIGMA FIX: Tiers de Prioridad (Trident Audit) ---
+                # Cada activo tiene su propio intervalo óptimo basado en volatilidad real
                 is_elite = self.symbol in MASTER_WATCHLIST
-                pulse_interval = 0.5 if is_elite else 1.0 
+                pulse_interval = PRIORITY_TIERS.get(self.symbol, DEFAULT_PULSE_INTERVAL)
                 
                 regime = self._last_tactical.get("data", {}).get("market_regime", "UNKNOWN") if self._last_tactical else "UNKNOWN"
-                if not is_elite and regime in ["CHOPPY", "ACCUMULATION", "DISTRIBUTION"]:
-                    pulse_interval = 3.0  # Los activos no-élite se ralentizan en rango
+                if regime in ["CHOPPY", "ACCUMULATION", "DISTRIBUTION"]:
+                    pulse_interval = max(pulse_interval, 3.0)  # En rango, todos se ralentizan al mínimo de 3s
                 
                 if now - self._last_pulse_ts >= pulse_interval:
                     self._last_pulse_ts = now
@@ -637,14 +650,19 @@ class SymbolBroadcaster:
                     if len(current_buffer) > 50:
                         df_tick = pd.DataFrame(current_buffer)
                         
-                        # Optimización Titanium v5.7.155 Master Gold: Ejecutar pd.to_datetime solo en el nuevo tick (Fast Path)
-                        if not hasattr(self, "_cached_live_dates") or len(self._cached_live_dates) != len(self._live_buffer):
+                        # OMEGA FIX: Append incremental en lugar de reconstruir todo el DatetimeIndex (Trident Audit v5.7.15)
+                        if not hasattr(self, "_cached_live_dates") or self._cached_live_dates is None:
                             base_dt = pd.to_datetime([i["data"]["timestamp"] for i in self._live_buffer], unit="s")
-                            self._cached_live_dates = pd.Series(base_dt)
-                            
-                        # Limitar conversión estricta al nuevo dato
-                        new_dt = pd.to_datetime([candle_payload["data"]["timestamp"]], unit="s")
-                        df_tick["timestamp"] = pd.concat([self._cached_live_dates, pd.Series(new_dt)], ignore_index=True)
+                            self._cached_live_dates = list(base_dt)
+                        
+                        # Append incremental O(1): solo convertimos el nuevo tick
+                        new_dt = pd.Timestamp(candle_payload["data"]["timestamp"], unit="s")
+                        self._cached_live_dates.append(new_dt)
+                        # Mantener sincronía con maxlen del deque (300)
+                        if len(self._cached_live_dates) > 301:
+                            self._cached_live_dates = self._cached_live_dates[-300:]
+                        
+                        df_tick["timestamp"] = pd.Series(self._cached_live_dates[-len(df_tick):])
 
                         # Asincronía: Offload CPU-bound ML Inference out of the main event loop
                         loop = asyncio.get_running_loop()
@@ -773,11 +791,12 @@ class SymbolBroadcaster:
                     if self._candle_closes % 100 == 0:
                         asyncio.create_task(self._check_drift(df_live.copy()))
                         
-                        # Garbage Collection (Memory Leaks Fix)
+                        # OMEGA FIX: Limpieza quirúrgica sin gc.collect() Stop-the-World (Trident Audit v5.7.15)
+                        # En lugar de forzar GC global (congela TODOS los broadcasters),
+                        # solo liberamos las referencias huérfanas que controlamos directamente.
                         self._history.clear()
-                        import gc
-                        gc.collect()
-                        logger.info(f"[BROADCASTER] {self._key} → 🧹 GC: Limpiando referencias antiguas y diccionarios huérfanos.")
+                        self._cached_live_dates = None  # Se reconstruirá en el próximo tick
+                        logger.info(f"[BROADCASTER] {self._key} → 🧹 Limpieza quirúrgica (sin GC global) completada.")
 
                     # SMC actualizado y Persistencia (Long-Term Memory V4.3)
                     try:
