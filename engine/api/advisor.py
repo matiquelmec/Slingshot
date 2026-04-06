@@ -17,6 +17,10 @@ OLLAMA_URL = "http://localhost:11434/api/chat"
 DEFAULT_MODEL = "gemma3:4b"
 AI_KEEP_ALIVE = -1 # v5.8-Audit: Elimina el warmup manteniendo el modelo cargado indefinidamente
 
+# --- IA PERSISTENCE v5.8-Gold ---
+_strategic_memo = {} 
+_semantic_cache = {} # Hash -> Advice mapping (v5.8 Master Spec)
+
 async def _ai_worker():
     """Worker centralizado que procesa la cola por prioridad."""
     global _current_ai_task
