@@ -38,8 +38,9 @@ class NewsWorker:
                     if response.status_code == 200:
                         items_data = []
                         try:
-                            # BS4 con lxml es mucho más permisivo con etiquetas mal cerradas (v5.7.156)
-                            soup = BeautifulSoup(response.content, 'lxml-xml')
+                            # v5.7.156 Zero-Dependency Fix: Usar 'html.parser' en lugar de 'lxml-xml' 
+                            # para evitar errores de 'tree builder not found' en entornos sin lxml.
+                            soup = BeautifulSoup(response.content, 'html.parser')
                             items = soup.find_all('item')[:5]
                             
                             for item in items:

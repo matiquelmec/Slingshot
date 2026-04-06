@@ -645,28 +645,26 @@ class SymbolBroadcaster:
                         except Exception as e:
                             logger.error(f"[BROADCASTER] {self._key} → On-Chain refresh error: {e}")
 
-                    # ML Inference (XGBoost, <50ms)
                     current_buffer = [i["data"] for i in self._live_buffer] + [candle_payload["data"]]
                     if len(current_buffer) > 50:
-                        df_tick = pd.DataFrame(current_buffer)
-                        
-                        # OMEGA FIX: Append incremental en lugar de reconstruir todo el DatetimeIndex (Trident Audit v5.7.15)
+                        # OMEGA FIX: Timestamps incrementales para evitar overhead de pd.to_datetime (v5.7.156 Hardening)
                         if not hasattr(self, "_cached_live_dates") or self._cached_live_dates is None:
                             base_dt = pd.to_datetime([i["data"]["timestamp"] for i in self._live_buffer], unit="s")
                             self._cached_live_dates = list(base_dt)
                         
-                        # Append incremental O(1): solo convertimos el nuevo tick
                         new_dt = pd.Timestamp(candle_payload["data"]["timestamp"], unit="s")
                         self._cached_live_dates.append(new_dt)
-                        # Mantener sincronía con maxlen del deque (300)
                         if len(self._cached_live_dates) > 301:
                             self._cached_live_dates = self._cached_live_dates[-300:]
-                        
-                        df_tick["timestamp"] = pd.Series(self._cached_live_dates[-len(df_tick):])
 
-                        # Asincronía: Offload CPU-bound ML Inference out of the main event loop
+                        # Asincronía Total: Offload PANDAS a hilos secundarios
+                        def _prepare_and_predict():
+                            _df = pd.DataFrame(current_buffer)
+                            _df["timestamp"] = pd.Series(self._cached_live_dates[-len(_df):])
+                            return ml_engine.predict_live(_df), _df
+
                         loop = asyncio.get_running_loop()
-                        raw_pred = await loop.run_in_executor(None, ml_engine.predict_live, df_tick)
+                        raw_pred, df_tick = await loop.run_in_executor(None, _prepare_and_predict)
                         
                         if raw_pred.get("status") == "active":
                             raw_prob = raw_pred.get("probability", 50)
