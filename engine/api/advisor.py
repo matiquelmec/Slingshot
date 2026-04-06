@@ -7,19 +7,62 @@ import hashlib
 from engine.api.config import settings
 from engine.core.session_manager import session_manager
 
+# --- ORCHESTRATOR AI v5.8-Audit ---
+# Cola de Prioridad Institucional para Ollama
+_ai_queue = asyncio.PriorityQueue()
+_current_ai_task = None
+
 # Configuración de Ollama Local
 OLLAMA_URL = "http://localhost:11434/api/chat"
-DEFAULT_MODEL = "gemma3:4b" 
+DEFAULT_MODEL = "gemma3:4b"
+AI_KEEP_ALIVE = -1 # v5.8-Audit: Elimina el warmup manteniendo el modelo cargado indefinidamente
 
-# Semáforo global para evitar saturación de la CPU (Cola Institucional)
-_ai_semaphore = asyncio.Semaphore(1)
+async def _ai_worker():
+    """Worker centralizado que procesa la cola por prioridad."""
+    global _current_ai_task
+    while True:
+        # prioridad 0: BTC / Absorción (Máxima)
+        # prioridad 10: Señales normales
+        # prioridad 20: Análisis secundarios / Noticias
+        priority, task_data = await _ai_queue.get()
+        asset = task_data['asset']
+        
+        try:
+            logger.info(f"🧠 [ORCHESTRATOR] Procesando {asset} (Prioridad: {priority})...")
+            _current_ai_task = asyncio.current_task()
+            
+            # Ejecutar el análisis real
+            result = await _execute_ollama_request(task_data)
+            task_data['future'].set_result(result)
+            
+        except Exception as e:
+            if not task_data['future'].done():
+                task_data['future'].set_exception(e)
+        finally:
+            _ai_queue.task_done()
+            _current_ai_task = None
 
-_strategic_memo = {} 
-_semantic_cache = {} # Hash -> Advice mapping
+async def _execute_ollama_request(data: dict) -> str:
+    """Ejecución física de la llamada a Ollama con keep_alive persistente."""
+    async with httpx.AsyncClient(timeout=35.0) as client:
+        payload = {
+            "model": DEFAULT_MODEL,
+            "messages": [{"role": "user", "content": data['prompt']}],
+            "stream": False,
+            "keep_alive": AI_KEEP_ALIVE, # v5.8-Audit: 0ms Warmup
+            "options": {"num_ctx": 4096, "temperature": 0.2}
+        }
+        if data.get('format'): payload['format'] = data['format']
+        
+        response = await client.post(OLLAMA_URL, json=payload)
+        if response.status_code != 200:
+            raise Exception(f"Ollama Error: {response.status_code}")
+        
+        result = response.json()
+        return result.get("message", {}).get("content", "").strip()
 
-# --- GESTOR DE PRIORIDAD IA v5.7.156 ---
-_current_ai_task = None
-_current_task_is_priority = False
+# Iniciar el worker al importar el módulo
+asyncio.create_task(_ai_worker())
 
 async def check_ollama_status():
     """Verifica si el servidor de Ollama está corriendo."""
@@ -292,96 +335,60 @@ async def generate_tactical_advice(
     """
 
 
-    global _current_ai_task, _current_task_is_priority
-    
-    is_absorption_alert = "ABSORCIÓN" in prompt
+    # v5.8-Audit: Priorización Institucional
+    is_priority = "ABSORCIÓN" in prompt or asset == "BTCUSDT"
+    priority = 0 if is_priority else 10
     
     try:
-        # Lógica de Interrupción Institucional (v5.7.156)
-        if is_absorption_alert and _current_ai_task and not _current_task_is_priority:
-            logger.warning(f"🚨 [ADVISOR] ¡ABSORCIÓN DETECTADA para {asset}! Cancelando análisis secundario en curso...")
-            _current_ai_task.cancel()
-
-        logger.info(f"[ADVISOR] ⏳ Reservando motor IA para {asset} (Prioridad: {'ALTA' if is_absorption_alert else 'Normal'})...")
+        # Encolar petición y esperar resultado
+        loop = asyncio.get_running_loop()
+        future = loop.create_future()
         
-        async with _ai_semaphore:
-            _current_ai_task = asyncio.current_task()
-            _current_task_is_priority = is_absorption_alert
-            
-            logger.info(f"[ADVISOR] 🚀 Motor IA activo para {asset}. Llamando a Ollama...")
+        await _ai_queue.put((priority, {
+            'asset': asset,
+            'prompt': prompt,
+            'future': future
+        }))
+        
+        advice = await future
+        
+        # Actualizar Memoria y Semantic Cache
+        _strategic_memo[asset] = {**current_state, "advice": advice}
+        _semantic_cache[semantic_hash] = {"price": current_state["price"], "advice": advice}
+        return advice
 
-            async with httpx.AsyncClient(timeout=30.0) as client:
-                payload = {
-                    "model": DEFAULT_MODEL,
-                    "messages": [
-                        {"role": "user", "content": prompt}
-                    ],
-                    "stream": False
-                }
-
-                response = await client.post(OLLAMA_URL, json=payload)
-                if response.status_code != 200:
-                    return f"ADVISOR LOG: OLLAMA_SERVICER_ERROR ({response.status_code})"
-
-                result = response.json()
-                advice = result.get("message", {}).get("content", "").strip()
-
-                # Formateo institucional: Limpiar markdown pesado pero mantener estructura
-                advice = advice.replace('**', '').replace('###', '').strip()
-
-                # Actualizar Memoria y Semantic Cache
-                _strategic_memo[asset] = {**current_state, "advice": advice}
-                _semantic_cache[semantic_hash] = {"price": current_state["price"], "advice": advice}
-
-                logger.info(f"[ADVISOR] ✅ Análisis generado para {asset} | Hash: {semantic_hash[:8]}")
-                return advice
-
-    except asyncio.CancelledError:
-        logger.warning(f"🔃 [ADVISOR] Análisis de {asset} CANCELADO por prioridad institucional superior.")
-        raise # Propagar para que el llamador lo maneje
     except Exception as e:
-        logger.error(f"[ADVISOR] ❌ Error en Ollama Advisor ({asset}): {e}")
-        return "ADVISOR LOG: LOCAL_MODEL_OFFLINE. Verifica si Ollama está corriendo."
-    finally:
-        # Solo limpiar si somos la tarea actual
-        if _current_ai_task == asyncio.current_task():
-            _current_ai_task = None
-            _current_task_is_priority = False
+        logger.error(f"[ADVISOR] ❌ Error en Orchestrator Queue ({asset}): {e}")
+        return "ADVISOR LOG: OLLAMA_QUEUE_ERROR. Reintentando..."
 
 async def generate_news_sentiment(headline: str) -> dict:
-    """
-    Analiza una noticia y devuelve el sentimiento, una breve razón Y la traducción al español.
-    """
+    """Analiza una noticia usando la cola de prioridad nivel 20 (baja)."""
     prompt = f"""
-    Eres un analista de sentimiento cripto experto y traductor técnico. 
-    Analiza este titular, tradúcelo perfectamente al español manteniendo el tono financiero, y determina el impacto potencial.
-    
-    TITULAR ORIGINAL (INGLÉS): "{headline}"
-    
-    Responde ÚNICAMENTE en formato JSON:
+    Eres un analista de sentimiento cripto experto.
+    Analiza este titular y responde ÚNICAMENTE en formato JSON:
+    TITULAR: "{headline}"
     {{
-        "translated_title": "Titular traducido fielmente al español",
+        "translated_title": "...",
         "sentiment": "BULLISH" | "BEARISH" | "NEUTRAL",
-        "score": float, // 0.0 a 1.0 (intensidad)
-        "impact": "Breve resumen de 1 oración en español sobre por qué tiene ese impacto."
+        "score": float,
+        "impact": "..."
     }}
     """
     try:
-        async with _ai_semaphore:
-            async with httpx.AsyncClient(timeout=15.0) as client:
-                payload = {
-                    "model": DEFAULT_MODEL,
-                    "messages": [{"role": "user", "content": prompt}],
-                    "stream": False,
-                    "format": "json"
-                }
-                response = await client.post(OLLAMA_URL, json=payload)
-                if response.status_code == 200:
-                    data = response.json()
-                    content = data.get("message", {}).get("content", "{}")
-                    return json.loads(content)
+        loop = asyncio.get_running_loop()
+        future = loop.create_future()
+        
+        await _ai_queue.put((20, {
+            'asset': 'NEWS',
+            'prompt': prompt,
+            'format': 'json',
+            'future': future
+        }))
+        
+        content = await future
+        return json.loads(content)
     except:
-        pass
+        return {"sentiment": "NEUTRAL", "score": 0.5, "translated_title": headline}
     return {
         "translated_title": headline, 
         "sentiment": "NEUTRAL", 
