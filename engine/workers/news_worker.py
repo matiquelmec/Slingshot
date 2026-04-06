@@ -1,8 +1,13 @@
 from engine.core.logger import logger
 import asyncio
 import httpx
-from bs4 import BeautifulSoup
+from bs4 import BeautifulSoup, XMLParsedAsHTMLWarning
+import warnings
 from datetime import datetime
+
+# --- INSTITUTIONAL NOISE REDUCTION v5.7.156 ---
+# Silenciamos la advertencia de BS4 al usar html.parser para feeds XML (Zero-Dependency fallback)
+warnings.filterwarnings("ignore", category=XMLParsedAsHTMLWarning)
 from engine.core.store import store
 from engine.api.advisor import generate_news_sentiment
 from engine.api.ws_manager import registry
