@@ -124,31 +124,48 @@ class MarketAnalyzer:
                 "reason": htf_bias.reason
             }
 
-        # ── Paso 7: Diagnóstico de Volumen v5.7.15 (DELTA FIX: Cached Rolling Medians) ──
-        # Solo recalculamos RVOL/Absorption cuando la última vela ha cambiado (cierre real).
-        # En el Fast Path (mismo timestamp), reutilizamos las columnas cacheadas.
+        # ── Paso 7: Diagnóstico de Volumen (v5.7.155 O(1) Fast Path) ──
+        # La barrera definitiva contra la latencia (El Parpadeo Arreglado)
         vol_cache_key = f"{asset}_{str(df['timestamp'].iloc[-1])}"
         
-        if vol_cache_key == self._rvol_cache_key and self._rvol_cached_cols:
-            # Hit de caché: inyectar columnas sin recalcular
-            for col_name, col_data in self._rvol_cached_cols.items():
-                if len(col_data) == len(df):
-                    df[col_name] = col_data.values
+        if vol_cache_key == getattr(self, '_rvol_cache_key', '') and getattr(self, '_rvol_state', None):
+            # FAST PATH: Tick actualizándose en vivo (O(1)) durante el mismo Timestamp.
+            # Reutilizamos las métricas Base-Line (rolling medians) para que el CPU no se queme
+            # mientras el volumen y el spread de la vela fluyen en vivo.
+            st = self._rvol_state
+            current_vol = float(df['volume'].iloc[-1])
+            
+            rvol = current_vol / st['vol_median'] if st['vol_median'] > 0 else 0.0
+            
+            body_spread = abs(float(df['close'].iloc[-1]) - float(df['open'].iloc[-1]))
+            candle_spread = float(df['high'].iloc[-1]) - float(df['low'].iloc[-1])
+            displacement = body_spread + (candle_spread * 0.1) + (float(df['close'].iloc[-1]) * 0.00001)
+            absorption_raw = current_vol / displacement if displacement > 0 else 0.0
+            
+            absorption_score = (absorption_raw - st['abs_median']) / (st['abs_mad'] * 1.4826) if st['abs_mad'] > 0 else 0.0
+            is_high_absorption = (absorption_score > 2.5) and (rvol > 1.5)
+            
+            # Dummy inject for diagnostic extraction later
+            if 'absorption_raw' not in df.columns:
+                df['absorption_raw'] = absorption_raw
+            else:
+                df.iloc[-1, df.columns.get_loc('absorption_raw')] = absorption_raw
         else:
-            # Miss de caché: recalcular y persistir
+            # SLOW PATH: Ha comenzado una nueva vela. Actualizamos las métricas Base-Line (O(n))
             df = calculate_rvol(df)
             df = calculate_absorption_index(df)
+            
+            abs_raw = df['absorption_raw']
             self._rvol_cache_key = vol_cache_key
-            self._rvol_cached_cols = {
-                "rvol": df["rvol"].copy(),
-                "vol_median": df["vol_median"].copy(),
-                "absorption_score": df["absorption_score"].copy() if "absorption_score" in df.columns else pd.Series([0.0]*len(df)),
-                "absorption_raw": df["absorption_raw"].copy() if "absorption_raw" in df.columns else pd.Series([0.0]*len(df)),
+            self._rvol_state = {
+                "vol_median": float(df['vol_median'].iloc[-1]) if 'vol_median' in df.columns else 1.0,
+                "abs_median": float(abs_raw.rolling(50).median().iloc[-1]) if len(abs_raw) >= 50 else float(abs_raw.median()),
+                "abs_mad": float((abs_raw - abs_raw.rolling(50).median()).abs().rolling(50).median().replace(0, 1.0).iloc[-1]) if len(abs_raw) >= 50 else 1.0
             }
-        
-        rvol = float(df['rvol'].iloc[-1]) if 'rvol' in df.columns else 0.0
-        absorption_score = float(df['absorption_score'].iloc[-1]) if 'absorption_score' in df.columns else 0.0
-        is_high_absorption = bool(df.get('is_absorption_elite', pd.Series([False]*len(df))).iloc[-1])
+            
+            rvol = float(df['rvol'].iloc[-1]) if 'rvol' in df.columns else 0.0
+            absorption_score = float(df['absorption_score'].iloc[-1]) if 'absorption_score' in df.columns else 0.0
+            is_high_absorption = bool(df.get('is_absorption_elite', pd.Series([False]*len(df))).iloc[-1])
         
         # Verificación de Gates
         htf_align = False
