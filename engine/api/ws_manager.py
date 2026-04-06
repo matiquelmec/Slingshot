@@ -607,10 +607,9 @@ class SymbolBroadcaster:
                         self._last_whale_scan_ts = now
                         def _find_whales():
                             try:
-                                # Audit: Sigma - Process large Order Books off-loop
-                                # Buscar el muro más grande en el Order Book
-                                all_bids = self._liquidity.get("bids", [])
-                                all_asks = self._liquidity.get("asks", [])
+                                # v5.7.157 Priority Fix: Sigma - Solo niveles 1-5 (Muros inmediatos)
+                                all_bids = self._liquidity.get("bids", [])[:5]
+                                all_asks = self._liquidity.get("asks", [])[:5]
                                 m_bid = max([float(b["volume"]) for b in all_bids]) if all_bids else 0.0
                                 m_ask = max([float(a["volume"]) for a in all_asks]) if all_asks else 0.0
                                 return max(m_bid, m_ask)
@@ -633,25 +632,18 @@ class SymbolBroadcaster:
                     # Refresco On-Chain (cada 30s - v5.7.15 Force Refresh)
                     if now - self._last_onchain_ts > 30: # 30s
                         try:
-                            # Cálculo de SMA_20 Volumen para el Dynamic Whale Trigger (v5.3)
-                            vols = [float(i["data"].get("volume", 0)) for i in list(self._live_buffer)[-20:]]
-                            avg_vol_tick = (sum(vols) / len(vols)) if vols else 1.0
-                            
-                            # News Integration: Risk Multiplier (v5.7.15)
+                            # v5.7.157 Protocolo de Silencio: On-Chain a log DEBUG
                             from engine.core.store import store
                             latest_news = await store.get_news(limit=1)
                             news_sentiment = latest_news[0].get("sentiment", "NEUTRAL") if latest_news else "NEUTRAL"
-                            
                             onchain_summary = await self._onchain_sentinel.refresh(
                                 current_price=float(kline['c']),
                                 market_regime=regime,
-                                avg_tick_volume=avg_vol_tick,
                                 news_sentiment=news_sentiment
                             )
-                            await self._broadcast({"type": "onchain_update", "data": onchain_summary})
+                            logger.debug(f"[ON-CHAIN] {self.symbol}: Bias={onchain_summary.get('onchain_bias')}")
                             self._last_onchain_ts = now
-                        except Exception as e:
-                            logger.error(f"[BROADCASTER] {self._key} → On-Chain refresh error: {e}")
+                        except Exception: pass
 
                     current_buffer = [i["data"] for i in self._live_buffer] + [candle_payload["data"]]
                     if len(current_buffer) > 50:
@@ -899,7 +891,7 @@ class SymbolBroadcaster:
             self._htf_bias = self._htf_analyzer.analyze_bias(df_h4, df_h1)
             self._last_htf_ts = time.time()
             
-            logger.info(f"[BROADCASTER] {self._key} → 🧭 HTF Bias Refrescado: {self._htf_bias.direction} ({self._htf_bias.reason})")
+            logger.debug(f"[BROADCASTER] {self._key} → 🧭 HTF Bias Refrescado: {self._htf_bias.direction}")
         except Exception as e:
             logger.error(f"[BROADCASTER] {self._key} → Error refrescando HTF Bias: {e}")
 
@@ -936,6 +928,11 @@ class SymbolBroadcaster:
 
         unique_new = []
         for s in raw_signals:
+            # v5.7.157 Protocolo Omega: Filtro de Confluencia Institucional (> 60%)
+            score = s.get("confluence", {}).get("total_score", 0)
+            if score <= 60:
+                continue
+                
             sid = get_sig_id(s)
             if sid not in self._processed_signals_this_candle:
                 unique_new.append(s)
