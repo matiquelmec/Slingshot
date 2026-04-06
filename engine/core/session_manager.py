@@ -33,6 +33,11 @@ _NY_TZ     = pytz.timezone("America/New_York")
 _LONDON_TZ = pytz.timezone("Europe/London")
 _TOKYO_TZ  = pytz.timezone("Asia/Tokyo")
 
+# --- GLOBAL SESSION CACHE v5.7.156 (Bootstrap Sync) ---
+# Almacena el resultado del bootstrap por símbolo para que se haga solo una vez
+# por cada moneda en el arranque, sin importar cuántos intervalos se usen.
+_BOOTSTRAP_MEMO = {} # symbol -> state_data_snapshot
+
 
 def _empty_session() -> dict:
     return {
@@ -107,11 +112,26 @@ class SessionManager:
     def bootstrap(self, history: list[dict]):
         """
         Procesa velas históricas para reconstruir niveles de sesión.
-        Procesa AMBOS días (hoy y ayer) para tener prev_high/prev_low
-        disponibles en todos los símbolos desde el primer tick.
+        Optimización v5.7.156: Si otro Broadcaster ya calculó este activo hoy, cargarlo de la memoria global.
         """
         if not history:
             return
+
+        now_utc = datetime.now(timezone.utc)
+        today_str = str(now_utc.date())
+
+        # ✅ FAST CACHE: Evitar re-calculo si ya lo hicimos para este símbolo hace menos de 1h
+        if self._symbol in _BOOTSTRAP_MEMO:
+            cached_day, cached_state = _BOOTSTRAP_MEMO[self._symbol]
+            if cached_day == today_str:
+                logger.info(f"[SessionManager:{self._symbol}] ♻️  Reutilizando Bootstrap Global (Sincronización v5.7.156)")
+                # Solo tomamos los campos que no son específicos de la instancia (levels)
+                # No sobreescribimos self._state totalmente para preservar trades_today
+                for k, v in cached_state.items():
+                    if k != "trades_today":
+                        self._state[k] = v
+                self._state["trading_day"] = today_str
+                return
 
         now_utc = datetime.now(timezone.utc)
         today   = now_utc.date()
@@ -205,8 +225,12 @@ class SessionManager:
                 self._state[key]["prev_low"]  = prev[key]["low"]
 
         self._state["trading_day"] = str(today)
+        
+        # ✅ PERSISTIR EN CACHÉ GLOBAL (v5.7.156)
+        _BOOTSTRAP_MEMO[self._symbol] = (str(today), self._state.copy())
+        
         self._save()
-        logger.info(f"[SessionManager] ✅ Bootstrap OK: día={today} | PDH={self._state['pdh']} | "
+        logger.info(f"[SessionManager:{self._symbol}] ✅ Bootstrap OK: día={today} | PDH={self._state.get('pdh')} | "
               f"London prev={self._state['london'].get('prev_high')} | NY prev={self._state['ny'].get('prev_high')}")
 
     # ──────────────────────────────────────────────────────────────────────

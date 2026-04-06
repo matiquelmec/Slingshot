@@ -14,10 +14,12 @@ DEFAULT_MODEL = "gemma3:4b"
 # Semáforo global para evitar saturación de la CPU (Cola Institucional)
 _ai_semaphore = asyncio.Semaphore(1)
 
-# --- SISTEMA DE CACHÉ ESTRATÉGICO v5.7.155 Master Gold (SEMANTIC CACHE) ---
-# Almacena el último análisis exitoso por activo para evitar redundancia
 _strategic_memo = {} 
 _semantic_cache = {} # Hash -> Advice mapping
+
+# --- GESTOR DE PRIORIDAD IA v5.7.156 ---
+_current_ai_task = None
+_current_task_is_priority = False
 
 async def check_ollama_status():
     """Verifica si el servidor de Ollama está corriendo."""
@@ -290,9 +292,22 @@ async def generate_tactical_advice(
     """
 
 
+    global _current_ai_task, _current_task_is_priority
+    
+    is_absorption_alert = "ABSORCIÓN" in prompt
+    
     try:
-        logger.info(f"[ADVISOR] ⏳ Reservando motor IA para {asset}...")
+        # Lógica de Interrupción Institucional (v5.7.156)
+        if is_absorption_alert and _current_ai_task and not _current_task_is_priority:
+            logger.warning(f"🚨 [ADVISOR] ¡ABSORCIÓN DETECTADA para {asset}! Cancelando análisis secundario en curso...")
+            _current_ai_task.cancel()
+
+        logger.info(f"[ADVISOR] ⏳ Reservando motor IA para {asset} (Prioridad: {'ALTA' if is_absorption_alert else 'Normal'})...")
+        
         async with _ai_semaphore:
+            _current_ai_task = asyncio.current_task()
+            _current_task_is_priority = is_absorption_alert
+            
             logger.info(f"[ADVISOR] 🚀 Motor IA activo para {asset}. Llamando a Ollama...")
 
             async with httpx.AsyncClient(timeout=30.0) as client:
@@ -321,9 +336,17 @@ async def generate_tactical_advice(
                 logger.info(f"[ADVISOR] ✅ Análisis generado para {asset} | Hash: {semantic_hash[:8]}")
                 return advice
 
+    except asyncio.CancelledError:
+        logger.warning(f"🔃 [ADVISOR] Análisis de {asset} CANCELADO por prioridad institucional superior.")
+        raise # Propagar para que el llamador lo maneje
     except Exception as e:
         logger.error(f"[ADVISOR] ❌ Error en Ollama Advisor ({asset}): {e}")
         return "ADVISOR LOG: LOCAL_MODEL_OFFLINE. Verifica si Ollama está corriendo."
+    finally:
+        # Solo limpiar si somos la tarea actual
+        if _current_ai_task == asyncio.current_task():
+            _current_ai_task = None
+            _current_task_is_priority = False
 
 async def generate_news_sentiment(headline: str) -> dict:
     """

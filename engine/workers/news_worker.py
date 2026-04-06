@@ -1,7 +1,7 @@
 from engine.core.logger import logger
 import asyncio
 import httpx
-import xml.etree.ElementTree as ET
+from bs4 import BeautifulSoup
 from datetime import datetime
 from engine.core.store import store
 from engine.api.advisor import generate_news_sentiment
@@ -38,23 +38,20 @@ class NewsWorker:
                     if response.status_code == 200:
                         items_data = []
                         try:
-                            root = ET.fromstring(response.content)
-                            for item in root.findall('.//item')[:5]:
-                                title = item.find('title')
-                                link = item.find('link')
-                                if title is not None and link is not None and title.text and link.text:
-                                    items_data.append({"title": title.text.strip(), "link": link.text.strip()})
-                        except ET.ParseError as xml_err:
-                            logger.warning(f"⚠️ [NEWS-WORKER] XML Parse error on {url} (usando regex fallback): {xml_err}")
-                            import re
-                            # Fallback extractor para RSS malformados
-                            content_str = response.text
-                            item_blocks = re.findall(r'<item>([\s\S]*?)</item>', content_str, re.IGNORECASE)
-                            for block in item_blocks[:5]:
-                                title_match = re.search(r'<title>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?</title>', block, re.IGNORECASE)
-                                link_match = re.search(r'<link>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?</link>', block, re.IGNORECASE)
-                                if title_match and link_match:
-                                    items_data.append({"title": title_match.group(1).strip(), "link": link_match.group(1).strip()})
+                            # BS4 con lxml es mucho más permisivo con etiquetas mal cerradas (v5.7.156)
+                            soup = BeautifulSoup(response.content, 'lxml-xml')
+                            items = soup.find_all('item')[:5]
+                            
+                            for item in items:
+                                title_tag = item.find('title')
+                                link_tag = item.find('link')
+                                if title_tag and link_tag:
+                                    title_text = title_tag.get_text().strip()
+                                    link_text = link_tag.get_text().strip()
+                                    if title_text and link_text:
+                                        items_data.append({"title": title_text, "link": link_text})
+                        except Exception as parse_err:
+                            logger.warning(f"⚠️ [NEWS-WORKER] BS4 Parse error on {url}: {parse_err}")
 
                         for item_data in items_data:
                             title = item_data["title"]

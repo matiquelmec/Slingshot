@@ -73,7 +73,7 @@ class GhostState:
 
 # ── Cache & Persistencia en memoria ──────────────────────────────────────────
 _cache: GhostState = GhostState()
-_TTL_SECONDS = 900   # 15 minutos — igual a 1 vela de 15m
+_TTL_SECONDS = 300   # 5 minutos (v5.7.156 Optimization)
 _STATE_FILE = Path(__file__).parent.parent / "data" / "macro_state.json"
 
 
@@ -227,8 +227,16 @@ async def refresh_ghost_data(symbol: str = "BTCUSDT", macro_ctx: Optional[MacroS
     """
     global _cache
 
-    # Si el Orchestrator inyecta un macro_ctx fresco, FORZAR recalculación
-    # (el TTL solo aplica cuando no hay contexto macro nuevo)
+    # OPTIMIZACIÓN v5.7.156: Respetar TTL incluso con macro_ctx inyectado 
+    # para evitar recalcular en cada tick del Fast Path.
+    if is_cache_fresh() and macro_ctx is not None:
+        # Solo actualizamos los campos dinámicos del macro_ctx sin re-fetch de APIs externas
+        _cache.dxy_trend = macro_ctx.dxy_trend
+        _cache.dxy_price = macro_ctx.dxy_price
+        _cache.nasdaq_trend = macro_ctx.nasdaq_trend
+        _cache.nasdaq_change_pct = macro_ctx.nas100_change_pct
+        return _cache
+
     if macro_ctx is None and is_cache_fresh():
         return _cache
 
