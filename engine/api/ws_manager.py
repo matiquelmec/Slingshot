@@ -19,7 +19,10 @@ BroadcasterRegistry:
 
 from engine.core.logger import logger
 import asyncio
-import json
+try:
+    import orjson as json
+except ImportError:
+    import json
 import time
 import traceback
 import hashlib
@@ -602,16 +605,21 @@ class SymbolBroadcaster:
                     # 1. Whale Sensor: [WHALE_SCAN] (v5.7.15 DOM Intelligence)
                     if now - self._last_whale_scan_ts >= 5.0: # Cada 5s
                         self._last_whale_scan_ts = now
-                        try:
-                            # Buscar el muro más grande en el Order Book
-                            all_bids = self._liquidity.get("bids", [])
-                            all_asks = self._liquidity.get("asks", [])
-                            max_bid = max([float(b["volume"]) for b in all_bids]) if all_bids else 0.0
-                            max_ask = max([float(a["volume"]) for a in all_asks]) if all_asks else 0.0
-                            whale_size = max(max_bid, max_ask)
-                            if whale_size > 0:
-                                logger.info(f"[WHALE_SCAN] Order Book Muro Máximo: {whale_size:.2f} {self.symbol.replace('USDT', '')}")
-                        except: pass
+                        def _find_whales():
+                            try:
+                                # Audit: Sigma - Process large Order Books off-loop
+                                # Buscar el muro más grande en el Order Book
+                                all_bids = self._liquidity.get("bids", [])
+                                all_asks = self._liquidity.get("asks", [])
+                                m_bid = max([float(b["volume"]) for b in all_bids]) if all_bids else 0.0
+                                m_ask = max([float(a["volume"]) for a in all_asks]) if all_asks else 0.0
+                                return max(m_bid, m_ask)
+                            except: return 0.0
+
+                        loop = asyncio.get_running_loop()
+                        whale_size = await loop.run_in_executor(None, _find_whales)
+                        if whale_size > 0:
+                            logger.info(f"[WHALE_SCAN] Order Book Muro Máximo: {whale_size:.2f} {self.symbol.replace('USDT', '')}")
 
                     # Sincronización con Ghost Data Centralizado
                     ghost = get_ghost_state()
