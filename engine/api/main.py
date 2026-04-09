@@ -15,7 +15,8 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from engine.api.config import settings
 from engine.api.json_utils import sanitize_for_json, SlingshotJSONEncoder
-from engine.api.ws_manager import registry, fetch_binance_history
+from engine.api.registry import registry
+from engine.api.ws_manager import fetch_binance_history
 from engine.main_router import SlingshotRouter
 from engine.core.store import store
 from engine.workers.orchestrator import SlingshotOrchestrator
@@ -41,11 +42,7 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3000",
-        "http://127.0.0.1:3000",
-        "http://localhost:3001",
-    ],
+    allow_origins=settings.CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -58,11 +55,44 @@ async def startup_event():
     """Inicialización del motor y limpieza del almacén de datos."""
     await store.clear_all() # Reset del estado efímero al arrancar
     
-    # Verificar Inteligencia Local
-    asyncio.create_task(check_ollama_status())
+    # v5.9-Fix: Verificar Ollama ANTES de arrancar workers (con reintentos)
+    import engine.api.advisor as advisor_module
+    from engine.api.advisor import start_ai_worker
+    
+    # Chequeo con reintentos: Ollama puede tardar en cargar modelos en frío
+    ollama_ready = False
+    for attempt in range(1, 4):
+        if await advisor_module.check_ollama_status(force_recheck=True):
+            ollama_ready = True
+            logger.info(f"🧠 [STARTUP] Ollama confirmado ONLINE (intento {attempt}/3). IA activa.")
+            break
+        else:
+            logger.warning(f"[STARTUP] Ollama no disponible (intento {attempt}/3).")
+        
+        if attempt < 3:
+            await asyncio.sleep(3)  # Esperar entre reintentos
+    
+    if not ollama_ready:
+        logger.error("🚨 [STARTUP] Ollama NO disponible tras 3 intentos. Noticias sin análisis IA.")
+    
+    start_ai_worker()
     
     asyncio.create_task(global_orchestrator.start())
-    logger.info("[API] Motor Slingshot v3.2 activado. Radar Center en línea.")
+
+    # 🏁 Startup: Activar Radar Center para activos de Élite (Simulation)
+    logger.info("[RADAR] 📡 Activando Radar Center para BTC, ETH, SOL, PAXG (Multi-TF)...")
+    elite_assets = ["BTCUSDT", "ETHUSDT", "SOLUSDT", "PAXGUSDT"]
+    intervals = ["1m", "5m", "15m"]
+    
+    # Iniciar broadcasters persistentes para la simulación
+    for asset in elite_assets:
+        for interval in intervals:
+            asyncio.create_task(registry.get_or_create(asset, interval, persistent=True))
+    
+    # Iniciar Monitor de Salud Institucional (30s Report)
+    await registry.start_simulation_monitor()
+    
+    logger.info("[SIMULATION] 🏎️ Motores listos para el despliegue.")
 
 @app.on_event("shutdown")
 async def shutdown_event():
@@ -175,24 +205,28 @@ async def websocket_stream_endpoint(
     websocket: WebSocket,
     symbol: str,
     interval: str = Query(default="15m"),
+    api_key: Optional[str] = Query(None)
 ):
     """
     Stream WebSocket multi-usuario para un símbolo dado.
 
-    Arquitectura:
-      1. El cliente se conecta → se suscribe al BroadcasterRegistry
-      2. Si el broadcaster para symbol:interval no existe, se crea automáticamente
-         (1 conexión Binance WS + 1 pipeline completo para ese símbolo)
-      3. Si ya existe, el cliente simplemente se agrega como suscriptor
-      4. El broadcaster hace fan-out de todos los mensajes via asyncio.Queue
-      5. Al desconectar, si era el último cliente → el broadcaster se destruye
+    🔒 Sigma Security v6.0: Validación de X-API-KEY interna para evitar front-running.
+    Arquitectura Delta v6.0: Utiliza el BroadcasterRegistry modularizado.
     """
     await websocket.accept()
 
+    # 🏛️ VERIVICACIÓN DE SEGURIDAD SIGMA
+    if not api_key or api_key != settings.SECURITY_API_KEY:
+        logger.error(f"[GATEWAY] 🔐 Acceso denegado (Invalid API Key) a {symbol}:{interval}")
+        registry.record_auth(success=False) # 📊 Registro Sigma
+        await websocket.close(code=4001) # Unauthorized
+        return
+
+    registry.record_auth(success=True) # 📊 Registro Sigma
     broadcaster, client_id = await registry.get_or_create(symbol, interval)
     queue = await broadcaster.subscribe(client_id)
 
-    logger.info(f"[GATEWAY] ✅ Cliente {client_id[:6]} conectado → {symbol.upper()}:{interval} "
+    logger.info(f"[GATEWAY] ✅ Acceso validado. Cliente {client_id[:6]} conectado → {symbol.upper()}:{interval} "
           f"({broadcaster.subscriber_count()} suscriptores totales)")
 
     try:

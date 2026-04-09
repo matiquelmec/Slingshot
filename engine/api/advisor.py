@@ -1,401 +1,341 @@
-from engine.core.logger import logger
-import httpx
 import asyncio
+import httpx
 import json
-import numpy as np
 import hashlib
+from typing import List, Dict, Optional
+from engine.core.logger import logger
+from engine.core.store import store
 from engine.api.config import settings
-from engine.core.session_manager import session_manager
 
-# --- ORCHESTRATOR AI v5.8-Audit ---
-# Cola de Prioridad Institucional para Ollama
+# --- AI QUEUE SYSTEM ---
 _ai_queue = asyncio.PriorityQueue()
-_current_ai_task = None
+_ai_task_counter = 0
+_active_queue_keys = set()
+_strategic_memo = {}
+_semantic_cache = {}
 
-# Configuración de Ollama Local
-OLLAMA_URL = "http://localhost:11434/api/chat"
-DEFAULT_MODEL = "gemma3:4b"
-AI_KEEP_ALIVE = -1 # v5.8-Audit: Elimina el warmup manteniendo el modelo cargado indefinidamente
+DEFAULT_MODEL = "qwen3:8b"
 
-# --- IA PERSISTENCE v5.8-Gold ---
-_strategic_memo = {} 
-_semantic_cache = {} # Hash -> Advice mapping (v5.8 Master Spec)
-
-async def _ai_worker():
-    """Worker centralizado que procesa la cola por prioridad."""
-    global _current_ai_task
-    while True:
-        # prioridad 0: BTC / Absorción (Máxima)
-        # prioridad 10: Señales normales
-        # prioridad 20: Análisis secundarios / Noticias
-        priority, task_data = await _ai_queue.get()
-        asset = task_data['asset']
+async def check_ollama_status(force_recheck=False) -> bool:
+    """v5.9.4-Resilience: Salto agresivo si ya está confirmado online en la sesión."""
+    global _ollama_cache
+    
+    # 1. Bypass total: si ya se confirmó una vez, no volver a preguntar al servidor tags (que se bloquea en heavy load)
+    if _ollama_cache["confirmed_online"]:
+        return True
         
-        try:
-            logger.info(f"🧠 [ORCHESTRATOR] Procesando {asset} (Prioridad: {priority})...")
-            _current_ai_task = asyncio.current_task()
-            
-            # Ejecutar el análisis real
-            result = await _execute_ollama_request(task_data)
-            task_data['future'].set_result(result)
-            
-        except Exception as e:
-            if not task_data['future'].done():
-                task_data['future'].set_exception(e)
-        finally:
-            _ai_queue.task_done()
-            _current_ai_task = None
-
-async def _execute_ollama_request(data: dict) -> str:
-    """Ejecución física de la llamada a Ollama con keep_alive persistente."""
-    async with httpx.AsyncClient(timeout=35.0) as client:
-        payload = {
-            "model": DEFAULT_MODEL,
-            "messages": [{"role": "user", "content": data['prompt']}],
-            "stream": False,
-            "keep_alive": AI_KEEP_ALIVE, # v5.8-Audit: 0ms Warmup
-            "options": {"num_ctx": 4096, "temperature": 0.2}
-        }
-        if data.get('format'): payload['format'] = data['format']
+    now = asyncio.get_event_loop().time()
+    if not force_recheck and (now - _ollama_cache["last_check"] < 5.0):
+        return _ollama_cache["status"]
         
-        response = await client.post(OLLAMA_URL, json=payload)
-        if response.status_code != 200:
-            raise Exception(f"Ollama Error: {response.status_code}")
-        
-        result = response.json()
-        return result.get("message", {}).get("content", "").strip()
-
-# Iniciar el worker al importar el módulo
-asyncio.create_task(_ai_worker())
-
-async def check_ollama_status():
-    """Verifica si el servidor de Ollama está corriendo."""
     try:
-        async with httpx.AsyncClient(timeout=1.5) as client:
+        async with httpx.AsyncClient(timeout=5.0) as client:
             response = await client.get("http://localhost:11434/api/tags")
-            if response.status_code == 200:
-                return True
-    except:
-        pass
-    return False
+            status = (response.status_code == 200)
+            if status:
+                _ollama_cache["confirmed_online"] = True
+            _ollama_cache["status"] = status
+            _ollama_cache["last_check"] = now
+            return status
+    except Exception:
+        _ollama_cache["status"] = False
+        _ollama_cache["last_check"] = now
+        return False
 
-async def generate_tactical_advice(
-    asset: str, 
-    tactical_data: dict, 
-    current_session: str, 
-    ml_projection: dict = None,
-    news: list = None,
-    liquidations: list = None,
-    economic_events: list = None,
-    onchain_data: dict = None
-) -> str:
+_ollama_cache = {"status": False, "last_check": 0, "confirmed_online": False}
+
+def extract_json_from_llm(content: str):
+    """Limpia la respuesta de la IA para extraer JSON puro y repara errores comunes de multilínea."""
+    # 1. Limpieza básica de Markdown
+    content = content.replace("```json", "").replace("```", "").strip()
+    
+    # 2. Extraer el bloque JSON más grande
+    if not (content.startswith("[") or content.startswith("{")):
+        start_idx = content.find("[")
+        if start_idx == -1: start_idx = content.find("{")
+        end_idx = content.rfind("]")
+        if end_idx == -1: end_idx = content.rfind("}")
+        if start_idx != -1 and end_idx != -1:
+            content = content[start_idx:end_idx+1]
+        elif start_idx != -1: # Caso especial: JSON truncado al final
+            content = content[start_idx:] + ("]" if content[start_idx] == "[" else "}")
+
+    # 3. Reparación de multilínea crítica: 
+    # Ollama a veces deja strings sin cerrar si hay un \n real dentro.
+    # Reemplazamos newlines literales dentro de lo que parece ser un bloque de texto JSON
+    # pero solo si no están seguidos de una estructura de clave JSON
+    import re
+    # Intentar escapar tímidamente los newlines que rompen strings
+    # (Buscamos texto entre comillas que tiene un salto de línea antes de la comilla de cierre)
+    # Nota: esto es heurístico.
+    lines = content.splitlines()
+    repaired_content = ""
+    for line in lines:
+        repaired_content += line.strip() + " "
+    content = repaired_content.strip()
+
+    return content
+
+async def generate_tactical_advice(symbol: str, 
+                                 tactical_data: dict, 
+                                 current_session: str = "UNKNOWN",
+                                 ml_projection: dict = None, 
+                                 news: list = None, 
+                                 liquidations: list = None, 
+                                 economic_events: list = None,
+                                 onchain_data: dict = None,
+                                 mtf_context: dict = None) -> str:
     """
-    Genera un consejo cuantitativo breve usando Ollama Local de forma asíncrona.
-    v5.7.155 Master Gold: Implementa Pre-digested Context y Semantic Caching para latencia mínima.
+    v5.9.5-MTF Master: Genera asesoría táctica consolidada multi-temporal.
+    Sintetiza 1m, 5m y 15m para detectar trampas y confirmar confluencias reales.
     """
-    strategy = tactical_data.get('active_strategy', 'UNKNOWN')
-    regime = tactical_data.get('market_regime', 'UNKNOWN')
+    # 1. Caché Semántica de Alta Velocidad
+    signal = tactical_data.get("signal", "NEUTRAL")
+    regime = tactical_data.get("regime", "IDLE")
+    price = tactical_data.get("price", 0.0)
     
-    # 🔴 PRECIO LIVE v5.7.155 Master Gold: Usar current_price inyectado por _emit_advisor (latest tick del WS)
-    live_price = float(tactical_data.get('current_price', 0))
+    # El hash semántico ahora incluye el estado de las señales MTF para refrescar si algo cambia en otra temporalidad
+    mtf_signals = "_".join([f"{k}:{v.get('signal', 'N')}" for k, v in (mtf_context or {}).items()])
+    semantic_hash = hashlib.md5(f"{symbol}_{regime}_{signal}_{mtf_signals}_{current_session}".encode()).hexdigest()
     
-    # Extraer data de la matriz de diagnóstico
-    diag = tactical_data.get('diagnostic', {}) or {}
-    rsi = diag.get('rsi', 50) or 50
-    macd_cross = "BULLISH" if diag.get('macd_bullish_cross') else "BEARISH/NEUTRAL"
-    bbwp = diag.get('bbwp', 0)
-    squeeze = "ACTIVE" if diag.get('squeeze_active') else "INACTIVE"
-    in_killzone = "SÍ (Volumen Institucional Alto)" if session_manager.is_killzone_active() else "NO (Volumen Minorista/Lento)"
-    bull_div = "PRESENTE" if diag.get('bullish_divergence') else "NO"
-    bear_div = "PRESENTE" if diag.get('bearish_divergence') else "NO"
-    # 📊 VOLUMEN INSTITUCIONAL v5.7.155 Master Gold (PRODUCCIÓN)
-    rvol = diag.get('rvol', 0) or 0
-    z_score = diag.get('z_score', 0) or 0
-    
-    # 🔴 DETECCIÓN DE ANOMALÍAS CRÍTICAS (Z-Score > 5.0)
-    # El Z-Score es más preciso que el RVOL para detectar "Flash Pumps" ruidosos.
-    is_anomaly = z_score > 5.0 or rvol > 10.0
-    rvol_alert = ""
-    mandatory_phrase = ""
-    
-    if is_anomaly and regime in ('RANGING', 'ACCUMULATION', 'DISTRIBUTION', 'UNKNOWN'):
-        mandatory_phrase = "ALERTA: ANOMALÍA INSTITUCIONAL (Z-SCORE > 5.0). ABSORCIÓN DETECTADA."
-        rvol_alert = f"""
-        🚨 [ALERTA DE SEGURIDAD CRÍTICA]
-        Z-SCORE RADAR: {z_score:.2f}σ | RVOL: {rvol:.2f}x.
-        ESTADO: ABSORCIÓN PROFESIONAL MASIVA.
-        INSTRUCCIÓN MANDATORIA: DEBES UTILIZAR LA FRASE EXACTA: '{mandatory_phrase}' EN TU VEREDICTO.
-        EXPLICACIÓN: Las instituciones están inyectando volumen sin mover el precio (Absorción). Esto es el precursor de una expansión violenta.
-        """
-    elif rvol > 5.0:
-        rvol_alert = f"⚠️ [VOLUMEN ANORMAL] RVOL de {rvol:.2f}x detectado. Alta probabilidad de manipulación o expansión."
-
-    # Extraer data de Estructura (SMC / Soportes)
-    smc = tactical_data.get('smc', {})
-    obs_bullish = len(smc.get('order_blocks', {}).get('bullish', []))
-    obs_bearish = len(smc.get('order_blocks', {}).get('bearish', []))
-    fvgs_bullish = len(smc.get('fvgs', {}).get('bullish', []))
-    fvgs_bearish = len(smc.get('fvgs', {}).get('bearish', []))
-    
-    def f_p(p):
-        try:
-            if p is None or (isinstance(p, float) and np.isnan(p)): return "N/A"
-            if p == 0: return "0.00"
-            if isinstance(p, (int, float)): 
-                dp = 10 if p < 0.0001 else 8 if p < 0.01 else 2
-                return f"{p:.{dp}f}".rstrip('0').rstrip('.')
-            return str(p)
-        except:
-            return "N/A"
-
-    # 1. SOPORTES Y RESISTENCIAS (Triple Canal de Búsqueda v5.7.155 Master Gold)
-    kl = tactical_data.get('key_levels', {})
-    smc_raw = tactical_data.get('smc', {})
-    
-    # Canal A: Key Levels | Canal B: SMC Backup | Canal C: Nearest Anchors
-    sups = kl.get('supports', []) or smc_raw.get('key_supports', [])
-    resists = kl.get('resistances', []) or smc_raw.get('key_resistances', [])
-    
-    support = f_p(sups[0]['price']) if (sups and 'price' in sups[0]) else (f_p(tactical_data.get('nearest_support')) if tactical_data.get('nearest_support') else 'N/A')
-    resistance = f_p(resists[0]['price']) if (resists and 'price' in resists[0]) else (f_p(tactical_data.get('nearest_resistance')) if tactical_data.get('nearest_resistance') else 'N/A')
-    
-    # Extraer Proyección Matemático-Mecánica (ML XGBoost)
-    ml_projection = ml_projection or {}
-    ml_dir = str(ml_projection.get('direction', 'ANALIZANDO')).upper()
-    try:
-        p_raw = ml_projection.get('probability', 50)
-        ml_prob = float(p_raw) if p_raw is not None else 50.0
-    except:
-        ml_prob = 50.0
-    
-    # 📐 FIBONACCI GATILLO v5.7.155 Master Gold
-    fibo = tactical_data.get('fibonacci')
-    price_in_gp = False
-    is_whale = False
-    fibo_lvl = 'N/A'
-    
-    if fibo:
-        sh = fibo.get('swing_high', 0)
-        sl = fibo.get('swing_low', 0)
-        levels = fibo.get('levels', {})
-        is_whale = fibo.get('is_whale_leg', False)
-        
-        # Golden Pocket: 0.618 a 0.66
-        gp_top = levels.get('0.618', 0)
-        gp_bottom = levels.get('0.66', 0)
-        
-        # Asegurar orden (en shorts el GP sube)
-        low_gp = min(gp_top, gp_bottom)
-        high_gp = max(gp_top, gp_bottom)
-        
-        price_in_gp = (live_price >= low_gp) and (live_price <= high_gp)
-        fibo_lvl = f"Swing High: ${f_p(sh)} | Swing Low: ${f_p(sl)} (GP: ${f_p(low_gp)}-${f_p(high_gp)})"
-    
-    # 🐋 WHALE EXECUTION: Si estamos en GP de una pierna Whale, cambiamos el tono a EXECUTE
-    if price_in_gp and is_whale:
-        mandatory_phrase = "⚠️ GATILLO DE ENTRADA DETECTADO (GP + WHALE LEG). ACCIÓN: EXECUTE."
-    elif price_in_gp:
-         mandatory_phrase = "⚠️ ZONA DE INTERÉS (GP). MONITOREAR RECHAZO."
-    
-    # Procesar Noticias Recientes (Sentimiento Híbrido)
-    news_text = "SIN NOTICIAS RECIENTES DE ALTO IMPACTO."
-    if news:
-        top_news = news[:3] # Solo las 3 más frescas
-        news_lines = []
-        for n in top_news:
-            line = f"[{n.get('sentiment', 'NEUTRAL')}] {n.get('title')} -> Impacto: {n.get('impact')}"
-            news_lines.append(line)
-        news_text = "\n    ".join(news_lines)
-
-    # Procesar Zonas de Liquidación (Magnetismo de Precios)
-    liq_text = "ZONAS DE LIQUIDACIÓN NO DETECTADAS O MUY ALEJADAS."
-    if liquidations:
-        top_liqs = sorted(liquidations, key=lambda x: x.get('strength', 0), reverse=True)[:4]
-        liq_lines = []
-        for l in top_liqs:
-            line = f"Precio: ${f_p(l['price'])} | Tipo: {l['type']} | Fuerza: {l['strength']}% | Apalancamiento: {l['leverage']}x"
-            liq_lines.append(line)
-        liq_text = "\n    ".join(liq_lines)
-
-    # Procesar Calendario Económico (Eventos Macro con Memoria)
-    cal_text = "SIN EVENTOS MACRO INMINENTES RELEVANTES."
-    if economic_events:
-        cal_lines = []
-        for ev in economic_events[:5]:
-            status_tag = f"[{ev.get('status', 'UPCOMING')}]"
-            date_time = ev.get('date', '').split('T')[1][:5] if 'T' in ev.get('date', '') else ''
-            cal_lines.append(f"{status_tag} {ev.get('country')}: {ev.get('title')} ({date_time}) -> Impacto: {ev.get('impact')}")
-        cal_text = "\n    ".join(cal_lines)
-
-    # 2. DEFINICIÓN ESTRATÉGICA
-    recommended_rr = "1:2" if "REVERSION" in strategy else "1:3"
-
-    # Extraer Sesgo Institucional (HTF)
-    htf = tactical_data.get('htf_bias', {}) or {}
-    htf_dir = str(htf.get('direction', 'NEUTRAL')).upper()
-    htf_reason = htf.get('reason', 'Sin datos institucionales suficientes.')
-
-    # Importar Ghost Data para Capa 1 (Macro)
-    from engine.indicators.ghost_data import get_ghost_state
-    ghost = get_ghost_state(asset)
-
-    # 💠 LÓGICA DE SMART CACHE (v5.7.155 Master Gold Semantic)
-    current_state = {
-        "price": float(tactical_data.get('current_price', 0)),
-        "support": support,
-        "resistance": resistance,
-        "regime": regime,
-        "strategy": strategy,
-        "ml_prob": ml_prob,
-        "dxy": ghost.dxy_trend,
-        "nasdaq": ghost.nasdaq_trend,
-        "onchain_bias": onchain_data.get("onchain_bias", "NEUTRAL") if onchain_data else "NEUTRAL"
-    }
-    
-    # CÁLCULO DE HASH SEMÁNTICO (Ignoramos pequeñas variaciones de precio < 0.05%)
-    state_str = f"{asset}_{regime}_{strategy}_{support}_{resistance}_{ml_dir}_{current_state['onchain_bias']}"
-    semantic_hash = hashlib.md5(state_str.encode()).hexdigest()
-
-    if current_state["support"] == "N/A" and current_state["resistance"] == "N/A":
-        return "INFORME UNIFICADO v5.7.155 Master Gold: ESTRUCTURA INSTITUCIONAL EN FORMACIÓN. Awaiting data hydration."
-
     if semantic_hash in _semantic_cache:
-        # Validamos si el precio no se ha movido violentamente (>0.1%)
         cached = _semantic_cache[semantic_hash]
-        price_diff = abs(current_state["price"] - cached["price"]) / cached["price"] if cached["price"] > 0 else 1.0
-        if price_diff < 0.001 and not rvol_is_ultra_high:
-            return f"[SEMANTIC CACHE HIT] {cached['advice']}"
+        if abs(cached["price"] - price) / (price or 1) < 0.0005:
+            return cached["advice"]
 
-    # 🧠 PRE-DIGESTED CONTEXT (Prompt Engineering v5.7.155 Master Gold)
-    # En lugar de enviar todo el historial, enviamos conclusiones procesadas.
-    onchain_text = f"Bias On-Chain: {current_state['onchain_bias']} | OI Delta: {onchain_data.get('oi_delta_pct', 0)}%" if onchain_data else "On-Chain: No data."
+    if not await check_ollama_status():
+        return "ADVISOR: OLLAMA_OFFLINE. Operando bajo parámetros técnicos puros."
+
+    # 2. SISTEMA DE UMBRAL POR VOLATILIDAD (0.15% Delta Logic)
+    if symbol in _strategic_memo:
+        last_p = _strategic_memo[symbol]["price"]
+        diff = abs(last_p - price) / (price or 1)
+        if diff < 0.0015 and signal == "NEUTRAL":
+            return _strategic_memo[symbol]["advice"]
+
+    if not await check_ollama_status():
+        return json.dumps({"verdict": "SIDEWAYS", "logic": "OLLAMA_OFFLINE", "threat": "LOW"})
+
+    # 3. Construcción de Contexto Multi-Timeframe y SMC (Variables en Vivo)
+    mtf_summary = ""
+    if mtf_context:
+        for tf, data in mtf_context.items():
+            sig = data.get('signal', 'NEUTRAL')
+            mtf_summary += f"- {tf}: {sig} | Trend: {data.get('trend', 'N/A')}\n"
+    else:
+        mtf_summary = f"- {tactical_data.get('interval', 'N/A')}: {signal} (Main)"
+        
+    # Extracción de Métricas SMC Críticas desde tactical_data
+    rvol = (tactical_data.get("diagnostic") or {}).get("rvol", 0)
     
-    digest = f"""
-    RESUMEN TÁCTICO: {asset} @ ${f_p(live_price)}
-    Régimen: {regime} | Estrategia: {strategy} | Killzone: {in_killzone}
-    Veredicto Técnico: RSI={rsi}, MACD={macd_cross}, RVOL={rvol:.2f}x, Z-Score={z_score:.2f}σ
-    Estructura: S={support}, R={resistance} | Fibo: {fibo_lvl}
-    Proyección ML: {ml_dir} ({ml_prob}%)
-    Macro: DXY {ghost.dxy_trend}, NASDAQ {ghost.nasdaq_trend}
-    On-Chain: {onchain_text}
-    """
-
-    prompt = f"""
-    Eres el 'Asesor Cuantitativo Institucional' del sistema v5.7.155 Master Gold. Tu misión es ejecutar el Algoritmo de Decisión SMC de 5 Fases.
-    ERES UNA MÁQUINA LÓGICA REGLAMENTARIA. DEBES OBEDECER ESTAS LEYES INQUEBRANTABLES:
-
-    ═══════════════════════════════════════════
-    LEYES DE CONSISTENCIA DE DATOS (MANDATORIAS):
-    ═══════════════════════════════════════════
-    - SI EL RADAR DICE RVOL > 10x, DEBES REPORTARLO COMO TAL. PROHIBIDO REPORTAR UN RVOL BAJO.
-    - SI 'Killzone Activa' es NO, TIENES PROHIBIDO USAR LA KILLZONE COMO ARGUMENTO PARA VALIDAR UNA ENTRADA. SI NO HAY KILLZONE, NO HAY OPERACIÓN.
-    - SI EL PRECIO ESTÁ EN 'RANGING' CON RVOL > 10x, EL VEREDICTO DEBE INDICAR ABSORCIÓN.
-
-    ═══════════════════════════════════════════
-    LEYES MACRO (CORRELACIÓN DXY-CRIPTO):
-    ═══════════════════════════════════════════
-    - DXY BULLISH (Dólar fuerte) = PELIGRO PARA LONGS. 
-    - DXY BEARISH (Dólar débil) = FAVORABLE PARA LONGS. 
-    ⚠️ LEY DXY: DXY BEARISH = FAVORABLE PARA LONGS EN CRIPTO. SI en tu análisis dices "DXY Bearish" y luego prohíbes longs, estás VIOLANDO esta ley.
-
-    ═══════════════════════════════════════════
-    DATOS SENSORIZADOS (EL ORÁCULO):
-    ═══════════════════════════════════════════
-    {digest}
+    smc_state = tactical_data.get("smc", {})
+    obs = smc_state.get("order_blocks", [])
+    fvgs = smc_state.get("fvgs", [])
     
-    {rvol_alert}
+    levels = tactical_data.get("key_levels", {})
+    resist = levels.get("resistance", "N/A")
+    support = levels.get("support", "N/A")
 
-    CAPA 1: CONTEXTO GLOBAL MACRO
-    - DXY Trend: {ghost.dxy_trend} | NASDAQ Trend: {ghost.nasdaq_trend}
-    - HTF Global Bias: {htf_dir}
-    
-    CAPA 2: NARRATIVA DIARIA
-    - Sesión Actual: {current_session}
-    
-    CAPA 3: ZONAS INSTITUCIONALES (SMC)
-    - SOPORTE: {support} | RESISTENCIA: {resistance}
-    - Zonas: {obs_bullish + fvgs_bullish} Bullish / {obs_bearish + fvgs_bearish} Bearish
-    
-    CAPA 4: GATILLO NEURONAL (IA)
-    - Proyección XGBoost: {ml_dir} ({ml_prob}%)
+    prompt = f"""[SISTEMA SLINGSHOT v6.0 - PROTOCOLO QUÁNTICO JSON]
+ACTIVO: {symbol} | SESIÓN: {current_session} | RÉGIMEN: {regime} | RVOL: {rvol}x
+NIVELES CLAVE:  Resistencia: {resist} | Soporte: {support}
+SMC STATE: {len(obs)} OBs Activos | {len(fvgs)} FVGs Activos
+MTF CONTEXT:
+{mtf_summary}
+ML/NEWS: {ml_projection.get('prediction', 'N/A') if ml_projection else 'N/A'} | {len(news or [])} items.
 
-    CHECKLIST DE DECISIÓN (ORDEN DE PRIORIDAD):
-    [PASO 1] REGLA DE SUPERVIVENCIA (SITREP): SI hay cisne negro (Guerra/Noticias Catastróficas) -> Veredicto: 'DEFCON 1 (DESCARTAR)'.
-    
-    [PASO 2] GATE DE CANALIZACIÓN (EL MURO): ¿Killzone Activa ({in_killzone})? 
-    ⚠️ LEY INQUEBRANTABLE: SI LA KILLZONE ES 'NO', DETÉN TODO ANÁLISIS. TU VEREDICTO DEBE SER 'DESCARTAR' SIN IMPORTAR CUALQUER OTRA MÉTRICA (NI RVOL, NI SMC, NI ML). NO JUSTIFIQUES. SOLO DESCARTA.
-    
-    [PASO 3] LEY DXY: ¿DXY favorece la dirección? DXY BULLISH = BLOQUEO DE LONGS.
-    
-    [PASO 4] ABSORCIÓN INSTITUCIONAL: Si llegaste aquí y el RVOL es {rvol:.2f}x (Régimen: {regime}) -> ¿Hay Absorción? Si el RVOL es Ultra-Alto (>10x), prioriza la acumulación.
+TAREA: Emite un veredicto técnico institucional en JSON puro.
+REGLAS:
+1. VERDICT: "GO" (Hay confluencia real SMC + Liquidez), "AVOID" (Riesgo alto/Veto), "SIDEWAYS" (Rango o Indecisión).
+2. THREAT: "LOW", "MEDIUM", "HIGH" (Basado estrictamente en RVOL y News/Régimen).
+3. LOGIC: Razón técnica en MAX 5 palabras (ej: "FVG Sweep en 15m").
 
-    [PASO 5] VEREDICTO FINAL: Decisión unificada. 
-    ⚠️ RECORDATORIO: Si Killzone es 'NO', el Veredicto es 'DESCARTAR'. Si Killzone es 'SÍ', integra SMC y {f"MANDATORIO USAR FRASE: '{mandatory_phrase}'" if mandatory_phrase else "Veredicto Técnico"}.
+RESPONDE SOLO EL JSON:
+{{"verdict": "...", "threat": "...", "logic": "..."}}"""
 
-    FORMATO DE RESPUESTA:
-    1. INICIO: "INFORME UNIFICADO v5.7.155 Master Gold PLATINUM: [TU VEREDICTO EN 1 PALABRA: DESCARTAR | COMPRAR | VENDER]"
-    2. CUERPO: 2 oraciones máximo explicando la confluencia (o la falta de Killzone).
-    3. CIERRE: [RIESGO TGT 1:3]
-    """
-
-
-    # v5.8-Audit: Priorización Institucional
-    is_priority = "ABSORCIÓN" in prompt or asset == "BTCUSDT"
-    priority = 0 if is_priority else 10
+    # 3. Gestión de Prioridad y Cola (v5.9.5 MTF Priority)
+    # Si hay CUALQUIER señal en CUALQUIER temporalidad, subimos prioridad
+    has_any_signal = any(d.get('signal', 'NEUTRAL') != 'NEUTRAL' for d in (mtf_context or {}).values()) or signal != "NEUTRAL"
+    is_priority = has_any_signal or (symbol == "BTCUSDT")
+    priority = 0 if is_priority else 50
     
+    queue_key = f"TACTICAL_{symbol}"
+    if queue_key in _active_queue_keys:
+        return "ADVISOR: ANALYZANDO_TICK_EN_COLA..."
+
     try:
-        # Encolar petición y esperar resultado
+        _active_queue_keys.add(queue_key)
         loop = asyncio.get_running_loop()
         future = loop.create_future()
         
-        await _ai_queue.put((priority, {
-            'asset': asset,
+        global _ai_task_counter
+        _ai_task_counter += 1
+        
+        await _ai_queue.put((priority, _ai_task_counter, {
+            'asset': symbol,
             'prompt': prompt,
-            'future': future
+            'future': future,
+            'format': 'json'
         }))
         
         advice = await future
-        
-        # Actualizar Memoria y Semantic Cache
-        _strategic_memo[asset] = {**current_state, "advice": advice}
-        _semantic_cache[semantic_hash] = {"price": current_state["price"], "advice": advice}
+        _strategic_memo[symbol] = {"price": price, "advice": advice}
+        _semantic_cache[semantic_hash] = {"price": price, "advice": advice}
         return advice
-
     except Exception as e:
-        logger.error(f"[ADVISOR] ❌ Error en Orchestrator Queue ({asset}): {e}")
-        return "ADVISOR LOG: OLLAMA_QUEUE_ERROR. Reintentando..."
+        logger.error(f"[ADVISOR] ❌ Error en Tactical Advisory ({symbol}): {e}")
+        return "ADVISOR LOG: OLLAMA_TIMEOUT. Siguiendo técnica pura."
+    finally:
+        _active_queue_keys.discard(queue_key)
 
-async def generate_news_sentiment(headline: str) -> dict:
-    """Analiza una noticia usando la cola de prioridad nivel 20 (baja)."""
-    prompt = f"""
-    Eres un analista de sentimiento cripto experto.
-    Analiza este titular y responde ÚNICAMENTE en formato JSON:
-    TITULAR: "{headline}"
-    {{
-        "translated_title": "...",
-        "sentiment": "BULLISH" | "BEARISH" | "NEUTRAL",
-        "score": float,
-        "impact": "..."
-    }}
+async def generate_news_sentiment_batch(headlines: list[str]) -> list[dict]:
     """
+    v5.9.3-Batch Master: Analiza múltiples titulares en una sola inferencia.
+    NUEVO: Incluye extracción robusta de JSON.
+    """
+    if not headlines:
+        return []
+        
+    fallback_list = [
+        {"sentiment": "NEUTRAL", "score": 0.5, "translated_title": h, "impact": "Análisis pendiente."}
+        for h in headlines
+    ]
+    
+    if not await check_ollama_status():
+        logger.warning(f"[ADVISOR] ⚠️ News Batch SKIP: Ollama no disponible para {len(headlines)} noticias.")
+        return fallback_list
+
+    trinity_context = "Sin datos de mercado recientes."
+    try:
+        market_states = await store.get_market_states()
+        if market_states:
+            lines = [f"- {s.get('asset', '?')}: Precio={s.get('current_price', '?')}, Régimen={s.get('regime', 'IDLE')}" for s in market_states]
+            trinity_context = "\n".join(lines)
+    except Exception as ctx_err:
+        logger.warning(f"[ADVISOR] Context fetch error: {ctx_err}")
+
+    headlines_formatted = "\n".join([f"{i+1}. {h}" for i, h in enumerate(headlines)])
+
+    prompt = f"""Eres un Analista Senior de Fondos de Cobertura (Top-Tier Hedge Fund).
+Tu objetivo es evaluar el impacto REAL de estas noticias en el precio de las criptomonedas.
+
+ESTADO ACTUAL DEL MERCADO:
+{trinity_context}
+
+TITULARES A ANALIZAR:
+{headlines_formatted}
+
+INSTRUCCIONES CRÍTICAS:
+1. TRADUCCIÓN: Traduce al español de forma impecable y trader.
+2. SENTIMIENTO: Escoge BULLISH, BEARISH o NEUTRAL. 
+   - EVITA el sentimiento NEUTRAL a menos que la noticia sea Tier 3. 
+   - Si la noticia implica dinero, regulaciones, adopción o grandes empresas, DEBE ser Bullish o Bearish.
+3. PRICED-IN (v6.5): 
+   - Si el precio ya se movió >1% en la dirección de la noticia en los últimos 5 mins, marca IMPACT="BAJO / DESCONTADO".
+4. SCORE: 
+   - 0.0 - 0.3: Pánico/Bearish fuerte.
+   - 0.7 - 1.0: Euforia/Bullish fuerte.
+   - 0.4 - 0.6: Solo para noticias burocráticas sin impacto.
+5. IMPACTO: Explica POR QUÉ esto moverá el precio hoy. Sé agresivo en tu análisis.
+
+Responde ÚNICAMENTE con un ARRAY JSON de objetos. NO incluyas markdown (```) ni texto extra.
+Estructura:
+[
+  {{"translated_title": "...", "sentiment": "...", "score": 0.5, "impact": "..."}}
+]"""
+
     try:
         loop = asyncio.get_running_loop()
         future = loop.create_future()
         
-        await _ai_queue.put((20, {
-            'asset': 'NEWS',
+        global _ai_task_counter
+        _ai_task_counter += 1
+
+        await _ai_queue.put((5, _ai_task_counter, {
+            'asset': 'NEWS_BATCH',
             'prompt': prompt,
-            'format': 'json',
-            'future': future
+            'future': future,
+            'format': 'json'
         }))
         
-        content = await future
-        return json.loads(content)
-    except:
-        return {"sentiment": "NEUTRAL", "score": 0.5, "translated_title": headline}
-    return {
-        "translated_title": headline, 
-        "sentiment": "NEUTRAL", 
-        "score": 0.5, 
-        "impact": "Análisis y traducción no disponibles actualmente."
-    }
+        raw_content = await future
+        clean_content = extract_json_from_llm(raw_content)
+        
+        try:
+            results = json.loads(clean_content)
+            
+            # Si Ollama devuelve un objeto con una clave "news" o similar
+            if isinstance(results, dict):
+                for key in ["news", "results", "analysis", "batch"]:
+                    if key in results and isinstance(results[key], list):
+                        results = results[key]
+                        break
+            
+            if not isinstance(results, list):
+                # Caso extremo: si es un dict y no tiene la lista, intentar corregir
+                if isinstance(results, dict) and len(results) > 0:
+                    results = [results] # Convertir un solo objeto en lista
+                else:
+                    raise ValueError(f"LLM response is not a JSON list or valid object. Content: {clean_content[:100]}...")
+                
+            for i, res in enumerate(results):
+                if "sentiment" not in res: res["sentiment"] = "NEUTRAL"
+                if "score" not in res: res["score"] = 0.5
+                if "impact" not in res: res["impact"] = "Procesado en lote."
+                if ("translated_title" not in res or not res["translated_title"]) and i < len(headlines): 
+                    res["translated_title"] = headlines[i]
+                
+            return results
+            
+        except json.JSONDecodeError as jde:
+            logger.error(f"[ADVISOR] ❌ JSON Decode Fail in Batch: {jde} | First 100 chars: {clean_content[:100]}")
+            return fallback_list
+            
+    except Exception as e:
+        logger.error(f"[ADVISOR] ❌ News Batch Error: {e}")
+        return fallback_list
+
+
+async def generate_news_sentiment(headline: str) -> dict:
+    """Wrapper para compatibilidad."""
+    batch = await generate_news_sentiment_batch([headline])
+    return batch[0] if batch else {"sentiment": "NEUTRAL", "score": 0.5, "translated_title": headline, "impact": "Error en lote."}
+
+async def ai_worker():
+    """Worker que procesa la cola de IA."""
+    async with httpx.AsyncClient(timeout=60.0) as client:
+        while True:
+            priority, count, task = await _ai_queue.get()
+            try:
+                payload = {
+                    "model": DEFAULT_MODEL,
+                    "prompt": task['prompt'],
+                    "stream": False,
+                    "options": {"temperature": 0.3}
+                }
+                if task.get('format') == 'json':
+                    payload['format'] = 'json'
+
+                response = await client.post("http://localhost:11434/api/generate", json=payload)
+                if response.status_code == 200:
+                    result = response.json()
+                    content = result.get("response", "").strip()
+                    task['future'].set_result(content)
+                else:
+                    task['future'].set_exception(Exception(f"Ollama error: {response.status_code}"))
+            except Exception as e:
+                task['future'].set_exception(e)
+            finally:
+                _ai_queue.task_done()
+
+def start_ai_worker():
+    global _ai_worker_task
+    _ai_worker_task = asyncio.create_task(ai_worker())
+    asyncio.create_task(background_ollama_check())
+
+async def background_ollama_check():
+    """Mantiene la caché actualizada."""
+    while True:
+        await check_ollama_status()
+        await asyncio.sleep(60)
+

@@ -1,7 +1,8 @@
+from engine.api.config import settings
 import math
 
 # Ratio Riesgo/Beneficio mínimo NETO (tras comisiones y slippage)
-MIN_RR_REQUIRED = 1.8
+MIN_RR_REQUIRED = settings.MIN_RR
 
 # Factor de Fricción Operativa (0.1% comisión entrada + 0.1% salida + 0.05% slippage estimado)
 FEE_SLIPPAGE_IMPACT = 0.0025 
@@ -11,6 +12,7 @@ MAX_DAILY_DRAWDOWN_PCT = 0.035
 
 # Límite de ejecuciones diarias para evitar factor humano (Maturity v5.0)
 MAX_DAILY_TRADES = 3
+
 
 from engine.core.session_manager import session_manager # Para control de CAP global
 
@@ -24,11 +26,11 @@ class RiskManager:
     4. [NUEVO] Portero Institucional: Rechaza señales con R:R insuficiente.
     """
 
-    def __init__(self, account_balance: float = 1000.0, base_risk_pct: float = 0.01, min_rr: float = MIN_RR_REQUIRED):
+    def __init__(self, account_balance: float = settings.ACCOUNT_BALANCE, base_risk_pct: float = settings.MAX_RISK_PCT, min_rr: float = settings.MIN_RR):
         """
         :param account_balance: Saldo total de la cuenta en USDT (Ej: $1,000 para Prop Firms).
         :param base_risk_pct: Porcentaje base a arriesgar por trade (Ej: 0.01 = 1%).
-        :param min_rr: Ratio Riesgo/Beneficio mínimo para aprobar una señal (default: 1.8).
+        :param min_rr: Ratio Riesgo/Beneficio mínimo para aprobar una señal (default: Config).
         """
         self.account_balance = account_balance
         self.base_risk_pct = base_risk_pct
@@ -109,19 +111,19 @@ class RiskManager:
             
             rr = round(net_reward / net_risk, 2)
             
-            # --- [SIGMA/DELTA v5.7.15] HARD-GATE R:R 2.0 ---
-            if rr < 2.0:
+            # --- [SIGMA/DELTA v5.7.15] DINAMIC HARD-GATE ---
+            if rr < self.min_rr:
                 return {
                     "approved": False,
                     "rr_ratio": rr,
                     "trade_quality": "POOR_RR ⛔",
-                    "reason": f"R:R Insuficiente ({rr} < 2.0). Descartado por Seguridad Financiera."
+                    "reason": f"R:R Insuficiente ({rr} < {self.min_rr}). Descartado por Seguridad Financiera."
                 }
             
             # --- DETERMINACIÓN DE CALIDAD ---
-            if rr >= 2.5:   quality = "A+ (Institutional)"
-            elif rr >= 1.8: quality = "B (Acceptable)"
-            else:           quality = "D (RECHAZADA 🔴)"
+            if rr >= (self.min_rr + 0.5):   quality = "A+ (Institutional)"
+            elif rr >= self.min_rr:      quality = "B (Acceptable)"
+            else:                        quality = "D (RECHAZADA 🔴)"
 
             # Verificación de Exposición Correlacionada (Beta Management)
             current_risk_multiplier = 1.0

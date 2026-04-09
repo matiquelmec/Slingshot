@@ -17,6 +17,7 @@ BroadcasterRegistry:
   - Thread-safe via asyncio.Lock
 """
 
+from engine.api.registry import registry
 from engine.core.logger import logger
 import asyncio
 try:
@@ -38,6 +39,7 @@ from fastapi import WebSocket
 
 from engine.api.config import settings
 from engine.api.json_utils import sanitize_for_json
+from engine.router.processors import StreamProcessor
 from engine.main_router import SlingshotRouter
 from engine.core.session_manager import SessionManager
 from engine.indicators.structure import (
@@ -61,28 +63,10 @@ from engine.core.store import store
 from engine.indicators.htf_analyzer import HTFAnalyzer
 from engine.indicators.onchain import OnChainSentinel
 
+# 🏛️ (v6.0-Audit) La gestión de concurrencia IA ha migrado a advisor.py (Priority Queue)
+# 🏛️ (v6.0-Strategy Delta) MASTER_WATCHLIST y PRIORITY_TIERS han migrado a config.py
 # ──────────────────────────────────────────────────────────────────────────────
-# CONFIGURACIÓN DE ÉLITE v5.7.15 (OPERACIÓN MASTER WATCHLIST — TIERED PRIORITY)
-# ──────────────────────────────────────────────────────────────────────────────
-MASTER_WATCHLIST = ["BTCUSDT", "ETHUSDT", "SOLUSDT", "PAXGUSDT"]
-
-# 🏛️ SIGMA FIX: Tiers de Prioridad de CPU (v5.7.15 Trident Audit)
-# Tier 1 (Alta Volatilidad): Cada 0.5s — Activos primarios de SMC
-# Tier 2 (Media Volatilidad): Cada 1.5s — Activos secundarios
-# Tier 3 (Baja Volatilidad):  Cada 5.0s — Commodities tokenizados (no gastar CPU)
-PRIORITY_TIERS = {
-    "BTCUSDT": 0.5,   # Tier 1
-    "SOLUSDT": 0.5,   # Tier 1
-    "ETHUSDT": 1.5,   # Tier 2
-    "PAXGUSDT": 5.0,  # Tier 3 — Oro tokenizado, volatilidad ~0.05%
-}
-DEFAULT_PULSE_INTERVAL = 2.0  # Para activos fuera de la watchlist
-
-# 🛡️ PROTECCIÓN DE OVERLOAD AI v5.7.15 (Sigma Sync)
-# Limita las llamadas simultáneas a Ollama para prevenir picos de latencia masivos.
-# En un VPS estándar, 1 es el máximo recomendado para Gemma-3 para evitar Drift >1000ms.
-GLOBAL_AI_SEMAPHORE = asyncio.Semaphore(1)
-# ──────────────────────────────────────────────────────────────────────────────
+from engine.router.processors import StreamProcessor
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -207,6 +191,17 @@ class SymbolBroadcaster:
         # ✅ SYNC INSTANTÁNEO: Radar Center (Global Context)
         if registry._last_radar_summary:
             await queue.put({"type": "radar_update", "data": registry._last_radar_summary})
+
+        # ✅ HYDRATION: Noticias (v5.9.11 Master Fix)
+        # Solo sincronizamos historial para el canal de 15m (Capitán) para evitar duplicados masivos 
+        # al cambiar de temporalidad. También aumentamos a 15 items para visión total.
+        if self.interval == "15m":
+            try:
+                latest_news = await store.get_news(limit=15)
+                for news_item in reversed(list(latest_news)):
+                    await queue.put({"type": "news_update", "data": news_item})
+            except Exception as e:
+                logger.error(f"[BROADCASTER] Hydration error: {e}")
 
         if self._last_ghost:    await queue.put(self._last_ghost)
         if self._last_smc:      await queue.put(self._last_smc)
@@ -592,8 +587,8 @@ class SymbolBroadcaster:
                 
                 # --- SIGMA FIX: Tiers de Prioridad (Trident Audit) ---
                 # Cada activo tiene su propio intervalo óptimo basado en volatilidad real
-                is_elite = self.symbol in MASTER_WATCHLIST
-                pulse_interval = PRIORITY_TIERS.get(self.symbol, DEFAULT_PULSE_INTERVAL)
+                is_elite = self.symbol in settings.MASTER_WATCHLIST
+                pulse_interval = settings.PRIORITY_TIERS.get(self.symbol, settings.DEFAULT_PULSE_INTERVAL)
                 
                 regime = self._last_tactical.get("data", {}).get("market_regime", "UNKNOWN") if self._last_tactical else "UNKNOWN"
                 if regime in ["CHOPPY", "ACCUMULATION", "DISTRIBUTION"]:
@@ -602,279 +597,140 @@ class SymbolBroadcaster:
                 if now - self._last_pulse_ts >= pulse_interval:
                     self._last_pulse_ts = now
 
-                    # 1. Whale Sensor: [WHALE_SCAN] (v5.7.15 DOM Intelligence)
-                    if now - self._last_whale_scan_ts >= 5.0: # Cada 5s
-                        self._last_whale_scan_ts = now
-                        def _find_whales():
-                            try:
-                                # v5.7.157 Priority Fix: Sigma - Solo niveles 1-5 (Muros inmediatos)
-                                all_bids = self._liquidity.get("bids", [])[:5]
-                                all_asks = self._liquidity.get("asks", [])[:5]
-                                m_bid = max([float(b["volume"]) for b in all_bids]) if all_bids else 0.0
-                                m_ask = max([float(a["volume"]) for a in all_asks]) if all_asks else 0.0
-                                return max(m_bid, m_ask)
-                            except: return 0.0
-
-                        loop = asyncio.get_running_loop()
-                        whale_size = await loop.run_in_executor(None, _find_whales)
-                        if whale_size > 0:
-                            logger.info(f"[WHALE_SCAN] Order Book Muro Máximo: {whale_size:.2f} {self.symbol.replace('USDT', '')}")
-
-                    # Sincronización con Ghost Data Centralizado
-                    ghost = get_ghost_state()
-                    if not ghost.is_stale and (not self._last_ghost or ghost.last_updated > self._last_ghost.get("data", {}).get("last_updated", 0)):
-                        await self._refresh_ghost(ghost)
-
-                    # Refresco Periódico de HTF Bias (cada 30 min)
-                    if now - self._last_htf_ts > 1800: # 30 min
-                         asyncio.create_task(self._refresh_htf_bias())
-
-                    # Refresco On-Chain (cada 30s - v5.7.15 Force Refresh)
-                    if now - self._last_onchain_ts > 30: # 30s
-                        try:
-                            # v5.7.157 Protocolo de Silencio: On-Chain a log DEBUG
-                            from engine.core.store import store
-                            latest_news = await store.get_news(limit=1)
-                            news_sentiment = latest_news[0].get("sentiment", "NEUTRAL") if latest_news else "NEUTRAL"
-                            onchain_summary = await self._onchain_sentinel.refresh(
-                                current_price=float(kline['c']),
-                                market_regime=regime,
-                                news_sentiment=news_sentiment
-                            )
-                            logger.debug(f"[ON-CHAIN] {self.symbol}: Bias={onchain_summary.get('onchain_bias')}")
-                            self._last_onchain_ts = now
-                        except Exception: pass
-
+                    # Contexto para el Brain Delta Δ
+                    # v6.0-Audit: Optimizamos la creación del DataFrame para evitar overhead persistente
                     current_buffer = [i["data"] for i in self._live_buffer] + [candle_payload["data"]]
-                    if len(current_buffer) > 50:
-                        # OMEGA FIX: Timestamps incrementales para evitar overhead de pd.to_datetime (v5.7.156 Hardening)
-                        if not hasattr(self, "_cached_live_dates") or self._cached_live_dates is None:
-                            base_dt = pd.to_datetime([i["data"]["timestamp"] for i in self._live_buffer], unit="s")
-                            self._cached_live_dates = list(base_dt)
+                    df_live = pd.DataFrame(current_buffer)
+                    
+                    # Llamada al Cerebro Táctico Delta (Etapa 2)
+                    delta_fast = await StreamProcessor.process_fast_path(
+                        symbol=self.symbol,
+                        interval=self.interval,
+                        candle_payload=candle_payload,
+                        ws_data=data,
+                        context={"df_live": df_live, "avg_volume": getattr(store, 'get_avg_volume', lambda x: 0)(self.symbol)}
+                    )
+
+                    # 1. ⚠️ Gestión Forense de Latencia (Audit Sigma)
+                    if delta_fast.get("latency_dirty"):
+                         await self._broadcast({"type": "neural_log", "data": {"type": "SYSTEM", "message": f"⚠️ LATENCY_DIRTY: {delta_fast['latency_ms']}ms (Margen >800ms)"}})
+                    
+                    # 📊 Registro en monitor global (Reporte 30s)
+                    from engine.api.registry import registry
+                    registry.record_latency(delta_fast.get("latency_ms", 0))
+                    
+                    # 2. 🐋 Whale / Absorption Logic
+                    if delta_fast.get("event") == "ABSORPTION_ALERT":
+                        logger.warning(f"[DELTA] 🚨 ABSORCIÓN detectada ({delta_fast['rvol']}x) en {self.symbol}")
+                        await self._broadcast({"type": "absorption_alert", "data": {"rvol": delta_fast['rvol']}})
+                        # Forzar re-análisis del Advisor ante flujo de órdenes agresivo
+                        asyncio.create_task(self._emit_advisor(self._last_tactical or {}, SessionManager.get_global_session_status(), is_absorption_alert=True))
+
+                    # 3. 🧠 Inferencia ML & Smoothing
+                    ml_data = delta_fast.get("ml_prediction", {})
+                    if ml_data:
+                        self._last_ml = ml_data
+                        # EMA Smoothing (v6.0 Trident Audit)
+                        prob_raw = ml_data.get("probability", 50)
+                        prob_bull = prob_raw if ml_data.get("direction") == "ALCISTA" else 100 - prob_raw
+                        self._ema_ml_prob = (prob_bull * self._ml_alpha) + (self._ema_ml_prob * (1 - self._ml_alpha))
+
+                    # 4. Pipeline Táctico (Mantenido local por ahora - Etapa 2.5)
+                    try:
+                        live_tactical = await asyncio.to_thread(
+                            self._router.process_market_data,
+                            df_live, asset=self.symbol, interval=self.interval,
+                            macro_levels=self._macro_levels, htf_bias=self._htf_bias,
+                            heatmap=self._heatmap, silent=True,
+                            event_time_ms=data.get("data", {}).get("E")
+                        )
+                        self._last_tactical = {"data": live_tactical}
+                        await self._broadcast({"type": "tactical_update", "data": live_tactical})
                         
-                        new_dt = pd.Timestamp(candle_payload["data"]["timestamp"], unit="s")
-                        self._cached_live_dates.append(new_dt)
-                        if len(self._cached_live_dates) > 301:
-                            self._cached_live_dates = self._cached_live_dates[-300:]
+                        # Monitor de Absorción para el Dashboard
+                        self._live_rvol = float((live_tactical.get('diagnostic') or {}).get('rvol', 0))
+                    except Exception as e:
+                        logger.error(f"[FAST-PATH] Pipeline tactical error: {e}")
 
-                        # Asincronía Total: Offload PANDAS a hilos secundarios
-                        def _prepare_and_predict():
-                            _df = pd.DataFrame(current_buffer)
-                            _df["timestamp"] = pd.Series(self._cached_live_dates[-len(_df):])
-                            return ml_engine.predict_live(_df), _df
-
-                        loop = asyncio.get_running_loop()
-                        raw_pred, df_tick = await loop.run_in_executor(None, _prepare_and_predict)
-                        
-                        if raw_pred.get("status") == "active":
-                            raw_prob = raw_pred.get("probability", 50)
-                            raw_dir  = raw_pred.get("direction", "ANALIZANDO")
-                            prob_bull = raw_prob if raw_dir == "ALCISTA" else 100 - raw_prob
-                            self._ema_ml_prob = (prob_bull * self._ml_alpha) + (self._ema_ml_prob * (1 - self._ml_alpha))
-
-                            if self._ema_ml_prob >= 55.0:   self._ml_direction = "ALCISTA"
-                            elif self._ema_ml_prob <= 45.0: self._ml_direction = "BAJISTA"
-                            elif self._ml_direction == "ANALIZANDO": self._ml_direction = "NEUTRAL"
-
-                            conf = self._ema_ml_prob if self._ml_direction == "ALCISTA" else (100 - self._ema_ml_prob)
-                            self._last_ml = {
-                                "direction": self._ml_direction,
-                                "probability": int(conf),
-                                "status": raw_pred["status"],
-                                "reason": raw_pred["reason"]
-                            }
-                        else:
-                            self._last_ml = raw_pred
-
-                        # Pipeline táctico en Fast Path (SILENCIOSO v4.0)
-                        try:
-                            live_tactical = await asyncio.to_thread(
-                                self._router.process_market_data,
-                                df_tick, 
-                                asset=self.symbol, 
-                                interval=self.interval,
-                                macro_levels=self._macro_levels,
-                                htf_bias=self._htf_bias,
-                                heatmap=self._heatmap, # v5.7 Neural Heatmap
-                                silent=True,
-                                event_time_ms=data.get("data", {}).get("E")
-                            )
-                            await self._broadcast({"type": "tactical_update", "data": live_tactical})
-
-                            # 🔴 v5.7.155 Master Gold: Capturar RVOL live del Fast Path para inyectarlo al Advisor
-                            fast_rvol = (live_tactical.get('diagnostic') or {}).get('rvol', 0)
-                            if fast_rvol and fast_rvol > 0:
-                                self._live_rvol = float(fast_rvol)
-                            
-                            # 🚀 HEARTBEAT DE ESCANEO: Para que el usuario vea que el motor está vivo
-                            if live_tactical.get("market_regime") != "UNKNOWN":
-                                # SI el análisis inicial fue N/A y ahora ya tenemos niveles, forzar actualización del Advisor
-                                has_levels = len(live_tactical.get('key_levels', {}).get('supports', [])) > 0
-                                if not self._first_advisor_done and has_levels:
-                                    logger.info(f"[BROADCASTER] 🚀 Estructura detectada para {self.symbol}. Forzando primer análisis del Advisor...")
-                                    session_state = SessionManager.get_global_session_status() # Estado actual
-                                    asyncio.create_task(self._emit_advisor(live_tactical, session_state))
-                                    self._first_advisor_done = True
-                                    self._last_advisor_ts = live_tactical.get("timestamp", 0)
-
-                                status_msg = f"[SCAN] Sesgo: {self._htf_bias.direction if self._htf_bias else 'NEUTRAL'} | Régimen: {live_tactical.get('market_regime')} | Filtros OK"
-                                
-                                # 🔴 ALERTA DE ABSORCIÓN (v5.7.15 Priority Audit)
-                                # Si el RVOL llega a 3.5x, forzamos al Advisor incluso si no es cierre de vela o estamos fuera de Killzone.
-                                if self._live_rvol >= 3.5:
-                                    last_advisor_ts_safe = str(self._last_advisor_ts) if self._last_advisor_ts else ""
-                                    current_ts = live_tactical.get("timestamp", 0)
-                                    # Debouncing: No spamear el Advisor si ya lo enviamos en los últimos 2 minutos por esta alerta
-                                    if str(current_ts) != last_advisor_ts_safe:
-                                        logger.warning(f"[BROADCASTER] 🚨 ALERTA DE ABSORCIÓN (RVOL {self._live_rvol}x) para {self.symbol}. Prioridad Máxima.")
-                                        session_state = SessionManager.get_global_session_status()
-                                        asyncio.create_task(self._emit_advisor(live_tactical, session_state, is_absorption_alert=True))
-                                        self._last_advisor_ts = current_ts
-
-                                await self._broadcast({"type": "neural_log", "data": {
-                                    "type": "SYSTEM",
-                                    "message": status_msg
-                                }})
-
-                            # 🚀 PERSISTENCIA EN TIEMPO REAL (Fast Path - SILENCIA LOGS)
-                            if live_tactical.get("signals") or live_tactical.get("blocked_signals"):
-                                await self._handle_signals(live_tactical, silent=True)
-                        except Exception as e:
-                            logger.error(f"[BROADCASTER] {self._key} → Fast Path pipeline error: {e}")
-                            traceback.print_exc()
-
-                    # Neural Pulse
+                    # Neural Pulse v6.0 (Feed Institucional)
                     await self._broadcast({
                         "type": "neural_pulse",
                         "data": {
                             "ml_projection": self._last_ml,
-                            "liquidity_heatmap": self._heatmap, # Enviar heatmap completo v5.7
-                            "legacy_liquidity": self._liquidity,
-                            "log": {
-                                "type": "SENSOR",
-                                "message": f"[Fast Path] Precio: ${float(kline['c']):.2f}"
-                            }
+                            "liquidity_heatmap": self._heatmap,
+                            "latency_ms": delta_fast.get("latency_ms", 0),
+                            "rvol_live": self._live_rvol
                         }
                     })
 
                 # ── SLOW PATH: cierre de vela ─────────────────────────────────
+                # ── SLOW PATH: cierre de vela (Strategy Delta Δ) ──────────────────────
                 if kline.get("x", False):
-                    # Resetear debounce de señales para la nueva vela
+                    # Resetear estado de la vela
                     self._processed_signals_this_candle.clear()
-                    
                     self._live_buffer.append(candle_payload)
                     self._candle_closes += 1
                     
-                    # ── Bootstrap del Slow Path (v5.7.155 Hardening) ───────────────
-                    final_tactical = self._last_tactical or {}
-                    session_state  = self._last_session or {}
+                    # Llamada al Cerebro Táctico Delta (Slow Path)
+                    # v6.0: Delegamos SMC, Liquidaciones y Drift al procesador especializado
+                    delta_slow = await StreamProcessor.process_slow_path(
+                        symbol=self.symbol,
+                        candle_payload=candle_payload,
+                        live_buffer=list(self._live_buffer),
+                        persistent_smc=self._persistent_smc,
+                        context={"candle_closes": self._candle_closes, "ml_direction": self._ml_direction}
+                    )
 
-                    df_live = pd.DataFrame([i["data"] for i in self._live_buffer])
-                    df_live["timestamp"] = pd.to_datetime(df_live["timestamp"], unit="s")
-
-                    # --- ML Accuracy Tracker para Drift Monitor (v5.7.155 Master Gold) ---
-                    # Registramos el resultado de la vela que acaba de cerrar vs la predicción de la anterior.
-                    if len(df_live) > 2:
-                        last_c = df_live.iloc[-1]
-                        actual_up = 1 if last_c['close'] > last_c['open'] else 0
-                        if hasattr(self, '_last_ml_prediction') and self._last_ml_prediction:
-                            pred_up = 1 if self._last_ml_prediction == "ALCISTA" else 0
-                            drift_monitor.record_prediction(pred_up, actual_up)
-                        
-                        # Guardamos la predicción actual para evaluarla en el siguiente cierre
-                        # Usamos la dirección suavizada vía EMA para evitar ruido
-                        self._last_ml_prediction = self._ml_direction
-
-                    # Drift Monitor (cada 100 velas cerradas ≈ 25h en 15m)
-                    if self._candle_closes % 100 == 0:
-                        asyncio.create_task(self._check_drift(df_live.copy()))
-                        
-                        # OMEGA FIX: Limpieza quirúrgica sin gc.collect() Stop-the-World (Trident Audit v5.7.15)
-                        # En lugar de forzar GC global (congela TODOS los broadcasters),
-                        # solo liberamos las referencias huérfanas que controlamos directamente.
-                        self._history.clear()
-                        self._cached_live_dates = None  # Se reconstruirá en el próximo tick
-                        logger.info(f"[BROADCASTER] {self._key} → 🧹 Limpieza quirúrgica (sin GC global) completada.")
-
-                    # SMC actualizado y Persistencia (Long-Term Memory V4.3)
-                    try:
-                        df_ob = await asyncio.to_thread(identify_order_blocks, df_live)
-                        smc_new   = await asyncio.to_thread(extract_smc_coordinates, df_ob)
-                        current_low = float(candle_payload["data"]["low"])
-                        current_high = float(candle_payload["data"]["high"])
-                        
-                        if self._persistent_smc:
-                            mitigated_smc = mitigate_smc_state(self._persistent_smc, current_low, current_high)
-                            self._persistent_smc = merge_smc_states(mitigated_smc, smc_new)
-                        else:
-                            self._persistent_smc = smc_new
-                            
+                    # 1. Sincronización de Memoria Técnica (SMC/OrderBlocks)
+                    if delta_slow.get("smc_data"):
+                        self._persistent_smc = delta_slow["smc_data"]
                         await self._broadcast({"type": "smc_data", "data": self._persistent_smc})
-                    except Exception as e:
-                        logger.error(f"[BROADCASTER] {self._key} → SMC Slow Path error: {e}")
 
-                    # Liquidaciones Sintéticas (Trapped Money)
-                    try:
-                        liq_clusters = await asyncio.to_thread(estimate_liquidation_clusters, df_live, self.latest_price)
-                        await self._broadcast({"type": "liquidation_update", "data": liq_clusters})
-                    except Exception as e:
-                        logger.error(f"[BROADCASTER] {self._key} → Liquidation Estimator error: {e}")
+                    # 2. Liquidaciones y Heatmap Estático
+                    if delta_slow.get("liquidation_clusters"):
+                        await self._broadcast({"type": "liquidation_update", "data": delta_slow["liquidation_clusters"]})
 
-                    # Pipeline táctico final (vela cerrada = máxima precisión)
+                    # 3. Pipeline Táctico de Cierre (Máxima Precisión)
                     try:
+                        # Re-construcción del DF para el router táctico
+                        df_slow = pd.DataFrame([i["data"] for i in self._live_buffer])
+                        df_slow["timestamp"] = pd.to_datetime(df_slow["timestamp"], unit="s")
+
                         news_items   = await self._store.get_news()
                         econ_events  = await self._store.get_economic_events(limit=5)
                         
                         self._router.set_context(
                             ml_projection=self._last_ml,
-                            session_data=session_state.get("data", {}),
+                            session_data=(self._last_session or {}).get("data", {}),
                             news_items=news_items,
                             economic_events=econ_events,
-                            liquidation_clusters=liq_clusters if 'liq_clusters' in locals() else []
+                            liquidation_clusters=delta_slow.get("liquidation_clusters", [])
                         )
                         final_tactical = await asyncio.to_thread(
                             self._router.process_market_data,
-                            df_live, 
-                            asset=self.symbol, 
-                            interval=self.interval,
-                            macro_levels=self._macro_levels,
-                            htf_bias=self._htf_bias,
-                            silent=False # En Slow Path queremos ver los porqués
+                            df_slow, asset=self.symbol, interval=self.interval,
+                            macro_levels=self._macro_levels, htf_bias=self._htf_bias,
+                            silent=False
                         )
                         await self._broadcast({"type": "tactical_update", "data": final_tactical})
-
-                        # Filtro macro + Telegram + Supabase (LOGS ACTIVOS EN CIERRE)
+                        
+                        # Gestión de Señales Institucionales (Portero)
                         await self._handle_signals(final_tactical, silent=False)
 
+                        # Trigger Único del Advisor (v6.0 No-Wait Queue)
+                        current_candle_ts = str(candle_payload["data"]["timestamp"])
+                        if current_candle_ts != str(self._last_advisor_ts):
+                            self._last_advisor_ts = current_candle_ts
+                            asyncio.create_task(self._emit_advisor(final_tactical, SessionManager.get_global_session_status()))
+
                     except Exception as e:
-                        logger.error(f"[BROADCASTER] {self._key} → Slow Path pipeline error: {e}")
+                        logger.error(f"[SLOW-PATH] tactical error: {e}")
 
-                    # Sesión con cierre confirmado
-                    try:
-                        session_state = self._session_manager.update(candle_payload["data"], is_closed=True)
-                        self._last_session = session_state # Persistir en la instancia
-                        await self._broadcast(session_state)
-                    except Exception as e:
-                        logger.error(f"[BROADCASTER] {self._key} → Session Slow Path error: {e}")
-
-                    # 🚨 DRIFT MONITOR: Evaluación de salud del modelo ML (v5.7.155 Master Gold)
-                    # Se ejecuta cada 100 velas (aprox 25h en 15m) para detectar obsolescencia.
-                    if self._candle_closes % 100 == 0:
-                        asyncio.create_task(self._check_drift(df_live.copy()))
-
-                    # LLM Advisor (no bloqueante -v4.0)
-                    # Solo disparamos el análisis una vez por cierre real de vela para evitar spam.
-                    current_candle_ts = str(candle_payload["data"]["timestamp"])
-                    last_advisor_ts_safe = str(self._last_advisor_ts) if self._last_advisor_ts else ""
-                    
-                    if current_candle_ts != last_advisor_ts_safe:
-                        self._last_advisor_ts = current_candle_ts
-                        if final_tactical and session_state:
-                            asyncio.create_task(self._emit_advisor(final_tactical, session_state))
-                        else:
-                            logger.warning(f"[BROADCASTER] {self._key} → Advisor cancelado: Datos incompletos en Slow Path.")
-                    else:
-                        logger.info(f"[BROADCASTER] {self._key} → 🧠 Advisor omitido (ya analizado para esta vela)")
+                    # 4. Limpieza Quirúrgica Delta
+                    if delta_slow.get("cleanup_event") == "CLEANUP_PERFORMED":
+                        self._history.clear()
+                        self._cached_live_dates = None
+                        logger.info(f"[DELTA] 🧹 Limpieza de memoria completada para {self.symbol}")
 
     async def _refresh_htf_bias(self):
         """Re-evalúa el sesgo institucional (4H + 1H) para el enrutamiento top-down."""
@@ -901,7 +757,7 @@ class SymbolBroadcaster:
         """Prueba rápida asincrónica para ver si Ollama responde en localhost:11434."""
         import httpx
         try:
-            async with httpx.AsyncClient(timeout=1.0) as client:
+            async with httpx.AsyncClient(timeout=4.0) as client:
                 r = await client.get("http://localhost:11434/api/tags")
                 return r.status_code == 200
         except:
@@ -923,13 +779,13 @@ class SymbolBroadcaster:
         # Generamos un ID basado en Asset, Tipo, Score y Timestamp de la vela.
         def get_sig_id(s):
             ts = s.get("timestamp") or s.get("time") or tactical.get("candles", [{}])[-1].get("timestamp", 0)
-            score = s.get("confluence", {}).get("total_score", 0)
+            score = s.get("confluence", {}).get("score", 0)
             return f"{self.symbol}:{s.get('type', 'LONG')}:{ts}:{score}"
 
         unique_new = []
         for s in raw_signals:
             # v5.7.157 Protocolo Omega: Filtro de Confluencia Institucional (> 60%)
-            score = s.get("confluence", {}).get("total_score", 0)
+            score = s.get("confluence", {}).get("score", 0)
             if score <= 60:
                 continue
                 
@@ -977,11 +833,15 @@ class SymbolBroadcaster:
         # pero NUNCA se envían al Dashboard. Limpieza visual absoluta.
         for sig in macro_blocked:
             motivo = sig.get("blocked_reason", "Bloqueada por filtro macro")
+            from engine.api.registry import registry
+            registry.record_veto(self.symbol, f"MACRO: {motivo}")
             if not silent:
                 logger.info(f"[GATEKEEPER] 🔇 Señal macro-bloqueada ({self.symbol}): {motivo}")
 
         for sig in unique_blocked:
             motivo = sig.get("blocked_reason", "Rechazada por filtro táctico")
+            from engine.api.registry import registry
+            registry.record_veto(self.symbol, f"TACTICAL: {motivo}")
             if not silent:
                 logger.info(f"[GATEKEEPER] 🔇 Señal router-bloqueada ({self.symbol}): {motivo}")
 
@@ -1034,7 +894,6 @@ class SymbolBroadcaster:
         except Exception as e:
             import traceback
             logger.error(f"[BROADCASTER] ❌ Error en Drift Monitor ({self.symbol}): {e}")
-            traceback.print_exc()
             traceback.print_exc()
 
 
@@ -1090,7 +949,7 @@ class SymbolBroadcaster:
             "price":            float(sig.get("price", 0)),
             "stop_loss":        float(sig.get("stop_loss", 0)),
             "take_profit_3r":   float(sig.get("take_profit_3r", 0)),
-            "confluence_score": float(sig.get("confluence", {}).get("total_score", 0)) if sig.get("confluence") else 0,
+            "confluence_score": float(sig.get("confluence", {}).get("score", 0)) if sig.get("confluence") else 0,
             "regime":           tactical.get("market_regime", "UNKNOWN"),
             "strategy":         tactical.get("active_strategy", "N/A"),
             "trigger":          sig.get("trigger", "N/A"),
@@ -1157,6 +1016,36 @@ class SymbolBroadcaster:
         if live_overrides:
             tactical = {**tactical, **live_overrides}
         
+        # 🟢 MTF Master Implementation (v5.9.5)
+        # Paso 1: Sanitizar y Guardar Snapshot para que otros intervalos lo vean
+        import numpy as np
+        sanitized_current = sanitize_for_json(tactical)
+        await self._store.save_tactical_snapshot(self.symbol, self.interval, sanitized_current)
+
+        # Paso 2: Lógica de "Capitán de Activo"
+        # Para evitar saturar a Ollama, solo un intervalo dispara el análisis. 
+        # Preferimos 15m (Estratégico). Si no está activo, 5m.
+        # Si un intervalo NO es el disparador, simplemente intenta leer el último análisis del store.
+        
+        IS_LEAD = (self.interval == "15m") 
+        # Fallback: si soy 5m y no hay 15m activo, yo tomo el mando (simplificado por ahora a 15m principal)
+        
+        if not IS_LEAD:
+            # Subordinado: Intentar leer el análisis consolidado del Capitán
+            existing_advice = await self._store.get_advisor_advice(self.symbol)
+            if existing_advice:
+                # Si el análisis tiene menos de 2 minutos, lo damos por válido para el 1m/5m
+                # updated_at = existing_advice.get("updated_at")
+                # if updated_at: ... 
+                self._last_advisor = existing_advice
+                await self._broadcast({"type": "advisor_update", "data": existing_advice})
+                return
+            
+            # Si no hay análisis previo, y soy un 1m/5m frenético, solo esperamos al 15m
+            # A menos que sea una ALERTA crítica
+            if not is_absorption_alert:
+                return
+
         # ✅ VERIFICACIÓN DE CACHÉ INTERNO (SMC v5.7.155 Master Gold)
         # Si ya tenemos un análisis para esta vela en el Store, lo reutilizamos.
         current_candle_ts = tactical.get("candles", [{}])[-1].get("timestamp", 0) if tactical.get("candles") else 0
@@ -1167,7 +1056,7 @@ class SymbolBroadcaster:
         if existing_advice and existing_advice.get("timestamp") == current_candle_ts:
             content = existing_advice.get("content", "")
             if "N/A" not in content and "ESTRUCTURA NO IDENTIFICADA" not in content:
-                logger.info(f"[BROADCASTER] ♻️ Reutilizando análisis cacheado para {self.symbol} ({current_candle_ts})")
+                logger.debug(f"[BROADCASTER] ♻️ Reutilizando análisis cacheado para {self.symbol} ({current_candle_ts})")
                 self._last_advisor = existing_advice
                 await self._broadcast({"type": "advisor_update", "data": existing_advice})
                 return
@@ -1214,60 +1103,80 @@ class SymbolBroadcaster:
             logger.info(f"[BROADCASTER] 🔃 Análisis previo cancelado para {self.symbol} (Nueva petición)")
 
         try:
-            loading_obj = {
-                "content": "CONECTANDO CON EL MOTOR CUÁNTICO (Ollama)... ⚡",
-                "timestamp": current_candle_ts,
-                "status": "LOADING_IA",
-                "updated_at": datetime.now(timezone.utc).isoformat()
-            }
-            # self._last_advisor se actualizará automáticamente via _broadcast
-            await self._broadcast({"type": "advisor_update", "data": loading_obj})
+            # --- GATEKEEPING COGNITIVO (v6.0 - Operation Lightning) ---
+            # FIX v6.0.1: tactical dict no tiene 'confluence_score' ni 'signal' a nivel raíz.
+            # Esos campos viven dentro de cada señal en tactical["signals"].
+            # Extraemos el mejor score de las señales aprobadas y verificamos si hay señal activa.
+            approved_signals = tactical.get("signals", [])
+            blocked_signals = tactical.get("blocked_signals", [])
+            all_signals = approved_signals + blocked_signals
+            
+            # Score: el más alto entre todas las señales (aprobadas + bloqueadas)
+            conf_score = max(
+                (s.get("confluence", {}).get("score", 0) for s in all_signals if s.get("confluence")),
+                default=0
+            )
+            # También considerar el score inyectado por _persist_signal si existe
+            conf_score = max(conf_score, tactical.get("confluence_score", 0))
+            
+            # Señal activa: hay señales aprobadas con tipo no-NEUTRAL
+            is_active_signal = any(
+                s.get("signal_type", s.get("type", "NEUTRAL")) != "NEUTRAL" 
+                for s in approved_signals
+            ) if approved_signals else False
+            
+            # Diagnóstico adicional: el régimen del mercado también indica actividad
+            regime = tactical.get("market_regime", "UNKNOWN")
+            is_trending = regime in ("MARKUP", "MARKDOWN", "ACCUMULATION", "DISTRIBUTION")
+            
+            logger.info(f"[GATEKEEPER-DEBUG] {self.symbol} | Score: {conf_score}% | Active: {is_active_signal} | Regime: {regime} | Signals: {len(approved_signals)}A/{len(blocked_signals)}B")
+            
+            if not is_active_signal and not is_trending and conf_score < 70:
+                # Bypass total de la IA para ahorrar recursos
+                advice = json.dumps({
+                    "verdict": "SIDEWAYS", 
+                    "logic": f"Confluencia {conf_score}% (Standby)", 
+                    "threat": "LOW"
+                })
+                logger.info(f"[BROADCASTER] 🛡️ Gatekeeping ACTIVE para {self.symbol}. Score {conf_score}% < 70%. LLM Bypassed.")
+            else:
+                loading_obj = {
+                    "content": "CONECTANDO CON EL MOTOR CUÁNTICO (Ollama)... ⚡",
+                    "timestamp": current_candle_ts,
+                    "status": "LOADING_IA",
+                    "updated_at": datetime.now(timezone.utc).isoformat()
+                }
+                await self._broadcast({"type": "advisor_update", "data": loading_obj})
 
-            # Creamos la tarea para poder cancelarla si fuera necesario
-            self._advisor_task = asyncio.current_task()
+                # Creamos la tarea para poder cancelarla si fuera necesario
+                self._advisor_task = asyncio.current_task()
 
-            # Obtener datos adicionales del store para el LLM
-            news_items = await self._store.get_news(limit=5)
-            liqs = await self._store.get_liquidation_clusters(self.symbol)
-            econ_events = await self._store.get_economic_events(limit=5)
+                # Obtener datos adicionales del store para el LLM
+                news_items = await self._store.get_news(limit=5)
+                liqs = await self._store.get_liquidation_clusters(self.symbol)
+                econ_events = await self._store.get_economic_events(limit=5)
 
-            # ✅ SERIALIZACIÓN ROBUSTA (v5.7.155 Master Gold)
-            # Convertimos tipos de Numpy a Python nativo (Evita el bug del N/A)
-            import numpy as np
-            def sanitize(obj):
-                if isinstance(obj, dict):
-                    return {k: sanitize(v) for k, v in obj.items()}
-                if isinstance(obj, list):
-                    return [sanitize(i) for i in obj]
-                if isinstance(obj, (np.float64, np.float32)):
-                    return float(obj)
-                if isinstance(obj, (np.int64, np.int32)):
-                    return int(obj)
-                return obj
+                # ✅ SERIALIZACIÓN ROBUSTA & MTF (v6.0 Master)
+                sanitized_current = sanitize_for_json(tactical.copy())
+                sanitized_current.pop("candles", None)
+                mtf_context = await self._store.get_mtf_context(self.symbol)
 
-            payload = tactical.copy()
-            payload.pop("candles", None)
-            sanitized_tactical = sanitize(payload)
-
-            # Timeout de 45 segundos para VPS — liberar recursos si la IA no responde
-            # 🛡️ Uso del Semáforo Global para prevenir Drift por saturación de CPU/GPU (v5.7.155)
-            async with GLOBAL_AI_SEMAPHORE:
+                # Proceder con la IA (v6.0 Master Consolidated Call)
                 advice = await asyncio.wait_for(
                     generate_tactical_advice(self.symbol, 
-                        tactical_data=sanitized_tactical,
+                        tactical_data=sanitized_current,
                         current_session=session_state.get("data", {}).get("current_session", "UNKNOWN"),
                         ml_projection=self._last_ml,
                         news=news_items,
                         liquidations=liqs,
                         economic_events=econ_events,
-                        onchain_data=self._last_onchain.get("data") if self._last_onchain else None
+                        onchain_data=self._last_onchain.get("data") if self._last_onchain else None,
+                        mtf_context=mtf_context
                     ),
-                    timeout=45.0
+                    timeout=60.0
                 ) 
-            logger.info(f"[BROADCASTER] ✅ Análisis LLM completado para {self.symbol}")
+                logger.info(f"[BROADCASTER] ✅ Análisis LLM completado para {self.symbol}")
             
-            # ✅ PERSISTENCIA EN EL STORE (v5.7.155 Master Gold)
-            # Guardamos el análisis con el timestamp de la vela para el debouncing global
             advice_obj = {
                 "timestamp": current_candle_ts,
                 "asset": self.symbol,
@@ -1371,143 +1280,8 @@ class SymbolBroadcaster:
 
 
 # ──────────────────────────────────────────────────────────────────────────────
-# BroadcasterRegistry — gestiona el ciclo de vida de todos los broadcasters
+
+
 # ──────────────────────────────────────────────────────────────────────────────
-
-class BroadcasterRegistry:
-    """
-    Registro global de SymbolBroadcasters.
-    Crea un broadcaster cuando el primer cliente se conecta a un símbolo.
-    Lo destruye cuando el último cliente desconecta.
-    """
-
-    def __init__(self):
-        self._broadcasters: Dict[str, SymbolBroadcaster] = {}
-        self._lock = asyncio.Lock()
-        self._pulse_task: Optional[asyncio.Task] = None
-        self._last_radar_summary: Optional[list] = None
-
-    async def start_global_pulse(self):
-        """Inicia el latido global que sincroniza el estado de todos los radares."""
-        if self._pulse_task: return
-        self._pulse_task = asyncio.create_task(self._pulse_loop())
-        logger.info("[REGISTRY] 💓 Global Radar Pulse iniciado (3s interval)")
-
-    async def _pulse_loop(self):
-        """Loop que emite el estado resumido de todo el mercado cada 3 segundos."""
-        while True:
-            try:
-                await asyncio.sleep(3) # Optimizado a 3s para feed institucional
-                # 1. Obtener estados de todos los activos desde el store
-                states = await store.get_market_states()
-                if not states: continue
-
-                # 2. Simplificar para el Radar (ahorro de ancho de banda)
-                summary = []
-                for s in states:
-                    summary.append({
-                        "asset":       s.get("asset"),
-                        "price":       s.get("price") or s.get("current_price"),
-                        "regime":      s.get("regime") or s.get("market_regime", "UNKNOWN"),
-                        "strategy":    s.get("strategy") or "SMC INSTITUTIONAL",
-                        "bias":        s.get("macro_bias") or (s.get("htf_bias", {}).get("direction", "NEUTRAL") if isinstance(s.get("htf_bias"), dict) else "NEUTRAL"),
-                        "ob_count":    (s.get("ob_bullish_count", 0) + s.get("ob_bearish_count", 0)),
-                        "fvg_active":  (s.get("fvg_bullish_active", False) or s.get("fvg_bearish_active", False)),
-                        "is_killzone": s.get("in_killzone", False),
-                        "macro_risk":  s.get("macro_risk", False),
-                        "liq_magnet":  s.get("liq_magnet", False),
-                        "ml_dir":      s.get("ml_dir", "NEUTRAL"),
-                        "ml_prob":     s.get("ml_prob", 50),
-                        "sentiment":   s.get("risk_appetite", "NEUTRAL")
-                    })
-
-                self._last_radar_summary = summary
-
-                # 3. Fan-out: Enviar a TODOS los broadcasters activos
-                async with self._lock:
-                    for b in self._broadcasters.values():
-                        await b._broadcast({"type": "radar_update", "data": summary})
-            except Exception as e:
-                logger.error(f"[REGISTRY] Pulse error: {e}")
-                await asyncio.sleep(5)
-
-    async def get_or_create(self, symbol: str, interval: str, persistent: bool = False) -> tuple[SymbolBroadcaster, str]:
-        """
-        Retorna el broadcaster para symbol:interval, creándolo si no existe.
-        También retorna el client_id único para este suscriptor.
-        """
-        # Asegurarse de que el pulso global esté corriendo
-        if not self._pulse_task:
-            await self.start_global_pulse()
-
-        key = f"{symbol.upper()}:{interval}"
-        client_id = str(uuid.uuid4())
-
-        async with self._lock:
-            if key not in self._broadcasters:
-                # ── PROTOCOLO CROSS-PAIR SAFETY v5.7.155 Master Gold ──
-                # Antes de arrancar el broadcaster, limpiamos basura de sesiones previas en el Store
-                # para este activo, garantizando que el análisis empiece de cero (Flush & Sync).
-                await store.flush_symbol(symbol.upper())
-
-                broadcaster = SymbolBroadcaster(symbol, interval, persistent=persistent)
-                self._broadcasters[key] = broadcaster
-                await broadcaster.start()
-                logger.info(f"[REGISTRY] ✅ Nuevo broadcaster: {key}")
-            else:
-                # Si ya existía pero no era persistente y ahora se pide persistencia (ej: por orquestador)
-                if persistent and not self._broadcasters[key].persistent:
-                    self._broadcasters[key].persistent = True
-                    logger.info(f"[REGISTRY] 💎 Broadcaster {key} elevado a PERSISTENTE")
-                    
-                logger.info(f"[REGISTRY] ♻️  Reutilizando broadcaster: {key} ({self._broadcasters[key].subscriber_count()} clientes activos)")
-
-        return self._broadcasters[key], client_id
-
-    async def release(self, symbol: str, interval: str, client_id: str):
-        """
-        Desregistra un cliente. Si era el último, detiene y elimina el broadcaster.
-        """
-        key = f"{symbol.upper()}:{interval}"
-        async with self._lock:
-            broadcaster = self._broadcasters.get(key)
-            if broadcaster is None:
-                return
-
-            await broadcaster.unsubscribe(client_id)
-
-            # 🚀 REGLA DE LINGER (Grace Period v5.7.155 Master Gold)
-            # No eliminamos el broadcaster inmediatamente. Esperamos 60 segundos por si el usuario recarga la página.
-            if broadcaster.subscriber_count() == 0 and not broadcaster.persistent:
-                async def _delayed_cleanup():
-                    await asyncio.sleep(60.0) # 60 segundos de "Gracia"
-                    async with self._lock:
-                        if key in self._broadcasters and self._broadcasters[key].subscriber_count() == 0:
-                            await self._broadcasters[key].stop()
-                            del self._broadcasters[key]
-                            logger.info(f"[REGISTRY] 🗑️ Broadcaster eliminado tras Grace Period: {key}")
-                
-                asyncio.create_task(_delayed_cleanup())
-            elif broadcaster.subscriber_count() == 0 and broadcaster.persistent:
-                pass
-
-    async def force_garbage_collection(self):
-        """Purgado manual de RAM para cumplir con el Stress Test Pilar 4.2."""
-        async with self._lock:
-            # Eliminar broadcasters inactivos que ya pasaron su Grace Period
-            for key in list(self._broadcasters.keys()):
-                if self._broadcasters[key].subscriber_count() == 0 and not self._broadcasters[key].persistent:
-                    await self._broadcasters[key].stop()
-                    del self._broadcasters[key]
-                    logger.info(f"[GARBAGE-COLLECTOR] 🧹 Liberada memoria de canal inactivo: {key}")
-
-    def status(self) -> dict:
-        """Retorna el estado del registry para el endpoint /health."""
-        return {
-            key: {"subscribers": b.subscriber_count()}
-            for key, b in self._broadcasters.items()
-        }
-
-
-# Instancia global — importada por main.py
-registry = BroadcasterRegistry()
+# (v6.0) BroadcasterRegistry ha migrado a engine/api/registry.py (Strategy Delta)
+# ──────────────────────────────────────────────────────────────────────────────

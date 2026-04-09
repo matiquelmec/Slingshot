@@ -195,7 +195,8 @@ export const useTelemetryStore = create<TelemetryState>((set, get) => {
 
         // ✅ FIX: URL dinámica desde variable de entorno — funciona en producción (Vercel)
         const BASE_WS = process.env.NEXT_PUBLIC_API_WS_URL ?? 'ws://localhost:8000';
-        ws = new WebSocket(`${BASE_WS}/api/v1/stream/${symbol}?interval=${timeframe}`);
+        const SECURITY_KEY = 'SLINGSHOT_INTERNAL_V6'; // 🔐 Sigma Security v6.0
+        ws = new WebSocket(`${BASE_WS}/api/v1/stream/${symbol}?interval=${timeframe}&api_key=${SECURITY_KEY}`);
 
         ws.onopen = () => {
             set({ isConnected: true });
@@ -468,9 +469,16 @@ export const useTelemetryStore = create<TelemetryState>((set, get) => {
                     });
                 } else if (data.type === 'news_update') {
                     const newsItem = data.data as NewsItem;
-                    set((state) => ({
-                        news: [newsItem, ...state.news].slice(0, 30) // Mantener las últimas 30
-                    }));
+                    set((state) => {
+                        // Anti-duplicados (por ID o título estricto)
+                        const exists = state.news.some(n => 
+                            n.id === newsItem.id || 
+                            n.title === newsItem.title
+                        );
+                        if (exists) return state; // Ignorar si ya existe
+                        
+                        return { news: [newsItem, ...state.news].slice(0, 15) }; // Mantener un feed denso y corporativo (max 15)
+                    });
                 } else if (data.type === 'liquidation_update') {
                     set({ liquidations: data.data as LiquidationCluster[] });
                 } else if (data.type === 'onchain_update') {
@@ -540,8 +548,13 @@ export const useTelemetryStore = create<TelemetryState>((set, get) => {
         economicEvents: [],
         marketSummary: {},
         liquidityHeatmap: null,
-        signalHistory: typeof window !== 'undefined' ? _loadSignalHistory().data : {},
-        signalIds: typeof window !== 'undefined' ? _loadSignalHistory().ids : [],
+        ...(() => {
+            const initialSignals = typeof window !== 'undefined' ? _loadSignalHistory() : { data: {}, ids: [] };
+            return {
+                signalHistory: initialSignals.data,
+                signalIds: initialSignals.ids
+            };
+        })(),
         auditedSignals: {},
         auditedIds: [],
         activeConnectionId: null,
@@ -572,7 +585,7 @@ export const useTelemetryStore = create<TelemetryState>((set, get) => {
         },
 
         setNews: (newsItems: NewsItem[]) => {
-            set({ news: newsItems });
+            set({ news: newsItems.slice(0, 15) }); // Mantener el límite visual de 15 noticias corporativas
         },
 
         fetchEconomicEvents: async () => {

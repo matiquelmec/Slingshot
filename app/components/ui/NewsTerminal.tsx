@@ -92,7 +92,7 @@ export default function NewsTerminal() {
                             const style = getSentimentStyles(item.sentiment);
                             return (
                                 <motion.div
-                                    key={item.title + item.timestamp}
+                                    key={`news-${item.timestamp}-${idx}`}
                                     initial={{ opacity: 0, x: 20, scale: 0.95 }}
                                     animate={{ opacity: 1, x: 0, scale: 1 }}
                                     transition={{ type: 'spring', stiffness: 300, damping: 25 }}

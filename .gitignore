@@ -45,3 +45,8 @@ bun.lockb
 
 # 🕒 Runtime States
 engine/data/session_state_*.json
+
+# 🗑️ Slingshot Cleanup (v6)
+tmp/
+*.db
+crash_log*.txt

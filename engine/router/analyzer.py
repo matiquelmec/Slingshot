@@ -82,9 +82,38 @@ class MarketAnalyzer:
         """Pipeline de análisis completo v5.4 con soporte de Caché LRU."""
         
         # ── Intento de recuperación de Caché (Optimización SIGMA) ─────────────
+        # v5.9.14-FIX: El caché retiene estructura pesada (SMC, Fibonacci, Régimen)
+        # pero RVOL y Absorción se recalculan en O(1) con el volumen VIVO de la vela.
+        # Esto elimina permanentemente el parpadeo a 0 en ambas métricas.
         cache_key = self._get_cache_key(asset, interval, df)
-        if cache_key in self._cache:
-            return self._cache[cache_key]
+        cached = self._cache.get(cache_key)
+        if cached is not None:
+            # FAST PATH: Métricas de volumen vivas sobre snapshot estructural cacheado
+            current_vol = float(df['volume'].iloc[-1])
+            st = getattr(self, '_rvol_state', None)
+            if st and st.get('vol_median', 0) > 0:
+                # 1. RVOL en tiempo real
+                live_rvol = round(current_vol / st['vol_median'], 2)
+                
+                # 2. Absorción en tiempo real (misma fórmula que el slow path)
+                body_spread = abs(float(df['close'].iloc[-1]) - float(df['open'].iloc[-1]))
+                candle_spread = float(df['high'].iloc[-1]) - float(df['low'].iloc[-1])
+                displacement = body_spread + (candle_spread * 0.1) + (float(df['close'].iloc[-1]) * 0.00001)
+                absorption_raw = current_vol / displacement if displacement > 0 else 0.0
+                live_absorption = round(
+                    (absorption_raw - st['abs_median']) / (st['abs_mad'] * 1.4826) if st.get('abs_mad', 0) > 0 else 0.0,
+                    2
+                )
+                live_elite = (live_absorption > 2.5) and (live_rvol > 1.5)
+                
+                # 3. Inyección atómica al diagnóstico
+                cached.diagnostic["volume"] = current_vol
+                cached.diagnostic["rvol"] = live_rvol
+                cached.diagnostic["absorption_score"] = live_absorption
+                cached.diagnostic["is_absorption_elite"] = live_elite
+                cached.diagnostic["displacement_active"] = live_rvol >= 1.5
+                cached.displacement_valid = live_rvol >= 1.5
+            return cached
 
         df = df.copy()
 

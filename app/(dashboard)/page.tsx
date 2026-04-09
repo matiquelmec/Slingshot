@@ -297,10 +297,39 @@ export default function OverviewPage() {
 
                                 <div className="flex-1 flex flex-col justify-center overflow-y-auto max-h-[65px] custom-scrollbar pr-1">
                                     {advisor_log ? (
-                                        <p className="text-[9.5px] text-white/80 leading-relaxed font-mono tracking-tight border-l-2 border-neon-cyan/50 pl-2">
-                                            <span className="text-neon-cyan opacity-80 font-bold mr-1">&gt;_</span>
-                                            {typeof advisor_log === 'string' ? advisor_log : (advisor_log as any)?.content ?? 'Analizando...'}
-                                        </p>
+                                        <div className="flex flex-col gap-1 border-l-2 border-neon-cyan/50 pl-2">
+                                            {(() => {
+                                                let text = typeof advisor_log === 'string' ? advisor_log : (advisor_log as any)?.content ?? 'Analizando...';
+                                                let parsed: any = null;
+                                                if (typeof text === 'string' && text.startsWith('{')) {
+                                                    try {
+                                                        parsed = JSON.parse(text);
+                                                        text = parsed.logic || text;
+                                                    } catch(e) {}
+                                                } else if (typeof advisor_log === 'object' && advisor_log !== null && 'verdict' in advisor_log) {
+                                                    parsed = advisor_log;
+                                                    text = parsed.logic || 'Analizando...';
+                                                }
+                                                return (
+                                                    <>
+                                                        {parsed && (
+                                                            <div className="flex items-center gap-2">
+                                                                <span className={`text-[8.5px] font-black tracking-widest px-1.5 py-0.5 rounded ${parsed.verdict === 'GO' ? 'bg-green-500/20 text-green-400' : parsed.verdict === 'AVOID' ? 'bg-red-500/20 text-red-400' : 'bg-yellow-500/20 text-yellow-400'}`}>
+                                                                    ACTITUD: {parsed.verdict}
+                                                                </span>
+                                                                <span className={`text-[8.5px] font-black tracking-widest px-1.5 py-0.5 rounded ${parsed.threat === 'LOW' ? 'bg-green-500/10 text-green-400/80' : parsed.threat === 'HIGH' ? 'bg-red-500/10 text-red-400/80' : 'bg-yellow-500/10 text-yellow-500/80'}`}>
+                                                                    THREAT: {parsed.threat}
+                                                                </span>
+                                                            </div>
+                                                        )}
+                                                        <p className="text-[9.5px] text-white/80 leading-relaxed font-mono tracking-tight mt-0.5">
+                                                            <span className="text-neon-cyan opacity-80 font-bold mr-1">&gt;_</span>
+                                                            {text}
+                                                        </p>
+                                                    </>
+                                                );
+                                            })()}
+                                        </div>
                                     ) : (
                                         <p className="text-[9px] text-white/30 italic text-center animate-pulse">
                                             Qwen inferiendo sobre ticks. Aguardando dictamen...

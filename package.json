@@ -1,6 +1,6 @@
 {
   "name": "slingshot-gen-1",
-  "version": "1.0.0",
+  "version": "6.0.0",
   "description": "> **\"La precisión es la única respuesta válida ante la fuerza bruta.\"**",
   "main": "index.js",
   "directories": {
@@ -11,7 +11,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "test": "python scripts/test_engine.py",
+    "test": "python -m pytest engine/tests/",
     "doctor": "python scripts/doctor.py"
   },
   "dependencies": {

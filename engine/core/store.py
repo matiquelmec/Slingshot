@@ -13,6 +13,9 @@ class MemoryStore:
     def __init__(self, max_history: int = 1000, max_signals: int = 200):
         # Estados actuales por activo (Radar)
         self._market_states: Dict[str, Dict[str, Any]] = {}
+
+        # Caché de Snapshots Tácticos por Intervalo (v5.9.5 MTF Master)
+        self._tactical_snapshots: Dict[str, Dict[str, Any]] = {}
         
         # Buffers circulares para señales (Evita crecimiento infinito)
         self._signal_events = deque(maxlen=max_signals)
@@ -45,6 +48,23 @@ class MemoryStore:
             self._market_states[asset].update(data)
             self._market_states[asset]["last_updated"] = datetime.now(timezone.utc).isoformat()
             self._market_states[asset]["asset"] = asset
+
+    async def save_tactical_snapshot(self, asset: str, interval: str, data: Dict[str, Any]):
+        """Persiste el estado técnico de un intervalo específico para análisis MTF."""
+        key = f"{asset}:{interval}"
+        async with self._lock:
+            self._tactical_snapshots[key] = data.copy()
+            self._tactical_snapshots[key]["last_updated"] = datetime.now(timezone.utc).isoformat()
+
+    async def get_mtf_context(self, asset: str) -> Dict[str, Dict[str, Any]]:
+        """Recupera todos los intervalos disponibles para un activo."""
+        async with self._lock:
+            context = {}
+            for interval in ["1m", "5m", "15m", "1h", "4h", "1d"]:
+                key = f"{asset}:{interval}"
+                if key in self._tactical_snapshots:
+                    context[interval] = self._tactical_snapshots[key]
+            return context
 
     async def save_candle(self, asset: str, interval: str, candle_data: Dict[str, Any]):
         """Guarda la vela en un buffer circular específico para el activo."""
@@ -106,11 +126,15 @@ class MemoryStore:
             return filtered
 
     async def save_news(self, news_item: Dict[str, Any]):
-        """Guarda una noticia en el buffer circular."""
+        """Guarda una noticia en el buffer circular con deduplicación estricta v5.9.6."""
         async with self._lock:
-            # Evitar duplicados por título
-            existing_titles = [n["title"] for n in self._news_items]
-            if news_item["title"] not in existing_titles:
+            # Normalizar para comparación (lowercase y sin espacios extra)
+            new_title = news_item.get("title", "").strip().lower()
+            if not new_title: return
+            
+            # Evitar duplicados por título (Case-Insensitive)
+            existing_titles = [n.get("title", "").strip().lower() for n in self._news_items]
+            if new_title not in existing_titles:
                 self._news_items.append(news_item)
 
     async def get_news(self, limit: Optional[int] = None) -> List[Dict[str, Any]]:

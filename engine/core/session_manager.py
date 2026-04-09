@@ -17,7 +17,7 @@ import json
 import pytz
 from datetime import datetime, timezone, date
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Any
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -479,8 +479,15 @@ class TimeFilter:
     Versión simplificada para chequeos rápidos en DataFrames.
     Implementa las KillZones de Londres y Nueva York.
     """
-    def is_killzone(self, ts: datetime) -> bool:
-        # OMEGA FIX: Guarda contra NaT (Trident Audit v5.7.15)
+    def is_killzone(self, ts: Any) -> bool:
+        # OMEGA FIX: Convertir float/int a datetime si es necesario (Delta Sync)
+        if isinstance(ts, (float, int)):
+            try:
+                ts = datetime.fromtimestamp(ts, tz=timezone.utc)
+            except:
+                return False
+                
+        # Guarda contra NaT (Trident Audit v5.7.15)
         try:
             if ts is None or (hasattr(ts, 'year') and str(ts) == 'NaT'):
                 return False

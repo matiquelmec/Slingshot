@@ -1,18 +1,41 @@
-# 🛡️ SLINGSHOT v5.7.155 Master Gold TITANIUM EDITION
+# 🛡️ SLINGSHOT v6.0.0 Master Gold TITANIUM EDITION
 > **"Institutional-Grade Algorithmic Terminal. Zero Latency. Zero Noise. Full Sovereignty."**
 
-![Status](https://img.shields.io/badge/Status-TOTALMENTE_DESPLEGADO-0d2a1a?style=for-the-badge&logo=codeproject&logoColor=fff)
-![Version](https://img.shields.io/badge/Version-4.3.5_Titanium-1a3a6e?style=for-the-badge)
+![Status](https://img.shields.io/badge/Status-100%_HARDENED_&_REORGANIZED-0d2a1a?style=for-the-badge&logo=codeproject&logoColor=fff)
+![Version](https://img.shields.io/badge/Version-6.0.0_Titanium-1a3a6e?style=for-the-badge)
 ![Engine](https://img.shields.io/badge/Engine-SMC_Asna--4-ffd700?style=for-the-badge&labelColor=0a0a0a)
 
-## 💎 La Visión (The Pivot)
-**Slingshot** no es un indicador retail. Es una **Terminal Algorítmica Local-First** diseñada para capturar la huella del **Smart Money** (Instituciones) a través de una arquitectura reactiva de baja latencia. 
-
-Eliminamos el ruido de los indicadores tradicionales para centrarnos en lo único que mueve el precio: **Liquidez, Tiempo y Volumen.**
-
----
-
 ## 🏗️ Arquitectura de Baja Latencia (Zero-Delay)
+
+```mermaid
+graph TB
+    subgraph "Frontend — Next.js 15"
+        A["Dashboard<br/>(page.tsx)"] --> B["TelemetryStore<br/>(Zustand 5)"]
+        B --> C["WebSocket Client"]
+        A --> D["TradingChart<br/>LW Charts"]
+    end
+
+    subgraph "Backend — Python FastAPI"
+        J["main.py<br/>FastAPI"] --> K["ws_manager.py<br/>BroadcasterRegistry"]
+        K --> L["SymbolBroadcaster<br/>(por activo:intervalo)"]
+        L --> M["SlingshotRouter<br/>(main_router.py)"]
+        M --> P["ConfluenceManager"]
+        M --> Q["RiskManager"]
+        L --> R["SessionManager"]
+        L --> S["Advisor LLM<br/>(Ollama)"]
+    end
+
+    subgraph "Data Layer"
+        Z["MemoryStore<br/>(RAM)"]
+        AA["JSON Files<br/>(session_state)"]
+        BB["Binance WS<br/>(Streaming)"]
+    end
+
+    C <--- "WebSocket (LocalMasterSync v2)" ---> J
+    L --> Z
+    R --> AA
+    BB --> L
+```
 
 ### 📡 El Pipeline Reactivo
 El sistema utiliza un orquestador **WebSocket** que inyecta datos directamente desde el radar de alta frecuencia hacia un motor de inferencia híbrido:
@@ -23,40 +46,13 @@ El sistema utiliza un orquestador **WebSocket** que inyecta datos directamente d
 
 ---
 
-## 🛡️ Blindaje de Supervivencia (VPS Londres/NY Ready)
-La versión **v5.7.155 Master Gold Titanium** introduce 4 protocolos de endurecimiento para entornos hostiles:
+## 🛡️ Blindaje & Hardening v6.0 (Zero-Noise)
+La versión **v6.0.0 Master Gold Titanium** introduce el protocolo de silencio operativo y armonización de riesgo:
 
-- **Stale Guard (Frontend):** Detección de "Pestañas Zombie" tras suspensión de PC; purga de mensajes obsoletos y resync automático al HEAD.
-- **Advisor Isolation:** Protección del Event Loop con timeouts de 45s y semáforos de CPU concurrente.
-- **Auto-Resurrection (systemd):** Watchdog institucional que garantiza el 99.9% de uptime reviviendo el sistema en <20s tras cualquier fallo de proceso.
-- **Docker Core:** Contenedores aislados con límites de RAM (`mem_limit: 2g`) para evitar saturación del host.
-
----
-
-## 🏹 Smart Money Concept (SMC) Engine
-- **KillZones Dinámicas:** NY & Londres ajustadas por horario UTC y DST.
-- **Order Blocks & FVGs:** Detección de zonas экстреmas (Wait For Sweep) con algoritmo de mitigación en tiempo real.
-- **SMT Divergence:** Comparación dinámica multiactivo para confirmar sesgos institucionales.
-- **RVOL 20x Detection:** Escáner de volumen en tiempo real para alertar sobre Absorción Profesional (Fuego Institucional).
-
----
-
-## 🚀 Despliegue en Un Click (Launcher)
-
-### Requisitos Previos
-- **Backend:** Python 3.12+ (con dependencias en `requirements.txt`).
-- **Frontend:** Node.js 20+ (Next.js 15).
-- **IA Local:** Ollama (modelo `gemma3:4b`).
-
-### Inicio Local
-```powershell
-./start.ps1
-```
-
-### Despliegue VPS (Docker)
-```bash
-docker-compose up -d --build
-```
+- **Unificación de Riesgo:** Consolidación de `MIN_RR` en `config.py` (Master 3.0) y el motor `RiskManager`.
+- **Refactorización de Tests:** Tests movidos desde `scripts/` hacia `engine/tests/` para cumplimiento de estándares PEP.
+- **Veto Transparente:** Las señales denegadas ahora explican exactamente por qué (HTF, Valor, Macro, etc.).
+- **Ollama Semantic Cache:** Inferencia IA optimizada con MD5 para evitar saturación de CPU innecesaria.
 
 ---
 
@@ -64,16 +60,22 @@ docker-compose up -d --build
 ```text
 slingshot_gen1/
 ├── 📁 engine/          # El Cerebro Algorítmico (FastAPI + SMC Strategy)
+│   ├── 📁 tests/       # 🏹 15 tests operativos consolidados (v6.0)
+│   ├── 📁 data/        # Persistencia de sesiones (v6.0 JSON-RAM)
 ├── 📁 app/             # La Terminal UI (Next.js + Zustand 5)
-├── 📁 docs/            # Especificación Técnica Maestra (v5.7.155 Master Gold Titanium)
+├── 📁 docs/            # Especificación Técnica & Auditoría Profesional
 ├── 📁 deploy/          # Artefactos de VPS: Dockerfiles, systemd, Watchdogs
-└── 📄 start.ps1        # El Orquestador de Lanzamiento
+└── 📄 start.ps1        # El Orquestador de Lanzamiento (v6.0 High Priority)
 ```
 
-## 📖 Documentación Profunda
-Para auditorías forenses o especificaciones de bajo nivel, consulta:
-👉 **[docs/SPECIFICATION_V4_PLATINUM.md](file:///c:/Users/Mat%C3%ADas%20Riquelme/Desktop/Proyectos%20documentados/Slingshot_Trading/docs/SPECIFICATION_V4_PLATINUM.md)**
+## 📖 Auditoría Forense
+Para la referencia técnica completa del sistema con diagramas, bugs, scorecard y roadmap:
+👉 **[docs/SLINGSHOT_BIBLE_V6.md](docs/SLINGSHOT_BIBLE_V6.md)** — La Biblia Unificada
+
+Para auditorías legacy o resúmenes ejecutivos:
+- [docs/professional_audit_v6.md](docs/professional_audit_v6.md) — Resumen v6
+- [docs/professional_audit_v5.md](docs/professional_audit_v5.md) — Auditoría v5 original
 
 ---
-*v5.7.155 Master Gold Titanium — El Estándar Maestro de la Terminal Algorítmica Local.*
-*Unified by Antigravity — April 03, 2026*
+*v6.0.0 Master Gold Titanium — El Estándar Maestro de la Terminal Algorítmica Local.*
+*Unified & Hardened by Antigravity — April 06, 2026*

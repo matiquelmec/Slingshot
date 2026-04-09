@@ -2,7 +2,7 @@ from engine.core.logger import logger
 import asyncio
 from typing import List, Dict, Optional
 from engine.api.config import settings
-from engine.api.ws_manager import registry
+from engine.api.registry import registry
 import engine.indicators.macro as macro
 from engine.indicators.ghost_data import refresh_ghost_data, load_local_state, get_ghost_state
 from engine.core.session_manager import SessionManager

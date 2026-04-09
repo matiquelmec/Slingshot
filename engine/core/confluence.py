@@ -12,6 +12,7 @@ Evalúa cada señal contra el arsenal puramente institucional completo:
 """
 
 import pandas as pd
+import numpy as np
 from datetime import datetime, timezone
 from typing import Dict, Any, Optional
 from engine.core.logger import logger
@@ -120,45 +121,118 @@ class ConfluenceManager:
         high_impact_near = False
         recent_impact_active = False
         event_name = ""
-        now = datetime.now(timezone.utc)
+        now = pd.Timestamp.now(tz=timezone.utc)
+
+        # Enforce list of dicts if input is DataFrame/Series
+        if hasattr(econ_events, "to_dict"):
+            if hasattr(econ_events, "columns"): econ_events = econ_events.to_dict('records')
+            else: econ_events = [econ_events.to_dict()]
         
         for ev in econ_events:
-            ev_date = ev.get('date', ev.get('timestamp'))
-            if not ev_date: continue
-            # Convert to UTC-aware datetime to prevent subtraction exceptions
-            ev_time = pd.to_datetime(ev_date, utc=True)
-            diff_hours = (ev_time - now).total_seconds() / 3600
-            
-            if ev.get('impact') == 'High' or ev.get('impact') == 'HIGH':
-                # RIESGO FUTURO (Inmediato)
-                if 0 < diff_hours < 1.5:
-                    high_impact_near = True
-                    event_name = ev.get('title', 'Evento Macro')
-                # IMPACTO RECIENTE (Inercia de mercado - 12 horas)
-                elif -12 < diff_hours <= 0:
-                    recent_impact_active = True
-                    event_name = ev.get('title', 'Evento Macro Reciente')
+            try:
+                ev_date = ev.get('date', ev.get('timestamp'))
+                if not ev_date: continue
 
-        # 6.1 Cálculo de News Sentiment (Reparado v5.7.155 Master Gold)
+                # Sutura Definitiva (v6.0 - Force Scalar)
+                if isinstance(ev_date, (np.ndarray, pd.Series, pd.Index)):
+                    ev_date = ev_date.iloc[0] if hasattr(ev_date, 'iloc') else ev_date[0]
+
+                # Convert to UTC-aware datetime to prevent subtraction exceptions (v6.0 Fix)
+                ev_time_pd = pd.to_datetime(ev_date, utc=True)
+                
+                # Convert to single scalar timestamp
+                if hasattr(ev_time_pd, "__iter__") and not isinstance(ev_time_pd, (str, bytes)):
+                    ev_time_pd = ev_time_pd[0]
+                
+                # Llegar a "Python Land" para evitar colisiones con NumPy
+                ev_time = ev_time_pd.to_pydatetime() if hasattr(ev_time_pd, "to_pydatetime") else ev_time_pd
+                now_py = now.to_pydatetime() if hasattr(now, "to_pydatetime") else now
+
+                diff_hours = (ev_time - now_py).total_seconds() / 3600
+                
+                if ev.get('impact') == 'High' or ev.get('impact') == 'HIGH':
+                    # RIESGO FUTURO (Inmediato)
+                    if 0 < diff_hours < 1.5:
+                        high_impact_near = True
+                        event_name = ev.get('title', 'Evento Macro')
+                    # IMPACTO RECIENTE (Inercia de mercado - 12 horas)
+                    elif -12 < diff_hours <= 0:
+                        recent_impact_active = True
+                        event_name = ev.get('title', 'Evento Macro Reciente')
+            except Exception as ev_err:
+                logger.warning(f"[CONFLUENCE] Error evaluando Evento Macro: {ev_err}")
+                continue
+
+        # 6.1 Cálculo de News Sentiment PONDERADO (v6.5 Master Smart-Flow)
         news_score = 0.5
         if news_items:
-            sent_map = {"BULLISH": 1.0, "NEUTRAL": 0.5, "BEARISH": 0.0}
-            scores = [sent_map.get(item.get('sentiment', 'NEUTRAL'), 0.5) for item in news_items]
-            news_score = sum(scores) / len(scores)
+            # Enforce list of dicts if input is DataFrame/Series
+            if hasattr(news_items, "to_dict"):
+                if hasattr(news_items, "columns"): news_items = news_items.to_dict('records')
+                else: news_items = [news_items.to_dict()]
 
-        # APLICAR LEYES DE NARRATIVA
+            sent_map = {"BULLISH": 1.0, "NEUTRAL": 0.5, "BEARISH": 0.0}
+            total_weighted_score = 0
+            total_weight_sum = 0
+            now_ts = pd.Timestamp.now(tz=timezone.utc)
+            
+            for item in news_items:
+                try:
+                    # A. Ponderación de Importancia (Tier 1 = x3, Tier 2 = x1.5)
+                    weight = float(item.get('weight', 1.0))
+                    
+                    # B. Time Decay (Sigma): TTL 5 min, luego decae linealmente durante 10 min
+                    # Sutura Definitiva (v6.0 - Force Scalar)
+                    ts_raw = item.get('timestamp')
+                    if not ts_raw: continue
+
+                    # Protección contra vectorización espontánea de Pandas/NumPy
+                    if isinstance(ts_raw, (np.ndarray, pd.Series, pd.Index)):
+                        ts_raw = ts_raw.iloc[0] if hasattr(ts_raw, 'iloc') else ts_raw[0]
+                    
+                    # Convertimos a Timestamp de Python puro para evitar conflictos con Numpy
+                    item_ts_pd = pd.to_datetime(ts_raw, utc=True)
+                    
+                    if hasattr(item_ts_pd, "__iter__") and not isinstance(item_ts_pd, (str, bytes)):
+                        item_ts_pd = item_ts_pd[0] # iloc[0] equivalent
+                    
+                    # Garantizar "Python Land" (v6.0 Omega Master Fix)
+                    item_ts = item_ts_pd.to_pydatetime() if hasattr(item_ts_pd, "to_pydatetime") else item_ts_pd
+                    now_py = now_ts.to_pydatetime() if hasattr(now_ts, "to_pydatetime") else now_ts
+
+                    age_mins = (now_py - item_ts).total_seconds() / 60
+                    
+                    decay = 1.0
+                    if age_mins > 5:
+                        decay = max(0, 1.0 - (age_mins - 5) / 10)
+                    
+                    effective_weight = weight * decay
+                    sent_val = sent_map.get(item.get('sentiment', 'NEUTRAL'), 0.5)
+                    
+                    total_weighted_score += (sent_val * effective_weight)
+                    total_weight_sum += effective_weight
+                except Exception as news_err:
+                    logger.warning(f"[CONFLUENCE] Error calculando Time-Decay (Noticia): {news_err}")
+                    continue
+                
+            if total_weight_sum > 0:
+                news_score = total_weighted_score / total_weight_sum
+
+        # [FIX BUG-001] APLICAR LEYES DE NARRATIVA
         if high_impact_near:
-            checklist.append({"factor": "Contexto Macro", "status": "DENEGADO", "detail": f"Riesgo: {event_name} inminente"})
-            score -= 20 # Penalización masiva
+            checklist.append({"factor": "Macro", "status": "ALERTA", "detail": "Noticia de alto impacto inminente"})
+            score -= 20
         elif recent_impact_active:
             if (is_long and news_score < 0.4) or (not is_long and news_score > 0.6):
                 score -= 15
-                checklist.append({"factor": "Sesgo Macro", "status": "DIVERGENTE", "detail": f"Contradice Impacto de {event_name}"})
+                checklist.append({"factor": "Macro", "status": "DIVERGENTE", "detail": "Noticia en contra de la dirección"})
             else:
                 score += econ_weight
-                checklist.append({"factor": "Sesgo Macro", "status": "CONFIRMADO", "detail": f"Alineado con {event_name}"})
+                checklist.append({"factor": "Macro", "status": "CONFIRMADO", "detail": "Contexto macro a favor"})
+        else:
+            # Caso base: Sin anomalías
             score += econ_weight
-            checklist.append({"factor": "Sesgo Macro", "status": "CONFIRMADO", "detail": "Sin anomalías macro"})
+            checklist.append({"factor": "Macro", "status": "NEUTRAL", "detail": "Sin eventos macro activos"})
 
         # 7. CLUSTERS DE LIQUIDACIÓN (Peso 10) v4.0
         liq_cluster_weight = 10
@@ -259,7 +333,7 @@ class ConfluenceManager:
             
             if htf_score < 15 or is_contrary:
                 multiplier = 0.0
-                veto_reason = f"HTF Score Bajo ({htf_score:.0f})" if htf_score < 15 else f"Dirección HTF Contraria ({htf_bias.direction})"
+                veto_reason = "HTF Bias en contra (Tendencia Mayor opuesta)"
                 checklist.append({"factor": "Veto HTF", "status": "DENEGADO", "detail": veto_reason})
             else:
                 checklist.append({"factor": "Veto HTF", "status": "APROBADO", "detail": f"Fuerza Macro: {htf_score:.0f}%"})
@@ -304,12 +378,22 @@ class ConfluenceManager:
         # 🚀 13. RELOJ DE OBSOLESCENCIA (TIME-DECAY) v5.7.155 Master Gold Titanium
         # Las señales de 1m o 5m rotan rápido; si no se mitigan pronto, pierden validez.
         try:
-            # Estandarizamos a UTC Naive para evitar TypeErrors entre datetime64 y Timestamps aware
-            now_ts = pd.to_datetime(df['timestamp'].iloc[-1]).tz_localize(None)
-            sig_ts = pd.to_datetime(signal.get('timestamp')).tz_localize(None)
+            now_ts = pd.to_datetime(str(df['timestamp'].iloc[-1])).tz_localize(None)
             
-            # Aproximamos velas transcurridas (asumiendo que estamos en el mismo DF)
-            candles_elapsed = len(df[df['timestamp'] > sig_ts])
+            sig_ts_raw = signal.get('timestamp')
+            # Fix Agent Omega: Si viene como timestamp numérico en milisegundos, arreglar su unidad
+            if isinstance(sig_ts_raw, (int, float)):
+                if sig_ts_raw > 1e11: # Probablemente ms en lugar de s
+                    sig_ts = pd.to_datetime(sig_ts_raw, unit='ms').tz_localize(None)
+                else:
+                    sig_ts = pd.to_datetime(sig_ts_raw, unit='s').tz_localize(None)
+            else:
+                sig_ts = pd.to_datetime(str(sig_ts_raw)).tz_localize(None)
+            
+            # Aproximamos velas transcurridas usando timedelta
+            diff_minutes = abs((now_ts - sig_ts).total_seconds()) / 60.0
+            # Asumiendo timeframe de 15m (siendo pesimistas)
+            candles_elapsed = diff_minutes / 15.0
             
             decay_mult = 1.0
             if candles_elapsed > 5:
@@ -322,10 +406,10 @@ class ConfluenceManager:
             multiplier *= decay_mult
             
             if decay_mult < 1.0:
-                status = "OBSOLETO" if decay_mult == 0 else "DECAYENDO"
-                checklist.append({"factor": "Time-Decay", "status": status, "detail": f"{candles_elapsed} velas desde origen"})
-            elif candles_elapsed > 0:
-                checklist.append({"factor": "Timing", "status": "FRESCO", "detail": f"Solo {candles_elapsed} velas de vida"})
+                status = "OBSOLETO" if decay_mult == 0.0 else "DECAYENDO"
+                checklist.append({"factor": "Time-Decay", "status": status, "detail": f"{int(candles_elapsed)} velas desde origen"})
+            elif candles_elapsed >= 0:
+                checklist.append({"factor": "Timing", "status": "FRESCO", "detail": f"Solo {int(candles_elapsed)} velas de vida"})
         except Exception as e:
             logger.error(f"[CONFLUENCE] Error calculando Time-Decay: {e}")
 
@@ -369,7 +453,13 @@ class ConfluenceManager:
         final_score = min(100, int(base_score * multiplier))
         
         conviction = "ALTA CONVICCIÓN" if final_score >= 70 else "SÓLIDA" if final_score >= 50 else "ESPECULATIVA"
-        if multiplier == 0: conviction = "VETADA"
+        
+        v_reason = None
+        if multiplier == 0: 
+            conviction = "VETADA"
+            # Extraer el motivo del veto del checklist
+            veto_entries = [c for c in checklist if c.get('status') == 'DENEGADO' or c.get('status') == 'OBSOLETO']
+            v_reason = veto_entries[-1].get('detail', 'Veto por Confluencia') if veto_entries else 'Veto por Riesgo'
         
         logger.info(f"[CONFLUENCE] Asset: {signal.get('pair') or 'BTC'} | Score: {final_score}% (Multiplier: {multiplier})")
         logger.info(f"             Regime OK? {regime_ok} | POI? {poi_pts} | Macro Near? {high_impact_near}")
@@ -378,11 +468,15 @@ class ConfluenceManager:
             "score": final_score,
             "conviction": conviction,
             "checklist": checklist,
-            "reasoning": self._build_reasoning(final_score, conviction, is_long, regime, has_ob, rvol, high_impact_near, event_name, cluster_hit),
-            "rvol": round(rvol, 2)
+            "reasoning": self._build_reasoning(final_score, conviction, is_long, regime, has_ob, rvol, high_impact_near, event_name, cluster_hit, v_reason),
+            "rvol": round(rvol, 2),
+            "veto_reason": v_reason
         }
 
-    def _build_reasoning(self, score: int, conviction: str, is_long: bool, regime: str, ob: bool, rvol: float, high_impact: bool, event: str, cluster: bool) -> str:
+    def _build_reasoning(self, score: int, conviction: str, is_long: bool, regime: str, ob: bool, rvol: float, high_impact: bool, event: str, cluster: bool, veto: str = None) -> str:
+        if conviction == "VETADA" and veto:
+            return f"⚠️ SEÑAL VETADA: {veto}. Sin confluencia institucional suficiente."
+
         msg = f"Señal {'LONG' if is_long else 'SHORT'} ({score}/100). "
         msg += f"Estructura {regime}. "
         if ob: msg += "POI Institucional validado. "
