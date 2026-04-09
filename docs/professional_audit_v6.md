@@ -40,7 +40,7 @@ graph TB
         BB["Binance WS<br/>(Streaming)"]
     end
 
-    C <--- "WebSocket (LocalMasterSync v2)" ---> J
+    C <--> |"WebSocket (LocalMasterSync v2)"| J
     L --> Z
     R --> AA
     BB --> L
