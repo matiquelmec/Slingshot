@@ -106,8 +106,8 @@ class RiskManager:
                      "reason": f"PRECISIÓN IRREAL: SL ({raw_risk:.4f}) < ATR ({atr_20:.4f})"
                  }
 
-            if net_risk < 0.0001:
-                return {"approved": False, "rr_ratio": 0.0, "trade_quality": "INVALID", "reason": "Riesgo nulo"}
+            if net_risk <= 0:
+                return {"approved": False, "rr_ratio": 0.0, "trade_quality": "INVALID", "reason": "Riesgo nulo o negativo"}
             
             rr = round(net_reward / net_risk, 2)
             
@@ -301,7 +301,8 @@ class RiskManager:
             trailing_stop_logic = "BE+1_THEN_FVG_TRAIL"
 
         # 4. Cálculo de Sizing
-        sl_distance_pct = abs(current_price - stop_loss_price) / current_price
+        safe_price = current_price if current_price > 0 else 1.0 # Guard contra división por cero
+        sl_distance_pct = abs(current_price - stop_loss_price) / safe_price
         sl_distance_pct = max(0.001, sl_distance_pct)
 
         pos_size_nominal = risk_amount_usdt / sl_distance_pct

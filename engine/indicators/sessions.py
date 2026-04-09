@@ -1,6 +1,5 @@
 from engine.core.logger import logger
 import pandas as pd
-import pytz
 
 def map_sessions_liquidity(df: pd.DataFrame) -> pd.DataFrame:
     """

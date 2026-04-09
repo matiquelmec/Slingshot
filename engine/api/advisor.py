@@ -14,7 +14,10 @@ _active_queue_keys = set()
 _strategic_memo = {}
 _semantic_cache = {}
 
-DEFAULT_MODEL = "qwen3:8b"
+DEFAULT_MODEL = settings.OLLAMA_MODEL  # Configurable via .env — default: qwen3:8b
+OLLAMA_URL   = settings.OLLAMA_URL     # Configurable via .env — default: http://localhost:11434
+
+_ollama_cache = {"status": False, "last_check": 0, "confirmed_online": False}
 
 async def check_ollama_status(force_recheck=False) -> bool:
     """v5.9.4-Resilience: Salto agresivo si ya está confirmado online en la sesión."""
@@ -30,7 +33,7 @@ async def check_ollama_status(force_recheck=False) -> bool:
         
     try:
         async with httpx.AsyncClient(timeout=5.0) as client:
-            response = await client.get("http://localhost:11434/api/tags")
+            response = await client.get(f"{OLLAMA_URL}/api/tags")
             status = (response.status_code == 200)
             if status:
                 _ollama_cache["confirmed_online"] = True
@@ -42,7 +45,6 @@ async def check_ollama_status(force_recheck=False) -> bool:
         _ollama_cache["last_check"] = now
         return False
 
-_ollama_cache = {"status": False, "last_check": 0, "confirmed_online": False}
 
 def extract_json_from_llm(content: str):
     """Limpia la respuesta de la IA para extraer JSON puro y repara errores comunes de multilínea."""
@@ -316,7 +318,7 @@ async def ai_worker():
                 if task.get('format') == 'json':
                     payload['format'] = 'json'
 
-                response = await client.post("http://localhost:11434/api/generate", json=payload)
+                response = await client.post(f"{OLLAMA_URL}/api/generate", json=payload)
                 if response.status_code == 200:
                     result = response.json()
                     content = result.get("response", "").strip()

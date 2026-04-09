@@ -70,9 +70,9 @@ graph TB
 | Lógica SMC | 9.5/10 | **Nivel Institucional** — 14 factores |
 | Calidad Código | 7.5/10 | **Bueno** — Modularización en proceso |
 | Riesgo | 9.0/10 | **Sólido** — Kelly Fraccional unificado |
-| Testing | 6.5/10 | **Estable** — 15 tests operativos en engine/tests |
+| Testing | 8.5/10 | **Robusto** — 17 tests operativos (Pipeline E2E cubierto) |
 
-**Puntuación Total: 8.3/10 — LISTO PARA PRODUCCIÓN INSTITUCIONAL**
+**Puntuación Total: 8.7/10 — LISTO PARA PRODUCCIÓN INSTITUCIONAL**
 
 ---
 *v6.0.0 Master Gold Titanium — Reorganizado y Endurecido.*

@@ -130,7 +130,7 @@ export const useTelemetryStore = create<TelemetryState>((set, get) => {
         return { data: finalData, ids: finalIds };
     };
 
-    const doConnect = (symbol: string, timeframe: Timeframe, isRetry = false) => {
+    const doConnect = async (symbol: string, timeframe: Timeframe, isRetry = false) => {
         const connectionId = Math.random().toString(36).substring(7);
 
         // Clean up existing connection and pending retries
@@ -193,14 +193,42 @@ export const useTelemetryStore = create<TelemetryState>((set, get) => {
             set({ activeConnectionId: connectionId });
         }
 
-        // ✅ FIX: URL dinámica desde variable de entorno — funciona en producción (Vercel)
+        // ✅ JWT Auth v6.0.1: URL dinámica y Security Key interna para fetch
+        const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000';
         const BASE_WS = process.env.NEXT_PUBLIC_API_WS_URL ?? 'ws://localhost:8000';
         const SECURITY_KEY = 'SLINGSHOT_INTERNAL_V6'; // 🔐 Sigma Security v6.0
-        ws = new WebSocket(`${BASE_WS}/api/v1/stream/${symbol}?interval=${timeframe}&api_key=${SECURITY_KEY}`);
 
-        ws.onopen = () => {
-            set({ isConnected: true });
-        };
+        try {
+            const tokenRes = await fetch(`${BASE_URL}/api/v1/auth/token?api_key=${SECURITY_KEY}`);
+            const tokenData = await tokenRes.json();
+            
+            if (!tokenData.token) {
+                throw new Error("No token returned");
+            }
+            
+            // Verificar si la conexión sigue siendo la activa después del delay del fetch
+            const currentId = get().activeConnectionId;
+            if (connectionId !== currentId) {
+                return;
+            }
+            
+            ws = new WebSocket(`${BASE_WS}/api/v1/stream/${symbol}?interval=${timeframe}&token=${tokenData.token}`);
+            
+            ws.onopen = () => {
+                set({ isConnected: true });
+            };
+        } catch (error) {
+            console.error("[AUTH] Fallo al hacer fetch del JWT para el WS:", error);
+            if (retryCount < MAX_RETRIES) {
+                const delayMs = Math.pow(2, retryCount) * 2000;
+                retryCount++;
+                console.warn(`[WS Auth] Reintento ${retryCount}/${MAX_RETRIES} en ${delayMs / 1000}s...`);
+                retryTimeout = setTimeout(() => {
+                    doConnect(get().activeSymbol, get().activeTimeframe, true);
+                }, delayMs);
+            }
+            return;
+        }
 
         // 🔴 STALE GUARD v5.7.155 Master Gold: Track last message time for zombie tab detection
         let lastMsgTimestamp = Date.now();

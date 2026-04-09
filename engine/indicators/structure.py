@@ -388,8 +388,8 @@ def extract_smc_coordinates(df: pd.DataFrame) -> dict:
     active_bearish_fvgs = []
     
     # Extraemos arrays nativos para velocidad extrema
-    # Optimización V4.3 Titanium: Slice para operar únicamente en las últimas 50 velas (Lookback HFT)
-    df_slice = df.tail(50).copy()
+    # Optimización V4.3 Titanium: Slice para operar en las últimas 150 velas (Visión Institucional)
+    df_slice = df.tail(150).copy()
     if 'timestamp' in df_slice.columns:
         df_slice = df_slice.dropna(subset=['timestamp'])
     

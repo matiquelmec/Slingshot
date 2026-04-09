@@ -5,7 +5,7 @@ Gestor centralizado del estado de las sesiones de mercado.
 
 CARACTERÍSTICAS:
 - Sin base de datos: persiste el estado en engine/data/session_state.json
-- DST-Aware: usa pytz para calcular horas reales de NY, Londres y Chile
+- DST-Aware: usa zoneinfo para calcular horas reales de NY, Londres y Chile
 - Memoria persistente: sobrevive reinicios del servidor
 - Auto-rotación: detecta cambio de día UTC y rota PDH/PDL automáticamente
 - Tiempo- Global Mastery: Proporciona estado de sesión independiente del símbolo
@@ -14,7 +14,7 @@ CARACTERÍSTICAS:
 
 from engine.core.logger import logger
 import json
-import pytz
+from zoneinfo import ZoneInfo
 from datetime import datetime, timezone, date
 from pathlib import Path
 from typing import Optional, Any
@@ -28,10 +28,10 @@ _STATE_FILE = Path(__file__).parent.parent / "data" / "session_state.json"
 # ──────────────────────────────────────────────────────────────────────────────
 # Zonas horarias (instancias únicas, no re-crear en cada llamada)
 # ──────────────────────────────────────────────────────────────────────────────
-_CHILE_TZ  = pytz.timezone("America/Santiago")
-_NY_TZ     = pytz.timezone("America/New_York")
-_LONDON_TZ = pytz.timezone("Europe/London")
-_TOKYO_TZ  = pytz.timezone("Asia/Tokyo")
+_CHILE_TZ  = ZoneInfo("America/Santiago")
+_NY_TZ     = ZoneInfo("America/New_York")
+_LONDON_TZ = ZoneInfo("Europe/London")
+_TOKYO_TZ  = ZoneInfo("Asia/Tokyo")
 
 # --- GLOBAL SESSION CACHE v5.7.156 (Bootstrap Sync) ---
 # Almacena el resultado del bootstrap por símbolo para que se haga solo una vez

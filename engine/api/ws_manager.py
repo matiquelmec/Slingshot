@@ -1,5 +1,5 @@
 """
-ws_manager.py — SymbolBroadcaster + BroadcasterRegistry
+ws_manager.py — SymbolBroadcaster v6.0.1 (Refactor ISS-011)
 =========================================================
 Arquitectura: "Compute Once, Fan-Out N"
 
@@ -8,13 +8,10 @@ Un SymbolBroadcaster por símbolo activo:
   - Ejecuta el pipeline completo (SlingshotRouter) una sola vez
   - Distribuye el resultado a TODOS los clientes via asyncio.Queue
 
-Sin importar cuántos usuarios estén viendo BTCUSDT/15m,
-el pipeline se ejecuta exactamente UNA vez.
-
-BroadcasterRegistry:
-  - Crea broadcasters bajo demanda (primer usuario)
-  - Los destruye automáticamente (último usuario desconecta)
-  - Thread-safe via asyncio.Lock
+Módulos extraídos (v6.0.1 — Refactor ISS-011):
+  registry.py        → BroadcasterRegistry
+  signal_handler.py  → SignalHandler (filtrado, persistencia, Telegram)
+  advisor_bridge.py  → AdvisorBridge (LLM Advisor, Ghost Data, caché semántica)
 """
 
 from engine.api.registry import registry
@@ -50,7 +47,7 @@ from engine.indicators.structure import (
 from engine.indicators.liquidations import estimate_liquidation_clusters
 from engine.indicators.liquidity import detect_liquidity_clusters, analyze_neural_heatmap
 from engine.indicators.ghost_data import (
-    refresh_ghost_data, get_ghost_state, filter_signals_by_macro, 
+    refresh_ghost_data, get_ghost_state, filter_signals_by_macro,
     is_cache_fresh, fetch_funding_rate, compute_symbol_ghost
 )
 from engine.ml.features import FeatureEngineer
@@ -58,15 +55,18 @@ from engine.ml.inference import ml_engine
 from engine.ml.drift_monitor import drift_monitor
 from engine.notifications.telegram import send_signal_async
 from engine.notifications.filter import signal_filter
-from engine.api.advisor import generate_tactical_advice
+from engine.api.advisor import generate_tactical_advice, check_ollama_status
 from engine.core.store import store
 from engine.indicators.htf_analyzer import HTFAnalyzer
 from engine.indicators.onchain import OnChainSentinel
 
+# ✅ v6.0.1 — Módulos extraídos (Refactor ISS-011)
+from engine.api.signal_handler import SignalHandler
+from engine.api.advisor_bridge import AdvisorBridge
+
 # 🏛️ (v6.0-Audit) La gestión de concurrencia IA ha migrado a advisor.py (Priority Queue)
 # 🏛️ (v6.0-Strategy Delta) MASTER_WATCHLIST y PRIORITY_TIERS han migrado a config.py
 # ──────────────────────────────────────────────────────────────────────────────
-from engine.router.processors import StreamProcessor
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -161,6 +161,14 @@ class SymbolBroadcaster:
         self._last_advisor_ts = 0
         self._advisor_task: Optional[asyncio.Task] = None
         self._live_rvol: float = 0.0  # 🔴 v5.7.155 Master Gold: RVOL en tiempo real del Fast Path
+        self._cached_live_dates = None  # ✅ ISS-012: Inicializado para evitar AttributeError en cleanup
+
+        # ✅ v6.0.1 — Módulos extraídos (Refactor ISS-011)
+        self._signal_handler  = SignalHandler(self.symbol, self.interval, self)
+        self._advisor_bridge  = AdvisorBridge(self.symbol, self.interval, self)
+
+        # Alias de compatibilidad para el caché de advisor (leído por main.py)
+        self._last_advisor = self._advisor_bridge._last_advisor_obj
 
         logger.info(f"[BROADCASTER] ✅ Creado: {self._key}")
 
@@ -764,86 +772,8 @@ class SymbolBroadcaster:
             return False
 
     async def _handle_signals(self, tactical: dict, silent: bool = False):
-        """Filtra por macro, notifica por Telegram y persiste en MemoryStore local (v3.0).
-        En Audit Mode: también persiste las señales RECHAZADAS por el Portero Institucional o HTF.
-        """
-        raw_signals = tactical.get("signals", [])
-        router_blocked = tactical.get("blocked_signals", [])
-
-        # Si no hay nada en absoluto, salir
-        if not raw_signals and not router_blocked:
-            return
-
-        # --- DEBOUNCE INSTITUCIONAL (v4.0) ---
-        # Identificar señales únicas para evitar spam en el Fast Path (mismo candle).
-        # Generamos un ID basado en Asset, Tipo, Score y Timestamp de la vela.
-        def get_sig_id(s):
-            ts = s.get("timestamp") or s.get("time") or tactical.get("candles", [{}])[-1].get("timestamp", 0)
-            score = s.get("confluence", {}).get("score", 0)
-            return f"{self.symbol}:{s.get('type', 'LONG')}:{ts}:{score}"
-
-        unique_new = []
-        for s in raw_signals:
-            # v5.7.157 Protocolo Omega: Filtro de Confluencia Institucional (> 60%)
-            score = s.get("confluence", {}).get("score", 0)
-            if score <= 60:
-                continue
-                
-            sid = get_sig_id(s)
-            if sid not in self._processed_signals_this_candle:
-                unique_new.append(s)
-                self._processed_signals_this_candle.add(sid)
-
-        unique_blocked = []
-        for s in router_blocked:
-            sid = get_sig_id(s)
-            if sid not in self._processed_signals_this_candle:
-                unique_blocked.append(s)
-                self._processed_signals_this_candle.add(sid)
-
-        if not unique_new and not unique_blocked:
-            return # Ya hemos auditado estas señales en este ciclo de vela
-
-        ghost = get_ghost_state()
-        approved, macro_blocked = filter_signals_by_macro(unique_new, ghost)
-        
-        # ──────── PROCESAR APROBADAS Y TELEGRAM ────────
-        final_approved = []
-        for sig in approved:
-            # Telegram (Filtro Anti-Spam / Cooldown)
-            ok_to_send, reason = signal_filter.should_send(self.symbol, sig)
-            if ok_to_send:
-                asyncio.create_task(send_signal_async(
-                    signal=sig, asset=self.symbol,
-                    regime=tactical.get("market_regime", "UNKNOWN"),
-                    strategy=tactical.get("active_strategy", "N/A")
-                ))
-                final_approved.append(sig)
-            else:
-                logger.info(f"[BROADCASTER] {self._key} → 🔕 Telegram bloqueado: {reason}")
-                sig["blocked_reason"] = reason
-                macro_blocked.append(sig)
-        
-        # ──────── PERSISTIR ACTIVAS ────────
-        for sig in final_approved:
-            asyncio.create_task(self._persist_signal(sig, tactical, status="ACTIVE", silent=silent))
-
-        # ──────── [DELTA v5.7.15] SEÑALES BLOQUEADAS: SOLO LOG INTERNO, CERO UI ────────
-        # Macro-blocked y router-blocked se registran en logs del servidor,
-        # pero NUNCA se envían al Dashboard. Limpieza visual absoluta.
-        for sig in macro_blocked:
-            motivo = sig.get("blocked_reason", "Bloqueada por filtro macro")
-            from engine.api.registry import registry
-            registry.record_veto(self.symbol, f"MACRO: {motivo}")
-            if not silent:
-                logger.info(f"[GATEKEEPER] 🔇 Señal macro-bloqueada ({self.symbol}): {motivo}")
-
-        for sig in unique_blocked:
-            motivo = sig.get("blocked_reason", "Rechazada por filtro táctico")
-            from engine.api.registry import registry
-            registry.record_veto(self.symbol, f"TACTICAL: {motivo}")
-            if not silent:
-                logger.info(f"[GATEKEEPER] 🔇 Señal router-bloqueada ({self.symbol}): {motivo}")
+        """Delega al SignalHandler extraído (v6.0.1 — Refactor ISS-011)."""
+        await self._signal_handler.handle(tactical, silent=silent)
 
     async def _check_drift(self, df_live: pd.DataFrame):
         """
@@ -899,314 +829,16 @@ class SymbolBroadcaster:
 
 
     async def _persist_signal(self, sig: dict, tactical: dict, status: str = "ACTIVE", rejection_reason: str = None, silent: bool = False):
-        """Inserta la señal en public.signal_events y en el MemoryStore local."""
-        ghost = get_ghost_state()
-        
-        # Mantener identidad de la señal: Si ya trae un timestamp (de la vela), usarlo. 
-        # Si no, usar la última vela de tactical.
-        raw_ts = sig.get("timestamp") or sig.get("time")
-        if not raw_ts and "candles" in tactical: # Fallback a última vela
-            raw_ts = tactical["candles"][-1]["timestamp"] if tactical["candles"] else None
-        
-        final_ts = raw_ts if raw_ts else datetime.now(timezone.utc).isoformat()
-        if isinstance(final_ts, (int, float)):
-            final_ts = datetime.fromtimestamp(final_ts, tz=timezone.utc).isoformat()
-
-        # --- CÁLCULO DE RIESGO HIPOTÉTICO (Audit Mode) ---
-        # Si la señal no trae cálculos de riesgo (posible en señales rechazadas), los simulamos.
-        risk_pct = sig.get("risk_pct")
-        risk_usd = sig.get("risk_amount_usdt", sig.get("risk_usd"))
-        pos_size = sig.get("position_size_usdt", sig.get("position_size"))
-        lev      = sig.get("leverage", 1)
-
-        if not risk_pct or not pos_size:
-            try:
-                from engine.risk.risk_manager import RiskManager
-                # Instanciamos el RiskManager con el balance actual del Ghost State
-                rm = RiskManager(account_balance=float(ghost.get("total_balance", 1000.0)))
-                
-                # Simulamos el cálculo estructural para que la UI no muestre N/A
-                calc = rm.calculate_position(
-                    current_price=float(sig.get("price", 0)),
-                    signal_type=sig.get("signal_type", sig.get("type", "LONG")).upper(),
-                    market_regime=tactical.get("market_regime", "UNKNOWN"),
-                    smc_data=tactical.get("smc"),
-                    atr_value=sig.get("atr", 0)
-                )
-                risk_pct = calc.get("risk_pct")
-                risk_usd = calc.get("risk_amount_usdt")
-                pos_size = calc.get("position_size_usdt")
-                lev      = calc.get("leverage")
-            except Exception as e:
-                logger.error(f"[AUDITOR] Error simulando riesgo: {e}")
-
-        realtime_data = {
-            "asset":            self.symbol,
-            "interval":         self.interval,
-            "signal_type":      sig.get("signal_type", sig.get("type", "LONG")).upper(),
-            "type":             sig.get("signal_type", sig.get("type", "LONG")).upper(),
-            "entry_price":      float(sig.get("price", 0)),
-            "price":            float(sig.get("price", 0)),
-            "stop_loss":        float(sig.get("stop_loss", 0)),
-            "take_profit_3r":   float(sig.get("take_profit_3r", 0)),
-            "confluence_score": float(sig.get("confluence", {}).get("score", 0)) if sig.get("confluence") else 0,
-            "regime":           tactical.get("market_regime", "UNKNOWN"),
-            "strategy":         tactical.get("active_strategy", "N/A"),
-            "trigger":          sig.get("trigger", "N/A"),
-            "status":           status,
-            "rejection_reason": rejection_reason,
-            "timestamp":        final_ts,
-            "confluence":       sig.get("confluence"),
-            "risk_pct":         risk_pct,
-            "risk_usd":         risk_usd,
-            "position_size":    pos_size,
-            "leverage":         lev,
-            "rr_ratio":         round(abs(float(sig.get("take_profit_3r", 0)) - float(sig.get("price", 0))) / abs(float(sig.get("price", 0)) - float(sig.get("stop_loss", 0.001))) if abs(float(sig.get("price", 0)) - float(sig.get("stop_loss", 0))) > 0 else 0, 2)
-        }
-        
-        # Persistencia en Memoria Local (siempre, para logs internos)
-        asyncio.create_task(self._store.save_signal(realtime_data))
-        
-        # [DELTA v5.7.15] Solo emitir al Dashboard si la señal es ACTIVA y de alta calidad
-        # Señales FILTER/SILENCE/BLOCKED se quedan en logs del servidor, fuera de la UI.
-        sig_score = realtime_data.get("confluence", {}).get("score", 0) if realtime_data.get("confluence") else 0
-        if status == "ACTIVE" and sig_score >= 70 and realtime_data.get("rr_ratio", 0) >= 2.0:
-            await self._broadcast({"type": "signal_auditor_update", "data": realtime_data})
-        
-        # En v3.0, solo guardamos en memoria. Print de confirmación local.
-        icon = "✅" if status == "ACTIVE" else "🚫"
-        if not silent:
-            logger.info(f"[LOCAL STORE] {icon} Señal ({status}) persistida: {realtime_data['signal_type']} {self.symbol} @ ${realtime_data['entry_price']:.2f}")
+        """Delega al SignalHandler extraído (v6.0.1 — Refactor ISS-011)."""
+        await self._signal_handler.persist(sig, tactical, status=status, rejection_reason=rejection_reason, silent=silent)
 
     def _get_tactical_hash(self, tactical: dict) -> str:
-        """Genera un hash MD5 del estado táctico (excluyendo datos volátiles)."""
-        # Extraemos solo lo estructural para el caché semántico
-        stable_keys = {
-            "market_regime", "active_strategy", "macro_bias", 
-            "htf_bias", "smc", "diagnostic", "key_levels"
-        }
-        state = {k: v for k, v in tactical.items() if k in stable_keys}
-        
-        # Redondear niveles de Fibonacci y OBs para evitar invalidación por micro-pips
-        # (Opcional, pero ayuda al hit-rate del caché)
-        
-        state_str = json.dumps(state, sort_keys=True, default=str)
-        return hashlib.md5(state_str.encode()).hexdigest()
+        """Delega al AdvisorBridge extraído (v6.0.1 — Refactor ISS-011)."""
+        return self._advisor_bridge.get_tactical_hash(tactical)
 
     async def _emit_advisor(self, tactical: dict, session_state: dict, is_absorption_alert: bool = False):
-        """Llama al LLM Advisor y broadcast el resultado (v5.7.155 Master Gold Live Price Injection)."""
-        
-        # 🔴 FIX CRÍTICO v5.7.155 Master Gold: Inyectar datos LIVE antes de enviar al LLM
-        # El tactical dict fue capturado como snapshot en el momento del cierre de vela.
-        # Si Ollama tarda 30-60s, el precio puede haber movido $500-$900.
-        live_overrides = {}
-        if self.latest_price and self.latest_price > 0:
-            live_overrides["current_price"] = self.latest_price
-        
-        # 🔴 FIX RVOL v5.7.155 Master Gold: El RVOL del Slow Path es de la vela CERRADA (ej: 0.15x).
-        # El RVOL del Fast Path es de la vela EN FORMACIÓN (ej: 33.36x).
-        # El Advisor debe ver el RVOL más alto de ambos para detectar Absorción Institucional.
-        if self._live_rvol > 0:
-            slow_rvol = (tactical.get('diagnostic') or {}).get('rvol', 0)
-            max_rvol = max(float(slow_rvol), self._live_rvol)
-            diag_copy = dict(tactical.get('diagnostic') or {})
-            diag_copy['rvol'] = round(max_rvol, 2)
-            live_overrides["diagnostic"] = diag_copy
-        
-        if live_overrides:
-            tactical = {**tactical, **live_overrides}
-        
-        # 🟢 MTF Master Implementation (v5.9.5)
-        # Paso 1: Sanitizar y Guardar Snapshot para que otros intervalos lo vean
-        import numpy as np
-        sanitized_current = sanitize_for_json(tactical)
-        await self._store.save_tactical_snapshot(self.symbol, self.interval, sanitized_current)
-
-        # Paso 2: Lógica de "Capitán de Activo"
-        # Para evitar saturar a Ollama, solo un intervalo dispara el análisis. 
-        # Preferimos 15m (Estratégico). Si no está activo, 5m.
-        # Si un intervalo NO es el disparador, simplemente intenta leer el último análisis del store.
-        
-        IS_LEAD = (self.interval == "15m") 
-        # Fallback: si soy 5m y no hay 15m activo, yo tomo el mando (simplificado por ahora a 15m principal)
-        
-        if not IS_LEAD:
-            # Subordinado: Intentar leer el análisis consolidado del Capitán
-            existing_advice = await self._store.get_advisor_advice(self.symbol)
-            if existing_advice:
-                # Si el análisis tiene menos de 2 minutos, lo damos por válido para el 1m/5m
-                # updated_at = existing_advice.get("updated_at")
-                # if updated_at: ... 
-                self._last_advisor = existing_advice
-                await self._broadcast({"type": "advisor_update", "data": existing_advice})
-                return
-            
-            # Si no hay análisis previo, y soy un 1m/5m frenético, solo esperamos al 15m
-            # A menos que sea una ALERTA crítica
-            if not is_absorption_alert:
-                return
-
-        # ✅ VERIFICACIÓN DE CACHÉ INTERNO (SMC v5.7.155 Master Gold)
-        # Si ya tenemos un análisis para esta vela en el Store, lo reutilizamos.
-        current_candle_ts = tactical.get("candles", [{}])[-1].get("timestamp", 0) if tactical.get("candles") else 0
-        
-        # Si ya existe un análisis para este activo en el store, no volvemos a llamar a Ollama.
-        # EXCEPCIÓN: Si el análisis guardado es un error (trae N/A o estructura no identificada), lo ignoramos.
-        existing_advice = await self._store.get_advisor_advice(self.symbol)
-        if existing_advice and existing_advice.get("timestamp") == current_candle_ts:
-            content = existing_advice.get("content", "")
-            if "N/A" not in content and "ESTRUCTURA NO IDENTIFICADA" not in content:
-                logger.debug(f"[BROADCASTER] ♻️ Reutilizando análisis cacheado para {self.symbol} ({current_candle_ts})")
-                self._last_advisor = existing_advice
-                await self._broadcast({"type": "advisor_update", "data": existing_advice})
-                return
-            else:
-                logger.info(f"[BROADCASTER] 🔃 Re-generando análisis para {self.symbol} (Caché previo era inválido/incompleto)")
-
-        # ✅ VERIFICACIÓN PREVENTIVA (Ollama) v5.7.155 Master Gold
-        # Si el motor IA no responde rápido, informamos al usuario de inmediato en vez de colgar el sistema.
-        if not await self.check_ollama():
-            logger.info(f"[BROADCASTER] ⚠️ Ollama no disponible para {self.symbol}")
-            await self._broadcast({"type": "advisor_update", "data": {
-                "content": "⚠️ MOTOR IA OFFLINE: El motor Ollama no responde en localhost:11434. Asegúrate de que Ollama esté abierto.",
-                "timestamp": current_candle_ts,
-                "updated_at": datetime.now(timezone.utc).isoformat()
-            }})
-            return
-
-        # ✅ CACHÉ SEMÁNTICO MD5 (v5.4 Optimization)
-        # Si la estructura no ha mutado, reutilizamos el consejo para ahorrar CPU (Gemma-3).
-        tactical_hash = self._get_tactical_hash(tactical)
-        
-        # Bypasseamos el caché si es una ALERTA DE ABSORCIÓN crítica
-        cache_hit = hasattr(self, '_last_tactical_hash') and self._last_tactical_hash == tactical_hash
-        
-        if cache_hit and not is_absorption_alert:
-            logger.info(f"[BROADCASTER] 🧠 Cache Semántico HIT para {self.symbol}. Contexto idéntico.")
-            if self._last_advisor:
-                await self._broadcast({"type": "advisor_update", "data": self._last_advisor})
-                return
-
-        self._last_tactical_hash = tactical_hash
-
-        if is_absorption_alert:
-            logger.info(f"[BROADCASTER] 🧪 Inyectando Etiqueta de ABSORCIÓN INSTITUCIONAL en el payload...")
-            tactical["alert_type"] = "ALERTA DE ABSORCIÓN"
-            tactical["priority"] = "MAXIMA"
-
-        logger.info(f"[BROADCASTER] 🧠 Iniciando análisis LLM para {self.symbol}...")
-        
-        # ✅ CANCELACIÓN DE TAREA PREVIA (Inteligencia de Concurrencia)
-        # Si ya hay un análisis corriendo (ej: cambio rápido de moneda), lo cancelamos para liberar el semáforo
-        if self._advisor_task and not self._advisor_task.done():
-            self._advisor_task.cancel()
-            logger.info(f"[BROADCASTER] 🔃 Análisis previo cancelado para {self.symbol} (Nueva petición)")
-
-        try:
-            # --- GATEKEEPING COGNITIVO (v6.0 - Operation Lightning) ---
-            # FIX v6.0.1: tactical dict no tiene 'confluence_score' ni 'signal' a nivel raíz.
-            # Esos campos viven dentro de cada señal en tactical["signals"].
-            # Extraemos el mejor score de las señales aprobadas y verificamos si hay señal activa.
-            approved_signals = tactical.get("signals", [])
-            blocked_signals = tactical.get("blocked_signals", [])
-            all_signals = approved_signals + blocked_signals
-            
-            # Score: el más alto entre todas las señales (aprobadas + bloqueadas)
-            conf_score = max(
-                (s.get("confluence", {}).get("score", 0) for s in all_signals if s.get("confluence")),
-                default=0
-            )
-            # También considerar el score inyectado por _persist_signal si existe
-            conf_score = max(conf_score, tactical.get("confluence_score", 0))
-            
-            # Señal activa: hay señales aprobadas con tipo no-NEUTRAL
-            is_active_signal = any(
-                s.get("signal_type", s.get("type", "NEUTRAL")) != "NEUTRAL" 
-                for s in approved_signals
-            ) if approved_signals else False
-            
-            # Diagnóstico adicional: el régimen del mercado también indica actividad
-            regime = tactical.get("market_regime", "UNKNOWN")
-            is_trending = regime in ("MARKUP", "MARKDOWN", "ACCUMULATION", "DISTRIBUTION")
-            
-            logger.info(f"[GATEKEEPER-DEBUG] {self.symbol} | Score: {conf_score}% | Active: {is_active_signal} | Regime: {regime} | Signals: {len(approved_signals)}A/{len(blocked_signals)}B")
-            
-            if not is_active_signal and not is_trending and conf_score < 70:
-                # Bypass total de la IA para ahorrar recursos
-                advice = json.dumps({
-                    "verdict": "SIDEWAYS", 
-                    "logic": f"Confluencia {conf_score}% (Standby)", 
-                    "threat": "LOW"
-                })
-                logger.info(f"[BROADCASTER] 🛡️ Gatekeeping ACTIVE para {self.symbol}. Score {conf_score}% < 70%. LLM Bypassed.")
-            else:
-                loading_obj = {
-                    "content": "CONECTANDO CON EL MOTOR CUÁNTICO (Ollama)... ⚡",
-                    "timestamp": current_candle_ts,
-                    "status": "LOADING_IA",
-                    "updated_at": datetime.now(timezone.utc).isoformat()
-                }
-                await self._broadcast({"type": "advisor_update", "data": loading_obj})
-
-                # Creamos la tarea para poder cancelarla si fuera necesario
-                self._advisor_task = asyncio.current_task()
-
-                # Obtener datos adicionales del store para el LLM
-                news_items = await self._store.get_news(limit=5)
-                liqs = await self._store.get_liquidation_clusters(self.symbol)
-                econ_events = await self._store.get_economic_events(limit=5)
-
-                # ✅ SERIALIZACIÓN ROBUSTA & MTF (v6.0 Master)
-                sanitized_current = sanitize_for_json(tactical.copy())
-                sanitized_current.pop("candles", None)
-                mtf_context = await self._store.get_mtf_context(self.symbol)
-
-                # Proceder con la IA (v6.0 Master Consolidated Call)
-                advice = await asyncio.wait_for(
-                    generate_tactical_advice(self.symbol, 
-                        tactical_data=sanitized_current,
-                        current_session=session_state.get("data", {}).get("current_session", "UNKNOWN"),
-                        ml_projection=self._last_ml,
-                        news=news_items,
-                        liquidations=liqs,
-                        economic_events=econ_events,
-                        onchain_data=self._last_onchain.get("data") if self._last_onchain else None,
-                        mtf_context=mtf_context
-                    ),
-                    timeout=60.0
-                ) 
-                logger.info(f"[BROADCASTER] ✅ Análisis LLM completado para {self.symbol}")
-            
-            advice_obj = {
-                "timestamp": current_candle_ts,
-                "asset": self.symbol,
-                "content": advice,
-                "updated_at": datetime.now(timezone.utc).isoformat()
-            }
-            await self._store.save_advisor_advice(self.symbol, advice_obj)
-            
-            # self._last_advisor será actualizado por _broadcast
-            await self._broadcast({"type": "advisor_update", "data": advice_obj})
-        except asyncio.TimeoutError:
-            logger.info(f"[BROADCASTER] ⚠️ Timeout en LLM Advisor ({self.symbol})")
-            error_obj = {
-                "content": "⚠️ MOTOR IA SATURADO: Ollama está tardando demasiado en responder. Reintentando en la próxima vela...",
-                "timestamp": current_candle_ts,
-                "status": "TIMEOUT",
-                "updated_at": datetime.now(timezone.utc).isoformat()
-            }
-            self._last_advisor = error_obj
-            await self._broadcast({"type": "advisor_update", "data": error_obj})
-        except asyncio.CancelledError:
-            pass
-        except Exception as e:
-            logger.error(f"[BROADCASTER] ❌ {self._key} → Advisor error: {e}")
-            await self._broadcast({"type": "advisor_update", "data": {
-                "content": f"ADVISOR OFFLINE: {str(e)}",
-                "timestamp": current_candle_ts,
-                "updated_at": datetime.now(timezone.utc).isoformat()
-            }})
-            traceback.print_exc()
+        """Delega al AdvisorBridge extraído (v6.0.1 — Refactor ISS-011)."""
+        await self._advisor_bridge.emit(tactical, session_state, is_absorption_alert=is_absorption_alert)
 
     async def _refresh_ghost(self, global_ghost=None):
         """Refresca Ghost Data (Funding específico + Global context) y broadcast."""

@@ -21,6 +21,8 @@ from engine.main_router import SlingshotRouter
 from engine.core.store import store
 from engine.workers.orchestrator import SlingshotOrchestrator
 from engine.api.advisor import check_ollama_status
+from engine.api.auth import issue_token, validate_token
+from fastapi import HTTPException
 import asyncio
 
 global_orchestrator = SlingshotOrchestrator()
@@ -200,26 +202,41 @@ async def analyze_symbol(symbol: str, timeframe: str = "15m"):
 
 # ── WebSocket Stream Multi-Usuario ───────────────────────────────────────────
 
+@app.get("/api/v1/auth/token")
+async def get_ws_token(api_key: str = Query(...)):
+    """Emite un JWT para WebSocket, protegido por API Key interna."""
+    if api_key != settings.SECURITY_API_KEY:
+        raise HTTPException(status_code=401, detail="API Key inválida")
+    
+    token = issue_token()
+    return {"token": token, "expires_in": 3600}
+
 @app.websocket("/api/v1/stream/{symbol}")
 async def websocket_stream_endpoint(
     websocket: WebSocket,
     symbol: str,
     interval: str = Query(default="15m"),
-    api_key: Optional[str] = Query(None)
+    token: Optional[str] = Query(None)
 ):
     """
     Stream WebSocket multi-usuario para un símbolo dado.
 
-    🔒 Sigma Security v6.0: Validación de X-API-KEY interna para evitar front-running.
+    🔒 JWT Security v6.0.1: Validación de token rotatorio
     Arquitectura Delta v6.0: Utiliza el BroadcasterRegistry modularizado.
     """
     await websocket.accept()
 
-    # 🏛️ VERIVICACIÓN DE SEGURIDAD SIGMA
-    if not api_key or api_key != settings.SECURITY_API_KEY:
-        logger.error(f"[GATEWAY] 🔐 Acceso denegado (Invalid API Key) a {symbol}:{interval}")
-        registry.record_auth(success=False) # 📊 Registro Sigma
-        await websocket.close(code=4001) # Unauthorized
+    if not token:
+        logger.error(f"[GATEWAY] 🔐 Acceso denegado (Missing Token) a {symbol}:{interval}")
+        registry.record_auth(success=False)
+        await websocket.close(code=4001)
+        return
+        
+    is_valid, reason, _ = validate_token(token)
+    if not is_valid:
+        logger.error(f"[GATEWAY] 🔐 Acceso denegado ({reason}) a {symbol}:{interval}")
+        registry.record_auth(success=False)
+        await websocket.close(code=4001)
         return
 
     registry.record_auth(success=True) # 📊 Registro Sigma
