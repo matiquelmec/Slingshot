@@ -104,17 +104,18 @@ class SignalGatekeeper:
                         news_multiplier = 0.0
                         event_name = ev.get('title', 'Noticia Crítica')
                         break
+
         
         for sig in signals[-10:]:  # Ventana de las últimas 10 señales
-            if news_multiplier == 0.0:
-                sig["confluence"] = {"score": 0}
-                self._block(sig, "RECHAZADA", f"Protocolo de Noticias Activo: {event_name} (+/- 15m)", result)
-                continue
-
             # ── Filtro 1: Enriquecimiento de Riesgo ──────────────────────────
             # (SMT_Strength se pasará en el contexto de riesgo si existe)
             smt_strength = sig.get('confluence', {}).get('smt_strength', 0) if sig.get('confluence') else 0
             
+            # --- [DELTA v6.1] PROTECCIÓN DE GEOMETRÍA INSTITUCIONAL ---
+            # Preservamos el setup original de la estrategia si existe
+            orig_sl = sig.get('stop_loss')
+            orig_tp = sig.get('tp1') or sig.get('take_profit_3r')
+
             risk_data = self._risk.calculate_position(
                 current_price=sig["price"],
                 signal_type=sig.get("signal_type", "LONG"),
@@ -124,7 +125,13 @@ class SignalGatekeeper:
                 atr_value=sig.get("atr_value", 0.0),
                 smt_strength=smt_strength
             )
-            # Actualizamos la señal con los datos de salida dinámica v5.7.155 Master Gold
+            
+            # Si la estrategia ya definió un setup (Ej: SMC OB-Low), lo respetamos
+            if orig_sl and orig_tp:
+                risk_data['stop_loss'] = orig_sl
+                risk_data['tp1'] = orig_tp
+                risk_data['take_profit_3r'] = orig_tp
+                
             sig.update(risk_data)
 
             # ── Filtro 2: Direccional HTF (AHORA DELEGADO AL CONFLUENCE MANAGER v5.7.155 Master Gold) ──
@@ -140,17 +147,38 @@ class SignalGatekeeper:
             #         self._block(sig, "BLOCKED_BY_HTF", f"Contra sesgo HTF Bajista: {htf_bias.reason}", result)
             #         continue
 
-            # ── Filtro 2.5: Jerarquía de Timeframes (SIGMA v5.7) ──────────────
-            if interval in ["1m", "5m"]:
-                if not htf_bias or htf_bias.direction == "NEUTRAL":
-                    self._block(sig, "BLOCKED_BY_SILENCE", f"Protocolo v5.7: Señal {interval} sin alineación HTF clara.", result)
-                    continue
-                
+            # --- [PIPELINE START] Evaluamos Confluencia Primero (v6.5 Master) ---
+            try:
+                confluence_result = confluence_manager.evaluate_signal(
+                    df=df,
+                    signal=sig,
+                    ml_projection=context.ml_projection,
+                    session_data=context.session_data,
+                    news_items=context.news_items,
+                    economic_events=context.economic_events,
+                    liquidation_clusters=context.liquidation_clusters,
+                    htf_bias=htf_bias,
+                    onchain_bias=context.onchain_bias,
+                    heatmap=context.heatmap
+                )
+                sig["confluence"] = confluence_result
+            except Exception as e:
+                logger.error(f"[GATEKEEPER] ConfluenceManager error: {e}")
+                sig["confluence"] = {"score": 50, "confluences": []}
+
+            score = sig["confluence"].get("score", 0)
+
+            # ── Filtro 1: Jerarquía de Timeframes (SIGMA v6.5 MASTER) ──
+            if htf_bias:
                 is_long = "LONG" in str(sig.get("signal_type", sig.get("type", ""))).upper()
-                if (htf_bias.direction == "BULLISH" and not is_long) or \
-                   (htf_bias.direction == "BEARISH" and is_long):
-                    self._block(sig, "AUTODESTRUCTED", f"Conflicto de Jerarquía: {interval} contra-tendencia {htf_bias.direction}", result)
-                    continue
+                
+                # REGLA DE ORO v6.6: Solo vetamos si el score es < 65% y hay conflicto.
+                if score < 65 and htf_bias.direction != "NEUTRAL":
+                    if (htf_bias.direction == "BULLISH" and not is_long) or \
+                       (htf_bias.direction == "BEARISH" and is_long):
+                        self._block(sig, "SIGMA_VETO", f"Conflicto de Tendencia (Score {score}% < 65%)", result)
+                        continue
+
 
             # ── Filtro 2.7: Anti-Spam de Volatilidad (OMEGA v5.7) ─────────────
             asset = sig.get("asset", "UNKNOWN")
@@ -166,10 +194,11 @@ class SignalGatekeeper:
             for ts, old_type in recent_for_asset:
                 if now_ts - ts < 900 and old_type != sig_type:
                     contradictory_count += 1
-            
-            if contradictory_count >= 2:
-                self._block(sig, "STRUCTURAL_INCONSISTENCY", "[OMEGA] Bloqueo por Ruido/Choppy: >2 señales contradictorias en 15m.", result)
-                # No registramos esta para no alimentar el spam
+
+            # Reducimos la sensibilidad de OMEGA en scalping para permitir volatilidad rápida
+            max_contradictory = 3 if interval in ["1m", "5m"] else 2
+            if contradictory_count >= max_contradictory:
+                self._block(sig, "STRUCTURAL_INCONSISTENCY", f"[OMEGA] Bloqueo por Choppy: >{max_contradictory} señales contradictorias.", result)
                 continue
             
             # Registrar éxito parcial (luego de pasar filtros estructurales base)
@@ -197,43 +226,35 @@ class SignalGatekeeper:
             except:
                 pass
 
-            # ── Filtro 3: Jurado de Confluencia ───────────────────────────────
-            try:
-                confluence_result = confluence_manager.evaluate_signal(
-                    df=df,
-                    signal=sig,
-                    ml_projection=context.ml_projection,
-                    session_data=context.session_data,
-                    news_items=context.news_items,
-                    economic_events=context.economic_events,
-                    liquidation_clusters=context.liquidation_clusters,
-                    htf_bias=htf_bias,
-                    onchain_bias=context.onchain_bias,
-                    heatmap=context.heatmap # v5.7 Neural Heatmap alignment
-                )
-                sig["confluence"] = confluence_result
-            except Exception as e:
-                logger.error(f"[GATEKEEPER] ConfluenceManager error: {e}")
-                sig["confluence"] = None
-
             # ── Filtro 4: R:R Mínimo ──────────────────────────────────────────
-            rr = self._risk.validate_signal(sig)
-            sig["rr_ratio"]     = rr["rr_ratio"]
-            sig["trade_quality"] = rr["trade_quality"]
+            rr_res = self._risk.validate_signal(sig)
+            sig["rr_ratio"]     = rr_res["rr_ratio"]
+            sig["trade_quality"] = rr_res["trade_quality"]
 
-            if not rr["approved"]:
+            # Umbral de Rentabilidad Matemática v6.7.8 (Extreme Survival)
+            min_rr = 1.5 # Sniper Sync
+            if not rr_res.get("approved", False):
                 if not silent:
-                    logger.info(f"[GATEKEEPER] 🔴 R:R insuficiente | {sig.get('signal_type')} | {rr['reason']}")
-                self._block(sig, "BLOCKED_BY_FILTER", rr["reason"], result)
+                    logger.info(f"[GATEKEEPER] \U0001f534 DELTA BLOCK: R:R {sig.get('rr_ratio', 0):.2f} | Reason: {rr_res.get('reason', 'N/A')}")
+                self._block(sig, "DELTA_VETO", f"R:R {sig.get('rr_ratio', 0):.2f} < {min_rr} | {rr_res.get('reason')}", result)
                 continue
 
-            # ── Filtro 5: Score de Confluencia (Umbral v5.7.15 — Nivel de Mando) ──
-            score = sig["confluence"].get("score", 0) if sig.get("confluence") else 0
-            min_score = 70 # Solo renderizamos si la confluencia es > 70%. Si es 0%, el sistema no molesta.
+            # ── Filtro 5: Score de Confluencia Mínimo ──
+            # [v7.9.0] Sintonía Diferenciada por Activo
+            if asset == "BTCUSDT":
+                min_score = 30
+            elif asset == "SOLUSDT":
+                min_score = 60  # SOL: solo señales de élite (v8.0.0)
+            else:
+                min_score = 40  # ETH y otros
+            
+            # [FORENSIC v6.8.2] Auditoría de Portero
+            if not silent:
+                logger.info(f"[GATEKEEPER_AUDIT] Asset: {asset} | Score: {score}% | Required: {min_score}%")
             
             if score < min_score:
                 if not silent:
-                    logger.info(f"[GATEKEEPER] 🔇 SILENCIO SELECTIVO: {score}% < {min_score}% — señal autodestruida")
+                    logger.info(f"[GATEKEEPER] \U0001f507 SEÑAL DÉBIL: {score}% < {min_score}%")
                 self._block(sig, "BLOCKED_BY_CONFIDENCE", f"Confianza {score}% < {min_score}%", result)
                 continue
 
@@ -242,6 +263,10 @@ class SignalGatekeeper:
                 self._block(sig, "BLOCKED_EXPIRED", "Señal expirada o tocó SL/TP", result)
                 continue
 
+            # ✅ ¡SEÑAL TOTALMENTE VALIDADA! 
+            if not silent:
+                logger.info(f"[GATEKEEPER] \u2705 \U0001f3af SEÑAL APROBADA: {sig['asset']} {sig['type']} | R:R {sig['rr_ratio']} | Score {score}%")
+            
             result.approved.append(sig)
 
         # ── [SIGMA v5.7.15] AGRUPACIÓN POR ZONA (0.5%) & LÍMITE OMEGA ──
@@ -325,7 +350,9 @@ class SignalGatekeeper:
 
             lows  = df_low[mask]
             highs = df_high[mask]
-            is_long = "LONG" in str(sig.get("type", "")).upper()
+            # [v6.1] Soporte para signal_type y type (Unificación Institucional)
+            sig_raw_type = str(sig.get("signal_type", sig.get("type", ""))).upper()
+            is_long = "LONG" in sig_raw_type
 
             if is_long:
                 return not ((lows <= sl).any() or (highs >= tp).any())

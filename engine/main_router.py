@@ -80,6 +80,7 @@ class SlingshotRouter:
         silent: bool = False,
         event_time_ms: int | None = None,
         heatmap: dict | None = None,
+        context: GatekeeperContext | None = None,
     ) -> dict:
         """
         Pipeline principal: transforma velas OHLCV en señales institucionales.
@@ -91,6 +92,10 @@ class SlingshotRouter:
             drift_ms = (start_t * 1000) - event_time_ms
             if drift_ms > 300:
                 logger.warning(f"⚠️ [LATENCY] High Latency detectada en el router: {drift_ms:.2f}ms de drift")
+        
+        # [IDENTITY v6.8.4]
+        if not silent:
+            logger.info(f"🚦 [ROUTER_ENTRY] Processing asset: {asset}")
 
         # ── Fase 1: Análisis del Mercado (Capa 1-3) ──────────────────────────
         # Intentamos recuperar del cache si el timestamp no ha cambiado
@@ -102,6 +107,7 @@ class SlingshotRouter:
             macro_levels=macro_levels,
             htf_bias=htf_bias,
             heatmap=heatmap,
+            silent=silent
         )
 
         if heatmap: self._context.heatmap = heatmap # Inyección dinámica v5.7
@@ -109,7 +115,7 @@ class SlingshotRouter:
         # ── Fase 2: Detección de Oportunidades SMC ───────────────────────────
         df_analyzed   = market_map.df_analyzed
         analyzed_df   = self._strategy.analyze(df_analyzed)
-        opportunities = self._strategy.find_opportunities(analyzed_df)
+        opportunities = self._strategy.find_opportunities(analyzed_df, asset=asset)
 
         # Ordenar por timestamp descendente
         try:
@@ -120,6 +126,7 @@ class SlingshotRouter:
         # ── Fase 3: Enriquecimiento de Riesgo (pre-Portero) ──────────────────
         enriched: list[dict] = []
         for sig in opportunities:
+            sig["asset"] = asset  # [IDENTIDAD v6.8.1] Asegura filtrado diferenciado
             risk_data = self._risk.calculate_position(
                 current_price=sig["price"],
                 signal_type=sig.get("signal_type", "LONG"),
@@ -127,19 +134,19 @@ class SlingshotRouter:
                 key_levels=market_map.key_levels,
                 smc_data=market_map.smc,
                 atr_value=sig.get("atr_value", 0.0),
+                asset=asset,
             )
-            # Enriquecemos de forma silenciosa para pre-cálculo
             enriched.append(enrich_signal(sig, risk_data, interval))
 
         # ── Fase 4: Portero Institucional ────────────────────────────────────
         gate = self._gatekeeper.process(
             signals=enriched,
-            df=df_analyzed,
+            df=analyzed_df,  # [FIX] Pasamos el DF analizado que contiene las columnas SMC
             smc_map=market_map.smc,
             key_levels=market_map.key_levels,
             interval=interval,
             htf_bias=htf_bias,
-            context=self._context,
+            context=context if context else self._context,
             silent=silent,
         )
 
@@ -156,9 +163,9 @@ class SlingshotRouter:
         for approved_sig in gate.approved:
             # Re-generamos el log del bridge pero ahora que sabemos que está aprobada
             symbol = approved_sig.get("asset", asset)
-            from engine.execution.ftmo_bridge import prepare_ftmo_order
-            # Forzamos silent=False para que OMEGA anuncie la orden aprobada
-            prepare_ftmo_order(approved_sig, silent=False)
+            from engine.execution.ftmo_bridge import prepare_ftmo_order_package
+            # Módulo DELTA: Preparamos el paquete fragmentado
+            prepare_ftmo_order_package(approved_sig)
             
             logger.info(
                 f"[ROUTER] ✅ Señal APROBADA | {approved_sig['type']} @ ${approved_sig['price']:.2f}"

@@ -70,7 +70,8 @@ class SignalHandler:
             return
 
         # ── Debounce Institucional ────────────────────────────────────────────
-        unique_new     = self._debounce(raw_signals,    min_score=60)
+        # [v8.2.0] Eliminamos min_score=60 porque el Gatekeeper dictamina (ej BTC puede ser 30%)
+        unique_new     = self._debounce(raw_signals,    min_score=0)
         unique_blocked = self._debounce(router_blocked, min_score=0)
 
         if not unique_new and not unique_blocked:
@@ -194,8 +195,7 @@ class SignalHandler:
         asyncio.create_task(store.save_signal(realtime_data))
 
         # ── Broadcast al Dashboard (solo calidad institucional) ───────────────
-        sig_score = realtime_data.get("confluence", {}).get("score", 0) if realtime_data.get("confluence") else 0
-        if status == "ACTIVE" and sig_score >= 70 and realtime_data.get("rr_ratio", 0) >= 2.0:
+        if status == "ACTIVE":
             await self._bc._broadcast({"type": "signal_auditor_update", "data": realtime_data})
 
         icon = "✅" if status == "ACTIVE" else "🚫"

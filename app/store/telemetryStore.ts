@@ -363,12 +363,9 @@ export const useTelemetryStore = create<TelemetryState>((set, get) => {
 
                     set((state) => {
                         // Protocolo v5.7.15: Una Sola Señal Maestra (El Mejor Cuadro)
-                        // Filtro de Supervivencia: Solo ACTIVE, RR > 2.0, Confluence >= 70%
-                        const activeSignalsOnly = incomingSignals.filter(s => 
-                            s.status === 'ACTIVE' && 
-                            (s.confluence?.score || 0) >= 70 &&
-                            (s.rr_ratio || 0) >= 2.0
-                        );
+                        // [v8.2.0] Eliminamos las restricciones rígidas (RR>2.0, Score>70). 
+                        // El Gatekeeper del backend ya filtró la señal según el activo. Si es ACTIVE, es válida.
+                        const activeSignalsOnly = incomingSignals.filter(s => s.status === 'ACTIVE');
                         
                         // OMEGA: Anti-Repetición en la UI (Top 1 por Asset en la cola visual)
                         const { data: newHistoryData, ids: newHistoryIds } = activeSignalsOnly.length > 0
@@ -405,9 +402,9 @@ export const useTelemetryStore = create<TelemetryState>((set, get) => {
 
                     const sig = data.data as Signal;
                     set((state) => {
-                        // DELTA: Limpieza del Renderizador Auditado
-                        // No mostramos NADA por debajo del 70% o RR < 2.0 incluso en auditoría.
-                        if ((sig.confluence?.score || 0) < 70 || (sig.rr_ratio || 0) < 2.0) {
+                        // DELTA: Permitir cualquier señal que venga como ACTIVE, el R:R y Score 
+                        // dependen de la calibración SIGMA del backend.
+                        if (sig.status !== 'ACTIVE') {
                              return state; 
                         }
 

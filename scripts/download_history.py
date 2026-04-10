@@ -9,8 +9,8 @@ def download_binance_klines(symbol: str, interval: str, target_candles: int, out
     """
     Descarga data histórica de Binance iterando hacia atrás en el tiempo.
     """
-    print(f"🚀 Iniciando descarga de historia para {symbol} ({interval})")
-    print(f"🎯 Meta: {target_candles} velas (Aprox. 1 año en 15m)")
+    print(f"START: Iniciando descarga de historia para {symbol} ({interval})")
+    print(f"TARGET: Meta: {target_candles} velas")
     
     base_url = "https://api.binance.com/api/v3/klines"
     
@@ -42,7 +42,7 @@ def download_binance_klines(symbol: str, interval: str, target_candles: int, out
             calls_made += 1
             
             if not data:
-                print("⚠️ Binance no devolvió más datos. Alcanzamos el límite histórico.")
+                print("WARNING: Binance no devolvio mas datos.")
                 break
                 
             # data comes ordered chronological (oldest to newest in the chunk)
@@ -54,23 +54,22 @@ def download_binance_klines(symbol: str, interval: str, target_candles: int, out
             oldest_candle_open_time = data[0][0]
             end_time = oldest_candle_open_time - 1
             
-            print(f"📥 Descargadas {len(all_klines)} de {target_candles} velas. "
+            print(f"FETCH: Descargadas {len(all_klines)} de {target_candles} velas. "
                   f"Fecha oldest: {datetime.fromtimestamp(oldest_candle_open_time/1000).strftime('%Y-%m-%d %H:%M')}")
                   
             if len(data) < limit:
-                # Si nos devolvió menos del límite, significa que es todo lo que la API tiene
-                print("⚠️ No hay más datos disponibles en el exchange para este rango temporal.")
+                print("WARNING: No hay mas datos para este rango.")
                 break
                 
         except Exception as e:
-            print(f"❌ Error al conectar con Binance: {e}")
+            print(f"ERROR: Fallo conexion: {e}")
             break
             
     # Keep only the target amount if we overshot
     if len(all_klines) > target_candles:
         all_klines = all_klines[-target_candles:]
         
-    print("\n🛠️ Procesando y formateando datos para el Engine...")
+    print("\nINFO: Procesando datos...")
     
     # Structuring like our current system expects
     df = pd.DataFrame(all_klines, columns=[
@@ -94,21 +93,27 @@ def download_binance_klines(symbol: str, interval: str, target_candles: int, out
     # Guardar en parquet
     os.makedirs(output_file.parent, exist_ok=True)
     
-    print(f"💾 Guardando dataset ultracomprimido: {output_file}")
+    print(f"SAVE: Guardando en {output_file}")
     df.to_parquet(output_file, index=False)
     
-    print(f"✅ ¡Descarga exitosa! Dataset final: {len(df)} filas.")
-    print(f"   Rango de Fechas: {df['timestamp'].min()} hasta {df['timestamp'].max()}")
+    print(f"SUCCESS: Descarga exitosa! Dataset final: {len(df)} filas.")
+    print(f"   Dates: {df['timestamp'].min()} to {df['timestamp'].max()}")
 
 if __name__ == "__main__":
-    # Configurar
-    symbol = "BTCUSDT"
-    interval = "15m"
-    target_candles = 35000  # Aprox 1 año (365 * 96)
-    
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--symbol", type=str, default="BTCUSDT")
+    parser.add_argument("--interval", type=str, default="15m")
+    parser.add_argument("--target_candles", type=int, default=35000)
+    parser.add_argument("--output_file", type=str, default=None)
+    args = parser.parse_args()
+
     # Donde lo guardamos
     project_root = Path(__file__).parent.parent
-    data_dir = project_root / "data"
-    output_path = data_dir / f"{symbol.lower()}_{interval}_1YEAR.parquet"
+    if args.output_file:
+        output_path = Path(args.output_file)
+    else:
+        data_dir = project_root / "tmp" / "data"
+        output_path = data_dir / f"{args.symbol.lower()}_{args.interval}.parquet"
     
-    download_binance_klines(symbol, interval, target_candles, output_path)
+    download_binance_klines(args.symbol, args.interval, args.target_candles, output_path)

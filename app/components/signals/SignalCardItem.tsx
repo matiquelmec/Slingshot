@@ -223,16 +223,16 @@ const SignalCardItem: React.FC<SignalCardItemProps> = ({ signal, currentPrice })
                     <div className="flex items-center gap-3">
                         <div className="flex-1 h-1.5 bg-black/60 rounded-full overflow-hidden border border-white/10">
                             <div
-                                className={`h-full rounded-full transition-all duration-700 ${signal.confluence.score >= 70 ? 'bg-neon-green shadow-[0_0_6px_rgba(0,255,65,0.6)]' :
-                                        signal.confluence.score >= 50 ? 'bg-neon-cyan shadow-[0_0_6px_rgba(0,229,255,0.6)]' :
-                                            signal.confluence.score >= 30 ? 'bg-yellow-400' : 'bg-neon-red'
+                                className={`h-full rounded-full transition-all duration-700 ${signal.confluence.score >= 60 ? 'bg-neon-green shadow-[0_0_6px_rgba(0,255,65,0.6)]' :
+                                        signal.confluence.score >= 40 ? 'bg-neon-cyan shadow-[0_0_6px_rgba(0,229,255,0.6)]' :
+                                            signal.confluence.score >= 25 ? 'bg-yellow-400' : 'bg-neon-red'
                                     }`}
                                 style={{ width: `${signal.confluence.score}%` }}
                             />
                         </div>
-                        <span className={`text-[10px] font-black tracking-widest whitespace-nowrap ${signal.confluence.score >= 70 ? 'text-neon-green' :
-                                signal.confluence.score >= 50 ? 'text-neon-cyan' :
-                                    signal.confluence.score >= 30 ? 'text-yellow-400' : 'text-neon-red'
+                        <span className={`text-[10px] font-black tracking-widest whitespace-nowrap ${signal.confluence.score >= 60 ? 'text-neon-green' :
+                                signal.confluence.score >= 40 ? 'text-neon-cyan' :
+                                    signal.confluence.score >= 25 ? 'text-yellow-400' : 'text-neon-red'
                             }`}
                         >
                             {signal.confluence.score}/100 {signal.confluence.conviction}

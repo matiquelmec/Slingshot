@@ -138,15 +138,22 @@ class ConfluenceManager:
                     ev_date = ev_date.iloc[0] if hasattr(ev_date, 'iloc') else ev_date[0]
 
                 # Convert to UTC-aware datetime to prevent subtraction exceptions (v6.0 Fix)
-                ev_time_pd = pd.to_datetime(ev_date, utc=True)
+                # Simulation-aware 'now' for backtesting/live consistency
+                now_sim = pd.to_datetime(df['timestamp'].iloc[-1], utc=True)
+                
+                # Conversión robusta de fecha (v6.6.5 Fix)
+                try:
+                    ev_time_pd = pd.to_datetime(float(ev_date), unit='s', utc=True)
+                except (ValueError, TypeError):
+                    ev_time_pd = pd.to_datetime(ev_date, utc=True)
                 
                 # Convert to single scalar timestamp
                 if hasattr(ev_time_pd, "__iter__") and not isinstance(ev_time_pd, (str, bytes)):
                     ev_time_pd = ev_time_pd[0]
                 
-                # Llegar a "Python Land" para evitar colisiones con NumPy
+                # Llegar a "Python Land" sin advertencias de nanosegundos
                 ev_time = ev_time_pd.to_pydatetime() if hasattr(ev_time_pd, "to_pydatetime") else ev_time_pd
-                now_py = now.to_pydatetime() if hasattr(now, "to_pydatetime") else now
+                now_py = now_sim.floor('us').to_pydatetime() if hasattr(now_sim, "to_pydatetime") else now_sim
 
                 diff_hours = (ev_time - now_py).total_seconds() / 3600
                 
@@ -191,14 +198,19 @@ class ConfluenceManager:
                         ts_raw = ts_raw.iloc[0] if hasattr(ts_raw, 'iloc') else ts_raw[0]
                     
                     # Convertimos a Timestamp de Python puro para evitar conflictos con Numpy
-                    item_ts_pd = pd.to_datetime(ts_raw, utc=True)
+                    # Garantizar conversión de Unix Timestamp (v6.6.5 Fix)
+                    try:
+                        item_ts_pd = pd.to_datetime(float(ts_raw), unit='s', utc=True)
+                    except (ValueError, TypeError):
+                        item_ts_pd = pd.to_datetime(ts_raw, utc=True)
                     
                     if hasattr(item_ts_pd, "__iter__") and not isinstance(item_ts_pd, (str, bytes)):
                         item_ts_pd = item_ts_pd[0] # iloc[0] equivalent
                     
-                    # Garantizar "Python Land" (v6.0 Omega Master Fix)
+                    # Garantizar "Python Land" sin advertencias de nanosegundos
                     item_ts = item_ts_pd.to_pydatetime() if hasattr(item_ts_pd, "to_pydatetime") else item_ts_pd
-                    now_py = now_ts.to_pydatetime() if hasattr(now_ts, "to_pydatetime") else now_ts
+                    now_sim = pd.to_datetime(df['timestamp'].iloc[-1], utc=True)
+                    now_py = now_sim.floor('us').to_pydatetime() if hasattr(now_sim, "to_pydatetime") else now_sim
 
                     age_mins = (now_py - item_ts).total_seconds() / 60
                     
@@ -332,30 +344,56 @@ class ConfluenceManager:
             is_contrary = (is_long and htf_bias.direction == 'BEARISH') or (not is_long and htf_bias.direction == 'BULLISH')
             
             if htf_score < 15 or is_contrary:
-                multiplier = 0.0
-                veto_reason = "HTF Bias en contra (Tendencia Mayor opuesta)"
-                checklist.append({"factor": "Veto HTF", "status": "DENEGADO", "detail": veto_reason})
+                # No vetamos, solo penalizamos fierte (v6.1 "Aggressive Flow")
+                penalty = 25
+                score -= penalty
+                veto_reason = "Tendencia Mayor opuesta o débil"
+                checklist.append({"factor": "HTF Alignment", "status": "DIVERGENTE", "detail": f"{veto_reason} (-{penalty}pts)"})
             else:
-                checklist.append({"factor": "Veto HTF", "status": "APROBADO", "detail": f"Fuerza Macro: {htf_score:.0f}%"})
+                score += 10
+                checklist.append({"factor": "HTF Alignment", "status": "APROBADO", "detail": f"Fuerza Macro: {htf_score:.0f}% (+10pts)"})
 
-        # 🚀 11. VETO DE VALOR (PREMIUM / DISCOUNT) v5.7.155 Master Gold Titanium
+        # 🚀 11. VETO DE VALOR (PREMIUM / DISCOUNT) — RELAJADO PARA EXPERIMENTO v6.1
+        # No aplicamos multiplier = 0.0, solo registramos en el checklist
         from engine.indicators.fibonacci import get_current_fibonacci_levels
         fib_data = get_current_fibonacci_levels(df)
         price = float(current.get('close', 0))
         
         if fib_data and 'levels' in fib_data:
             fib_05 = fib_data['levels'].get('0.5')
+            gp_618 = fib_data['levels'].get('0.618')
+            gp_786 = fib_data['levels'].get('0.786')
+            
             if fib_05:
-                # REGLA DE ORO SMC: Comprar solo en Discount (<0.5), Vender solo en Premium (>0.5)
+                # A. Veto de Valor (Premium/Discount)
                 invalid_value = (is_long and price > fib_05) or (not is_long and price < fib_05)
+                value_zone = "PREMIUM (CARO) 🔴" if is_long else "DISCOUNT (BARATO) 🔴"
                 
                 if invalid_value:
-                    multiplier = 0.0
-                    value_zone = "PREMIUM (CARO)" if is_long else "DISCOUNT (BARATO)"
-                    checklist.append({"factor": "Veto de Valor", "status": "DENEGADO", "detail": f"Zona {value_zone}"})
+                    score -= 10
+                    checklist.append({"factor": "Zona de Valor", "status": "PRECAUCIÓN", "detail": f"Operando en {value_zone} (-10pts)"})
                 else:
+                    value_pts = 10
+                    score += value_pts
                     value_zone = "DISCOUNT ✅" if is_long else "PREMIUM ✅"
-                    checklist.append({"factor": "Zona de Valor", "status": "CONFIRMADO", "detail": value_zone})
+                    checklist.append({"factor": "Zona de Valor", "status": "CONFIRMADO", "detail": f"{value_zone} (+{value_pts}pts)"})
+
+            if gp_618 and gp_786:
+                # B. Confluencia Golden Pocket (SMC OTE)
+                z_top = max(gp_618, gp_786)
+                z_bottom = min(gp_618, gp_786)
+                
+                if z_bottom <= price <= z_top:
+                    is_whale = fib_data.get("is_whale_leg", False)
+                    gp_pts = 20 if is_whale else 10
+                    score += gp_pts
+                    whale_txt = " (WHALE LEG 🐋)" if is_whale else ""
+                    checklist.append({
+                        "factor": "Golden Pocket", 
+                        "status": "CONFIRMADO", 
+                        "detail": f"Inversión en OTE {gp_pts}pts{whale_txt}"
+                    })
+
 
         # 🚀 12. VETO DE VOLATILIDAD MACRO (EVENTOS ECONÓMICOS) v5.7.155 Master Gold Titanium
         if high_impact_near:
@@ -373,45 +411,46 @@ class ConfluenceManager:
 
             if is_imminent:
                 multiplier = 0.0
+                logger.info(f"[CONFLUENCE] 🔴 Veto Macro: Evento {event_name} inminente")
                 checklist.append({"factor": "Veto Macro News", "status": "DENEGADO", "detail": f"Imminente: {event_name}"})
 
-        # 🚀 13. RELOJ DE OBSOLESCENCIA (TIME-DECAY) v5.7.155 Master Gold Titanium
-        # Las señales de 1m o 5m rotan rápido; si no se mitigan pronto, pierden validez.
+        # 🚀 13. RELOJ DE OBSOLESCENCIA (TIME-DECAY) v6.6.6 Master Fix
         try:
-            now_ts = pd.to_datetime(str(df['timestamp'].iloc[-1])).tz_localize(None)
+            def _to_dt(ts):
+                if ts is None: return pd.Timestamp.now(tz=timezone.utc).floor('us').tz_localize(None)
+                try:
+                    # Si es convertible a número, es un Unix Timestamp
+                    f_ts = float(ts)
+                    unit = 's' if f_ts < 2e9 else 'ms'
+                    return pd.to_datetime(f_ts, unit=unit, utc=True).floor('us').tz_localize(None)
+                except (ValueError, TypeError):
+                    # Si falla, es un string de fecha (ISO, etc.)
+                    return pd.to_datetime(str(ts), utc=True).floor('us').tz_localize(None)
+
+            # Sincronización de Relojes con el DF actual
+            now_ts = _to_dt(df['timestamp'].iloc[-1])
+            sig_ts = _to_dt(signal.get('timestamp'))
             
-            sig_ts_raw = signal.get('timestamp')
-            # Fix Agent Omega: Si viene como timestamp numérico en milisegundos, arreglar su unidad
-            if isinstance(sig_ts_raw, (int, float)):
-                if sig_ts_raw > 1e11: # Probablemente ms en lugar de s
-                    sig_ts = pd.to_datetime(sig_ts_raw, unit='ms').tz_localize(None)
-                else:
-                    sig_ts = pd.to_datetime(sig_ts_raw, unit='s').tz_localize(None)
-            else:
-                sig_ts = pd.to_datetime(str(sig_ts_raw)).tz_localize(None)
-            
-            # Aproximamos velas transcurridas usando timedelta
-            diff_minutes = abs((now_ts - sig_ts).total_seconds()) / 60.0
-            # Asumiendo timeframe de 15m (siendo pesimistas)
-            candles_elapsed = diff_minutes / 15.0
+            diff_seconds = abs((now_ts - sig_ts).total_seconds())
+            candles_elapsed = diff_seconds / (15.0 * 60.0)
             
             decay_mult = 1.0
-            if candles_elapsed > 5:
-                decay_mult = 0.8 # Decaimiento del 20%
-            if candles_elapsed > 12:
-                decay_mult = 0.5 # Decaimiento del 50%
-            if candles_elapsed > 25:
-                decay_mult = 0.0 # VETO TOTAL: Narrativa obsoleta
+            if candles_elapsed > 10: decay_mult = 0.8
+            if candles_elapsed > 30: 
+                decay_mult = 0.0 # Veto total por obsolescencia
+                v_reason = f"Expirado ({int(candles_elapsed)} velas)"
                 
             multiplier *= decay_mult
             
             if decay_mult < 1.0:
                 status = "OBSOLETO" if decay_mult == 0.0 else "DECAYENDO"
                 checklist.append({"factor": "Time-Decay", "status": status, "detail": f"{int(candles_elapsed)} velas desde origen"})
-            elif candles_elapsed >= 0:
-                checklist.append({"factor": "Timing", "status": "FRESCO", "detail": f"Solo {int(candles_elapsed)} velas de vida"})
+            else:
+                checklist.append({"factor": "Timing", "status": "FRESCO", "detail": "Señal en tiempo real"})
         except Exception as e:
-            logger.error(f"[CONFLUENCE] Error calculando Time-Decay: {e}")
+            logger.error(f"[CONFLUENCE] Error crítico en Time-Decay: {e}")
+            # Fallback seguro: No vetar por error de sistema
+            if 'multiplier' not in locals(): multiplier = 1.0
 
         # 🚀 14. ON-CHAIN SENTINEL (Peso 15) v5.7.155 Master Gold
         onchain_weight = 15
@@ -461,7 +500,7 @@ class ConfluenceManager:
             veto_entries = [c for c in checklist if c.get('status') == 'DENEGADO' or c.get('status') == 'OBSOLETO']
             v_reason = veto_entries[-1].get('detail', 'Veto por Confluencia') if veto_entries else 'Veto por Riesgo'
         
-        logger.info(f"[CONFLUENCE] Asset: {signal.get('pair') or 'BTC'} | Score: {final_score}% (Multiplier: {multiplier})")
+        logger.info(f"[CONFLUENCE] Asset: {signal.get('asset', 'UNKNOWN')} | Score: {final_score}% (Multiplier: {multiplier})")
         logger.info(f"             Regime OK? {regime_ok} | POI? {poi_pts} | Macro Near? {high_impact_near}")
 
         return {

@@ -11,7 +11,7 @@ Principios:
 3. Precisión de Activo: Manejo dinámico de Tick Value y Contract Size.
 """
 
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 import math
 from engine.api.config import settings
 from engine.core.logger import logger
@@ -31,6 +31,8 @@ ASSET_SPECS = {
     "AUDUSD":   {"contract_size": 100000, "tick_size": 0.00001, "tick_value": 1.0,   "type": "FOREX",  "pip_points": 10},
     "XAUUSD":   {"contract_size": 100,    "tick_size": 0.01,    "tick_value": 1.0,   "type": "METALS", "pip_points": 10}, # 1.00 move = $100
     "BTCUSDT":  {"contract_size": 1,      "tick_size": 0.01,    "tick_value": 0.01,  "type": "CRYPTO", "pip_points": 100}, # $1 move = $1 profit per lot
+    "ETHUSDT":  {"contract_size": 1,      "tick_size": 0.01,    "tick_value": 0.01,  "type": "CRYPTO", "pip_points": 100},
+    "SOLUSDT":  {"contract_size": 1,      "tick_size": 0.01,    "tick_value": 0.01,  "type": "CRYPTO", "pip_points": 100},
     "US30":     {"contract_size": 1,      "tick_size": 0.1,     "tick_value": 0.1,   "type": "INDEX",  "pip_points": 10},  # FTMO Indices suelen ser $1 por punto por lote
     "NAS100":   {"contract_size": 1,      "tick_size": 0.1,     "tick_value": 0.1,   "type": "INDEX",  "pip_points": 10},
 }
@@ -81,45 +83,66 @@ def calculate_dynamic_lots(
     
     return lots
 
-def prepare_ftmo_order(signal_data: Dict[str, Any], silent: bool = True) -> Dict[str, Any]:
+def prepare_ftmo_order_package(signal_data: Dict[str, Any]) -> List[Dict[str, Any]]:
     """
-    Prepara el payload JSON final para el puente de ejecución MT5.
-    Transforma la señal táctica SMC en una orden institucional.
+    Versión DELTA v6.7.5.
+    Prepara un paquete de 3 órdenes (60/20/20) para ejecución fragmentada.
     """
     symbol = signal_data.get("asset", "EURUSD").upper()
-    entry  = float(signal_data.get("price", 0))
+    entry  = float(signal_data.get("entry_price", signal_data.get("price", 0)))
     sl     = float(signal_data.get("stop_loss", 0))
-    tp     = float(signal_data.get("take_profit_3r", 0))
     sig_type = signal_data.get("signal_type", "LONG").upper()
     
-    # ── Determinar Riesgo en USD ──────────────────────────────────────────────
-    # Prioridad: 1. El riesgo calculado por RiskManager, 2. El % de settings, 3. 1% de 100k.
-    risk_usd = signal_data.get("risk_usd")
-    if not risk_usd:
-        risk_pct = getattr(settings, "MAX_RISK_PCT", DEFAULT_RISK_PCT)
-        risk_usd = FTMO_ACCOUNT_BALANCE * risk_pct
+    # Niveles SIGMA
+    tp1 = float(signal_data.get("tp1", 0))
+    tp2 = float(signal_data.get("tp2", 0))
+    tp3 = float(signal_data.get("tp3", 0))
+    tp1_vol_pct = float(signal_data.get("tp1_vol_pct", 0.60))
+
+    # Riesgo y Lotaje
+    risk_usd = signal_data.get("risk_usd", FTMO_ACCOUNT_BALANCE * DEFAULT_RISK_PCT)
+    total_lots = calculate_dynamic_lots(symbol, entry, sl, risk_usd)
+    
+    # Fragmentación de Lotes
+    lots_tp1 = total_lots * tp1_vol_pct
+    lots_tp2 = total_lots * 0.20
+    lots_tp3 = total_lots - lots_tp1 - lots_tp2
+    
+    fragments = [
+        {"id": "TP1", "vol": round(lots_tp1, 2), "tp": tp1},
+        {"id": "TP2", "vol": round(lots_tp2, 2), "tp": tp2},
+        {"id": "TP3", "vol": round(lots_tp3, 2), "tp": tp3}
+    ]
+    
+    package = []
+    for frag in fragments:
+        if frag["vol"] <= 0: continue
+        package.append({
+            "symbol":    symbol,
+            "action":    "BUY" if sig_type == "LONG" else "SELL",
+            "type":      "ORDER_TYPE_LIMIT",
+            "volume":    frag["vol"],
+            "price":     entry,
+            "sl":        sl,
+            "tp":        frag["tp"],
+            "comment":   f"DELTA_{frag['id']}_{symbol}",
+            "magic":     43000,
+        })
         
-    # ── Ejecutar Sizing ───────────────────────────────────────────────────────
-    lots = calculate_dynamic_lots(symbol, entry, sl, risk_usd)
-    
-    # ── Construir Orden MT5 ──────────────────────────────────────────────────
-    order = {
-        "symbol":    symbol,
-        "action":    "BUY" if sig_type == "LONG" else "SELL",
-        "type":      "ORDER_TYPE_LIMIT", # Recomendado para evitar Market Impact
-        "volume":    lots,
-        "price":     entry,
-        "sl":        sl,
-        "tp":        tp,
-        "deviation": 10, # Slippage máximo tolerable en puntos
-        "comment":   f"SMC_{signal_data.get('regime', 'ALPHA')}_PT_{int(signal_data.get('confluence', {}).get('score', 0))}",
-        "magic":     43000, # Titanium Magic ID para Slingshot
+    logger.info(f"📦 [DELTA_BRIDGE] Paquete de {len(package)} fragmentos preparado para {symbol}")
+    return package
+
+def modify_ftmo_order(ticket: int, new_sl: float, new_tp: float = None) -> Dict[str, Any]:
+    """
+    Función para el Módulo OMEGA.
+    Modifica el SL/TP de una orden activa en MT5.
+    """
+    return {
+        "action": "MODIFY",
+        "ticket": ticket,
+        "sl": round(new_sl, 5),
+        "tp": round(new_tp, 5) if new_tp else 0
     }
-    
-    if not silent:
-        logger.info(f"⚖️ [FTMO_BRIDGE] Preparando orden {symbol} @ {lots} lotes | Riesgo: ${risk_usd:.2f}")
-    
-    return order
 
 if __name__ == "__main__":
     # Test Mock Signal

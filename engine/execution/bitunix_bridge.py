@@ -60,7 +60,7 @@ def prepare_bitunix_order(signal_data: Dict[str, Any]) -> Dict[str, Any]:
     Ajusta el TP para absorber los Taker Fees y garantizar el R:R neto.
     """
     symbol = signal_data.get("asset", "BTCUSDT").upper()
-    entry  = float(signal_data.get("price", 0))
+    entry  = float(signal_data.get("entry_price", signal_data.get("price", 0)))
     sl     = float(signal_data.get("stop_loss", 0))
     tp_raw = float(signal_data.get("take_profit_3r", 0))
     side_tactical = signal_data.get("signal_type", "LONG").upper()

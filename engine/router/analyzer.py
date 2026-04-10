@@ -46,6 +46,7 @@ class MarketMap:
     diagnostic: dict = field(default_factory=dict)
     htf_alignment: bool = False 
     displacement_valid: bool = False 
+    atr_value: float = 0.0 # [AUDITORIA v6.6.13]
     df_analyzed: Any = field(default_factory=dict) 
 
 
@@ -78,6 +79,7 @@ class MarketAnalyzer:
         macro_levels=None,
         htf_bias=None,
         heatmap: dict | None = None,
+        silent: bool = False,
     ) -> MarketMap:
         """Pipeline de análisis completo v5.4 con soporte de Caché LRU."""
         
@@ -87,6 +89,11 @@ class MarketAnalyzer:
         # Esto elimina permanentemente el parpadeo a 0 en ambas métricas.
         cache_key = self._get_cache_key(asset, interval, df)
         cached = self._cache.get(cache_key)
+        
+        # [INTEGRIDAD v6.8.6] Verificar que el activo en caché sea el mismo (Anti-Leakage)
+        if cached is not None and cached.asset != asset:
+            cached = None
+            
         if cached is not None:
             # FAST PATH: Métricas de volumen vivas sobre snapshot estructural cacheado
             current_vol = float(df['volume'].iloc[-1])
@@ -104,23 +111,37 @@ class MarketAnalyzer:
                     (absorption_raw - st['abs_median']) / (st['abs_mad'] * 1.4826) if st.get('abs_mad', 0) > 0 else 0.0,
                     2
                 )
-                live_elite = (live_absorption > 2.5) and (live_rvol > 1.5)
+                # 🔴 [MODO EXPERIMENTO] Umbrales relajados para detección de élite
+                live_elite = (live_absorption > 2.0) and (live_rvol > 1.2)
                 
                 # 3. Inyección atómica al diagnóstico
                 cached.diagnostic["volume"] = current_vol
                 cached.diagnostic["rvol"] = live_rvol
                 cached.diagnostic["absorption_score"] = live_absorption
                 cached.diagnostic["is_absorption_elite"] = live_elite
-                cached.diagnostic["displacement_active"] = live_rvol >= 1.5
-                cached.displacement_valid = live_rvol >= 1.5
+                # 🔴 [MODO EXPERIMENTO] Umbral relajado de 1.5x a 1.1x
+                cached.diagnostic["displacement_active"] = live_rvol >= 1.1
+                cached.displacement_valid = live_rvol >= 1.1
             return cached
 
         df = df.copy()
 
-        # ── Paso 0: Normalización de Tipos ─────────────────────────
+        # ── Paso 0: Normalización y ATR ─────────────────────────
         for col in ["open", "high", "low", "close", "volume"]:
             if col in df.columns:
                 df[col] = pd.to_numeric(df[col], errors="coerce")
+
+        if len(df) >= 14:
+            high_low = df["high"] - df["low"]
+            high_close = (df["high"] - df["close"].shift()).abs()
+            low_close = (df["low"] - df["close"].shift()).abs()
+            ranges = pd.concat([high_low, high_close, low_close], axis=1)
+            true_range = ranges.max(axis=1)
+            df["atr"] = true_range.ewm(alpha=1/14, adjust=False).mean()
+        else:
+            df["atr"] = df["close"] * 0.002 # Fallback
+            
+        df.attrs["atr_value"] = float(df["atr"].iloc[-1]) if not df["atr"].empty else 0.0
 
         # ── Paso 1: Soporte / Resistencia ──────────────────────────
         df = identify_support_resistance(df, interval=interval)
@@ -181,6 +202,13 @@ class MarketAnalyzer:
                 df.iloc[-1, df.columns.get_loc('absorption_raw')] = absorption_raw
         else:
             # SLOW PATH: Ha comenzado una nueva vela. Actualizamos las métricas Base-Line (O(n))
+            # [v6.8.8] Calculamos ATR Real para precisión de Stops en el RiskManager
+            tr1 = df['high'] - df['low']
+            tr2 = (df['high'] - df['close'].shift(1)).abs()
+            tr3 = (df['low'] - df['close'].shift(1)).abs()
+            df['tr'] = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
+            df['atr'] = df['tr'].rolling(14).mean()
+            
             df = calculate_rvol(df)
             df = calculate_absorption_index(df)
             
@@ -218,7 +246,8 @@ class MarketAnalyzer:
             "imbalance_neural": (heatmap or {}).get("imbalance", 0.0)
         }
         
-        logger.info(f"🛠️ [ANALYZER] {asset} | RVOL: {rvol:.2f} | Abs: {absorption_score:.2f} | HTF Align: {htf_align}")
+        if not silent:
+            logger.info(f"🛠️ [ANALYZER] {asset} | RVOL: {rvol:.2f} | Abs: {absorption_score:.2f} | HTF Align: {htf_align}")
 
         # ── Finalización y Caché ─────────────────────────────────────────────
         m_map = MarketMap(
@@ -246,6 +275,7 @@ class MarketAnalyzer:
             diagnostic=diagnostic,
             htf_alignment=htf_align,
             displacement_valid=rvol >= 1.5,
+            atr_value=float(df["atr"].iloc[-1]) if "atr" in df.columns else 0.0,
             df_analyzed=df,
         )
 
@@ -262,8 +292,13 @@ class MarketAnalyzer:
         """Extrae OBs y FVGs v5.4."""
         try:
             atr_val = df.attrs.get("atr_value", float(df["close"].iloc[-1]) * 0.003)
-            df_ob = identify_order_blocks(df)
-            smc = extract_smc_coordinates(df_ob)
+            # DELTA FIX: Actualizamos el df original para que las columnas ob_bullish/bearish persistan
+            df_res = identify_order_blocks(df)
+            for col in ['ob_bullish', 'ob_bearish', 'fvg_bullish', 'fvg_bearish', 'bos_bullish', 'bos_bearish']:
+                if col in df_res.columns:
+                    df[col] = df_res[col]
+            
+            smc = extract_smc_coordinates(df)
 
             bullish_zones = (
                 [{"top": o["top"], "bottom": o["bottom"]} for o in smc["order_blocks"]["bullish"]]

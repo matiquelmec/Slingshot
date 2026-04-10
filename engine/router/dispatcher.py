@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import pandas as pd
 from typing import Any
-from engine.execution.ftmo_bridge import prepare_ftmo_order
+from engine.execution.ftmo_bridge import prepare_ftmo_order_package
 from engine.execution.bitunix_bridge import prepare_bitunix_order
 
 
@@ -48,6 +48,7 @@ def build_base_result(market_map) -> dict:
         "fibonacci": mm.fibonacci,
         "htf_bias": mm.htf_bias,
         "diagnostic": mm.diagnostic,
+        "atr_value": mm.atr_value, # [AUDITORIA v6.6.14]
         "signals": [],
         "blocked_signals": [],
     }
@@ -76,18 +77,22 @@ def enrich_signal(signal: dict, risk_data: dict, interval: str) -> dict:
         "leverage":          risk_data["leverage"],
         "position_size":     risk_data["position_size_usdt"],
         "stop_loss":         risk_data["stop_loss"],
-        "take_profit_3r":    risk_data["take_profit_3r"],
+        "tp1":               risk_data["tp1"],
+        "tp2":               risk_data["tp2"],
+        "tp3":               risk_data["tp3"],
+        "take_profit_3r":    risk_data["tp2"], # Legacy: vinculamos 1.8R como TP principal
         "entry_zone_top":    risk_data["entry_zone_top"],
         "entry_zone_bottom": risk_data["entry_zone_bottom"],
         "expiry_candles":    risk_data.get("expiry_candles", 3),
         "expiry_timestamp":  expiry_timestamp_str,
+        "tp1_vol":           risk_data.get("tp1_vol_pct", 0.60), # Sintonía SIGMA (v7.5.0)
         "interval_minutes":  interval_minutes,
     })
     
     # ── FTMO BRIDGE (Titanium v5.7.155 Master Gold) ───────────────────────────────────────
     try:
-        # Preparamos la orden para MT5 y la inyectamos en la señal
-        signal["ftmo_order"] = prepare_ftmo_order(signal)
+        # Preparamos el paquete de órdenes fragmentadas (60/20/20) para MT5
+        signal["ftmo_order_package"] = prepare_ftmo_order_package(signal)
     except Exception:
         signal["ftmo_order"] = None
 

@@ -31,7 +31,7 @@ export function getSignalLifecycle(sig: Signal, currentPrice: number | null, now
         // Priorizar rejection_reason que viene del broadcast estandarizado
         const whySignal = sig.confluence?.reasoning || 'Criterio técnico base cumplido.';
         const rejectionDetail = sig.rejection_reason || (sig as any).blocked_reason || 
-                               (sig.status === 'BLOCKED_BY_CONFIDENCE' ? 'No alcanzó el umbral de excelencia (75%)' : 'Rechazada por módulo de riesgo.');
+                               (sig.status === 'BLOCKED_BY_CONFIDENCE' ? 'Confianza debajo del umbral del activo' : 'Rechazada por módulo de riesgo.');
 
         return {
             status: 'INVALIDADA', 

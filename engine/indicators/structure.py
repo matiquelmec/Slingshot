@@ -23,10 +23,10 @@ WINDOW_BY_INTERVAL: dict[str, int] = {
     '1w':  4,
 }
 
-def identify_order_blocks(df: pd.DataFrame, threshold: float = 2.0, lookback_structure: int = 15) -> pd.DataFrame:
+def identify_order_blocks(df: pd.DataFrame, threshold: float = 1.5, lookback_structure: int = 21) -> pd.DataFrame:
     """
-    SMC Nivel 3 (God Mode): Detecta Order Blocks e Imbalances (Fair Value Gaps).
-    Filtra los High-Probability OBs exigiendo Liquidity Sweep o Break of Structure.
+    SMC Nivel 3 (God Mode Refined): Detecta Order Blocks e Imbalances.
+    v6.0.5: Re-activada la lógica de BOS para mayor frecuencia profesional.
     """
     df = df.copy()
     
@@ -36,37 +36,35 @@ def identify_order_blocks(df: pd.DataFrame, threshold: float = 2.0, lookback_str
     df['avg_body'] = df['body_size'].rolling(window=20).mean()
     df['avg_total'] = df['total_size'].rolling(window=20).mean()
     
-    # 2. Identificar Velas Institucionales (Expansión Fuerte / Imbalance)
-    df['is_imbalance'] = (df['body_size'] > (df['avg_body'] * threshold)) & (df['total_size'] > df['avg_total'])
+    # 2. Identificar Velas Institucionales (Expansión Realista)
+    df['is_imbalance'] = (df['body_size'] > (df['avg_body'] * threshold))
     
     df['imbalance_bullish'] = df['is_imbalance'] & (df['close'] > df['open'])
     df['imbalance_bearish'] = df['is_imbalance'] & (df['close'] < df['open'])
     
     # 3. Mapeo de Estructura Institucional (Vectorizado)
-    # Rastrear el techo y piso reciente para ver si el OB causa ruptura o barrido
-    # Usamos shift(1) para no incluir la vela actual en el lookback
     df['struct_high'] = df['high'].shift(1).rolling(window=lookback_structure).max()
     df['struct_low'] = df['low'].shift(1).rolling(window=lookback_structure).min()
     
-    # 4. Detectar Order Blocks (OB) Base (Inducements potenciales)
+    # 4. Detectar Order Blocks (OB) Base
     prev_bearish = df['close'].shift(1) < df['open'].shift(1)
     base_bull_ob = df['imbalance_bullish'] & prev_bearish
     
     prev_bullish = df['close'].shift(1) > df['open'].shift(1)
     base_bear_ob = df['imbalance_bearish'] & prev_bullish
     
-    # 5. Filtrado "SMC Liquidity Trap" (Wait For Sweep)
-    # Regla OB Alcista HP:
-    # A) La vela roja previa (el bloque) barrió el mínimo estructural (Liquidity Sweep)
-    # Hemos REMOVIDO la alternativa de "BOS simple" para evitar Inducements.
-    # Solo se entra si el OB es Extremo y originó un barrido previo.
+    # 5. Filtrado Profesional: SWEEP o BOS (Break of Structure)
+    # OB Alcista: La vela rompe el máximo estructural (BOS) O barrió el mínimo previo (Sweep)
+    bullish_bos = df['high'] > df['struct_high']
+    bullish_sweep = df['low'].shift(1) <= df['struct_low'].shift(1) # La vela roja previa barrió
     
-    bullish_sweep = df['low'].shift(1) <= df['struct_low'].shift(1)
-    bearish_sweep = df['high'].shift(1) >= df['struct_high'].shift(1)
+    # OB Bajista: La vela rompe el mínimo estructural (BOS) O barrió el máximo previo (Sweep)
+    bearish_bos = df['low'] < df['struct_low']
+    bearish_sweep = df['high'].shift(1) >= df['struct_high'].shift(1) # La vela verde previa barrió
     
-    # Solo es OB válido si tiene Imbalance + Reversion + SWEEP (Bloqueo Estricto de Inducement)
-    df['ob_bullish'] = base_bull_ob & bullish_sweep
-    df['ob_bearish'] = base_bear_ob & bearish_sweep
+    # Veredicto: OB es válido si hay Imbalance + (BOS o Sweep)
+    df['ob_bullish'] = base_bull_ob & (bullish_bos | bullish_sweep)
+    df['ob_bearish'] = base_bear_ob & (bearish_bos | bearish_sweep)
     
     # 6. Fair Value Gaps (FVG) Filtrados SMC God Mode (High-Probability)
     # Regla: La mecha de la Vela 3 y la mecha de la Vela 1 no deben tocarse. 

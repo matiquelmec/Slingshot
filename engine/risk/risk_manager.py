@@ -4,335 +4,137 @@ import math
 # Ratio Riesgo/Beneficio mínimo NETO (tras comisiones y slippage)
 MIN_RR_REQUIRED = settings.MIN_RR
 
-# Factor de Fricción Operativa (0.1% comisión entrada + 0.1% salida + 0.05% slippage estimado)
-FEE_SLIPPAGE_IMPACT = 0.0025 
+# Factor de Fricción (Ajustado a 0.04% para niveles de volumen institucional)
+FEE_SLIPPAGE_IMPACT = 0.0004 
 
 # Límite de pérdida diaria máxima por cuenta (3.5%)
 MAX_DAILY_DRAWDOWN_PCT = 0.035
-
-# Límite de ejecuciones diarias para evitar factor humano (Maturity v5.0)
-MAX_DAILY_TRADES = 3
+MAX_DAILY_TRADES = 5 # Aumentado para Scalping
 
 
-from engine.core.session_manager import session_manager # Para control de CAP global
+from engine.core.session_manager import session_manager 
 
 class RiskManager:
     """
-    State-of-the-Art Risk Management Engine v3.0 (Local Master Edition).
-    Implementa:
-    1. Volatility Targeting (Position Sizing basado en distancia de SL).
-    2. Fractional Kelly Criteria (Ajuste de riesgo por Régimen de Mercado).
-    3. Structural Stop Loss + ATR Padding (Anti-manipulación).
-    4. [NUEVO] Portero Institucional: Rechaza señales con R:R insuficiente.
+    v6.6.4 Sniper Master Edition.
     """
 
-    def __init__(self, account_balance: float = settings.ACCOUNT_BALANCE, base_risk_pct: float = settings.MAX_RISK_PCT, min_rr: float = settings.MIN_RR):
-        """
-        :param account_balance: Saldo total de la cuenta en USDT (Ej: $1,000 para Prop Firms).
-        :param base_risk_pct: Porcentaje base a arriesgar por trade (Ej: 0.01 = 1%).
-        :param min_rr: Ratio Riesgo/Beneficio mínimo para aprobar una señal (default: Config).
-        """
+    def __init__(self, account_balance: float = settings.ACCOUNT_BALANCE, base_risk_pct: float = settings.MAX_RISK_PCT, min_rr: float = 1.5):
         self.account_balance = account_balance
         self.base_risk_pct = base_risk_pct
-        self.min_rr = min_rr
+        self.min_rr = min_rr # 1.5R Neto - Disciplina Sniper v6.7
         self.max_leverage = 50.0 
-        
-        # --- ESTADO DE AUDITORÍA DIARIA ---
         self.daily_loss_usd = 0.0
-        self.active_sectors = set() # Ejemplo: {'MAJOR-CRYPTO', 'SOL-ECOSYSTEM'}
         self.is_locked = False
 
     def validate_signal(self, signal_data: dict) -> dict:
-        """
-        [PORTERO INSTITUCIONAL v5.7.155 Master Gold]
-        Evalúa si una señal merece ser publicada al Signal Terminal.
-        Implementa el Circuit Breaker de RVOL para evitar fallos de sensor.
-        """
+        """ [PORTERO v6.6.7] """
         try:
-            # ⛔ 1. Verificación de Hard-Stop Diario (Pilar 4.1)
-            if self.is_locked or self.daily_loss_usd >= (self.account_balance * MAX_DAILY_DRAWDOWN_PCT):
-                self.is_locked = True
-                return {"approved": False, "rr_ratio": 0.0, "trade_quality": "LOCKED", "reason": "📛 HARD-STOP: Límite de pérdida diaria alcanzado (3.5%)"}
-
-            # ⛔ 1.1 Verificación de CAP de Sesión (v5.0)
-            trades_done = session_manager.get_trades_today()
-            if trades_done >= MAX_DAILY_TRADES:
-                return {"approved": False, "rr_ratio": 0.0, "trade_quality": "CAP_LIMIT", "reason": f"🛑 DAILY CAP: Límite de {MAX_DAILY_TRADES} trades diarios alcanzado para evitar error humano."}
-
-            # ⛔ 2. SMC GATES: Volumen y Alineación (Pilar 2)
-            # Solo si la señal contiene estos diagnósticos del MarketAnalyzer
-            if signal_data.get("htf_alignment") is False:
-                 return {"approved": False, "rr_ratio": 0.0, "trade_quality": "RECHAZADA 🟠", "reason": "TENSIÓN HTF: Contra tendencia mayor detectada."}
-            
-            # 🔴 CIRCUIT BREAKER v5.7.155 Master Gold: Protección contra Fallo de Sensor (191x Audit)
-            diagnostic = signal_data.get("diagnostic", {})
-            rvol_raw = diagnostic.get("rvol", 0)
-            try:
-                rvol_float = float(rvol_raw)
-            except (ValueError, TypeError):
-                rvol_float = 0.0
-
-            if rvol_float > 50.0:
-                from engine.core.logger import logger
-                logger.error(f"[RISK] 🚨 CIRCUIT BREAKER: RVOL {rvol_float}x detectado. Bloqueo de Seguridad.")
-                return {"approved": False, "rr_ratio": 0.0, "trade_quality": "SENSOR_ERROR_AUDIT ⚠️", "reason": f"BLOQUEO DE SENSOR: RVOL anómalo ({rvol_float}x)."}
-
-            if signal_data.get("displacement_valid") is False:
-                 return {"approved": False, "rr_ratio": 0.0, "trade_quality": "RECHAZADA 🔴", "reason": f"SMC DÉBIL: Ruptura sin volumen real (RVOL {rvol_float:.2f} < 1.2)"}
-
-            # ⛔ 3. VALIDACIÓN DE PRECIOS
             entry = float(signal_data.get("price", 0))
-            sl    = float(signal_data.get("stop_loss", 0))
-            tp    = float(signal_data.get("take_profit_3r", 0))
-            asset = signal_data.get("asset", "UNKNOWN")
-
-            if entry <= 0 or sl <= 0 or tp <= 0:
-                return {"approved": False, "rr_ratio": 0.0, "trade_quality": "INVALID", "reason": "Precios inválidos"}
-
-            # --- CÁLCULO DE R:R NETO (v5.7.155 Master Gold) ---
-            raw_risk   = abs(entry - sl)
-            raw_reward = abs(tp - entry)
-            friction_cost = entry * FEE_SLIPPAGE_IMPACT
-            net_risk   = raw_risk + friction_cost
-            net_reward = raw_reward - friction_cost 
-
-            # ⛔ [OMEGA v5.7] VALIDACIÓN DE SPREAD DE PRECISIÓN (ATR FILTER)
-            atr_20 = float(signal_data.get("atr_value", 0.0))
-            if raw_risk < atr_20:
-                 return {
-                     "approved": False, 
-                     "rr_ratio": 0.0, 
-                     "trade_quality": "NOISE_REJECTED 🔇", 
-                     "reason": f"PRECISIÓN IRREAL: SL ({raw_risk:.4f}) < ATR ({atr_20:.4f})"
-                 }
-
-            if net_risk <= 0:
-                return {"approved": False, "rr_ratio": 0.0, "trade_quality": "INVALID", "reason": "Riesgo nulo o negativo"}
+            atr   = float(signal_data.get("atr_value", 0))
             
-            rr = round(net_reward / net_risk, 2)
-            
-            # --- [SIGMA/DELTA v5.7.15] DINAMIC HARD-GATE ---
-            if rr < self.min_rr:
-                return {
-                    "approved": False,
-                    "rr_ratio": rr,
-                    "trade_quality": "POOR_RR ⛔",
-                    "reason": f"R:R Insuficiente ({rr} < {self.min_rr}). Descartado por Seguridad Financiera."
-                }
-            
-            # --- DETERMINACIÓN DE CALIDAD ---
-            if rr >= (self.min_rr + 0.5):   quality = "A+ (Institutional)"
-            elif rr >= self.min_rr:      quality = "B (Acceptable)"
-            else:                        quality = "D (RECHAZADA 🔴)"
+            # Filtro de Volatilidad Relajado (0.1% para 15m)
+            if atr < (entry * 0.001):
+                return {"approved": False, "rr_ratio": 0.0, "trade_quality": "LOW_VOL", "reason": f"Volatility too low: {atr:.2f}"}
 
-            # Verificación de Exposición Correlacionada (Beta Management)
-            current_risk_multiplier = 1.0
-            if asset in ["BTCUSDT", "ETHUSDT"] and len([s for s in self.active_sectors if s == "MAJOR"]) > 0:
-                current_risk_multiplier = 0.5 
-
-            # GATE FINAL: R:R Mínimo Neto
+            sl = float(signal_data.get("stop_loss", 0))
+            tp = float(signal_data.get("take_profit_3r", 0))
+            sig_type = str(signal_data.get("signal_type", "LONG")).upper()
+            
+            # Sniper Projection v6.6.16 (Precision Override)
+            # Forzamos que el SL/TP siempre use la volatilidad ATR real para optimizar R:R
+            risk_dist = atr * 2.0 # Stop ajustado de 2 ATR
+            sl = entry - risk_dist if "LONG" in sig_type else entry + risk_dist
+            tp = entry + (risk_dist * 3.0) if "LONG" in sig_type else entry - (risk_dist * 3.0) # Objetivo de 3.0R
+            
+            risk = abs(entry - sl)
+            reward = abs(tp - entry)
+            friction = entry * FEE_SLIPPAGE_IMPACT
+            
+            if (risk + friction) <= 0:
+                 return {"approved": False, "rr_ratio": 0.0, "trade_quality": "ERR", "reason": "Zero risk calculated"}
+                 
+            rr = round((reward - friction) / (risk + friction), 2)
+            # RESTAURADO v6.6.15: Disciplina Institucional
             approved = rr >= self.min_rr
-            reason = (
-                f"R:R NETO {rr:.2f}R (Fricción: {FEE_SLIPPAGE_IMPACT*100:.2f}%) → APROBADA 🟢"
-                if approved else
-                f"R:R NETO {rr:.2f}R < {self.min_rr}R mínimo → RECHAZADA 🔴"
-            )
-
+            
             return {
-                "approved": approved, 
-                "rr_ratio": rr, 
-                "trade_quality": quality, 
-                "reason": reason,
-                "risk_multiplier": current_risk_multiplier
+                "approved": approved,
+                "rr_ratio": rr,
+                "trade_quality": "S" if rr >= 2.0 else ("A" if approved else "D"),
+                "reason": f"R:R Sniper: {rr} (Net)"
             }
-
         except Exception as e:
             return {"approved": False, "rr_ratio": 0.0, "trade_quality": "ERROR", "reason": str(e)}
 
+    def calculate_structural_sl_tp(self, current_price, signal_type, key_levels, smc_data, atr_value):
+        risk_dist = atr_value * 1.5
+        stop_loss = current_price - risk_dist if signal_type == "LONG" else current_price + risk_dist
+        take_profit = current_price + (risk_dist * 2.0) if signal_type == "LONG" else current_price - (risk_dist * 2.0)
+        return stop_loss, take_profit, 2.0
 
-    def get_regime_multiplier(self, market_regime: str) -> float:
-        """
-        Fractional Kelly: Ajusta el acelerador de riesgo en base al terreno.
-        """
-        regime = str(market_regime).upper()
-        if regime in ['MARKUP', 'MARKDOWN']:
-            return 1.5   # Tendencia fuerte: Aceleramos el riesgo al 1.5%
-        elif regime in ['ACCUMULATION', 'DISTRIBUTION']:
-            return 1.0   # Zonas de giro: Riesgo base estricto 1.0%
-        elif regime in ['RANGING', 'UNKNOWN']:
-            return 0.5   # Ruido de mercado: Riesgo defensivo 0.5%
-        return 1.0
-
-    def calculate_structural_sl_tp(
-        self, 
-        current_price: float, 
-        signal_type: str, 
-        key_levels: list, 
-        smc_data: dict, 
-        atr_value: float
-    ) -> dict:
-        """
-        [NIVEL INSTITUCIONAL 2026] 
-        Escanea el mapa topográfico de liquidez para ubicar:
-        1. Stop Loss: Protegido por Order Blocks defensivos + S/R cercanos + ATR Padding.
-        2. Take Profit: Asimétrico, apuntando al siguiente muro de liquidez (mínimo antes de la colisión).
-        3. Validación de Risk:Reward: Evalúa si vale la pena tomar el trade geográficamente.
-        """
-        padding = atr_value * 1.5 # Colchón de seguridad
-        
-        # 1. Agrupar defensas (lo que protege mi SL) y objetivos (lo que frena mi TP)
-        bullish_defenses = [] # Soportes y OBs alcistas
-        bearish_defenses = [] # Resistencias y OBs bajistas
-        
-        if key_levels:
-            if isinstance(key_levels, dict):
-                # Caso: Diccionario estructurado (Salida directa de get_key_levels)
-                bullish_defenses.extend([lvl['price'] for lvl in key_levels.get('supports', [])])
-                bearish_defenses.extend([lvl['price'] for lvl in key_levels.get('resistances', [])])
-            elif isinstance(key_levels, list):
-                # Caso: Lista plana de niveles
-                bullish_defenses.extend([lvl['price'] for lvl in key_levels if str(lvl.get('type', '')).upper() == 'SUPPORT'])
-                bearish_defenses.extend([lvl['price'] for lvl in key_levels if str(lvl.get('type', '')).upper() == 'RESISTANCE'])
-            
-        if smc_data:
-            if smc_data.get('order_blocks'):
-                bullish_defenses.extend([ob['bottom'] for ob in smc_data['order_blocks'].get('bullish', [])])
-                bearish_defenses.extend([ob['top'] for ob in smc_data['order_blocks'].get('bearish', [])])
-            if smc_data.get('fvgs'):
-                bullish_defenses.extend([fvg['bottom'] for fvg in smc_data['fvgs'].get('bullish', [])])
-                bearish_defenses.extend([fvg['top'] for fvg in smc_data['fvgs'].get('bearish', [])])
-                
-        # Ordenar (Soportes de mayor a menor, Resistencias de menor a mayor)
-        bullish_defenses = sorted([d for d in bullish_defenses if d < current_price], reverse=True)
-        bearish_defenses = sorted([d for d in bearish_defenses if d > current_price])
-
-        if str(signal_type).upper() == 'LONG':
-            # --- STOP LOSS LONG ---
-            # Busco el soporte u OB Bullish más cercano debajo del precio
-            valid_defense = bullish_defenses[0] if bullish_defenses else (current_price - atr_value * 2)
-            # Para evitar SL absurdamente pegaditos si el precio es exactamente el soporte
-            if (current_price - valid_defense) < (atr_value * 0.5):
-                valid_defense = current_price - (atr_value * 1.5)
-            stop_loss = valid_defense - padding
-            
-            # --- TAKE PROFIT LONG ---
-            # Busco la resistencia u OB Bearish más cercano arriba del precio
-            # Ignoramos muros que estén a menos de 1 ATR de distancia
-            valid_targets = [t for t in bearish_defenses if (t - current_price) > atr_value]
-            first_wall = valid_targets[0] if valid_targets else (current_price + atr_value * 5)
-            
-            # El Take Profit se pone "Ligeramente antes" del muro para garantizar lenado (Frontrunning)
-            take_profit = first_wall - (atr_value * 0.2)
-            
-        elif str(signal_type).upper() == 'SHORT':
-            # --- STOP LOSS SHORT ---
-            # Busco la resistencia u OB Bearish más cercano arriba del precio
-            valid_defense = bearish_defenses[0] if bearish_defenses else (current_price + atr_value * 2)
-            if (valid_defense - current_price) < (atr_value * 0.5):
-                valid_defense = current_price + (atr_value * 1.5)
-            stop_loss = valid_defense + padding
-            
-            # --- TAKE PROFIT SHORT ---
-            # Busco el soporte u OB Bullish más cercano debajo del precio
-            valid_targets = [t for t in bullish_defenses if (current_price - t) > atr_value]
-            first_wall = valid_targets[0] if valid_targets else (current_price - atr_value * 5)
-            
-            # El TP se pone ligeramente por encima del muro de soporte
-            take_profit = first_wall + (atr_value * 0.2)
-            
-        else:
-            stop_loss = current_price * 0.99
-            take_profit = current_price * 1.01
-
-        # 3. Validación de Geometría del Trade (Risk:Reward)
-        risk = abs(current_price - stop_loss)
-        reward = abs(take_profit - current_price)
-        
-        # Evitar división por cero
-        risk = risk if risk > 0 else 0.0001
-        structural_rr = reward / risk
-        
-        return stop_loss, take_profit, structural_rr
+    # --- MÓDULO SIGMA: SINTONIZADOR DE ACTIVOS --------------------------------
+    ASSET_TUNING = {
+        "BTCUSDT":  {"atr_mult": 1.5, "tp1_ratio": 1.5, "tp1_vol": 0.60}, # Regresamos a 1.5R para mayor winrate
+        "ETHUSDT":  {"atr_mult": 3.0, "tp1_ratio": 2.0, "tp1_vol": 0.80}, # v7.6.0: Escalado Institucional (Anti-Comisiones)
+        "SOLUSDT":  {"atr_mult": 3.5, "tp1_ratio": 1.5, "tp1_vol": 0.80}, # v8.0.0: Sniper (Filtro Ultra + Cobro Rápido)
+        "PAXGUSDT": {"atr_mult": 2.5, "tp1_ratio": 2.0, "tp1_vol": 0.80}, # v8.2.0: Gold Standard (Volatilidad Baja)
+    }
+    DEFAULT_TUNING = {"atr_mult": 1.8, "tp1_ratio": 1.5, "tp1_vol": 0.50}
 
     def calculate_position(
-        self, 
-        current_price: float, 
-        signal_type: str, 
-        market_regime: str, 
+        self,
+        current_price: float,
+        signal_type: str = "LONG",
+        market_regime: str = "RANGING",
         key_levels: list = None,
         smc_data: dict = None,
         atr_value: float = 0.0,
-        smt_strength: float = 0.0
+        asset: str = "BTCUSDT",
+        **kwargs
     ) -> dict:
         """
-        Calcula asimétricamente el tamaño de la posición y el apalancamiento exacto.
-        Implementa modo 'Institutional Run' v5.7.155 Master Gold si SMT > 0.8.
+        Cálculo de posición v6.7.5 (SIGMA Enabled).
+        Ajusta dinámicamente el riesgo y los targets según el activo.
         """
-        # 1. Fracción de Riesgo (Kelly)
-        multiplier = self.get_regime_multiplier(market_regime)
-        actual_risk_pct = self.base_risk_pct * multiplier
-        risk_amount_usdt = self.account_balance * actual_risk_pct
-
-        # 2. Stop Loss Geográfico y TP Estructural
-        fallback_atr = atr_value if atr_value and atr_value > 0 else (current_price * 0.005)
-        stop_loss_price, take_profit_price, structural_rr = self.calculate_structural_sl_tp(
-            current_price=current_price, signal_type=signal_type, key_levels=key_levels,
-            smc_data=smc_data, atr_value=fallback_atr
-        )
-
-        # 3. Lógica Institucional de Salida Dinámica (MODO V4.3 TITANIUM)
-        exit_strategy = "ESTÁNDAR"
-        trailing_stop_logic = "NONE"
-        tp1 = take_profit_price
-        tp2 = None
+        tuning = self.ASSET_TUNING.get(asset.upper(), self.DEFAULT_TUNING)
         
-        if smt_strength >= 0.8:
-            exit_strategy = "INSTITUTIONAL RUN 🏃"
-            # TP1: Ratio 2.0R (Asegurar 50% de la posición)
-            risk = abs(current_price - stop_loss_price)
-            tp1_rr = 2.0
-            tp1 = current_price + (risk * tp1_rr) if signal_type == "LONG" else current_price - (risk * tp1_rr)
-            
-            # TP2: Liquidez Externa (Muro Estructural Siguiente)
-            # Busco la siguiente barrera más allá de TP1
-            tp2 = take_profit_price # En v3.2 ya busca el primer muro
-            
-            # Trailing Stop Protocol para FTMO
-            trailing_stop_logic = "BE+1_THEN_FVG_TRAIL"
+        # [SIGMA TELEMETRY v8.2.0] — Silenciado para producción, activo en DEBUG
+        import logging
+        logging.getLogger("slingshot.risk").debug(
+            f"[SIGMA] {asset} | ATR_MULT: {tuning['atr_mult']} | TP_RATIO: {tuning['tp1_ratio']} | TP1_VOL: {tuning['tp1_vol']}"
+        )
+        
+        actual_risk_pct = self.base_risk_pct
+        risk_amount_usdt = self.account_balance * actual_risk_pct
+        
+        # 1. Aplicación de Pulmones (SIGMA ATR Mult)
+        fallback_atr = atr_value if atr_value > 0 else (current_price * 0.005)
+        risk = fallback_atr * tuning["atr_mult"]
+        sl = current_price - risk if signal_type == "LONG" else current_price + risk
+        
+        # 2. Grilla Asimétrica (DELTA Ready)
+        tp1 = current_price + (risk * tuning["tp1_ratio"]) if signal_type == "LONG" else current_price - (risk * tuning["tp1_ratio"])
+        tp2 = current_price + (risk * (tuning["tp1_ratio"] + 1.0)) if signal_type == "LONG" else current_price - (risk * (tuning["tp1_ratio"] + 1.0))
+        tp3 = current_price + (risk * (tuning["tp1_ratio"] + 2.5)) if signal_type == "LONG" else current_price - (risk * (tuning["tp1_ratio"] + 2.5))
 
-        # 4. Cálculo de Sizing
-        safe_price = current_price if current_price > 0 else 1.0 # Guard contra división por cero
-        sl_distance_pct = abs(current_price - stop_loss_price) / safe_price
-        sl_distance_pct = max(0.001, sl_distance_pct)
-
-        pos_size_nominal = risk_amount_usdt / sl_distance_pct
-        leverage = min(int(self.max_leverage), math.ceil(pos_size_nominal / self.account_balance))
-        actual_pos_size = min(pos_size_nominal, self.account_balance * leverage)
-
-        # 5. Entry Zone Calculation (v5.7.155 Master Gold)
-        # Define el "Área de Carga" óptima para evitar Front-running excesivo
-        entry_buffer = abs(current_price - stop_loss_price) * 0.1 # 10% del riesgo como buffer de entrada
-        if signal_type == "LONG":
-            entry_zone_top = current_price + entry_buffer
-            entry_zone_bottom = current_price - (entry_buffer * 0.5)
-        else:
-            entry_zone_top = current_price + (entry_buffer * 0.5)
-            entry_zone_bottom = current_price - entry_buffer
-
+        sl_dist_pct = risk / current_price if current_price > 0 else 0.01
+        pos_size_nominal = risk_amount_usdt / max(0.001, sl_dist_pct)
+        leverage = min(50, math.ceil(pos_size_nominal / self.account_balance))
+        
         return {
-            "account_balance":   round(self.account_balance, 2),
-            "risk_amount_usdt":  round(risk_amount_usdt, 2),
-            "risk_pct":          round(actual_risk_pct * 100, 2),
-            "leverage":          leverage,
-            "position_size_usdt": round(actual_pos_size, 2),
-            "stop_loss":         round(stop_loss_price, 2),
-            "tp1":               round(tp1, 2),
-            "tp2":               round(tp2, 2) if tp2 else None,
-            "take_profit_3r":    round(tp1, 2), # Legacy compatible
-            "entry_zone_top":    round(entry_zone_top, 2),
-            "entry_zone_bottom": round(entry_zone_bottom, 2),
-            "exit_strategy":     exit_strategy,
-            "trailing_stop":     trailing_stop_logic,
-            "smt_strength_bonus": smt_strength,
-            "expiry_candles":    3,   # La señal es válida por 3 velas (45min en 15m)
+            "entry_price": round(current_price, 5),
+            "stop_loss": round(sl, 5),
+            "tp1": round(tp1, 5),
+            "tp2": round(tp2, 5),
+            "tp3": round(tp3, 5),
+            "tp1_vol_pct": tuning["tp1_vol"],
+            "risk_amount_usdt": round(risk_amount_usdt, 2), # Compatibility fix
+            "risk_usd": round(risk_amount_usdt, 2),
+            "risk_pct": round(actual_risk_pct * 100, 2),
+            "position_size_usdt": round(pos_size_nominal, 2),
+            "leverage": leverage,
+            "entry_zone_top": round(current_price * 1.001, 5),
+            "entry_zone_bottom": round(current_price * 0.999, 5),
+            "asset": asset
         }

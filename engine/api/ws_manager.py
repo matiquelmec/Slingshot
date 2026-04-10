@@ -189,11 +189,9 @@ class SymbolBroadcaster:
         
         # ✅ SYNC INSTANTÁNEO: Enviar últimas señales ACTIVAS de alta calidad (v5.7.15)
         last_signals = await store.get_signals(asset=self.symbol)
-        # [DELTA v5.7.15] Solo sincronizar señales que sobreviven al Filtro de Supervivencia
+        # [v8.2.0] Sincronizar todas las señales ACTIVAS, delegamos el margen de supervivencia al backend.
         for sig in list(last_signals)[-20:]:
-            sig_score = sig.get("confluence", {}).get("score", 0) if sig.get("confluence") else 0
-            sig_rr = sig.get("rr_ratio", 0)
-            if sig.get("status") == "ACTIVE" and sig_score >= 70 and sig_rr >= 2.0:
+            if sig.get("status") == "ACTIVE":
                 await queue.put({"type": "signal_auditor_update", "data": sig})
 
         # ✅ SYNC INSTANTÁNEO: Radar Center (Global Context)
