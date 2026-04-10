@@ -163,8 +163,9 @@ class SignalHandler:
 
         # ── Construcción del Payload ──────────────────────────────────────────
         price      = float(sig.get("price", 0))
-        sl         = float(sig.get("stop_loss", 0))
-        tp         = float(sig.get("take_profit_3r", 0))
+        sl         = float(calc.get("stop_loss", sig.get("stop_loss", 0))) if 'calc' in locals() else float(sig.get("stop_loss", 0))
+        # Seleccionamos tp3 como el Target 3R primario desde RiskManager v6.7.5
+        tp         = float(calc.get("tp3", sig.get("take_profit_3r", 0))) if 'calc' in locals() else float(sig.get("take_profit_3r", 0))
         rr_ratio   = round(abs(tp - price) / abs(price - sl) if abs(price - sl) > 0 else 0, 2)
 
         realtime_data = {
@@ -189,6 +190,10 @@ class SignalHandler:
             "position_size":    pos_size,
             "leverage":         lev,
             "rr_ratio":         rr_ratio,
+            "entry_zone_top":   calc.get("entry_zone_top") if 'calc' in locals() else None,
+            "entry_zone_bottom": calc.get("entry_zone_bottom") if 'calc' in locals() else None,
+            "tp1":              calc.get("tp1") if 'calc' in locals() else None,
+            "tp2":              calc.get("tp2") if 'calc' in locals() else None,
         }
 
         # ── Persistencia en RAM ───────────────────────────────────────────────

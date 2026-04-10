@@ -583,6 +583,10 @@ class SymbolBroadcaster:
                 }
                 await self._broadcast(candle_payload)
 
+                # ── OMEGA CENTINEL (Paper Trading & Execution Tracker) ─────────
+                from engine.execution.omega_listener import omega_centinel
+                await omega_centinel.check_live_price(self.symbol, float(kline["c"]), self)
+
                 # ── Sesiones en tiempo real ───────────────────────────────────
                 self._session_manager.update(candle_payload["data"])
                 session_state = self._session_manager.get_current_state()
@@ -651,6 +655,19 @@ class SymbolBroadcaster:
                             event_time_ms=data.get("data", {}).get("E")
                         )
                         self._last_tactical = {"data": live_tactical}
+                        
+                        # 🔥 [SIGNAL_CREATED] Disparo de Alta Prioridad
+                        if live_tactical.get("signals"):
+                            for sig in live_tactical["signals"]:
+                                await self._broadcast({"type": "signal_auditor_update", "data": sig})
+                                logger.info(f"🚀 [WS_PUSH] Señal APROBADA con Prioridad Máxima: {sig['asset']}")
+
+                        # 🔍 [AUDIT_PUSH] Enviar bloqueadas para visibilidad de Portero
+                        if live_tactical.get("blocked_signals"):
+                            for sig in live_tactical["blocked_signals"]:
+                                await self._broadcast({"type": "signal_auditor_update", "data": sig})
+                                logger.info(f"🔍 [WS_AUDIT] Señal BLOQUEADA enviada al Radar: {sig['asset']} ({sig.get('status')})")
+
                         await self._broadcast({"type": "tactical_update", "data": live_tactical})
                         
                         # Monitor de Absorción para el Dashboard

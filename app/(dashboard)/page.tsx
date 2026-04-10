@@ -15,6 +15,7 @@ const LiquidationScanner = dynamic(() => import('../components/ui/LiquidationSca
 const LatticeScanner = dynamic(() => import('../components/ui/LatticeScanner'), { ssr: false });
 const MacroCalendar = dynamic(() => import('../components/macro/MacroCalendar'), { ssr: false });
 const EliteConsole = dynamic(() => import('../components/ui/EliteConsole'), { ssr: false });
+const OmegaCentinelPanel = dynamic(() => import('../components/execution/OmegaCentinelPanel'), { ssr: false });
 
 // ── Tipos ─────────────────────────────────────────────────────────────────────
 
@@ -35,7 +36,7 @@ export default function OverviewPage() {
     const [newSymbol, setNewSymbol] = useState('');
     const [availableSymbols, setAvailableSymbols] = useState<string[]>([]);
     const [filteredSymbols, setFilteredSymbols] = useState<string[]>([]);
-    const [sidePanelMode, setSidePanelMode] = useState<'LOGS' | 'NEWS' | 'LIQS' | 'CAL'>('LIQS');
+    const [sidePanelMode, setSidePanelMode] = useState<'LOGS' | 'NEWS' | 'LIQS' | 'CAL' | 'OMEGA'>('LIQS');
 
     const { 
         activeSymbol, 
@@ -367,6 +368,12 @@ export default function OverviewPage() {
                             >
                                 CAL
                             </button>
+                            <button
+                                onClick={() => setSidePanelMode('OMEGA')}
+                                className={`px-3 py-1.5 rounded-lg text-[9px] font-black tracking-widest transition-all ${sidePanelMode === 'OMEGA' ? 'bg-white/20 text-white border border-white/40 shadow-[0_0_10px_rgba(255,255,255,0.2)]' : 'text-white/30 hover:text-white/60'}`}
+                            >
+                                OMEGA
+                            </button>
                         </div>
 
                         <div className="flex-1 flex flex-col overflow-hidden">
@@ -398,8 +405,10 @@ export default function OverviewPage() {
                                 <NewsTerminal />
                             ) : sidePanelMode === 'LIQS' ? (
                                 <LiquidationScanner />
-                            ) : (
+                            ) : sidePanelMode === 'CAL' ? (
                                 <MacroCalendar />
+                            ) : (
+                                <OmegaCentinelPanel />
                             )}
                         </div>
                     </div>

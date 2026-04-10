@@ -161,16 +161,22 @@ class SlingshotRouter:
 
         # ── Fase 6: Log Institucional Post-Aprobación (OMEGA Logic) ──────────
         for approved_sig in gate.approved:
+            approved_sig["status"] = "ACTIVE"
+            approved_sig["asset"] = approved_sig.get("asset", asset)
+            
+            # [OMEGA] Persistencia Atómica: Esto es lo que "enciende" el cable
+            import asyncio
+            from engine.core.store import store
+            asyncio.create_task(store.save_signal(approved_sig))
+            
             # Re-generamos el log del bridge pero ahora que sabemos que está aprobada
-            symbol = approved_sig.get("asset", asset)
             from engine.execution.ftmo_bridge import prepare_ftmo_order_package
             # Módulo DELTA: Preparamos el paquete fragmentado
             prepare_ftmo_order_package(approved_sig)
             
             logger.info(
-                f"[ROUTER] ✅ Señal APROBADA | {approved_sig['type']} @ ${approved_sig['price']:.2f}"
+                f"[ROUTER] ✅ Señal APROBADA y PERSISTIDA | {approved_sig['type']} @ ${approved_sig['price']:.2f}"
                 f" | Score: {approved_sig.get('confluence', {}).get('score', '?')}%"
-                f" | Leverage: {approved_sig.get('leverage')}x"
             )
 
         # Monitor de ejecución local

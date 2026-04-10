@@ -42,6 +42,10 @@ export interface Signal {
     expiry_timestamp?: string;
     interval_minutes?: number;
     status?: string;
+    current_price?: number;
+    sl_dynamic?: number;
+    shield_active?: boolean;
+    profit_locked?: boolean;
     rejection_reason?: string;
     blocked_reason?: string;
     rr_ratio?: number;

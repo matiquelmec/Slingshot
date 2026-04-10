@@ -120,12 +120,14 @@ export default function RadarFeed() {
 
                                 return (
                                     <motion.div
-                                        key={signal.id}
+                                        key={signal.id || `${signal.timestamp || signal.created_at}-${signal.asset}-${Math.random()}`}
                                         initial={{ opacity: 0, x: -10 }}
                                         animate={{ opacity: 1, x: 0 }}
                                         exit={{ opacity: 0, scale: 0.95 }}
                                         layout
-                                        className={`group/card relative flex items-center gap-4 p-4 rounded-xl border transition-all ${isBlocked
+                                        className={`group/card relative flex items-center gap-4 p-4 rounded-xl border transition-all ${
+                                            signal.status === 'FILLED' || signal.shield_active ? 'bg-neon-cyan/5 border-neon-cyan/20 opacity-90' :
+                                            isBlocked
                                             ? 'bg-black/40 border-white/5 opacity-60' // Señales bloqueadas (Auditoría)
                                             : isLong
                                                 ? 'bg-neon-green/5 border-neon-green/10 hover:border-neon-green/30'
@@ -133,18 +135,25 @@ export default function RadarFeed() {
                                             }`}
                                     >
                                         {/* Status Indicator Bar */}
-                                        <div className={`absolute left-0 top-1 bottom-1 w-[3px] rounded-r-full ${isBlocked ? 'bg-gray-700' : isLong ? 'bg-neon-green' : 'bg-neon-red'
+                                        <div className={`absolute left-0 top-1 bottom-1 w-[3px] rounded-r-full ${
+                                            signal.status === 'FILLED' || signal.shield_active ? 'bg-neon-cyan' :
+                                            isBlocked ? 'bg-gray-700' : isLong ? 'bg-neon-green' : 'bg-neon-red'
                                             }`} />
 
                                         {/* Symbol Meta */}
                                         <div className="flex flex-col min-w-[100px]">
                                             <span className="text-lg font-black text-white tracking-tighter">{signal.asset}</span>
                                             <div className="flex items-center gap-1.5 mt-0.5">
-                                                <div className={`h-1.5 w-1.5 rounded-full ${isLong ? 'bg-neon-green' : 'bg-neon-red'} animate-pulse`} />
-                                                <span className={`text-[10px] font-bold uppercase tracking-wider ${isLong ? 'text-neon-green/80' : 'text-neon-red/80'}`}>
-                                                    {signal.signal_type}
+                                                <div className={`h-1.5 w-1.5 rounded-full ${signal.status === 'FILLED' ? 'bg-neon-cyan' : isBlocked ? 'bg-white/20' : isLong ? 'bg-neon-green' : 'bg-neon-red'} ${!isBlocked && 'animate-pulse'}`} />
+                                                <span className={`text-[10px] font-bold uppercase tracking-wider ${signal.status === 'FILLED' ? 'text-neon-cyan' : isBlocked ? 'text-white/40' : isLong ? 'text-neon-green/80' : 'text-neon-red/80'}`}>
+                                                    {signal.status === 'FILLED' ? 'OMEGA ACTIVA' : isBlocked ? (signal.status || 'BLOQUEADA') : signal.signal_type}
                                                 </span>
                                             </div>
+                                            {isBlocked && signal.blocked_reason && (
+                                                <span className="text-[8px] text-white/30 font-mono mt-1 leading-none truncate max-w-[120px]">
+                                                    {signal.blocked_reason}
+                                                </span>
+                                            )}
                                         </div>
 
                                         {/* Entry Info */}

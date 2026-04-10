@@ -162,6 +162,11 @@ class SignalGatekeeper:
                     heatmap=context.heatmap
                 )
                 sig["confluence"] = confluence_result
+                # [Audit v8.2.2] Aplicamos el multiplicador de noticias al score
+                if news_multiplier == 0.0:
+                    sig["confluence"]["score"] = 0
+                    sig["confluence"]["veto_reason"] = f"News Veto: {event_name}"
+
             except Exception as e:
                 logger.error(f"[GATEKEEPER] ConfluenceManager error: {e}")
                 sig["confluence"] = {"score": 50, "confluences": []}
@@ -196,9 +201,10 @@ class SignalGatekeeper:
                     contradictory_count += 1
 
             # Reducimos la sensibilidad de OMEGA en scalping para permitir volatilidad rápida
-            max_contradictory = 3 if interval in ["1m", "5m"] else 2
+            # v8.2.1 Tuning: 5 contradicciones en 1m/5m para no asfixiar el radar
+            max_contradictory = 5 if interval in ["1m", "5m"] else 3
             if contradictory_count >= max_contradictory:
-                self._block(sig, "STRUCTURAL_INCONSISTENCY", f"[OMEGA] Bloqueo por Choppy: >{max_contradictory} señales contradictorias.", result)
+                self._block(sig, "BLOCKED_CHOPPY", f"[OMEGA] Bloqueo por Choppy: >{max_contradictory} flips.", result)
                 continue
             
             # Registrar éxito parcial (luego de pasar filtros estructurales base)
@@ -240,22 +246,27 @@ class SignalGatekeeper:
                 continue
 
             # ── Filtro 5: Score de Confluencia Mínimo ──
-            # [v7.9.0] Sintonía Diferenciada por Activo
+            # [v8.2.1] Sintonía de Visibilidad: Bajamos los muros para que la UI respire
             if asset == "BTCUSDT":
-                min_score = 30
+                min_score = 25  # Mas visibilidad en BTC
             elif asset == "SOLUSDT":
-                min_score = 60  # SOL: solo señales de élite (v8.0.0)
+                min_score = 45  # SOL era 60, bajamos a 45 para auditoría
+            elif asset == "ETHUSDT":
+                min_score = 35  # ETH era 40
             else:
-                min_score = 40  # ETH y otros
+                min_score = 35  # Genérico
             
             # [FORENSIC v6.8.2] Auditoría de Portero
             if not silent:
                 logger.info(f"[GATEKEEPER_AUDIT] Asset: {asset} | Score: {score}% | Required: {min_score}%")
             
             if score < min_score:
+                reason = sig.get("confluence", {}).get("veto_reason") or f"Confianza {score}% < {min_score}%"
                 if not silent:
-                    logger.info(f"[GATEKEEPER] \U0001f507 SEÑAL DÉBIL: {score}% < {min_score}%")
-                self._block(sig, "BLOCKED_BY_CONFIDENCE", f"Confianza {score}% < {min_score}%", result)
+                    logger.info(f"[GATEKEEPER] \U0001f507 SEÑAL DÉBIL o VETADA: {reason}")
+                
+                status = "BLOCKED_NEWS" if news_multiplier == 0.0 else "BLOCKED_BY_CONFIDENCE"
+                self._block(sig, status, reason, result)
                 continue
 
             # ── Filtro 6: Path Traversal — ¿Sigue Viva? ──────────────────────
@@ -264,6 +275,7 @@ class SignalGatekeeper:
                 continue
 
             # ✅ ¡SEÑAL TOTALMENTE VALIDADA! 
+            sig["status"] = "ACTIVE" # Asegurar status predeterminado
             if not silent:
                 logger.info(f"[GATEKEEPER] \u2705 \U0001f3af SEÑAL APROBADA: {sig['asset']} {sig['type']} | R:R {sig['rr_ratio']} | Score {score}%")
             

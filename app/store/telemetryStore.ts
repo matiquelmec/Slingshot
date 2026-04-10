@@ -401,22 +401,26 @@ export const useTelemetryStore = create<TelemetryState>((set, get) => {
                     // Evento específico inyectado en WS desde v3.3 (Audit Mode)
 
                     const sig = data.data as Signal;
+                    const id = sig.id || `${sig.timestamp}-${sig.asset}`;
+
                     set((state) => {
-                        // DELTA: Permitir cualquier señal que venga como ACTIVE, el R:R y Score 
-                        // dependen de la calibración SIGMA del backend.
-                        if (sig.status !== 'ACTIVE') {
-                             return state; 
-                        }
-
-                        const id = sig.id || `${sig.timestamp}-${sig.asset}`;
-                        if (state.auditedSignals[id]) return state;
-
+                        const status = sig.status || '';
+                        
+                        // 1. Sincronizar Radar (Acepta TODO: Aprobadas y Bloqueadas)
                         const newAuditedData = { ...state.auditedSignals, [id]: sig };
-                        const newAuditedIds = [id, ...state.auditedIds].slice(0, 100); 
+                        const newAuditedIds = state.auditedSignals[id] ? state.auditedIds : [id, ...state.auditedIds].slice(0, 100); 
+
+                        // 2. Sincronizar OMEGA (Solo Aprobadas/Ejecución)
+                        let newHistory = { data: state.signalHistory, ids: state.signalIds };
+                        if (['ACTIVE', 'FILLED', 'SHIELD_ACTIVATED'].includes(status)) {
+                            newHistory = _mergeSignals(state.signalHistory, state.signalIds, [sig]);
+                        }
 
                         return { 
                             auditedSignals: newAuditedData,
-                            auditedIds: newAuditedIds
+                            auditedIds: newAuditedIds,
+                            signalHistory: newHistory.data,
+                            signalIds: newHistory.ids
                         };
                     });
                 } else if (data.type === 'advisor_update') {
@@ -428,6 +432,16 @@ export const useTelemetryStore = create<TelemetryState>((set, get) => {
                                 ...state.advisorLogs,
                                 [asset]: advice
                             }
+                        };
+                    });
+                } else if (data.type === 'execution_update') {
+                    // 🛡️ OMEGA Live Synchronization
+                    const sig = data.data as Signal;
+                    set((state) => {
+                        const { data: newHistoryData, ids: newHistoryIds } = _mergeSignals(state.signalHistory, state.signalIds, [sig]);
+                        return {
+                            signalHistory: newHistoryData,
+                            signalIds: newHistoryIds
                         };
                     });
                 } else if (data.type === 'radar_update') {
