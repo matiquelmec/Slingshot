@@ -262,6 +262,15 @@ class SymbolBroadcaster:
         clean = sanitize_for_json(message)
         
         msg_type = clean.get("type", "")
+        
+        # [AUDITORIA v8.3.0] Validación de pertenencia de asset
+        if msg_type in ["tactical_update", "signal_auditor_update", "execution_update"]:
+            payload = clean.get("data", {})
+            asset = payload.get("asset") if isinstance(payload, dict) else payload.get("symbol") if isinstance(payload, dict) else "?"
+            if asset and asset != self.symbol and asset != "?":
+                logger.error(f"🚨 [LEAK DETECTED] Broadcaster {self.symbol} emitio payload de {asset}! Bloqueando propogación.")
+                return # Veto preventivo para evitar contaminar el frontend
+
         if msg_type == "ghost_update":     
             self._last_ghost = clean
             await store.update_market_state(self.symbol, {
@@ -562,8 +571,11 @@ class SymbolBroadcaster:
                     }
                     continue
 
-                # ── Kline (vela) ──────────────────────────────────────────────
-                if stream_type != kline_stream:
+                # ── Symbol Integrity Check (Zero Trust v8.3.0) ──────────────────
+                # Verificamos que el stream realmente pertenezca a este Broadcaster
+                target_prefix = self.symbol.lower()
+                if not stream_type.startswith(target_prefix):
+                    logger.warning(f"⚠️ [SYSTEM] Cross-stream leak detected! Received {stream_type} in {self.symbol} broadcaster. Discarding.")
                     continue
 
                 kline = payload_data.get("k")
@@ -815,7 +827,7 @@ class SymbolBroadcaster:
                 from engine.notifications.telegram import send_drift_alert_async
                 
                 drift_payload = {
-                    "asset": self.symbol,
+                    "asset": self._symbol,  # [FORCED v8.3.0] Prohibir asset leakage
                     "affected_features": ", ".join(report.features_in_drift) if report.features_in_drift else "Generales",
                     "rolling_accuracy": f"{report.rolling_accuracy * 100:.1f}",
                     "psi_max": f"{report.psi_max:.3f}",

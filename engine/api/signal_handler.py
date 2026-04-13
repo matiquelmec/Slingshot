@@ -152,7 +152,8 @@ class SignalHandler:
                     signal_type=sig.get("signal_type", sig.get("type", "LONG")).upper(),
                     market_regime=tactical.get("market_regime", "UNKNOWN"),
                     smc_data=tactical.get("smc"),
-                    atr_value=sig.get("atr", 0)
+                    atr_value=sig.get("atr", 0),
+                    asset=self._symbol
                 )
                 risk_pct = calc.get("risk_pct")
                 risk_usd = calc.get("risk_amount_usdt")
@@ -168,8 +169,13 @@ class SignalHandler:
         tp         = float(calc.get("tp3", sig.get("take_profit_3r", 0))) if 'calc' in locals() else float(sig.get("take_profit_3r", 0))
         rr_ratio   = round(abs(tp - price) / abs(price - sl) if abs(price - sl) > 0 else 0, 2)
 
+        # ── Validación de Integridad v8.3.0 ────────────────────────────────────
+        if price <= 0:
+            logger.error(f"❌ [SIGNAL_HANDLER] Señal con precio INVALIDO (0) para {self._symbol}. Abortando.")
+            return
+
         realtime_data = {
-            "asset":            self._symbol,
+            "asset":            self._symbol,  # [FORCED] Sobrescribir siempre con el símbolo del Broadcaster
             "interval":         self._interval,
             "signal_type":      sig.get("signal_type", sig.get("type", "LONG")).upper(),
             "type":             sig.get("signal_type", sig.get("type", "LONG")).upper(),
@@ -190,10 +196,11 @@ class SignalHandler:
             "position_size":    pos_size,
             "leverage":         lev,
             "rr_ratio":         rr_ratio,
-            "entry_zone_top":   calc.get("entry_zone_top") if 'calc' in locals() else None,
-            "entry_zone_bottom": calc.get("entry_zone_bottom") if 'calc' in locals() else None,
-            "tp1":              calc.get("tp1") if 'calc' in locals() else None,
-            "tp2":              calc.get("tp2") if 'calc' in locals() else None,
+            "entry_zone_top":   calc.get("entry_zone_top", sig.get("entry_zone_top")) if 'calc' in locals() else sig.get("entry_zone_top"),
+            "entry_zone_bottom": calc.get("entry_zone_bottom", sig.get("entry_zone_bottom")) if 'calc' in locals() else sig.get("entry_zone_bottom"),
+            "tp1":              calc.get("tp1", sig.get("tp1")) if 'calc' in locals() else sig.get("tp1"),
+            "tp2":              calc.get("tp2", sig.get("tp2")) if 'calc' in locals() else sig.get("tp2"),
+            "tp3":              calc.get("tp3", sig.get("tp3")) if 'calc' in locals() else sig.get("tp3"),
         }
 
         # ── Persistencia en RAM ───────────────────────────────────────────────

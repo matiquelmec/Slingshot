@@ -90,7 +90,7 @@ class RiskManager:
         key_levels: list = None,
         smc_data: dict = None,
         atr_value: float = 0.0,
-        asset: str = "BTCUSDT",
+        asset: str = "UNKNOWN",
         **kwargs
     ) -> dict:
         """

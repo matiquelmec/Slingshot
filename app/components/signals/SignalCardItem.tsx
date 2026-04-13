@@ -3,6 +3,7 @@
 import React, { useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { Signal } from '../../types/signal';
+import { useTelemetryStore } from '../../store/telemetryStore';
 import { getSignalLifecycle, getSignalStyle } from '../../utils/signalLogic';
 
 interface SignalCardItemProps {
@@ -20,15 +21,19 @@ const formatTime = (ts: string) => {
 };
 
 const SignalCardItem: React.FC<SignalCardItemProps> = ({ signal, currentPrice }) => {
+    // Consumimos el mapa de precios globales para hidratación específica por activo (v5.8.0)
+    const latestPrices = useTelemetryStore(state => state.latestPrices);
+    const effectivePrice = useMemo(() => {
+        return latestPrices[signal.asset] || currentPrice;
+    }, [latestPrices, signal.asset, currentPrice]);
 
-    // Memoizamos fuertemente el ciclo de vida. Solo recalcula si el currentPrice hace que evalúe distinto,
-    // o si pasa mucha diferencia de Date.now()
+    // Memoizamos fuertemente el ciclo de vida. Solo recalcula si el effectivePrice hace que evalúe distinto,
     const { lifecycle, style } = useMemo(() => {
         const now = Date.now();
-        const lc = getSignalLifecycle(signal, currentPrice, now);
+        const lc = getSignalLifecycle(signal, effectivePrice, now);
         const st = getSignalStyle(signal.type);
         return { lifecycle: lc, style: st };
-    }, [signal, currentPrice]); // Recalcula si el target signal muta o el precio toca su umbral
+    }, [signal, effectivePrice]); 
 
     return (
         <motion.div
@@ -103,24 +108,33 @@ const SignalCardItem: React.FC<SignalCardItemProps> = ({ signal, currentPrice })
             )}
 
             {/* ── Fila 3: Zonas y Target ── */}
-            <div className="grid grid-cols-3 gap-2 text-[9px] font-mono mb-2">
+            <div className="grid grid-cols-4 gap-2 text-[9px] font-mono mb-2">
                 <div className="flex flex-col gap-0.5 bg-white/[0.02] rounded px-2 py-1 border border-white/5">
-                    <span className="text-white/30 text-[8px] tracking-widest">ZONA ENTRADA</span>
+                    <span className="text-white/30 text-[8px] tracking-widest uppercase">Entry</span>
                     {signal.entry_zone_top && signal.entry_zone_bottom ? (
                         <span className="text-white/80 font-bold">
-                            ${signal.entry_zone_bottom.toLocaleString(undefined, { maximumFractionDigits: 0 })} – ${signal.entry_zone_top.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                            ${signal.entry_zone_bottom.toLocaleString(undefined, { maximumFractionDigits: 1 })} – ${signal.entry_zone_top.toLocaleString(undefined, { maximumFractionDigits: 1 })}
                         </span>
                     ) : (
                         <span className="text-white/60 font-bold">${signal.price?.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
                     )}
                 </div>
                 <div className="flex flex-col gap-0.5 bg-neon-red/5 rounded px-2 py-1 border border-neon-red/10">
-                    <span className="text-neon-red/50 text-[8px] tracking-widest">⛔ STOP LOSS</span>
+                    <span className="text-neon-red/50 text-[8px] tracking-widest uppercase">Stop</span>
                     <span className="text-neon-red/90 font-bold">${signal.stop_loss?.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
                 </div>
-                <div className="flex flex-col gap-0.5 bg-neon-green/5 rounded px-2 py-1 border border-neon-green/10">
-                    <span className="text-neon-green/50 text-[8px] tracking-widest">🎯 TARGET 3R</span>
-                    <span className="text-neon-green/90 font-bold">${signal.take_profit_3r?.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                <div className="flex flex-col gap-0.5 bg-neon-green/5 rounded px-2 py-1 border border-neon-green/10 col-span-2">
+                    <div className="flex justify-between items-center mb-0.5">
+                        <span className="text-neon-green/50 text-[8px] tracking-widest uppercase">Targets (1,2,3)</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <span className="text-white/40 text-[8px]">1:</span>
+                        <span className="text-neon-green/70 font-bold">${signal.tp1?.toLocaleString(undefined, { minimumFractionDigits: 2 }) || '---'}</span>
+                        <span className="text-white/40 text-[8px]">2:</span>
+                        <span className="text-neon-green/80 font-bold">${signal.tp2?.toLocaleString(undefined, { minimumFractionDigits: 2 }) || '---'}</span>
+                        <span className="text-white/20 text-[7px]">⚡</span>
+                        <span className="text-neon-green/100 font-bold">${(signal.tp3 || signal.take_profit_3r)?.toLocaleString(undefined, { minimumFractionDigits: 2 }) || '---'}</span>
+                    </div>
                 </div>
             </div>
 

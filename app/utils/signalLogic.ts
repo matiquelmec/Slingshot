@@ -1,5 +1,3 @@
-import React from 'react';
-import { TrendingUp, TrendingDown, Crosshair } from 'lucide-react';
 import { Signal, QuantDiagnostic, SessionData, TacticalDecision } from '../types/signal';
 
 // =============== ESTRATEGIAS VISUALES DE SEÑALES ===============
@@ -27,8 +25,6 @@ export function getSignalLifecycle(sig: Signal, currentPrice: number | null, now
         const borderColor = sig.status === 'BLOCKED_BY_HTF' ? 'border-amber-500/30' : sig.status === 'STAND_BY' ? 'border-cyan-500/30' : 'border-red-500/10';
         const textColor = sig.status === 'BLOCKED_BY_HTF' ? 'text-amber-500/60' : sig.status === 'STAND_BY' ? 'text-cyan-400/60' : 'text-white/40';
 
-        // Detalle extendido: Combinar POR QUÉ es señal + POR QUÉ se rechaza
-        // Priorizar rejection_reason que viene del broadcast estandarizado
         const whySignal = sig.confluence?.reasoning || 'Criterio técnico base cumplido.';
         const rejectionDetail = sig.rejection_reason || (sig as any).blocked_reason || 
                                (sig.status === 'BLOCKED_BY_CONFIDENCE' ? 'Confianza debajo del umbral del activo' : 'Rechazada por módulo de riesgo.');
@@ -40,6 +36,41 @@ export function getSignalLifecycle(sig: Signal, currentPrice: number | null, now
             color: textColor,
             bgColor: `bg-black/60 ${borderColor} opacity-95 shadow-inner`,
         };
+    }
+
+    // 0.1 ESTADOS OMEGA (Ejecución en Tiempo Real v8.2)
+    if (sig.status === 'FILLED' || sig.status === 'CLOSED_TP_MAX' || sig.status === 'STOPPED_OUT') {
+        if (sig.status === 'FILLED') {
+            const isShielded = (sig as any).shield_active;
+            const isLocked = (sig as any).profit_locked;
+            return {
+                status: 'EN_ZONA',
+                label: isLocked ? '🔒 PROFITS LOCKED' : isShielded ? '🛡️ SHIELD ACTIVE (BE)' : '⚡ POSITION OPEN (FILLED)',
+                reason: isLocked ? `Posición protegida en TP1 ($${sig.tp1?.toLocaleString()}). Buscando TP3.` : 
+                        isShielded ? `Precio tocó TP1. Stop Loss movido a Break-even ($${sig.price?.toLocaleString()}).` :
+                        `Precio entró en zona. Orden ejecutada. Vigilando niveles de salida.`,
+                color: 'text-neon-cyan',
+                bgColor: 'bg-neon-cyan/10 border-neon-cyan/40 shadow-[0_0_15px_rgba(0,229,255,0.1)]',
+            };
+        }
+        if (sig.status === 'STOPPED_OUT') {
+            return {
+                status: 'INVALIDADA',
+                label: '🛑 STOP LOSS HIT',
+                reason: `Posición cerrada por Stop Loss en $${currentPrice?.toLocaleString() || sig.stop_loss?.toLocaleString()}. Gestión de riesgo OMEGA aplicada.`,
+                color: 'text-neon-red',
+                bgColor: 'bg-neon-red/10 border-neon-red/30 opacity-70',
+            };
+        }
+        if (sig.status === 'CLOSED_TP_MAX') {
+            return {
+                status: 'EN_ZONA',
+                label: '✅ FULL TAKE PROFIT',
+                reason: `La posición alcanzó el Target máximo (TP3/3R). Operación exitosa.`,
+                color: 'text-neon-green',
+                bgColor: 'bg-neon-green/10 border-neon-green/30 shadow-[0_0_15px_rgba(0,255,65,0.1)]',
+            };
+        }
     }
 
     // 1. INVALIDADA por precio: el precio cerró más allá del SL

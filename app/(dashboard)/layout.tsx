@@ -4,9 +4,9 @@ import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
-import {
-    Crosshair, Radio, Database, ShieldCheck,
-    LayoutDashboard, Activity, Terminal, BarChart2, User
+import { 
+    LayoutDashboard, Radio, Terminal, BarChart2, Activity, Database, 
+    Crosshair, ShieldCheck 
 } from 'lucide-react';
 import { useTelemetryStore } from '../store/telemetryStore';
 

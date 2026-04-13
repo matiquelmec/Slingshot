@@ -2,7 +2,7 @@
 
 import React, { useEffect } from 'react';
 import { AnimatePresence } from 'framer-motion';
-import { Network, ShieldAlert, Check } from 'lucide-react';
+import { Network, ShieldAlert, Check, Trash2 } from 'lucide-react';
 import { useSearchParams } from 'next/navigation';
 // Store & Types
 import { useTelemetryStore } from '../../store/telemetryStore';
@@ -32,8 +32,11 @@ export default function SignalTerminal() {
     const activeTimeframe = useTelemetryStore(state => state.activeTimeframe);
     const advisorLogs = useTelemetryStore(state => state.advisorLogs);
     const advisorLog = advisorLogs[activeSymbol] || null;
+    const clearSignalHistory = useTelemetryStore(state => state.clearSignalHistory);
+    const viewMode = useTelemetryStore(state => state.viewMode);
+    const setViewMode = useTelemetryStore(state => state.setViewMode);
+    const hydrateSignals = useTelemetryStore(state => state.hydrateSignals);
 
-    const [globalSignals, setGlobalSignals] = React.useState<any[]>([]);
     const [isLoadingSignals, setIsLoadingSignals] = React.useState(true);
 
     useEffect(() => {
@@ -47,7 +50,7 @@ export default function SignalTerminal() {
                 const res = await fetch(`http://localhost:8000/api/v1/signals?status=ALL`);
                 if (res.ok) {
                     const data = await res.json();
-                    setGlobalSignals(data);
+                    hydrateSignals(data);
                 }
             } catch (e) {
                 console.warn("SignalTerminal: Feed offline.");
@@ -60,14 +63,14 @@ export default function SignalTerminal() {
         fetchInitialHydration();
     }, [searchParams, activeSymbol, connect]);
 
-    // Combinación Híbrida: Base de Datos Local + Transmisión de WS (Zustand)
+    // Los audiosignals siguen siendo directos para el Feed de auditoría
     const displayMap = new Map();
-    [...Object.values(signalHistory), ...globalSignals].forEach(s => displayMap.set(s.id || `${s.timestamp}-${s.asset}`, s));
-    // El WS de Zustand (Auditor) SIEMPRE tiene la prioridad absolutaa (sobrescribe pasados)
+    Object.values(signalHistory).forEach(s => displayMap.set(s.id || `${s.timestamp}-${s.asset}`, s));
     Object.values(auditedSignals).forEach(s => displayMap.set(s.id || `${s.timestamp}-${s.asset}`, s));
     
-    // Sort descendente por tiempo
+    // Sort descendente por tiempo + Filtrado por Activo (v5.8.0)
     const displaySignals = Array.from(displayMap.values())
+        .filter(s => viewMode === 'GLOBAL' || s.asset === activeSymbol)
         .sort((a, b) => new Date(b.created_at || b.timestamp).getTime() - new Date(a.created_at || a.timestamp).getTime())
         .slice(0, 50);
 
@@ -87,9 +90,36 @@ export default function SignalTerminal() {
                     </h2>
                 </div>
                 <div className="flex items-center gap-3 text-[10px] font-bold tracking-widest text-white/40">
+                    <div className="flex items-center bg-white/5 rounded-lg p-0.5 border border-white/5 mr-2">
+                        <button 
+                            onClick={() => setViewMode('SYMBOL')}
+                            className={`px-2 py-1 rounded transition-all ${viewMode === 'SYMBOL' ? 'bg-neon-cyan/20 text-neon-cyan' : 'hover:text-white/60'}`}
+                        >
+                            {activeSymbol.replace('USDT', '')}
+                        </button>
+                        <button 
+                            onClick={() => setViewMode('GLOBAL')}
+                            className={`px-2 py-1 rounded transition-all ${viewMode === 'GLOBAL' ? 'bg-neon-cyan/20 text-neon-cyan' : 'hover:text-white/60'}`}
+                        >
+                            GLOBAL
+                        </button>
+                    </div>
                     <span className="flex items-center gap-1.5"><Network size={12} className="text-neon-cyan/60" /> AUDIT MODE</span>
+                    
+                    <button 
+                        onClick={() => {
+                            if (window.confirm("¿Limpiar todo el historial de señales detectadas?")) {
+                                clearSignalHistory();
+                            }
+                        }}
+                        className="ml-2 p-1.5 hover:bg-red-500/20 hover:text-red-400 rounded-md transition-all group relative"
+                        title="Limpiar Sensores"
+                    >
+                        <Trash2 size={12} />
+                    </button>
+
                     {activeCount > 0 && (
-                        <span className="flex items-center gap-1 text-neon-green/80">
+                        <span className="flex items-center gap-1 text-neon-green/80 ml-2">
                             <Check size={10} /> {activeCount} APPROVED
                         </span>
                     )}

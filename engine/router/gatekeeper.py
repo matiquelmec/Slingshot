@@ -106,7 +106,23 @@ class SignalGatekeeper:
                         break
 
         
+        # --- [FORENSIC v8.2.8] Price Sanity Check --- 
+        # Obtenemos el precio actual de mercado desde el DF para comparar coherencia
+        market_price = float(df["close"].iloc[-1]) if not df.empty else 0.0
+
         for sig in signals[-10:]:  # Ventana de las últimas 10 señales
+            # 1. 🛡️ Protección de Identidad: Validar coherencia de precio vs asset
+            sig_price = float(sig.get("price", 0))
+            asset = sig.get("asset", "UNKNOWN")
+            
+            if market_price > 0:
+                price_diff_pct = abs(sig_price - market_price) / market_price
+                # Si la señal se desvía más del 15% del precio actual del feed, es basura o de otro activo
+                if price_diff_pct > 0.15:
+                    logger.warning(f"🚨 [GATEKEEPER] DATA_POLLUTION detectada en {asset}: Precio {sig_price} incoherente vs Market {market_price}")
+                    self._block(sig, "BLOCKED_BY_POLLUTION", f"Incoherencia de precio ({price_diff_pct:.1%}). Posible cruce de activos.", result)
+                    continue
+
             # ── Filtro 1: Enriquecimiento de Riesgo ──────────────────────────
             # (SMT_Strength se pasará en el contexto de riesgo si existe)
             smt_strength = sig.get('confluence', {}).get('smt_strength', 0) if sig.get('confluence') else 0
@@ -123,7 +139,8 @@ class SignalGatekeeper:
                 key_levels=key_levels,
                 smc_data=smc_map,
                 atr_value=sig.get("atr_value", 0.0),
-                smt_strength=smt_strength
+                smt_strength=smt_strength,
+                asset=sig.get("asset", "UNKNOWN")
             )
             
             # Si la estrategia ya definió un setup (Ej: SMC OB-Low), lo respetamos

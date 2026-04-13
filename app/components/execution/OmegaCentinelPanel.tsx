@@ -11,27 +11,47 @@ export default function OmegaCentinelPanel() {
     const [dailyDrawdown, setDailyDrawdown] = useState(0.00); // 0%
     const maxDrawdown = -3.50;
 
+    const activeSymbol = useTelemetryStore(state => state.activeSymbol);
+    const latestPrices = useTelemetryStore(state => state.latestPrices);
     const signalHistory = useTelemetryStore(state => state.signalHistory);
     const signalIds = useTelemetryStore(state => state.signalIds);
+    const viewMode = useTelemetryStore(state => state.viewMode);
+    
+    // Helper para formateo de precios profesional
+    const formatPrice = (val: number | undefined, asset: string) => {
+        if (!val) return '---';
+        const decimals = asset.includes('USDT') && val < 10 ? 4 : 2;
+        return val.toLocaleString(undefined, { 
+            minimumFractionDigits: decimals, 
+            maximumFractionDigits: decimals 
+        });
+    };
 
     // Obtener señales en ejecución o pendientes
-    const activeExecutionSignals = signalIds
+    // [v8.3.2] Clean up signalIds to prevent duplicate keys in React (Set conversion)
+    const activeExecutionSignals = Array.from(new Set(signalIds))
         .map(id => signalHistory[id])
-        .filter(sig => sig && ['ACTIVE', 'FILLED', 'SHIELD_ACTIVATED'].includes(sig.status || ''));
+        .filter(sig => sig && (viewMode === 'GLOBAL' || sig.asset === activeSymbol) && ['ACTIVE', 'FILLED', 'SHIELD_ACTIVATED', 'TP1_HIT', 'SHIELDED'].includes(sig.status || ''));
 
-    const activeOrders = activeExecutionSignals.map(sig => ({
-        id: sig.id,
-        asset: sig.asset,
-        type: sig.signal_type || 'LONG',
-        status: sig.status,
-        entry: sig.price,
-        sl: sig.sl_dynamic || sig.stop_loss,
-        tp1: sig.tp1,
-        tp2: sig.tp2,
-        shield_active: sig.shield_active || false,
-        profit_locked: sig.profit_locked || false,
-        current_price: sig.current_price || sig.price
-    }));
+    const activeOrders = activeExecutionSignals.map(sig => {
+        const symbol = sig.asset || 'UNKNOWN';
+        const currentPrice = latestPrices[symbol] || sig.current_price || sig.price;
+        
+        return {
+            id: sig.id,
+            asset: symbol,
+            type: sig.signal_type || (sig.type?.includes('LONG') ? 'LONG' : 'SHORT'),
+            status: sig.status,
+            entry: sig.price,
+            sl: sig.sl_dynamic || sig.stop_loss,
+            tp1: sig.tp1,
+            tp2: sig.tp2,
+            tp3: sig.tp3 || sig.take_profit_3r,
+            shield_active: sig.shield_active || false,
+            profit_locked: sig.profit_locked || false,
+            current_price: currentPrice
+        };
+    });
 
     const drawdownPct = Math.min((dailyDrawdown / maxDrawdown) * 100, 100);
 
@@ -102,10 +122,10 @@ export default function OmegaCentinelPanel() {
                         </p>
                     </div>
                 ) : (
-                    <AnimatePresence>
-                        {activeOrders.map((order: any) => (
+                    <AnimatePresence mode="popLayout">
+                        {activeOrders.map((order: any, idx: number) => (
                             <motion.div
-                                key={order.id}
+                                key={order.id || `order-${order.asset}-${idx}`}
                                 initial={{ opacity: 0, y: 10 }}
                                 animate={{ opacity: 1, y: 0 }}
                                 exit={{ opacity: 0, scale: 0.95 }}
@@ -138,7 +158,7 @@ export default function OmegaCentinelPanel() {
                                 <div className="grid grid-cols-3 gap-2 text-[9px] font-mono mb-3">
                                     <div className="flex flex-col gap-1">
                                         <span className="text-white/30">ENTRY</span>
-                                        <span className="text-white">¤{Number(order.entry).toFixed(2)}</span>
+                                        <span className="text-white font-bold">${formatPrice(order.entry, order.asset)}</span>
                                     </div>
                                     <div className="flex flex-col gap-1">
                                         <span className="text-white/30">PnL %</span>
@@ -156,8 +176,20 @@ export default function OmegaCentinelPanel() {
                                     <div className="flex flex-col gap-1">
                                         <span className="text-white/30">STOP LOSS</span>
                                         <span className={`font-bold ${order.shield_active ? 'text-neon-cyan' : 'text-red-400'}`}>
-                                            {order.shield_active ? 'BE' : `¤${Number(order.sl).toFixed(2)}`}
+                                            {order.shield_active ? '🛡️ BE' : `$${formatPrice(order.sl, order.asset)}`}
                                         </span>
+                                    </div>
+                                    <div className="flex flex-col gap-1">
+                                        <span className="text-neon-cyan/50">TP1</span>
+                                        <span className="text-neon-cyan font-bold">${formatPrice(order.tp1, order.asset)}</span>
+                                    </div>
+                                    <div className="flex flex-col gap-1">
+                                        <span className="text-neon-cyan/50">TP2</span>
+                                        <span className="text-neon-cyan font-bold">${formatPrice(order.tp2, order.asset)}</span>
+                                    </div>
+                                    <div className="flex flex-col gap-1">
+                                        <span className="text-neon-cyan/50">TP3</span>
+                                        <span className="text-neon-cyan font-bold">${formatPrice(order.tp3, order.asset)}</span>
                                     </div>
                                 </div>
 

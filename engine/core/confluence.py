@@ -51,8 +51,12 @@ class ConfluenceManager:
             current = df.iloc[-1]
             vol_mean = df['volume'].iloc[-21:-1].mean()
 
-        sig_type = signal.get('type', '').upper()
-        is_long = 'LONG' in sig_type
+        # [FIX v6.6.7] Source of Truth Hierarchy
+        # 1. signal_type (explícito)
+        # 2. type (inferido por string)
+        sig_type_raw = str(signal.get('signal_type', signal.get('type', ''))).upper()
+        is_long = 'LONG' in sig_type_raw
+        
         checklist = []
         score = 0
         total_weight = 0
@@ -506,6 +510,7 @@ class ConfluenceManager:
         return {
             "score": final_score,
             "conviction": conviction,
+            "is_long": is_long, # [DELTA v6.1] Propagación de polaridad
             "checklist": checklist,
             "reasoning": self._build_reasoning(final_score, conviction, is_long, regime, has_ob, rvol, high_impact_near, event_name, cluster_hit, v_reason),
             "rvol": round(rvol, 2),

@@ -28,6 +28,7 @@ interface TelemetryState {
     activeTimeframe: Timeframe;
     candles: CandleData[];
     latestPrice: number | null;
+    latestPrices: Record<string, number | null>; // 🚀 Mapa de precios por activo (v5.7.155 Master Gold)
     mlProjection: { direction: 'ALCISTA' | 'BAJISTA' | 'NEUTRAL' | 'ANALIZANDO' | 'CALIBRANDO' | 'ERROR', probability: number, reason?: string };
     liquidityHeatmap: { bids: { price: number, volume: number }[], asks: { price: number, volume: number }[] } | null;
     neuralLogs: NeuralLog[];
@@ -46,11 +47,15 @@ interface TelemetryState {
     auditedSignals: Record<string, Signal>; // 🏹 O(1) Map para auditoría (v5.4)
     auditedIds: string[];                   // 📜 Índice ordenado para auditoría
     activeConnectionId: string | null;
+    viewMode: 'SYMBOL' | 'GLOBAL';          // 🛰️ Modo de vista global (v8.4)
     connect: (symbol: string, timeframe?: Timeframe) => void;
     disconnect: () => void;
     setTimeframe: (tf: Timeframe) => void;
     setNews: (news: NewsItem[]) => void;
+    setViewMode: (mode: 'SYMBOL' | 'GLOBAL') => void;
+    hydrateSignals: (signals: Signal[]) => void;
     fetchEconomicEvents: () => Promise<void>;
+    clearSignalHistory: () => void;
 }
 
 export const useTelemetryStore = create<TelemetryState>((set, get) => {
@@ -104,11 +109,20 @@ export const useTelemetryStore = create<TelemetryState>((set, get) => {
         const newIds = [...prevIds];
 
         incoming.forEach(sig => {
+            // [v8.3.1] Force unique ID if missing
             const id = sig.id || `${sig.timestamp}-${sig.asset}`;
+            
+            // Basic integrity validation
+            if (!sig.asset || !sig.price || sig.price <= 0) {
+                console.warn(`[TELEMETRY] Skipping malformed signal during merge:`, sig);
+                return;
+            }
+
             if (!newData[id]) {
                 newIds.unshift(id);
             }
-            newData[id] = sig;
+            // Ensure ID is inscribed in the object for O(1) retrieval and unique keys
+            newData[id] = { ...sig, id };
         });
 
         // Garbage collector (2 horas)
@@ -294,10 +308,14 @@ export const useTelemetryStore = create<TelemetryState>((set, get) => {
                     const sortedCandles = Array.from(uniqueCandlesMap.values()).sort((a, b) => (a.time as number) - (b.time as number));
 
                     const lastPrice = sortedCandles.length > 0 ? Number(sortedCandles[sortedCandles.length - 1].close) : null;
-                    set({
+                    set((state) => ({
                         candles: sortedCandles,
-                        latestPrice: lastPrice
-                    });
+                        latestPrice: lastPrice,
+                        latestPrices: {
+                            ...state.latestPrices,
+                            [get().activeSymbol]: lastPrice
+                        }
+                    }));
                 } else if (data.type === 'candle') {
                     const newCandle: CandleData = {
                         time: data.data.timestamp,
@@ -333,7 +351,11 @@ export const useTelemetryStore = create<TelemetryState>((set, get) => {
 
                         return {
                             candles: currentCandles,
-                            latestPrice: Number(newCandle.close)
+                            latestPrice: Number(newCandle.close),
+                            latestPrices: {
+                                ...state.latestPrices,
+                                [state.activeSymbol]: Number(newCandle.close)
+                            }
                         };
                     });
                 } else if (data.type === 'neural_pulse') {
@@ -392,15 +414,25 @@ export const useTelemetryStore = create<TelemetryState>((set, get) => {
                             },
                             advisorLogs: updatedAdvisorLogs,
                             htfBias: d.htf_bias ?? state.htfBias,
-                            latestPrice: d.current_price ?? state.latestPrice, 
+                            latestPrice: d.asset === state.activeSymbol ? (d.current_price ?? state.latestPrice) : state.latestPrice,
+                            latestPrices: {
+                                ...state.latestPrices,
+                                [d.asset]: d.current_price ?? (state.latestPrices[d.asset] || null)
+                            },
                             signalHistory: newHistoryData,
                             signalIds: newHistoryIds,
                         };
                     });
                 } else if (data.type === 'signal_auditor_update') {
                     // Evento específico inyectado en WS desde v3.3 (Audit Mode)
-
                     const sig = data.data as Signal;
+                    
+                    // [GATEKEEPER v8.3.0] Validation of signal integrity
+                    if (!sig.asset || !sig.price || sig.price <= 0) {
+                        console.warn(`[TELEMETRY] Skipping malformed/contaminated signal:`, sig);
+                        return;
+                    }
+
                     const id = sig.id || `${sig.timestamp}-${sig.asset}`;
 
                     set((state) => {
@@ -412,8 +444,20 @@ export const useTelemetryStore = create<TelemetryState>((set, get) => {
 
                         // 2. Sincronizar OMEGA (Solo Aprobadas/Ejecución)
                         let newHistory = { data: state.signalHistory, ids: state.signalIds };
+                        
+                        // [v8.3.0] PURE ACTIVE FILTER: Solo permitimos señales ACTIVE si coinciden con el activo
+                        // y tienen un precio coherente (anti-pollution)
                         if (['ACTIVE', 'FILLED', 'SHIELD_ACTIVATED'].includes(status)) {
-                            newHistory = _mergeSignals(state.signalHistory, state.signalIds, [sig]);
+                            const currentPrice = state.latestPrices[sig.asset] || (sig.asset === state.activeSymbol ? state.latestPrice : null);
+                            const sigPrice = sig.price || 0;
+                            const deviation = currentPrice ? Math.abs(sigPrice - currentPrice) / currentPrice : 0;
+                            
+                            // 15% threshold for gatekeeping (matched with backend gatekeeper.py)
+                            if (deviation < 0.15 || !currentPrice) {
+                                newHistory = _mergeSignals(state.signalHistory, state.signalIds, [sig]);
+                            } else {
+                                console.warn(`[POLLUTION ALERT] Reverting signal ${id} on ${sig.asset} | Sig: ${sigPrice} vs Market: ${currentPrice} | Dev: ${(deviation*100).toFixed(1)}%`);
+                            }
                         }
 
                         return { 
@@ -438,6 +482,15 @@ export const useTelemetryStore = create<TelemetryState>((set, get) => {
                     // 🛡️ OMEGA Live Synchronization
                     const sig = data.data as Signal;
                     set((state) => {
+                        const currentPrice = state.latestPrices[sig.asset] || state.latestPrice;
+                        const sigPrice = sig.price || 0;
+                        const deviation = currentPrice ? Math.abs(sigPrice - currentPrice) / currentPrice : 0;
+
+                        if (deviation > 0.25 && currentPrice) {
+                            console.warn(`[EXECUTION POLLUTION] Blocked state update for ${sig.asset} due to incoherent price: ${sigPrice}`);
+                            return state;
+                        }
+
                         const { data: newHistoryData, ids: newHistoryIds } = _mergeSignals(state.signalHistory, state.signalIds, [sig]);
                         return {
                             signalHistory: newHistoryData,
@@ -449,10 +502,15 @@ export const useTelemetryStore = create<TelemetryState>((set, get) => {
                     const summary = data.data as any[];
                     set((state) => {
                         const newSummary = { ...state.marketSummary };
+                        const newPrices = { ...state.latestPrices };
                         summary.forEach(s => {
                             newSummary[s.asset] = s;
+                            if (s.price) newPrices[s.asset] = s.price;
                         });
-                        return { marketSummary: newSummary };
+                        return { 
+                            marketSummary: newSummary,
+                            latestPrices: newPrices
+                        };
                     });
                 } else if (data.type === 'session_update') {
                     set((state) => ({ 
@@ -566,6 +624,7 @@ export const useTelemetryStore = create<TelemetryState>((set, get) => {
         activeTimeframe: '15m',
         candles: [],
         latestPrice: null,
+        latestPrices: {},
         mlProjection: { direction: 'CALIBRANDO', probability: 0 },
         neuralLogs: [],
         tacticalDecision: {
@@ -598,6 +657,17 @@ export const useTelemetryStore = create<TelemetryState>((set, get) => {
         auditedIds: [],
         activeConnectionId: null,
         onchainMetrics: null,
+        viewMode: 'SYMBOL',
+
+        hydrateSignals: (signals: Signal[]) => {
+            set((state) => {
+                const { data, ids } = _mergeSignals(state.signalHistory, state.signalIds, signals);
+                return { 
+                    signalHistory: data, 
+                    signalIds: ids 
+                };
+            });
+        },
 
         connect: (symbol: string, timeframe?: Timeframe) => {
             const tf = timeframe ?? get().activeTimeframe;
@@ -627,6 +697,10 @@ export const useTelemetryStore = create<TelemetryState>((set, get) => {
             set({ news: newsItems.slice(0, 15) }); // Mantener el límite visual de 15 noticias corporativas
         },
 
+        setViewMode: (mode: 'SYMBOL' | 'GLOBAL') => {
+            set({ viewMode: mode });
+        },
+
         fetchEconomicEvents: async () => {
             try {
                 const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000';
@@ -651,6 +725,17 @@ export const useTelemetryStore = create<TelemetryState>((set, get) => {
             } catch (e) {
                 console.error("Failed to fetch economic events:", e);
             }
+        },
+
+        clearSignalHistory: () => {
+            localStorage.removeItem('slingshot_signal_history_v2');
+            set({
+                signalHistory: {},
+                signalIds: [],
+                auditedSignals: {},
+                auditedIds: []
+            });
+            console.log("🧹 Signal history and localStorage cleared.");
         }
     };
 });
