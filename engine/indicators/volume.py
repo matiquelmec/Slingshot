@@ -2,52 +2,130 @@ from engine.core.logger import logger
 import pandas as pd
 import numpy as np
 
-def calculate_rvol(df: pd.DataFrame, window: int = 24) -> pd.DataFrame:
+def _format_pandas_freq(interval: str) -> str:
+    """Sanea el intervalo para compatibilidad con Pandas 2.2.0+ (ROE: PANDAS_STRICT_COMPLIANCE)"""
+    if not interval: return None
+    # Mapeo explícito para evitar reemplazos erróneos
+    mapping = {'1m': '1min', '3m': '3min', '5m': '5min', '15m': '15min', '30m': '30min', '1h': '1h', '4h': '4h', '1d': '1D'}
+    return mapping.get(interval, interval.replace('m', 'min') if interval.endswith('m') else interval)
+
+def calculate_rvol(df: pd.DataFrame, window: int = 24, target_interval: str = None) -> pd.DataFrame:
     """
     Relative Volume (RVOL) - Nivel 3 (Gatillo Institucional).
     Calcula si el volumen actual es inusualmente alto en comparación con la mediana reciente.
-    Usamos la mediana para resistir valores extremos (Outliers) que sesgan la media simple.
+    
+    [FIX v6.6.18] Resuelto Shape Mismatch via Reindexing + Forward Fill.
     """
     df = df.copy()
+    if df.empty: return df
+
+    # [SAFE_INIT] Garantizar existencia de columnas
+    df['vol_median'] = df['volume'].median()
+    df['rvol'] = 1.0
+
+    # 1. Asegurar homogeneidad de datos (Sutura Estadística)
+    work_df = df
+    has_resampled = False
     
-    # Robust Median SMA (v5.7.155 Master Gold Unified)
-    df['vol_median'] = df['volume'].rolling(window=window, min_periods=window).median()
+    if target_interval and 'timestamp' in df.columns:
+        try:
+            pandas_freq = _format_pandas_freq(target_interval)
+            # Creamos un índice temporal para el resampling
+            df_ts = df.copy()
+            df_ts.index = pd.to_datetime(df['timestamp'])
+            
+            work_df = df_ts.resample(pandas_freq).agg({
+                'volume': 'sum', 'open': 'first', 'high': 'max', 'low': 'min', 'close': 'last'
+            }).dropna()
+            has_resampled = True
+        except Exception as e:
+            logger.warning(f"RVOL Resample Skip: {e}")
+            work_df = df
+
+    # 2. Chequeo de Warm-up
+    if len(work_df) < 20:
+        return df
     
-    # Calcular RVOL = Volumen Actual / Mediana del Volumen
-    df['rvol'] = df['volume'] / df['vol_median']
-    df['rvol'] = df['rvol'].fillna(0)
+    # 3. Robust Median SMA en el work_df (resampled or original)
+    work_df['vol_median'] = work_df['volume'].rolling(window=window, min_periods=20).median()
+    
+    # 4. Mapeo de vuelta al DF original (ROE: NO_DROPPED_COLUMNS)
+    if has_resampled:
+        # Reindexamos los valores calculados en HTF de vuelta al índice original (Datetime)
+        # y luego los asignamos al DataFrame original usando forward fill.
+        resampled_median = work_df['vol_median'].reindex(df_ts.index, method='ffill')
+        df['vol_median'] = resampled_median.values
+    else:
+        df['vol_median'] = work_df['vol_median']
+        
+    # 5. Calcular RVOL con Epsilon
+    df['rvol'] = df['volume'] / (df['vol_median'] + 1e-9)
+    df['rvol'] = df['rvol'].fillna(1.0)
     
     return df
 
-def calculate_absorption_index(df: pd.DataFrame, window: int = 50) -> pd.DataFrame:
+def calculate_absorption_index(df: pd.DataFrame, window: int = 50, target_interval: str = None) -> pd.DataFrame:
     """
     Índice de Absorción Institucional (Lattice Nivel 4).
     Mide la 'Presión de Volumen' sobre el 'Movimiento de Precio'.
     
-    Un índice de absorción alto ocurre cuando el volumen es enorme pero el precio 
-    se mueve poco (velas de cuerpo pequeño en zonas de liquidez).
+    [FIX v6.6.18] Resuelto Shape Mismatch via Reindexing + Forward Fill.
     """
     df = df.copy()
+    if df.empty: return df
+
+    # [SAFE_INIT] Garantizar existencia de columnas
+    df['absorption_raw'] = 0.0
+    df['absorption_score'] = 0.0
+
+    # 1. Homogeneidad de Datos
+    work_df = df
+    has_resampled = False
     
-    # Spread del cuerpo y spread total (fuerza residual)
-    body_spread = (df['close'] - df['open']).abs()
-    candle_spread = (df['high'] - df['low'])
+    if target_interval and 'timestamp' in df.columns:
+        try:
+            pandas_freq = _format_pandas_freq(target_interval)
+            df_ts = df.copy()
+            df_ts.index = pd.to_datetime(df['timestamp'])
+            
+            work_df = df_ts.resample(pandas_freq).agg({
+                'volume': 'sum', 'open': 'first', 'high': 'max', 'low': 'min', 'close': 'last'
+            }).dropna()
+            has_resampled = True
+        except: 
+            work_df = df
+
+    # 2. Warm-up Check
+    if len(work_df) < 20:
+        return df
     
-    # Denominador de esfuerzo: evitamos división por cero con epsilon
-    # Consideramos el movimiento del cuerpo como el factor principal de 'desplazamiento'
-    displacement = body_spread + (candle_spread * 0.1) + (df['close'] * 0.00001)
+    # 3. Cálculo de Absorción Bruta
+    body_spread = (work_df['close'] - work_df['open']).abs()
+    candle_spread = (work_df['high'] - work_df['low'])
+    displacement = body_spread + (candle_spread * 0.1) + (work_df['close'] * 0.00001) + 1e-9
     
-    # Índice de Absorción Bruto
-    df['absorption_raw'] = df['volume'] / displacement
+    work_df['absorption_raw'] = work_df['volume'] / displacement
     
-    # Normalización del índice vía Z-Score Robusto (v5.4)
-    median = df['absorption_raw'].rolling(window=window).median()
-    mad = (df['absorption_raw'] - median).abs().rolling(window=window).median()
+    # 4. Normalización Robusta (Z-Score via MAD)
+    median = work_df['absorption_raw'].rolling(window=window, min_periods=20).median()
+    mad = (work_df['absorption_raw'] - median).abs().rolling(window=window, min_periods=20).median()
+    mad_scaled = (mad * 1.4826) + 1e-9
     
-    # Si mad es 0, usamos un valor mínimo para evitar NaNs
-    mad = mad.replace(0, 1.0)
+    work_df['absorption_score'] = (work_df['absorption_raw'] - median) / mad_scaled
     
-    df['absorption_score'] = (df['absorption_raw'] - median) / (mad * 1.4826)
+    # 5. HARD CLAMP (ROE Directiva 2)
+    work_df['absorption_score'] = work_df['absorption_score'].clip(-15.0, 15.0)
+    
+    # 6. Re-mapeo al DF original (ROE: NO_DROPPED_COLUMNS)
+    if has_resampled:
+        # Proyectar scores de HTF a LTF
+        resampled_score = work_df['absorption_score'].reindex(df_ts.index, method='ffill')
+        resampled_raw = work_df['absorption_raw'].reindex(df_ts.index, method='ffill')
+        df['absorption_score'] = resampled_score.values
+        df['absorption_raw'] = resampled_raw.values
+    else:
+        df['absorption_score'] = work_df['absorption_score']
+        df['absorption_raw'] = work_df['absorption_raw']
     
     return df
 

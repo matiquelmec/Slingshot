@@ -147,6 +147,7 @@ class SlingshotRouter:
             interval=interval,
             htf_bias=htf_bias,
             context=context if context else self._context,
+            regime_details=market_map.diagnostic.get('regime_details'),
             silent=silent,
         )
 

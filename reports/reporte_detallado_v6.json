@@ -1,0 +1,7 @@
+{
+  "p50_total_ms": 33.3229,
+  "p99_total_ms": 41.3726,
+  "p50_df_creation_ms": 0.617,
+  "p50_fast_path_logic_ms": 0.1403,
+  "p50_router_process_ms": 32.5555
+}

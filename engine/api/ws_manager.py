@@ -520,13 +520,13 @@ class SymbolBroadcaster:
     # ── Stream en tiempo real (Fase 2 del stream) ────────────────────────────
 
     async def _stream_live(self):
-        """Conexión al stream multiplexado de Binance (Spot + Futures Mark Price Check)."""
-        # 1. Source Check: Futures Mark Price (v5.3 Audit)
+        """Conexión al stream multiplexado de Binance (Capa de Red Pura)."""
+        # 1. Source Check: Futures Mark Price
         try:
             futures_stream_url = f"wss://fstream.binance.com/ws/{self.symbol.lower()}@markPrice"
             async with ws_client.connect(futures_stream_url, open_timeout=10) as fws:
-                await fws.recv() # Wait for first frame
-                logger.info(f"[SOURCE_CHECK] fapi.binance.com (Futures) CONECTADO → markPriceStream recibido.")
+                await fws.recv() 
+                logger.info(f"[SOURCE_CHECK] fapi.binance.com (Futures) CONECTADO.")
         except Exception as e:
             logger.warning(f"[SOURCE_CHECK] Fallo al verificar fapi.binance.com: {e}")
 
@@ -534,238 +534,202 @@ class SymbolBroadcaster:
         depth_stream = f"{self.symbol.lower()}@depth20@100ms"
         binance_url  = f"wss://stream.binance.com:9443/stream?streams={kline_stream}/{depth_stream}"
 
-        # 🛡️ PROTECCIÓN DE HANDSHAKE v5.7.155 Master Gold (Thundering Herd Prevention)
-        # Añadimos un pequeño jitter aleatorio para no colapsar el stack de red al arrancar
+        # 🛡️ PROTECCIÓN DE HANDSHAKE (Thundering Herd Prevention)
         import random
         await asyncio.sleep(random.uniform(0.1, 2.0))
         
         logger.info(f"[BROADCASTER] {self._key} → Conectando a Binance WS: {binance_url}")
 
-        # Heartbeat Robustness: Ping/Pong cada 20s y margen de 30s para el apretón de manos (handshake)
         async with ws_client.connect(
             binance_url, 
             ping_interval=20, 
             ping_timeout=20,
-            open_timeout=30, # Margen extra para red saturada/VPS
+            open_timeout=30, 
             close_timeout=10
         ) as binance_ws:
             logger.info(f"[BROADCASTER] {self._key} → Stream EN VIVO 🟢")
+            
+            # EL BUCLE PRINCIPAL AHORA TIENE COMPLEJIDAD CICLOMÁTICA DE 3.
             while True:
                 raw = await asyncio.wait_for(binance_ws.recv(), timeout=30.0)
                 data = json.loads(raw)
                 stream_type = data.get("stream", "")
                 payload_data = data.get("data", {})
 
-                # ── Order Book Depth (Neural Heatmap v5.7) ────────────────────
+                # Dispatcher de Capa 1
                 if stream_type == depth_stream:
-                    price = self.latest_price or 1.0
-                    self._heatmap = analyze_neural_heatmap(
-                        bids=payload_data.get("bids", []),
-                        asks=payload_data.get("asks", []),
-                        current_price=price
-                    )
-                    # Mantener compatibilidad legacy para filtros básicos
-                    self._liquidity = {
-                        "bids": [{"price": b["price"], "volume": b["volume"]} for b in self._heatmap.get("hot_bids", [])],
-                        "asks": [{"price": a["price"], "volume": a["volume"]} for a in self._heatmap.get("hot_asks", [])]
-                    }
-                    continue
+                    self._process_depth_stream(payload_data)
+                elif stream_type.startswith(self.symbol.lower()):
+                    await self._process_kline_stream(payload_data, data)
+                else:
+                    logger.warning(f"⚠️ [SYSTEM] Cross-stream leak detected! {stream_type} discarded.")
 
-                # ── Symbol Integrity Check (Zero Trust v8.3.0) ──────────────────
-                # Verificamos que el stream realmente pertenezca a este Broadcaster
-                target_prefix = self.symbol.lower()
-                if not stream_type.startswith(target_prefix):
-                    logger.warning(f"⚠️ [SYSTEM] Cross-stream leak detected! Received {stream_type} in {self.symbol} broadcaster. Discarding.")
-                    continue
+    # ---------------------------------------------------------------------
+    # DELEGADOS DE EJECUCIÓN (AISLAMIENTO DE COMPLEJIDAD)
+    # ---------------------------------------------------------------------
 
-                kline = payload_data.get("k")
-                if not kline:
-                    continue
+    def _process_depth_stream(self, payload_data: dict):
+        """Procesa exclusivamente el Neural Heatmap (Fast Path visual)."""
+        price = self.latest_price or 1.0
+        self._heatmap = analyze_neural_heatmap(
+            bids=payload_data.get("bids", []),
+            asks=payload_data.get("asks", []),
+            current_price=price
+        )
+        self._liquidity = {
+            "bids": [{"price": b["price"], "volume": b["volume"]} for b in self._heatmap.get("hot_bids", [])],
+            "asks": [{"price": a["price"], "volume": a["volume"]} for a in self._heatmap.get("hot_asks", [])]
+        }
 
-                candle_payload = {
-                    "type": "candle",
-                    "data": {
-                        "timestamp": kline["t"] / 1000,
-                        "open":  float(kline["o"]),
-                        "high":  float(kline["h"]),
-                        "low":   float(kline["l"]),
-                        "close": float(kline["c"]),
-                        "volume": float(kline["v"]),
-                    }
-                }
-                await self._broadcast(candle_payload)
+    async def _process_kline_stream(self, payload_data: dict, raw_data: dict):
+        """Enrutador de velas: Separa el Fast Path (Tick) del Slow Path (Close)."""
+        kline = payload_data.get("k")
+        if not kline:
+            return
 
-                # ── OMEGA CENTINEL (Paper Trading & Execution Tracker) ─────────
-                from engine.execution.omega_listener import omega_centinel
-                await omega_centinel.check_live_price(self.symbol, float(kline["c"]), self)
+        candle_payload = {
+            "type": "candle",
+            "data": {
+                "timestamp": kline["t"] / 1000,
+                "open":  float(kline["o"]),
+                "high":  float(kline["h"]),
+                "low":   float(kline["l"]),
+                "close": float(kline["c"]),
+                "volume": float(kline["v"]),
+            }
+        }
+        await self._broadcast(candle_payload)
 
-                # ── Sesiones en tiempo real ───────────────────────────────────
-                self._session_manager.update(candle_payload["data"])
-                session_state = self._session_manager.get_current_state()
-                await self._broadcast(session_state)
+        # OMEGA CENTINEL
+        from engine.execution.omega_listener import omega_centinel
+        await omega_centinel.check_live_price(self.symbol, float(kline["c"]), self)
 
-                # ── FAST PATH (Dinámico: Tiered Priority v5.7.15) ──────────────
-                now = time.time()
-                
-                # --- SIGMA FIX: Tiers de Prioridad (Trident Audit) ---
-                # Cada activo tiene su propio intervalo óptimo basado en volatilidad real
-                is_elite = self.symbol in settings.MASTER_WATCHLIST
-                pulse_interval = settings.PRIORITY_TIERS.get(self.symbol, settings.DEFAULT_PULSE_INTERVAL)
-                
-                regime = self._last_tactical.get("data", {}).get("market_regime", "UNKNOWN") if self._last_tactical else "UNKNOWN"
-                if regime in ["CHOPPY", "ACCUMULATION", "DISTRIBUTION"]:
-                    pulse_interval = max(pulse_interval, 3.0)  # En rango, todos se ralentizan al mínimo de 3s
-                
-                if now - self._last_pulse_ts >= pulse_interval:
-                    self._last_pulse_ts = now
+        # SESIONES
+        self._session_manager.update(candle_payload["data"])
+        await self._broadcast(self._session_manager.get_current_state())
 
-                    # Contexto para el Brain Delta Δ
-                    # v6.0-Audit: Optimizamos la creación del DataFrame para evitar overhead persistente
-                    current_buffer = [i["data"] for i in self._live_buffer] + [candle_payload["data"]]
-                    df_live = pd.DataFrame(current_buffer)
-                    
-                    # Llamada al Cerebro Táctico Delta (Etapa 2)
-                    delta_fast = await StreamProcessor.process_fast_path(
-                        symbol=self.symbol,
-                        interval=self.interval,
-                        candle_payload=candle_payload,
-                        ws_data=data,
-                        context={"df_live": df_live, "avg_volume": getattr(store, 'get_avg_volume', lambda x: 0)(self.symbol)}
-                    )
+        # ENRUTAMIENTO BIFURCADO
+        await self._execute_fast_path(candle_payload, raw_data)
+        
+        if kline.get("x", False):
+            await self._execute_slow_path(candle_payload)
 
-                    # 1. ⚠️ Gestión Forense de Latencia (Audit Sigma)
-                    if delta_fast.get("latency_dirty"):
-                         await self._broadcast({"type": "neural_log", "data": {"type": "SYSTEM", "message": f"⚠️ LATENCY_DIRTY: {delta_fast['latency_ms']}ms (Margen >800ms)"}})
-                    
-                    # 📊 Registro en monitor global (Reporte 30s)
-                    from engine.api.registry import registry
-                    registry.record_latency(delta_fast.get("latency_ms", 0))
-                    
-                    # 2. 🐋 Whale / Absorption Logic
-                    if delta_fast.get("event") == "ABSORPTION_ALERT":
-                        logger.warning(f"[DELTA] 🚨 ABSORCIÓN detectada ({delta_fast['rvol']}x) en {self.symbol}")
-                        await self._broadcast({"type": "absorption_alert", "data": {"rvol": delta_fast['rvol']}})
-                        # Forzar re-análisis del Advisor ante flujo de órdenes agresivo
-                        asyncio.create_task(self._emit_advisor(self._last_tactical or {}, SessionManager.get_global_session_status(), is_absorption_alert=True))
+    async def _execute_fast_path(self, candle_payload: dict, raw_data: dict):
+        """Lógica de inter-vela (Tiered Priority)."""
+        now = time.time()
+        pulse_interval = settings.PRIORITY_TIERS.get(self.symbol, settings.DEFAULT_PULSE_INTERVAL)
+        
+        regime = self._last_tactical.get("data", {}).get("market_regime", "UNKNOWN") if self._last_tactical else "UNKNOWN"
+        if regime in ["CHOPPY", "ACCUMULATION", "DISTRIBUTION"]:
+            pulse_interval = max(pulse_interval, 3.0) 
+        
+        if now - self._last_pulse_ts < pulse_interval:
+            return  # Rate Limiter Institucional Activo
+            
+        self._last_pulse_ts = now
+        current_buffer = [i["data"] for i in self._live_buffer] + [candle_payload["data"]]
+        df_live = pd.DataFrame(current_buffer)
+        
+        delta_fast = await StreamProcessor.process_fast_path(
+            symbol=self.symbol, interval=self.interval,
+            candle_payload=candle_payload, ws_data=raw_data,
+            context={"df_live": df_live, "avg_volume": getattr(store, 'get_avg_volume', lambda x: 0)(self.symbol)}
+        )
 
-                    # 3. 🧠 Inferencia ML & Smoothing
-                    ml_data = delta_fast.get("ml_prediction", {})
-                    if ml_data:
-                        self._last_ml = ml_data
-                        # EMA Smoothing (v6.0 Trident Audit)
-                        prob_raw = ml_data.get("probability", 50)
-                        prob_bull = prob_raw if ml_data.get("direction") == "ALCISTA" else 100 - prob_raw
-                        self._ema_ml_prob = (prob_bull * self._ml_alpha) + (self._ema_ml_prob * (1 - self._ml_alpha))
+        from engine.api.registry import registry
+        registry.record_latency(delta_fast.get("latency_ms", 0))
 
-                    # 4. Pipeline Táctico (Mantenido local por ahora - Etapa 2.5)
-                    try:
-                        live_tactical = await asyncio.to_thread(
-                            self._router.process_market_data,
-                            df_live, asset=self.symbol, interval=self.interval,
-                            macro_levels=self._macro_levels, htf_bias=self._htf_bias,
-                            heatmap=self._heatmap, silent=True,
-                            event_time_ms=data.get("data", {}).get("E")
-                        )
-                        self._last_tactical = {"data": live_tactical}
-                        
-                        # 🔥 [SIGNAL_CREATED] Disparo de Alta Prioridad
-                        if live_tactical.get("signals"):
-                            for sig in live_tactical["signals"]:
-                                await self._broadcast({"type": "signal_auditor_update", "data": sig})
-                                logger.info(f"🚀 [WS_PUSH] Señal APROBADA con Prioridad Máxima: {sig['asset']}")
+        if delta_fast.get("latency_dirty"):
+            await self._broadcast({"type": "neural_log", "data": {"type": "SYSTEM", "message": f"⚠️ LATENCY_DIRTY: {delta_fast['latency_ms']}ms"}})
+            
+        if delta_fast.get("event") == "ABSORPTION_ALERT":
+            logger.warning(f"[DELTA] 🚨 ABSORCIÓN detectada en {self.symbol}")
+            await self._broadcast({"type": "absorption_alert", "data": {"rvol": delta_fast['rvol']}})
+            asyncio.create_task(self._emit_advisor(self._last_tactical or {}, SessionManager.get_global_session_status(), is_absorption_alert=True))
 
-                        # 🔍 [AUDIT_PUSH] Enviar bloqueadas para visibilidad de Portero
-                        if live_tactical.get("blocked_signals"):
-                            for sig in live_tactical["blocked_signals"]:
-                                await self._broadcast({"type": "signal_auditor_update", "data": sig})
-                                logger.info(f"🔍 [WS_AUDIT] Señal BLOQUEADA enviada al Radar: {sig['asset']} ({sig.get('status')})")
+        ml_data = delta_fast.get("ml_prediction", {})
+        if ml_data:
+            self._last_ml = ml_data
+            prob_raw = ml_data.get("probability", 50)
+            prob_bull = prob_raw if ml_data.get("direction") == "ALCISTA" else 100 - prob_raw
+            self._ema_ml_prob = (prob_bull * self._ml_alpha) + (self._ema_ml_prob * (1 - self._ml_alpha))
 
-                        await self._broadcast({"type": "tactical_update", "data": live_tactical})
-                        
-                        # Monitor de Absorción para el Dashboard
-                        self._live_rvol = float((live_tactical.get('diagnostic') or {}).get('rvol', 0))
-                    except Exception as e:
-                        logger.error(f"[FAST-PATH] Pipeline tactical error: {e}")
+        try:
+            live_tactical = await asyncio.to_thread(
+                self._router.process_market_data, df_live, asset=self.symbol, interval=self.interval,
+                macro_levels=self._macro_levels, htf_bias=self._htf_bias, heatmap=self._heatmap, silent=True,
+                event_time_ms=raw_data.get("data", {}).get("E")
+            )
+            self._last_tactical = {"data": live_tactical}
+            self._live_rvol = float((live_tactical.get('diagnostic') or {}).get('rvol', 0))
+            
+            for sig in live_tactical.get("signals", []):
+                await self._broadcast({"type": "signal_auditor_update", "data": sig})
+                logger.info(f"🚀 [WS_PUSH] Señal APROBADA: {sig['asset']}")
 
-                    # Neural Pulse v6.0 (Feed Institucional)
-                    await self._broadcast({
-                        "type": "neural_pulse",
-                        "data": {
-                            "ml_projection": self._last_ml,
-                            "liquidity_heatmap": self._heatmap,
-                            "latency_ms": delta_fast.get("latency_ms", 0),
-                            "rvol_live": self._live_rvol
-                        }
-                    })
+            for sig in live_tactical.get("blocked_signals", []):
+                await self._broadcast({"type": "signal_auditor_update", "data": sig})
 
-                # ── SLOW PATH: cierre de vela ─────────────────────────────────
-                # ── SLOW PATH: cierre de vela (Strategy Delta Δ) ──────────────────────
-                if kline.get("x", False):
-                    # Resetear estado de la vela
-                    self._processed_signals_this_candle.clear()
-                    self._live_buffer.append(candle_payload)
-                    self._candle_closes += 1
-                    
-                    # Llamada al Cerebro Táctico Delta (Slow Path)
-                    # v6.0: Delegamos SMC, Liquidaciones y Drift al procesador especializado
-                    delta_slow = await StreamProcessor.process_slow_path(
-                        symbol=self.symbol,
-                        candle_payload=candle_payload,
-                        live_buffer=list(self._live_buffer),
-                        persistent_smc=self._persistent_smc,
-                        context={"candle_closes": self._candle_closes, "ml_direction": self._ml_direction}
-                    )
+            await self._broadcast({"type": "tactical_update", "data": live_tactical})
+        except Exception as e:
+            logger.error(f"[FAST-PATH] Pipeline tactical error: {e}")
 
-                    # 1. Sincronización de Memoria Técnica (SMC/OrderBlocks)
-                    if delta_slow.get("smc_data"):
-                        self._persistent_smc = delta_slow["smc_data"]
-                        await self._broadcast({"type": "smc_data", "data": self._persistent_smc})
+        await self._broadcast({
+            "type": "neural_pulse",
+            "data": {"ml_projection": self._last_ml, "liquidity_heatmap": self._heatmap, "latency_ms": delta_fast.get("latency_ms", 0), "rvol_live": self._live_rvol}
+        })
 
-                    # 2. Liquidaciones y Heatmap Estático
-                    if delta_slow.get("liquidation_clusters"):
-                        await self._broadcast({"type": "liquidation_update", "data": delta_slow["liquidation_clusters"]})
+    async def _execute_slow_path(self, candle_payload: dict):
+        """Lógica de cierre de vela (Strategy Delta Δ)."""
+        self._processed_signals_this_candle.clear()
+        self._live_buffer.append(candle_payload)
+        self._candle_closes += 1
+        
+        delta_slow = await StreamProcessor.process_slow_path(
+            symbol=self.symbol, candle_payload=candle_payload,
+            live_buffer=list(self._live_buffer), persistent_smc=self._persistent_smc,
+            context={"candle_closes": self._candle_closes, "ml_direction": self._ml_direction}
+        )
 
-                    # 3. Pipeline Táctico de Cierre (Máxima Precisión)
-                    try:
-                        # Re-construcción del DF para el router táctico
-                        df_slow = pd.DataFrame([i["data"] for i in self._live_buffer])
-                        df_slow["timestamp"] = pd.to_datetime(df_slow["timestamp"], unit="s")
+        if delta_slow.get("smc_data"):
+            self._persistent_smc = delta_slow["smc_data"]
+            await self._broadcast({"type": "smc_data", "data": self._persistent_smc})
 
-                        news_items   = await self._store.get_news()
-                        econ_events  = await self._store.get_economic_events(limit=5)
-                        
-                        self._router.set_context(
-                            ml_projection=self._last_ml,
-                            session_data=(self._last_session or {}).get("data", {}),
-                            news_items=news_items,
-                            economic_events=econ_events,
-                            liquidation_clusters=delta_slow.get("liquidation_clusters", [])
-                        )
-                        final_tactical = await asyncio.to_thread(
-                            self._router.process_market_data,
-                            df_slow, asset=self.symbol, interval=self.interval,
-                            macro_levels=self._macro_levels, htf_bias=self._htf_bias,
-                            silent=False
-                        )
-                        await self._broadcast({"type": "tactical_update", "data": final_tactical})
-                        
-                        # Gestión de Señales Institucionales (Portero)
-                        await self._handle_signals(final_tactical, silent=False)
+        if delta_slow.get("liquidation_clusters"):
+            await self._broadcast({"type": "liquidation_update", "data": delta_slow["liquidation_clusters"]})
 
-                        # Trigger Único del Advisor (v6.0 No-Wait Queue)
-                        current_candle_ts = str(candle_payload["data"]["timestamp"])
-                        if current_candle_ts != str(self._last_advisor_ts):
-                            self._last_advisor_ts = current_candle_ts
-                            asyncio.create_task(self._emit_advisor(final_tactical, SessionManager.get_global_session_status()))
+        try:
+            df_slow = pd.DataFrame([i["data"] for i in self._live_buffer])
+            df_slow["timestamp"] = pd.to_datetime(df_slow["timestamp"], unit="s")
 
-                    except Exception as e:
-                        logger.error(f"[SLOW-PATH] tactical error: {e}")
+            news_items   = await self._store.get_news()
+            econ_events  = await self._store.get_economic_events(limit=5)
+            
+            self._router.set_context(
+                ml_projection=self._last_ml, session_data=(self._last_session or {}).get("data", {}),
+                news_items=news_items, economic_events=econ_events, liquidation_clusters=delta_slow.get("liquidation_clusters", [])
+            )
+            
+            final_tactical = await asyncio.to_thread(
+                self._router.process_market_data, df_slow, asset=self.symbol, interval=self.interval,
+                macro_levels=self._macro_levels, htf_bias=self._htf_bias, silent=False
+            )
+            await self._broadcast({"type": "tactical_update", "data": final_tactical})
+            await self._handle_signals(final_tactical, silent=False)
 
-                    # 4. Limpieza Quirúrgica Delta
-                    if delta_slow.get("cleanup_event") == "CLEANUP_PERFORMED":
-                        self._history.clear()
-                        self._cached_live_dates = None
-                        logger.info(f"[DELTA] 🧹 Limpieza de memoria completada para {self.symbol}")
+            current_candle_ts = str(candle_payload["data"]["timestamp"])
+            if current_candle_ts != str(self._last_advisor_ts):
+                self._last_advisor_ts = current_candle_ts
+                asyncio.create_task(self._emit_advisor(final_tactical, SessionManager.get_global_session_status()))
+
+        except Exception as e:
+            logger.error(f"[SLOW-PATH] tactical error: {e}")
+
+        if delta_slow.get("cleanup_event") == "CLEANUP_PERFORMED":
+            self._history.clear()
+            self._cached_live_dates = None
+            logger.info(f"[DELTA] 🧹 Limpieza de memoria completada para {self.symbol}")
+
 
     async def _refresh_htf_bias(self):
         """Re-evalúa el sesgo institucional (4H + 1H) para el enrutamiento top-down."""

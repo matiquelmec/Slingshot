@@ -59,7 +59,7 @@ Start-Process powershell -ArgumentList `
     "-NoExit", `
     "-Command", "Set-Location -LiteralPath '$PSScriptRoot'; node .\node_modules\next\dist\bin\next dev"
 
-# --- Optimización de Latencia Institucional (v5.4.3) ---
+# --- Optimización de Latencia Institucional (v6.1.0) ---
 Write-Host "  [3/3] Optimizando prioridad del S.O. para trading..." -ForegroundColor Yellow
 Start-Sleep -Seconds 5
 if (Test-Path "$PSScriptRoot\scripts\optimize_os.ps1") {

@@ -1,4 +1,4 @@
-# Slingshot v4.6 Platinum — OS Optimizer (PowerShell)
+# Slingshot v6.1.0 Institutional — OS Optimizer (PowerShell)
 # Eleva la prioridad del motor de trading y la IA local para minimizar latencia en trading HFT.
 
 $TradingProcess = Get-Process -Name "python" -ErrorAction SilentlyContinue
@@ -18,4 +18,4 @@ if ($AIProcess) {
     Write-Host "[WARNING] Ollama no detectado. Asegúrate de que el servidor local esté activo." -ForegroundColor Yellow
 }
 
-Write-Host "`nSlingshot v4.6: CPU Priorizada para Trading e IA Local." -ForegroundColor Cyan
+Write-Host "`nSlingshot v6.1.0: CPU Priorizada para Trading e IA Local." -ForegroundColor Cyan

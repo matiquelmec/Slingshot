@@ -15,6 +15,7 @@ from dataclasses import dataclass, field
 from typing import Optional, Any
 
 from engine.indicators.regime import RegimeDetector
+from engine.indicators.market_analyzer import market_analyzer
 from engine.indicators.structure import (
     identify_support_resistance,
     get_key_levels,
@@ -107,10 +108,9 @@ class MarketAnalyzer:
                 candle_spread = float(df['high'].iloc[-1]) - float(df['low'].iloc[-1])
                 displacement = body_spread + (candle_spread * 0.1) + (float(df['close'].iloc[-1]) * 0.00001)
                 absorption_raw = current_vol / displacement if displacement > 0 else 0.0
-                live_absorption = round(
-                    (absorption_raw - st['abs_median']) / (st['abs_mad'] * 1.4826) if st.get('abs_mad', 0) > 0 else 0.0,
-                    2
-                )
+                # [AUDITORIA v6.6.13] Epsilon y Hard Clamp en Fast Path
+                abs_score_raw = (absorption_raw - st['abs_median']) / ((st['abs_mad'] * 1.4826) + 1e-9) if st.get('abs_mad', 0) > 0 else 0.0
+                live_absorption = round(max(min(abs_score_raw, 15.0), -15.0), 2)
                 # 🔴 [MODO EXPERIMENTO] Umbrales relajados para detección de élite
                 live_elite = (live_absorption > 2.0) and (live_rvol > 1.2)
                 
@@ -147,10 +147,17 @@ class MarketAnalyzer:
         df = identify_support_resistance(df, interval=interval)
         saved_attrs = df.attrs.copy()
 
-        # ── Paso 2: Régimen de Wyckoff ─────────────────────────────
+        # ── Paso 2: Régimen de Wyckoff (Legacy) + Compuesto (v6.1) ──────────
         df = self._regime_detector.detect_regime(df)
         df.attrs.update(saved_attrs)
-        current_regime = df["market_regime"].iloc[-1]
+        
+        # 🧠 FASE 2: INDICADOR DE RÉGIMEN COMPUESTO (Delta Audit)
+        compound_regime = market_analyzer.detect_market_regime(df)
+        current_regime = compound_regime["regime"]
+        
+        # Log del veredicto institucional
+        if not silent:
+             logger.info(f"[REGIME_DELTA] {asset} | {current_regime} (Confianza: {compound_regime['confidence']}%)")
 
         # ── Paso 3: SMC — Estructura Fractal ───────────────────────
         smc_data = self._extract_smc(df)
@@ -192,7 +199,9 @@ class MarketAnalyzer:
             displacement = body_spread + (candle_spread * 0.1) + (float(df['close'].iloc[-1]) * 0.00001)
             absorption_raw = current_vol / displacement if displacement > 0 else 0.0
             
-            absorption_score = (absorption_raw - st['abs_median']) / (st['abs_mad'] * 1.4826) if st['abs_mad'] > 0 else 0.0
+            # [AUDITORIA v6.6.13] Epsilon y Hard Clamp en Fast Path (O(1))
+            abs_score_raw = (absorption_raw - st['abs_median']) / ((st['abs_mad'] * 1.4826) + 1e-9) if st['abs_mad'] > 0 else 0.0
+            absorption_score = max(min(abs_score_raw, 15.0), -15.0)
             is_high_absorption = (absorption_score > 2.5) and (rvol > 1.5)
             
             # Dummy inject for diagnostic extraction later
@@ -209,8 +218,8 @@ class MarketAnalyzer:
             df['tr'] = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
             df['atr'] = df['tr'].rolling(14).mean()
             
-            df = calculate_rvol(df)
-            df = calculate_absorption_index(df)
+            df = calculate_rvol(df, target_interval=interval)
+            df = calculate_absorption_index(df, target_interval=interval)
             
             abs_raw = df['absorption_raw']
             self._rvol_cache_key = vol_cache_key
@@ -243,7 +252,8 @@ class MarketAnalyzer:
             "macro_bias": macro.global_bias,
             "htf_align": htf_align,
             "displacement_active": rvol >= 1.5,
-            "imbalance_neural": (heatmap or {}).get("imbalance", 0.0)
+            "imbalance_neural": (heatmap or {}).get("imbalance", 0.0),
+            "regime_details": compound_regime # Inyectamos detalles para el Portero
         }
         
         if not silent:

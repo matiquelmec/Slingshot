@@ -1,18 +1,9 @@
 from engine.api.config import settings
 import math
 
-# Ratio Riesgo/Beneficio mínimo NETO (tras comisiones y slippage)
-MIN_RR_REQUIRED = settings.MIN_RR
-
 # Factor de Fricción (Ajustado a 0.04% para niveles de volumen institucional)
 FEE_SLIPPAGE_IMPACT = 0.0004 
 
-# Límite de pérdida diaria máxima por cuenta (3.5%)
-MAX_DAILY_DRAWDOWN_PCT = 0.035
-MAX_DAILY_TRADES = 5 # Aumentado para Scalping
-
-
-from engine.core.session_manager import session_manager 
 
 class RiskManager:
     """
@@ -37,8 +28,6 @@ class RiskManager:
             if atr < (entry * 0.001):
                 return {"approved": False, "rr_ratio": 0.0, "trade_quality": "LOW_VOL", "reason": f"Volatility too low: {atr:.2f}"}
 
-            sl = float(signal_data.get("stop_loss", 0))
-            tp = float(signal_data.get("take_profit_3r", 0))
             sig_type = str(signal_data.get("signal_type", "LONG")).upper()
             
             # Sniper Projection v6.6.16 (Precision Override)

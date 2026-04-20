@@ -68,6 +68,7 @@ class SignalGatekeeper:
         interval: str,
         htf_bias=None,
         context: GatekeeperContext | None = None,
+        regime_details: dict | None = None,
         silent: bool = False,
     ) -> GatekeeperResult:
         """
@@ -105,7 +106,20 @@ class SignalGatekeeper:
                         event_name = ev.get('title', 'Noticia Crítica')
                         break
 
+        # 🧠 [DELTA v6.1] Cerebro de Régimen (Mandatos de Supervivencia)
+        regime_info = regime_details or {"regime": "UNKNOWN", "bias": "NEUTRAL", "confidence": 0}
+        regime_type = str(regime_info.get("regime", "UNKNOWN")).upper()
+        regime_bias = str(regime_info.get("bias", "NEUTRAL")).upper()
+        regime_stress = regime_type == "HIGH_VOLATILITY_STRESS"
         
+        # ── REGLA 1 (CHOPPY): Veto Total por Fricción Lateral ─────────────
+        if regime_type == "CHOPPY":
+             if not silent:
+                 logger.warning(f"[GATEKEEPER] [DELTA_BLOCK] Regimen CHOPPY detectado. Veto de seguridad activado.")
+             # Si el régimen es CHOPPY, bloqueamos todas las señales de este ciclo
+             for sig in signals:
+                 self._block(sig, "BLOCKED_BY_DELTA", "Régimen Lateral Detectado (CHOPPY)", result)
+             return result
         # --- [FORENSIC v8.2.8] Price Sanity Check --- 
         # Obtenemos el precio actual de mercado desde el DF para comparar coherencia
         market_price = float(df["close"].iloc[-1]) if not df.empty else 0.0
@@ -123,7 +137,21 @@ class SignalGatekeeper:
                     self._block(sig, "BLOCKED_BY_POLLUTION", f"Incoherencia de precio ({price_diff_pct:.1%}). Posible cruce de activos.", result)
                     continue
 
-            # ── Filtro 1: Enriquecimiento de Riesgo ──────────────────────────
+            # ── REGLA 2 (ALIGNMENT): Veto por Desalineación Macro ────────────
+            sig_type = str(sig.get("signal_type", sig.get("type", ""))).upper()
+            is_long = "LONG" in sig_type
+            
+            alignment_veto = False
+            if regime_bias == "BULLISH" and not is_long and "STRONG" in regime_type:
+                alignment_veto = True
+            elif regime_bias == "BEARISH" and is_long and "STRONG" in regime_type:
+                alignment_veto = True
+                
+            if alignment_veto:
+                if not silent:
+                    logger.info(f"[GATEKEEPER] [DELTA_BLOCK] Desalineacion Macroestructural ({sig_type} vs {regime_type})")
+                self._block(sig, "DELTA_VETO", f"Desalineacion Macroestructural: Operando contra {regime_type}", result)
+                continue
             # (SMT_Strength se pasará en el contexto de riesgo si existe)
             smt_strength = sig.get('confluence', {}).get('smt_strength', 0) if sig.get('confluence') else 0
             
@@ -264,15 +292,21 @@ class SignalGatekeeper:
 
             # ── Filtro 5: Score de Confluencia Mínimo ──
             # [v8.2.1] Sintonía de Visibilidad: Bajamos los muros para que la UI respire
-            if asset == "BTCUSDT":
-                min_score = 25  # Mas visibilidad en BTC
-            elif asset == "SOLUSDT":
-                min_score = 45  # SOL era 60, bajamos a 45 para auditoría
-            elif asset == "ETHUSDT":
-                min_score = 35  # ETH era 40
-            else:
-                min_score = 35  # Genérico
+            # 🧠 REGLA 3 (STRESS): Elevación de Umbral por Volatilidad Extrema
+            stress_premium = 15 if regime_stress else 0
             
+            if asset == "BTCUSDT":
+                min_score = 25 + stress_premium
+            elif asset == "SOLUSDT":
+                min_score = 45 + stress_premium
+            elif asset == "ETHUSDT":
+                min_score = 35 + stress_premium
+            else:
+                min_score = 35 + stress_premium
+            
+            if regime_stress and not silent:
+                logger.warning(f"[GATEKEEPER] STRESS DETECTADO: Elevando umbral de score (+{stress_premium}%)")
+
             # [FORENSIC v6.8.2] Auditoría de Portero
             if not silent:
                 logger.info(f"[GATEKEEPER_AUDIT] Asset: {asset} | Score: {score}% | Required: {min_score}%")

@@ -435,8 +435,13 @@ class ConfluenceManager:
             now_ts = _to_dt(df['timestamp'].iloc[-1])
             sig_ts = _to_dt(signal.get('timestamp'))
             
+            # Dinamismo de intervalo para Time-Decay
+            interval_str = kwargs.get('interval', '15m')
+            interval_map = {'1m': 60, '5m': 300, '15m': 900, '1h': 3600, '4h': 14400, '1d': 86400}
+            interval_seconds = interval_map.get(interval_str, 900) # SAFE_FALLBACK a 900s (15m)
+            
             diff_seconds = abs((now_ts - sig_ts).total_seconds())
-            candles_elapsed = diff_seconds / (15.0 * 60.0)
+            candles_elapsed = diff_seconds / interval_seconds
             
             decay_mult = 1.0
             if candles_elapsed > 10: decay_mult = 0.8

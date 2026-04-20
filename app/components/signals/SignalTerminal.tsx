@@ -38,6 +38,7 @@ export default function SignalTerminal() {
     const hydrateSignals = useTelemetryStore(state => state.hydrateSignals);
 
     const [isLoadingSignals, setIsLoadingSignals] = React.useState(true);
+    const [hideBlocked, setHideBlocked] = React.useState(true);
 
     useEffect(() => {
         const symbol = searchParams.get('symbol');
@@ -68,10 +69,19 @@ export default function SignalTerminal() {
     Object.values(signalHistory).forEach(s => displayMap.set(s.id || `${s.timestamp}-${s.asset}`, s));
     Object.values(auditedSignals).forEach(s => displayMap.set(s.id || `${s.timestamp}-${s.asset}`, s));
     
-    // Sort descendente por tiempo + Filtrado por Activo (v5.8.0)
+    // Sort descendente por tiempo + Filtrado por Activo y Estado (v5.8.0)
     const displaySignals = Array.from(displayMap.values())
         .filter(s => viewMode === 'GLOBAL' || s.asset === activeSymbol)
-        .sort((a, b) => new Date(b.created_at || b.timestamp).getTime() - new Date(a.created_at || a.timestamp).getTime())
+        .filter(s => {
+            if (!hideBlocked) return true;
+            const score = s.confluence?.score || s.confluence_score || 0;
+            return !s.status?.startsWith('BLOCKED') && s.status !== 'VETADA' && score >= 25;
+        })
+        .sort((a, b) => {
+            const timeA = new Date(a.created_at || a.timestamp).getTime();
+            const timeB = new Date(b.created_at || b.timestamp).getTime();
+            return timeB - timeA;
+        })
         .slice(0, 50);
 
     const activeCount = displaySignals.filter(s => s.status === 'ACTIVE').length;
@@ -104,7 +114,21 @@ export default function SignalTerminal() {
                             GLOBAL
                         </button>
                     </div>
-                    <span className="flex items-center gap-1.5"><Network size={12} className="text-neon-cyan/60" /> AUDIT MODE</span>
+                    <div className="flex items-center bg-white/5 rounded-lg p-0.5 border border-white/5 mr-2">
+                        <button 
+                            onClick={() => setHideBlocked(true)}
+                            className={`px-2 py-1 rounded transition-all text-[9px] ${hideBlocked ? 'bg-green-500/20 text-green-400 font-black' : 'text-white/40 hover:text-white/60'}`}
+                        >
+                            SOLO APROBADAS
+                        </button>
+                        <button 
+                            onClick={() => setHideBlocked(false)}
+                            className={`px-2 py-1 rounded transition-all text-[9px] ${!hideBlocked ? 'bg-red-500/20 text-red-400 font-black' : 'text-white/40 hover:text-white/60'}`}
+                        >
+                            VER VETADAS
+                        </button>
+                    </div>
+                    <span className="flex items-center gap-1.5 border-l border-white/10 pl-3"><Network size={12} className="text-neon-cyan/60" /> AUDIT MODE</span>
                     
                     <button 
                         onClick={() => {

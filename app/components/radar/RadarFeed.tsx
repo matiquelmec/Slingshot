@@ -120,7 +120,7 @@ export default function RadarFeed() {
 
                                 return (
                                     <motion.div
-                                        key={signal.id || `${signal.timestamp || signal.created_at}-${signal.asset}-${Math.random()}`}
+                                        key={signal.id || `${signal.timestamp || signal.created_at}-${signal.asset}`}
                                         initial={{ opacity: 0, x: -10 }}
                                         animate={{ opacity: 1, x: 0 }}
                                         exit={{ opacity: 0, scale: 0.95 }}

@@ -36,6 +36,9 @@ class SlingshotBacktest:
             return
         
         df_base = pd.read_parquet(self.parquet_path)
+        if 't' in df_base.columns and 'timestamp' not in df_base.columns:
+            df_base.rename(columns={'t': 'timestamp', 'o': 'open', 'h': 'high', 'l': 'low', 'c': 'close', 'v': 'volume'}, inplace=True)
+            
         self.stats = {"tp1_hits": 0, "be_hits": 0, "sl_hits": 0, "tp2_hits": 0, "tp3_hits": 0}
         
         if not pd.api.types.is_datetime64_any_dtype(df_base['timestamp']):
@@ -48,19 +51,20 @@ class SlingshotBacktest:
         df_1h_htf = df_base.resample('1h').agg(ohlc_dict).dropna()
         df_4h_htf = df_base.resample('4h').agg(ohlc_dict).dropna()
         
-        df_15m = df_base.tail(max_candles) if max_candles else df_base
-        total = len(df_15m)
+        df_1m = df_base.tail(max_candles) if max_candles else df_base
+        total = len(df_1m)
 
         for i in range(200, total):
-            current_ts = df_15m.index[i]
-            current_candle = df_15m.iloc[i]
+            current_ts = df_1m.index[i]
+            current_candle = df_1m.iloc[i]
 
             if self.active_trade:
                 self._check_exit(current_candle)
             
             if not self.active_trade:
-                hist_1h = df_1h_htf[df_1h_htf.index < current_ts].tail(50)
-                hist_4h = df_4h_htf[df_4h_htf.index < current_ts].tail(50)
+                # Evitar Look-ahead bias: solo considerar velas HTF cerradas (índice + offset <= current_ts)
+                hist_1h = df_1h_htf[df_1h_htf.index + pd.Timedelta(hours=1) <= current_ts].tail(50)
+                hist_4h = df_4h_htf[df_4h_htf.index + pd.Timedelta(hours=4) <= current_ts].tail(50)
                 
                 if not hist_1h.empty and not hist_4h.empty:
                     bias_1h = "LONG" if hist_1h['close'].iloc[-1] > hist_1h['close'].iloc[-5] else "SHORT"
@@ -70,9 +74,9 @@ class SlingshotBacktest:
                         strength=0.8, reason="MTF Confirmed"
                     )
 
-                    df_to_process = df_15m.iloc[i-200:i+1].reset_index()
+                    df_to_process = df_1m.iloc[i-200:i+1].reset_index()
                     result = self.router.process_market_data(
-                        df=df_to_process, asset=self.symbol, interval="15m", htf_bias=htf, silent=True
+                        df=df_to_process, asset=self.symbol, interval="1m", htf_bias=htf, silent=True
                     )
                     
                     if result.get("signals"):
@@ -96,6 +100,22 @@ class SlingshotBacktest:
         t = self.active_trade
         high, low = float(candle['high']), float(candle['low'])
         is_long = (t["side"] == "LONG")
+        
+        # 🛡️ Módulo OMEGA: Verificación de Stop Loss / Break-Even (WORST-CASE DOCTRINE)
+        hit_sl = (is_long and low <= t["stop_loss"]) or (not is_long and high >= t["stop_loss"])
+        if hit_sl:
+            pnl = (t["stop_loss"] - t["entry_price"]) / t["entry_price"] if is_long else (t["entry_price"] - t["stop_loss"]) / t["entry_price"]
+            self.balance += (t["remaining_size"] * pnl) - (t["remaining_size"] * self.fee_rate)
+            
+            if t["tp_hits"] >= 1: 
+                self.wins += 1
+                self.stats["be_hits"] += 1
+            else: 
+                self.losses += 1
+                self.stats["sl_hits"] += 1
+            
+            self.active_trade = None
+            return # Ejecución Inmediata, ignorar TP en la misma vela (Worst-Case)
         
         # 🎯 Módulo DELTA: Salidas Fragmentadas (60/20/20)
         current_target = t["tp1"] if t["tp_hits"] == 0 else (t["tp2"] if t["tp_hits"] == 1 else t["tp3"])
@@ -127,23 +147,6 @@ class SlingshotBacktest:
                 self.active_trade = None
                 return
 
-        if not self.active_trade: return
-
-        # 🛡️ Módulo OMEGA: Verificación de Stop Loss / Break-Even
-        hit_sl = (is_long and low <= t["stop_loss"]) or (not is_long and high >= t["stop_loss"])
-        if hit_sl:
-            pnl = (t["stop_loss"] - t["entry_price"]) / t["entry_price"] if is_long else (t["entry_price"] - t["stop_loss"]) / t["entry_price"]
-            self.balance += (t["remaining_size"] * pnl) - (t["remaining_size"] * self.fee_rate)
-            
-            if t["tp_hits"] >= 1: 
-                self.wins += 1
-                self.stats["be_hits"] += 1
-            else: 
-                self.losses += 1
-                self.stats["sl_hits"] += 1
-            
-            self.active_trade = None
-
     def _finalize_report(self):
         total = self.wins + self.losses
         winrate = (self.wins / total * 100) if total > 0 else 0
@@ -165,6 +168,6 @@ if __name__ == "__main__":
     args = parser.parse_args()
     
     symbol_lower = args.symbol.lower()
-    data_file = str(root_path / "tmp" / "data" / f"{symbol_lower}_15m.parquet")
+    data_file = str(root_path / "engine" / "tests" / "data" / f"{symbol_lower}_1m_30d.parquet")
     
     SlingshotBacktest(data_file, symbol=args.symbol).run(max_candles=args.candles)

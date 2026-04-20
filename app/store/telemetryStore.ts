@@ -105,25 +105,26 @@ export const useTelemetryStore = create<TelemetryState>((set, get) => {
     };
 
     const _mergeSignals = (prevData: Record<string, Signal>, prevIds: string[], incoming: Signal[]): { data: Record<string, Signal>, ids: string[] } => {
-        const newData = { ...prevData };
-        const newIds = [...prevIds];
+        let newData = { ...prevData };
+        let newIds = [...prevIds];
+        let hasChanged = false;
 
         incoming.forEach(sig => {
-            // [v8.3.1] Force unique ID if missing
             const id = sig.id || `${sig.timestamp}-${sig.asset}`;
             
-            // Basic integrity validation
-            if (!sig.asset || !sig.price || sig.price <= 0) {
-                console.warn(`[TELEMETRY] Skipping malformed signal during merge:`, sig);
-                return;
-            }
+            if (!sig.asset || !sig.price || sig.price <= 0) return;
 
-            if (!newData[id]) {
-                newIds.unshift(id);
+            // Si es nueva señal o el estado cambió, marcamos como cambiado
+            if (!newData[id] || JSON.stringify(newData[id]) !== JSON.stringify({ ...sig, id })) {
+                if (!newData[id]) {
+                    newIds.unshift(id);
+                }
+                newData[id] = { ...sig, id };
+                hasChanged = true;
             }
-            // Ensure ID is inscribed in the object for O(1) retrieval and unique keys
-            newData[id] = { ...sig, id };
         });
+
+        if (!hasChanged) return { data: prevData, ids: prevIds };
 
         // Garbage collector (2 horas)
         const now = Date.now();
@@ -137,11 +138,16 @@ export const useTelemetryStore = create<TelemetryState>((set, get) => {
             return s && (now - getUtcTime(s.timestamp) < 2 * 60 * 60 * 1000);
         }).slice(0, 100);
 
-        const finalData: Record<string, Signal> = {};
-        finalIds.forEach(id => { finalData[id] = newData[id]; });
+        // Si después del garbage collector los IDs cambiaron, regenerar el mapa
+        if (finalIds.length !== newIds.length) {
+            const finalData: Record<string, Signal> = {};
+            finalIds.forEach(id => { finalData[id] = newData[id]; });
+            _saveSignalHistory(finalData, finalIds);
+            return { data: finalData, ids: finalIds };
+        }
 
-        _saveSignalHistory(finalData, finalIds);
-        return { data: finalData, ids: finalIds };
+        _saveSignalHistory(newData, newIds);
+        return { data: newData, ids: newIds };
     };
 
     const doConnect = async (symbol: string, timeframe: Timeframe, isRetry = false) => {
@@ -176,12 +182,13 @@ export const useTelemetryStore = create<TelemetryState>((set, get) => {
                 // advisorLogs: {},  <-- REMOVED: Mantener caché entre símbolos para hidratación instantánea v5.7.155 Master Gold
                 mlProjection: { direction: 'NEUTRAL', probability: 50, reason: "Aguardando conexión de telemetría..." },
                 tacticalDecision: {
-                    regime: "ANALIZANDO NUEVO RIESGO...", strategy: "STANDBY",
+                    regime: "ANALIZANDO NUEVO RIESGO...",
+                    strategy: "STANDBY",
                     reasoning: `Sincronizando telemetría para ${symbol}.`,
                     current_price: null,
-                    nearest_support: null, nearest_resistance: null,
-                    sma_fast: null, sma_slow: null, sma_slow_slope: null,
-                    bb_width: null, bb_width_mean: null, dist_to_sma200: null, signals: [],
+                    nearest_support: null,
+                    nearest_resistance: null,
+                    signals: [],
                     key_levels: { resistances: [], supports: [] }
                 },
                 htfBias: null,
@@ -632,9 +639,9 @@ export const useTelemetryStore = create<TelemetryState>((set, get) => {
             strategy: "STANDBY",
             reasoning: "Inicializando motores de inferencia.",
             current_price: null,
-            nearest_support: null, nearest_resistance: null,
-            sma_fast: null, sma_slow: null, sma_slow_slope: null,
-            bb_width: null, bb_width_mean: null, dist_to_sma200: null, signals: [],
+            nearest_support: null,
+            nearest_resistance: null,
+            signals: [],
             key_levels: { resistances: [], supports: [] }
         },
         smcData: null,

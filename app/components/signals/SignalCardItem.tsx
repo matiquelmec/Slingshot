@@ -11,12 +11,33 @@ interface SignalCardItemProps {
     currentPrice: number | null;
 }
 
-const formatTime = (ts: string) => {
+const formatTime = (ts: any) => {
     try {
-        const date = new Date(ts);
+        if (!ts) return '---';
+        
+        let date: Date;
+        // Si es un número (Unix Timestamp)
+        if (typeof ts === 'number') {
+            const unitMultiplier = ts < 2e9 ? 1000 : 1;
+            date = new Date(ts * unitMultiplier);
+        } else if (!isNaN(Number(ts))) {
+            // Si es un string que representa un número
+            const n = Number(ts);
+            const unitMultiplier = n < 2e9 ? 1000 : 1;
+            date = new Date(n * unitMultiplier);
+        } else {
+            // Si es una fecha ISO o similar
+            date = new Date(ts);
+        }
+
+        if (isNaN(date.getTime())) {
+            // Fallback: intentar extraer hora de un string con espacio
+            return ts.toString().includes(' ') ? ts.toString().split(' ')[1] : ts.toString();
+        }
+
         return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     } catch (e) {
-        return ts?.split(' ')[1] || ts;
+        return ts?.toString() || '---';
     }
 };
 
@@ -119,21 +140,21 @@ const SignalCardItem: React.FC<SignalCardItemProps> = ({ signal, currentPrice })
                         <span className="text-white/60 font-bold">${signal.price?.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
                     )}
                 </div>
-                <div className="flex flex-col gap-0.5 bg-neon-red/5 rounded px-2 py-1 border border-neon-red/10">
-                    <span className="text-neon-red/50 text-[8px] tracking-widest uppercase">Stop</span>
-                    <span className="text-neon-red/90 font-bold">${signal.stop_loss?.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                <div className="flex flex-col gap-0.5 bg-red-500/10 rounded px-2 py-1 border border-red-500/30">
+                    <span className="text-red-400 text-[8px] tracking-widest uppercase font-black">Stop Loss</span>
+                    <span className="text-red-500 font-black">${signal.stop_loss?.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
                 </div>
-                <div className="flex flex-col gap-0.5 bg-neon-green/5 rounded px-2 py-1 border border-neon-green/10 col-span-2">
+                <div className="flex flex-col gap-0.5 bg-green-500/10 rounded px-2 py-1 border border-green-500/30 col-span-2">
                     <div className="flex justify-between items-center mb-0.5">
-                        <span className="text-neon-green/50 text-[8px] tracking-widest uppercase">Targets (1,2,3)</span>
+                        <span className="text-green-400 text-[8px] tracking-widest uppercase font-black">Take Profit Targets (1,2,3)</span>
                     </div>
                     <div className="flex items-center gap-2">
-                        <span className="text-white/40 text-[8px]">1:</span>
-                        <span className="text-neon-green/70 font-bold">${signal.tp1?.toLocaleString(undefined, { minimumFractionDigits: 2 }) || '---'}</span>
-                        <span className="text-white/40 text-[8px]">2:</span>
-                        <span className="text-neon-green/80 font-bold">${signal.tp2?.toLocaleString(undefined, { minimumFractionDigits: 2 }) || '---'}</span>
-                        <span className="text-white/20 text-[7px]">⚡</span>
-                        <span className="text-neon-green/100 font-bold">${(signal.tp3 || signal.take_profit_3r)?.toLocaleString(undefined, { minimumFractionDigits: 2 }) || '---'}</span>
+                        <span className="text-green-300 text-[8px] font-bold">T1:</span>
+                        <span className="text-green-400 font-black">${signal.tp1?.toLocaleString(undefined, { minimumFractionDigits: 2 }) || '---'}</span>
+                        <span className="text-green-300 text-[8px] font-bold ml-1">T2:</span>
+                        <span className="text-green-400 font-black">${signal.tp2?.toLocaleString(undefined, { minimumFractionDigits: 2 }) || '---'}</span>
+                        <span className="text-green-500 text-[10px]">⚡</span>
+                        <span className="text-green-300 font-black">${(signal.tp3 || signal.take_profit_3r)?.toLocaleString(undefined, { minimumFractionDigits: 2 }) || '---'}</span>
                     </div>
                 </div>
             </div>
