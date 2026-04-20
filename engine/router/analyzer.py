@@ -109,10 +109,12 @@ class MarketAnalyzer:
                 displacement = body_spread + (candle_spread * 0.1) + (float(df['close'].iloc[-1]) * 0.00001)
                 absorption_raw = current_vol / displacement if displacement > 0 else 0.0
                 # [AUDITORIA v6.6.13] Epsilon y Hard Clamp en Fast Path
+                # [APEX v8.0] Sigmoid Mapping en Fast Path
                 abs_score_raw = (absorption_raw - st['abs_median']) / ((st['abs_mad'] * 1.4826) + 1e-9) if st.get('abs_mad', 0) > 0 else 0.0
-                live_absorption = round(max(min(abs_score_raw, 15.0), -15.0), 2)
-                # 🔴 [MODO EXPERIMENTO] Umbrales relajados para detección de élite
-                live_elite = (live_absorption > 2.0) and (live_rvol > 1.2)
+                live_absorption = round((1 / (1 + np.exp(-abs_score_raw * 0.5))) * 100, 2)
+                
+                # 🔴 [MODO EXPERIMENTO] Umbral de Élite adaptado a la nueva escala (> 80)
+                live_elite = (live_absorption > 80.0) and (live_rvol > 1.2)
                 
                 # 3. Inyección atómica al diagnóstico
                 cached.diagnostic["volume"] = current_vol
@@ -200,9 +202,10 @@ class MarketAnalyzer:
             absorption_raw = current_vol / displacement if displacement > 0 else 0.0
             
             # [AUDITORIA v6.6.13] Epsilon y Hard Clamp en Fast Path (O(1))
+            # [APEX v8.0] Sigmoid Mapping en Fast Path (O(1))
             abs_score_raw = (absorption_raw - st['abs_median']) / ((st['abs_mad'] * 1.4826) + 1e-9) if st['abs_mad'] > 0 else 0.0
-            absorption_score = max(min(abs_score_raw, 15.0), -15.0)
-            is_high_absorption = (absorption_score > 2.5) and (rvol > 1.5)
+            absorption_score = (1 / (1 + np.exp(-abs_score_raw * 0.5))) * 100
+            is_high_absorption = (absorption_score > 80.0) and (rvol > 1.2)
             
             # Dummy inject for diagnostic extraction later
             if 'absorption_raw' not in df.columns:
