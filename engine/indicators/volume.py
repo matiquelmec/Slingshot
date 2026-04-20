@@ -18,7 +18,7 @@ def calculate_seasonal_volume(df: pd.DataFrame, window_days: int = 5) -> pd.Seri
         return pd.Series(df['volume'].median(), index=df.index)
     
     temp_df = df.copy()
-    temp_df['dt'] = pd.to_datetime(temp_df['timestamp'])
+    temp_df['dt'] = pd.to_datetime(temp_df['timestamp'], unit='ms', errors='coerce')
     temp_df['hour'] = temp_df['dt'].dt.hour
     temp_df['minute'] = temp_df['dt'].dt.minute
     
