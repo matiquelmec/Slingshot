@@ -1,11 +1,13 @@
-# 🛡️ SLINGSHOT v6.0.0 Master Gold TITANIUM EDITION
+# 🛡️ SLINGSHOT v6.1.0 Master Gold TITANIUM HARDENED
 > **"Institutional-Grade Algorithmic Terminal. Zero Latency. Zero Noise. Full Sovereignty."**
 
-![Status](https://img.shields.io/badge/Status-100%_HARDENED_&_REORGANIZED-0d2a1a?style=for-the-badge&logo=codeproject&logoColor=fff)
-![Version](https://img.shields.io/badge/Version-6.0.0_Titanium-1a3a6e?style=for-the-badge)
+![Status](https://img.shields.io/badge/Status-100%_HARDENED_&_OPERATIONAL-0d2a1a?style=for-the-badge&logo=codeproject&logoColor=fff)
+![Version](https://img.shields.io/badge/Version-6.1.0_Titanium_Hardened-1a3a6e?style=for-the-badge)
 ![Engine](https://img.shields.io/badge/Engine-SMC_Asna--4-ffd700?style=for-the-badge&labelColor=0a0a0a)
+![Performance](https://img.shields.io/badge/Latency-Sub--100ms-blue?style=for-the-badge)
 
 ## 🏗️ Arquitectura de Baja Latencia (Zero-Delay)
+Slingshot opera sobre un orquestador reactivo diseñado para la ejecución algorítmica de grado institucional:
 
 ```mermaid
 graph TB
@@ -23,6 +25,7 @@ graph TB
         M --> Q["RiskManager"]
         L --> R["SessionManager"]
         L --> S["Advisor LLM<br/>(Ollama)"]
+        L --> T["ExecutionEngine<br/>(Binance)"]
     end
 
     subgraph "Data Layer"
@@ -35,22 +38,25 @@ graph TB
     L --> Z
     R --> AA
     BB --> L
+    T --> BB
 ```
 
 ### 📡 El Pipeline Reactivo
 El sistema utiliza un orquestador **WebSocket** que inyecta datos directamente desde el radar de alta frecuencia hacia un motor de inferencia híbrido:
 
-1.  **Fast Path (Math):** Procesa cada tick en milisegundos para detectar absorción institucional y barridas de liquidez (FVG/OB).
-2.  **Slow Path (IA):** El analista senior integrado **(Gemma-3 Local)** genera tácticas estructurales cada cierre de vela, blindado con un sistema de inyección de precio en vivo (Anti-Hallucination).
-3.  **Memory Store:** Persistencia atómica en RAM que elimina el cuello de botella de las bases de datos tradicionales en el flujo de ejecución.
+1.  **Fast Path (Math):** Procesa cada tick en milisegundos para detectar absorción institucional y barridas de liquidez (FVG/OB/RVOL).
+2.  **Slow Path (IA):** El analista senior integrado **(Qwen-3 Local)** genera tácticas estructurales cada cierre de vela, blindado contra alucinaciones.
+3.  **Memory Store:** Persistencia atómica en RAM que elimina el cuello de botella de las bases de datos tradicionales.
+4.  **Execution Engine:** Motor de firmas asíncronas para Binance Futures con manejo de latencia crítica.
 
 ---
 
-## 🛡️ Blindaje & Hardening v6.0 (Zero-Noise)
-La versión **v6.0.0 Master Gold Titanium** introduce el protocolo de silencio operativo y armonización de riesgo:
+## 🛡️ Blindaje & Hardening v6.1 (Zero-Noise)
+La versión **v6.1.0 Master Gold Titanium Hardened** consolida el ecosistema para operaciones reales:
 
-- **Unificación de Riesgo:** Consolidación de `MIN_RR` en `config.py` (Master 3.0) y el motor `RiskManager`.
-- **Refactorización de Tests:** Tests movidos desde `scripts/` hacia `engine/tests/` para cumplimiento de estándares PEP.
+- **Unificación de Riesgo:** Consolidación de `MIN_RR` en `config.py` (**Master 2.5**) y el motor `RiskManager` (FTMO Compliant).
+- **Saneamiento Analítico:** Resolución del error de resampling HTF (*Shape Mismatch*) mediante el protocolo *Safe Init*.
+- **Telemetría Estabilizada:** Eliminación de parpadeos en el Radar mediante keys deterministas y detección de cambios reales.
 - **Veto Transparente:** Las señales denegadas ahora explican exactamente por qué (HTF, Valor, Macro, etc.).
 - **Ollama Semantic Cache:** Inferencia IA optimizada con MD5 para evitar saturación de CPU innecesaria.
 
@@ -60,22 +66,24 @@ La versión **v6.0.0 Master Gold Titanium** introduce el protocolo de silencio o
 ```text
 slingshot_gen1/
 ├── 📁 engine/          # El Cerebro Algorítmico (FastAPI + SMC Strategy)
-│   ├── 📁 tests/       # 🏹 15 tests operativos consolidados (v6.0)
-│   ├── 📁 data/        # Persistencia de sesiones (v6.0 JSON-RAM)
-├── 📁 app/             # La Terminal UI (Next.js + Zustand 5)
+│   ├── 📁 execution/   # ✅ Motor de Ejecución Binance Activo (v6.1)
+│   ├── 📁 indicators/  # 12 Kernels de Análisis Técnico (SMC/Wyckoff)
+│   ├── 📁 tests/       # 🏹 17 tests operativos consolidados (v6.1)
+│   ├── 📁 data/        # Persistencia de sesiones (v6.1 JSON-RAM)
+├── 📁 app/             # La Terminal UI (Next.js 15 + Zustand 5)
 ├── 📁 docs/            # Especificación Técnica & Auditoría Profesional
-├── 📁 deploy/          # Artefactos de VPS: Dockerfiles, systemd, Watchdogs
-└── 📄 start.ps1        # El Orquestador de Lanzamiento (v6.0 High Priority)
+├── 📁 scripts/         # Artefactos de VPS, Docker y Watchdogs
+└── 📄 start.ps1        # El Orquestador de Lanzamiento (v6.1 High Priority)
 ```
 
-## 📖 Auditoría Forense
+## 📖 Documentación Maestra (Blueprints)
 Para la referencia técnica completa del sistema con diagramas, bugs, scorecard y roadmap:
 👉 **[docs/SLINGSHOT_BIBLE_V6.md](docs/SLINGSHOT_BIBLE_V6.md)** — La Biblia Unificada
 
-Para auditorías legacy o resúmenes ejecutivos:
+Para resúmenes ejecutivos y auditorías:
 - [docs/professional_audit_v6.md](docs/professional_audit_v6.md) — Resumen v6
-- [docs/professional_audit_v5.md](docs/professional_audit_v5.md) — Auditoría v5 original
+- [docs/knowledge/](docs/knowledge/) — Repositorio de Teoría SMC
 
 ---
-*v6.0.0 Master Gold Titanium — El Estándar Maestro de la Terminal Algorítmica Local.*
-*Unified & Hardened by Antigravity — April 06, 2026*
+*v6.1.0 Master Gold Titanium Hardened — El Estándar Maestro de la Terminal Algorítmica Local.*
+*Unified & Hardened by Antigravity — April 20, 2026*
