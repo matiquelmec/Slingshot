@@ -36,12 +36,16 @@ def calculate_rvol(df: pd.DataFrame, window: int = 50, use_seasonality: bool = T
 
     # 1. Obtener Base de Comparación (Estacional o Mediana)
     if use_seasonality and 'timestamp' in df.columns:
-        df['vol_baseline'] = calculate_seasonal_volume(df)
+        df['vol_median'] = calculate_seasonal_volume(df)
     else:
-        df['vol_baseline'] = df['volume'].rolling(window=window, min_periods=20).median()
+        df['vol_median'] = df['volume'].rolling(window=window, min_periods=20).median()
+    
+    # Asegurar que el median no sea ridículamente bajo (Protección Anti-Explosión)
+    global_median = df['volume'].median()
+    df['vol_median'] = df['vol_median'].replace(0, global_median)
     
     # 2. Ratio Crudo
-    df['rvol_ratio'] = df['volume'] / (df['vol_baseline'] + 1e-9)
+    df['rvol_ratio'] = df['volume'] / (df['vol_median'] + 1e-9)
     
     # 3. Normalización por Rango Percentil (Robusto contra Outliers)
     # Indica qué tan alto es el volumen actual respecto al historial (0.0 a 1.0)
