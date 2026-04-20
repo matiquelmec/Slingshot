@@ -26,7 +26,7 @@ def calculate_seasonal_volume(df: pd.DataFrame, window_days: int = 5) -> pd.Seri
     seasonal_profile = temp_df.groupby(['hour', 'minute'])['volume'].transform('mean')
     return seasonal_profile
 
-def calculate_rvol(df: pd.DataFrame, window: int = 50, use_seasonality: bool = True) -> pd.DataFrame:
+def calculate_rvol(df: pd.DataFrame, window: int = 50, use_seasonality: bool = True, target_interval: str = None) -> pd.DataFrame:
     """
     Relative Volume (RVOL) Apex Edition.
     Usa Rango Percentil (0-100) y Estacionalidad para una lectura no-lineal.
@@ -52,7 +52,7 @@ def calculate_rvol(df: pd.DataFrame, window: int = 50, use_seasonality: bool = T
     
     return df
 
-def calculate_absorption_index(df: pd.DataFrame, window: int = 50) -> pd.DataFrame:
+def calculate_absorption_index(df: pd.DataFrame, window: int = 50, target_interval: str = None) -> pd.DataFrame:
     """
     VSA Intelligence Engine v8.0.
     Mide 'Esfuerzo (Volumen)' vs 'Resultado (Precio)'.
