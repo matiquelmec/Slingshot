@@ -42,14 +42,22 @@ def calculate_rvol(df: pd.DataFrame, window: int = 50, use_seasonality: bool = T
     if df.empty: return df
 
     # 1. Obtener Base de Comparación (Estacional o Mediana)
-    if use_seasonality and 'timestamp' in df.columns:
+    # [ROBUSTEZ v8.1] Solo usamos estacionalidad si el buffer cubre al menos 24 horas
+    has_enough_history = False
+    if 'timestamp' in df.columns and len(df) > 10:
+        duration_hours = (df['timestamp'].max() - df['timestamp'].min()) / (1000 * 60 * 60)
+        if duration_hours >= 23.5: # Margen para 24h
+            has_enough_history = True
+
+    if use_seasonality and has_enough_history:
         df['vol_median'] = calculate_seasonal_volume(df)
     else:
-        df['vol_median'] = df['volume'].rolling(window=window, min_periods=20).median()
+        # Fallback a Mediana Móvil Robusta si no hay historial suficiente para estacionalidad
+        df['vol_median'] = df['volume'].rolling(window=window, min_periods=10).median()
     
-    # Asegurar que el median no sea ridículamente bajo (Protección Anti-Explosión)
+    # Asegurar que el median no sea cero (Protección Anti-Explosión)
     global_median = df['volume'].median()
-    df['vol_median'] = df['vol_median'].replace(0, global_median)
+    df['vol_median'] = df['vol_median'].replace(0, global_median).fillna(global_median)
     
     # 2. Ratio Crudo
     df['rvol_ratio'] = df['volume'] / (df['vol_median'] + 1e-9)
