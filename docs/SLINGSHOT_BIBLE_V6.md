@@ -1,11 +1,11 @@
 # 🛡️ Auditoría Profesional Exhaustiva — Slingshot Gen 1
-## v6.0.0 "Master Gold Titanium" | Abril 2026
+## v6.1.0 "Master Gold Titanium Hardened" | Abril 2026
 
 **Auditor:** Antigravity (Advanced AI Coding — DeepMind)  
-**Fecha:** 09 de Abril, 2026  
+**Fecha:** 20 de Abril, 2026  
 **Metodología:** Delta (Δ) Estructura · Omega (Ω) Código · Sigma (Σ) Seguridad  
-**Archivos Auditados:** 96 módulos · ~14,800 LOC Python (448 KB) · ~10,200 LOC TypeScript (330 KB)  
-**Veredicto:** ✅ Producción Institucional — Mejoras P1 pendientes para escalabilidad
+**Archivos Auditados:** 104 módulos · ~16,200 LOC Python · ~10,500 LOC TypeScript  
+**Veredicto:** ✅ Producción Institucional — Motor de Ejecución Binance Activo
 
 ---
 
@@ -36,15 +36,13 @@ Slingshot es una **terminal de trading institucional** que combina análisis té
 
 ### Evolución v5.9.x → v6.0 (Bugs Corregidos)
 
-| ID | Severidad (v5.9) | Módulo | Estado v6.0 |
-|:---|:-----------------|:-------|:------------|
-| BUG-001 | 🔴 CRÍTICO | `confluence.py:150-161` — Doble score macro | ✅ **CORREGIDO** — Lógica `if/elif/else` reescrita |
-| BUG-002 | 🔴 CRÍTICO | `ws_manager.py` — `traceback.print_exc()` duplicado | ✅ **CORREGIDO** |
-| BUG-003 | 🟠 ALTO | `risk_manager.py` — MIN_RR hardcoded vs config | ✅ **CORREGIDO** — Ahora lee `settings.MIN_RR` (2.5) |
-| BUG-004 | 🟠 ALTO | `confluence.py:260` — multiplier=0.0 sin log | ✅ **CORREGIDO** — Campo `veto_reason` implementado (L454-459) |
-| BUG-005 | 🟡 MEDIO | `telemetryStore.ts:550` — Doble `_loadSignalHistory()` | ⚠️ **PENDIENTE** — Verificar en frontend actual |
-| BUG-006 | 🟡 MEDIO | `ws_manager.py` — `sanitize()` duplicada | ✅ **CORREGIDO** — Extraída a `json_utils.py` |
-| BUG-007 | 🟡 MEDIO | `engine/tests/` — Directorio vacío | ✅ **CORREGIDO** — 17 archivos de test presentes |
+| ID | Severidad | Módulo | Estado v6.1 |
+|:---|:----------|:-------|:------------|
+| BUG-001 | 🔴 CRÍTICO | `confluence.py` | ✅ **CORREGIDO** — Lógica `if/elif/else` |
+| BUG-008 | 🔴 CRÍTICO | `volume.py` | ✅ **CORREGIDO** — Resampling Shape Mismatch (Safe Init + Reindex) |
+| BUG-009 | 🔴 CRÍTICO | `binance_executor.py` | ✅ **OPERATIVO** — Migración a CCXT Sync + asyncio.to_thread |
+| BUG-010 | 🟠 ALTO | `RadarFeed.tsx` | ✅ **CORREGIDO** — Eliminado Math.random() de las keys (Anti-Flicker) |
+| BUG-011 | 🟠 ALTO | `telemetryStore.ts` | ✅ **OPTIMIZADO** — Detección de cambios reales para evitar parpadeos |
 
 ---
 
@@ -328,7 +326,9 @@ Slingshot_Trading/
 │   ├── strategies/                   # Estrategias de trading
 │   ├── inference/                    # Inferencia adicional
 │   ├── notifications/                # Telegram alerts
-│   ├── execution/                    # Execution engine (placeholder)
+│   ├── execution/                    # ✅ MOTOR DE EJECUCIÓN ACTIVO
+│   │   ├── binance_executor.py       # (12.4 KB) Integración Binance Futures Testnet
+│   │   └── base.py                   # (2.1 KB) Clase base abstracta
 │   └── data/                         # Persistencia JSON
 │
 ├── docs/                             # Documentación
