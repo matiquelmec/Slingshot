@@ -168,7 +168,9 @@ class SignalGatekeeper:
                 smc_data=smc_map,
                 atr_value=sig.get("atr_value", 0.0),
                 smt_strength=smt_strength,
-                asset=sig.get("asset", "UNKNOWN")
+                asset=sig.get("asset", "UNKNOWN"),
+                liquidations=context.liquidation_clusters,
+                heatmap=context.heatmap
             )
             
             # Si la estrategia ya definió un setup (Ej: SMC OB-Low), lo respetamos

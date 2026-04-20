@@ -80,6 +80,8 @@ class RiskManager:
         smc_data: dict = None,
         atr_value: float = 0.0,
         asset: str = "UNKNOWN",
+        liquidations: list = None,
+        heatmap: dict = None,
         **kwargs
     ) -> dict:
         """
@@ -99,13 +101,79 @@ class RiskManager:
         
         # 1. Aplicación de Pulmones (SIGMA ATR Mult)
         fallback_atr = atr_value if atr_value > 0 else (current_price * 0.005)
-        risk = fallback_atr * tuning["atr_mult"]
-        sl = current_price - risk if signal_type == "LONG" else current_price + risk
+        risk_dist = fallback_atr * tuning["atr_mult"]
         
-        # 2. Grilla Asimétrica (DELTA Ready)
-        tp1 = current_price + (risk * tuning["tp1_ratio"]) if signal_type == "LONG" else current_price - (risk * tuning["tp1_ratio"])
-        tp2 = current_price + (risk * (tuning["tp1_ratio"] + 1.0)) if signal_type == "LONG" else current_price - (risk * (tuning["tp1_ratio"] + 1.0))
-        tp3 = current_price + (risk * (tuning["tp1_ratio"] + 2.5)) if signal_type == "LONG" else current_price - (risk * (tuning["tp1_ratio"] + 2.5))
+        # --- [GOD MODE: SALIDAS ESTRUCTURALES v6.1] ---
+        sl = current_price - risk_dist if signal_type == "LONG" else current_price + risk_dist
+        tp1 = current_price + (risk_dist * tuning["tp1_ratio"]) if signal_type == "LONG" else current_price - (risk_dist * tuning["tp1_ratio"])
+
+        # Intento de SL Estructural (Order Blocks / Key Levels)
+        if smc_data or key_levels:
+            if signal_type == "LONG":
+                # Buscar el OB Alcista o Soporte más cercano por debajo del precio
+                obs = smc_data.get("order_blocks", {}).get("bullish", []) if smc_data else []
+                sups = key_levels.get("supports", []) if key_levels else []
+                structural_floors = [ob["bottom"] for ob in obs] + [s["price"] for s in sups]
+                valid_floors = [f for f in structural_floors if f < current_price]
+                if valid_floors:
+                    best_floor = max(valid_floors)
+                    # Colocamos SL 0.2 ATR por debajo del piso estructural
+                    sl_candidate = best_floor - (fallback_atr * 0.2)
+                    # No alejamos el SL más de 2x del riesgo base por seguridad
+                    if sl_candidate > (current_price - risk_dist * 1.5):
+                        sl = sl_candidate
+            else:
+                # Buscar el OB Bajista o Resistencia más cercana por arriba del precio
+                obs = smc_data.get("order_blocks", {}).get("bearish", []) if smc_data else []
+                res = key_levels.get("resistances", []) if key_levels else []
+                structural_ceilings = [ob["top"] for ob in obs] + [r["price"] for r in res]
+                valid_ceilings = [c for c in structural_ceilings if c > current_price]
+                if valid_ceilings:
+                    best_ceiling = min(valid_ceilings)
+                    sl_candidate = best_ceiling + (fallback_atr * 0.2)
+                    if sl_candidate < (current_price + risk_dist * 1.5):
+                        sl = sl_candidate
+
+        # Intento de TP Inteligente (Liquidation Clusters / Opposite OBs)
+        if liquidations or smc_data:
+            if signal_type == "LONG":
+                # Target: Liquidaciones de SHORT o OB Bajistas
+                liq_targets = [l["price"] for l in (liquidations or []) if l["type"] == "SHORT_LIQ" and l["price"] > current_price]
+                ob_targets = [ob["bottom"] for ob in (smc_data.get("order_blocks", {}).get("bearish", []) if smc_data else []) if ob["bottom"] > current_price]
+                all_targets = liq_targets + ob_targets
+                if all_targets:
+                    # Apuntamos al cluster más cercano que nos dé al menos el RR mínimo
+                    all_targets.sort()
+                    for target in all_targets:
+                        potential_rr = (target - current_price) / abs(current_price - sl)
+                        if potential_rr >= self.min_rr:
+                            tp1 = target
+                            break
+            else:
+                # Target: Liquidaciones de LONG o OB Alcistas
+                liq_targets = [l["price"] for l in (liquidations or []) if l["type"] == "LONG_LIQ" and l["price"] < current_price]
+                ob_targets = [ob["top"] for ob in (smc_data.get("order_blocks", {}).get("bullish", []) if smc_data else []) if ob["top"] < current_price]
+                all_targets = liq_targets + ob_targets
+                if all_targets:
+                    all_targets.sort(reverse=True)
+                    for target in all_targets:
+                        potential_rr = (current_price - target) / abs(current_price - sl)
+                        if potential_rr >= self.min_rr:
+                            tp1 = target
+                            break
+
+        # Red de Seguridad: Asegurar RR 2.5 en el setup final
+        final_risk = abs(current_price - sl)
+        final_reward = abs(tp1 - current_price)
+        if final_risk > 0:
+            final_rr = final_reward / final_risk
+            if final_rr < self.min_rr:
+                # Si la estructura no da para el RR, forzamos salida matemática
+                tp1 = current_price + (final_risk * self.min_rr) if signal_type == "LONG" else current_price - (final_risk * self.min_rr)
+
+        # Targets Secundarios
+        tp2 = tp1 + (abs(tp1 - current_price) * 0.5) if signal_type == "LONG" else tp1 - (abs(tp1 - current_price) * 0.5)
+        tp3 = tp2 + (abs(tp2 - tp1) * 0.5) if signal_type == "LONG" else tp2 - (abs(tp2 - tp1) * 0.5)
 
         sl_dist_pct = risk / current_price if current_price > 0 else 0.01
         pos_size_nominal = risk_amount_usdt / max(0.001, sl_dist_pct)
