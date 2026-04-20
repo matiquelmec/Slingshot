@@ -45,8 +45,14 @@ def calculate_rvol(df: pd.DataFrame, window: int = 50, use_seasonality: bool = T
     # [ROBUSTEZ v8.1] Solo usamos estacionalidad si el buffer cubre al menos 24 horas
     has_enough_history = False
     if 'timestamp' in df.columns and len(df) > 10:
-        duration_hours = (df['timestamp'].max() - df['timestamp'].min()) / (1000 * 60 * 60)
-        if duration_hours >= 23.5: # Margen para 24h
+        diff = df['timestamp'].max() - df['timestamp'].min()
+        # Manejo robusto: Si es Timedelta (datetime) o si es numérico (ms)
+        if hasattr(diff, 'total_seconds'):
+            duration_hours = diff.total_seconds() / 3600
+        else:
+            duration_hours = diff / (1000 * 60 * 60)
+            
+        if duration_hours >= 23.5:
             has_enough_history = True
 
     if use_seasonality and has_enough_history:
