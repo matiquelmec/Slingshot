@@ -6,59 +6,75 @@
 ![Engine](https://img.shields.io/badge/Engine-SMC_Asna--4-ffd700?style=for-the-badge&labelColor=0a0a0a)
 ![Performance](https://img.shields.io/badge/Latency-Sub--100ms-blue?style=for-the-badge)
 
-## 🏗️ Arquitectura de Baja Latencia (Zero-Delay)
-Slingshot opera sobre un orquestador reactivo diseñado para la ejecución algorítmica de grado institucional:
-
-```mermaid
-graph TB
-    subgraph "Frontend — Next.js 15"
-        A["Dashboard<br/>(page.tsx)"] --> B["TelemetryStore<br/>(Zustand 5)"]
-        B --> C["WebSocket Client"]
-        A --> D["TradingChart<br/>LW Charts"]
-    end
-
-    subgraph "Backend — Python FastAPI"
-        J["main.py<br/>FastAPI"] --> K["ws_manager.py<br/>BroadcasterRegistry"]
-        K --> L["SymbolBroadcaster<br/>(por activo:intervalo)"]
-        L --> M["SlingshotRouter<br/>(main_router.py)"]
-        M --> P["ConfluenceManager"]
-        M --> Q["RiskManager"]
-        L --> R["SessionManager"]
-        L --> S["Advisor LLM<br/>(Ollama)"]
-        L --> T["ExecutionEngine<br/>(Binance)"]
-    end
-
-    subgraph "Data Layer"
-        Z["MemoryStore<br/>(RAM)"]
-        AA["JSON Files<br/>(session_state)"]
-        BB["Binance WS<br/>(Streaming)"]
-    end
-
-    C <--- "WebSocket (LocalMasterSync v2)" ---> J
-    L --> Z
-    R --> AA
-    BB --> L
-    T --> BB
-```
-
-### 📡 El Pipeline Reactivo
-El sistema utiliza un orquestador **WebSocket** que inyecta datos directamente desde el radar de alta frecuencia hacia un motor de inferencia híbrido:
-
-1.  **Fast Path (Math):** Procesa cada tick en milisegundos para detectar absorción institucional y barridas de liquidez (FVG/OB/RVOL).
-2.  **Slow Path (IA):** El analista senior integrado **(Qwen-3 Local)** genera tácticas estructurales cada cierre de vela, blindado contra alucinaciones.
-3.  **Memory Store:** Persistencia atómica en RAM que elimina el cuello de botella de las bases de datos tradicionales.
-4.  **Execution Engine:** Motor de firmas asíncronas para Binance Futures con manejo de latencia crítica.
+## 🎯 Nuestra Misión: Democratizar el Smart Money
+Slingshot no es solo un bot de trading; es una **Terminal de Inteligencia Institucional** diseñada para nivelar el campo de juego entre el trader retail y los grandes fondos de inversión. El sistema utiliza principios avanzados de **SMC (Smart Money Concepts)** y **Wyckoff** para identificar el rastro de la liquidez institucional antes de que el movimiento ocurra.
 
 ---
 
-## 🛡️ Blindaje & Hardening v6.1 (Zero-Noise)
-La versión **v6.1.0 Master Gold Titanium Hardened** consolida el ecosistema para operaciones reales:
+## 🏛️ El Blueprint — Arquitectura de Grado Profesional
+Slingshot opera sobre un ecosistema desacoplado que garantiza una ejecución sin bloqueos y una visualización en tiempo real.
 
-- **Unificación de Riesgo:** Consolidación de `MIN_RR` en `config.py` (**Master 2.5**) y el motor `RiskManager` (FTMO Compliant).
-- **Saneamiento Analítico:** Resolución del error de resampling HTF (*Shape Mismatch*) mediante el protocolo *Safe Init*.
-- **Telemetría Estabilizada:** Eliminación de parpadeos en el Radar mediante keys deterministas y detección de cambios reales.
-- **Veto Transparente:** Las señales denegadas ahora explican exactamente por qué (HTF, Valor, Macro, etc.).
-- **Ollama Semantic Cache:** Inferencia IA optimizada con MD5 para evitar saturación de CPU innecesaria.
+```mermaid
+graph TB
+    subgraph "Frontend — Next.js 15 (La Terminal)"
+        A["Dashboard<br/>Multi-Asset Radar"] --> B["TelemetryStore<br/>(Zustand 5)"]
+        B --> C["WebSocket Client<br/>MasterSync v2"]
+        A --> D["TradingChart<br/>LW Charts + SMC Overlays"]
+    end
+
+    subgraph "Backend — Python FastAPI (El Cerebro)"
+        J["main.py<br/>FastAPI Engine"] --> K["ws_manager.py<br/>Broadcaster Registry"]
+        K --> L["SymbolBroadcaster<br/>(por activo:intervalo)"]
+        L --> M["SlingshotRouter<br/>Pipeline Analítico"]
+        M --> P["ConfluenceManager<br/>14-Factor Filter"]
+        M --> Q["RiskManager<br/>FTMO Compliance"]
+        L --> S["Advisor LLM<br/>(Qwen-3 Local)"]
+        L --> T["ExecutionEngine<br/>Binance Master"]
+    end
+
+    subgraph "Data Layer"
+        Z["MemoryStore<br/>(RAM Persistent)"]
+        AA["JSON Records<br/>Session History"]
+        BB["Binance WS<br/>Real-Time Feed"]
+    end
+
+    C <--- "Lattice Protocol" ---> J
+    L --> Z
+    T --> BB
+```
+
+---
+
+## 🧠 Metodología Educativa & Algorítmica
+
+### 1. Confluencia de 14 Factores
+El motor no dispara señales basándose en un solo indicador. Cada oportunidad es filtrada por un protocolo de **14 capas**, incluyendo:
+- **Estructura HTF:** Alineación con marcos temporales superiores (4H/Daily).
+- **Zonas de Interés (POI):** Identificación de Order Blocks (OB) y Fair Value Gaps (FVG).
+- **Absorción de Volumen:** Análisis dinámico de RVOL para detectar "Absorption Index" institucional.
+- **Liquidez Externa/Interna:** Monitoreo de barridas de liquidez (EQL/EQH).
+
+### 2. Inferencia IA Local (Sovereign AI)
+Utilizamos un modelo **Qwen-3:8B** (vía Ollama) corriendo localmente. Esto garantiza que tus datos y estrategias nunca salgan de tu hardware. La IA actúa como un "Analista Senior" que valida el contexto narrativo de cada señal generada por el motor matemático.
+
+### 3. Gestión de Riesgo Hardened
+El sistema implementa un **Hard-Veto Protocol**. Si una señal cumple la estrategia pero falla en el perfil de riesgo (ej: RR < 2.5), el sistema la bloquea preventivamente y notifica la razón técnica del rechazo.
+
+---
+
+## 🏹 Guía de Inicio Rápido (Quick Start)
+
+### Requisitos Previos
+- **Python 3.10+** (Backend)
+- **Node.js 20+** (Frontend)
+- **Ollama** (Inferencia IA)
+- **Binance API Keys** (Para ejecución en Testnet)
+
+### Lanzamiento en un Solo Paso
+Hemos diseñado un orquestador para Windows que inicializa ambos servidores en alta prioridad:
+```powershell
+./launch.bat
+```
 
 ---
 
@@ -66,22 +82,17 @@ La versión **v6.1.0 Master Gold Titanium Hardened** consolida el ecosistema par
 ```text
 slingshot_gen1/
 ├── 📁 engine/          # El Cerebro Algorítmico (FastAPI + SMC Strategy)
-│   ├── 📁 execution/   # ✅ Motor de Ejecución Binance Activo (v6.1)
-│   ├── 📁 indicators/  # 12 Kernels de Análisis Técnico (SMC/Wyckoff)
-│   ├── 📁 tests/       # 🏹 17 tests operativos consolidados (v6.1)
-│   ├── 📁 data/        # Persistencia de sesiones (v6.1 JSON-RAM)
+│   ├── 📁 execution/   # ✅ Motor de Ejecución Binance Activo
+│   ├── 📁 indicators/  # Kernels de Volumen, Estructura y Liquidez
+│   ├── 📁 tests/       # 🛡️ 17 tests operativos de integridad
 ├── 📁 app/             # La Terminal UI (Next.js 15 + Zustand 5)
-├── 📁 docs/            # Especificación Técnica & Auditoría Profesional
-├── 📁 scripts/         # Artefactos de VPS, Docker y Watchdogs
-└── 📄 start.ps1        # El Orquestador de Lanzamiento (v6.1 High Priority)
+├── 📁 docs/            # El Centro de Conocimiento Unificado
+└── 📁 scripts/         # Herramientas de DevOps y Benchmarking
 ```
 
-## 📖 Documentación Maestra (Blueprints)
-Para la referencia técnica completa del sistema con diagramas, bugs, scorecard y roadmap:
-👉 **[docs/SLINGSHOT_BIBLE_V6.md](docs/SLINGSHOT_BIBLE_V6.md)** — La Biblia Unificada
-
-Para teoría y fundamentos:
-- [docs/knowledge/](docs/knowledge/) — Repositorio de Teoría SMC (Wyckoff/SMC)
+## 📖 Documentación Profunda
+- **[docs/SLINGSHOT_BIBLE_V6.md](docs/SLINGSHOT_BIBLE_V6.md)**: La especificación técnica completa (600+ líneas de arquitectura).
+- **[docs/knowledge/](docs/knowledge/)**: Nuestra base de conocimientos sobre el Régimen de Mercado Profesional y Teoría SMC.
 
 ---
 *v6.1.0 Master Gold Titanium Hardened — El Estándar Maestro de la Terminal Algorítmica Local.*
