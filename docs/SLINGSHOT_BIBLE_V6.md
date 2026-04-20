@@ -331,20 +331,18 @@ Slingshot_Trading/
 │   │   └── base.py                   # (2.1 KB) Clase base abstracta
 │   └── data/                         # Persistencia JSON
 │
-├── docs/                             # Documentación
-│   ├── SLINGSHOT_BIBLE_V6.md         # ⭐ ESTE DOCUMENTO
-│   ├── professional_audit_v6.md      # Resumen ejecutivo
-│   ├── professional_audit_v5.md      # Auditoría v5 (legacy)
-│   ├── architecture/MASTERPLAN_V5.md # Diagram legacy (v5)
-│   ├── core/MASTER_SPEC_V5.md        # Spec legacy (v5)
-│   └── knowledge/                    # Teoría SMC/Wyckoff
+├── docs/                             # Documentación Unificada
+│   ├── SLINGSHOT_BIBLE_V6.md         # ⭐ ESTE DOCUMENTO (Fuente de Verdad)
+│   └── knowledge/                    # Teoría SMC/Wyckoff (Sovereign Material)
 │
-├── deploy/                           # Docker + systemd
-├── scripts/                          # Scripts de utilidad
-│   └── utils/                        # 🛡️ Scripts one-off útiles (cleanup, refactor)
-├── start.ps1                         # (3.8 KB) Orquestador de lanzamiento
-├── docker-compose.yml                # (3.5 KB) Compose para producción
-└── .env.example                      # Template de configuración
+├── scripts/                          # Orquestación, DevOps y Utilidades
+│   ├── deploy/                       # Artefactos VPS (Dockerfile, Systemd)
+│   ├── utils/                        # Scripts de limpieza y mantenimiento
+│   ├── latency_benchmark.py          # Monitor de red crítico
+│   └── start.ps1                     # Main Launcher v6.1
+├── launch.bat                        # Launcher Windows (QuickStart)
+├── docker-compose.yml                # Orquestación de contenedores
+└── .env.example                      # Template de configuración (API Keys)
 ```
 
 ### 2.4 Evaluación Estructural

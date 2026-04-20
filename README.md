@@ -80,9 +80,8 @@ slingshot_gen1/
 Para la referencia técnica completa del sistema con diagramas, bugs, scorecard y roadmap:
 👉 **[docs/SLINGSHOT_BIBLE_V6.md](docs/SLINGSHOT_BIBLE_V6.md)** — La Biblia Unificada
 
-Para resúmenes ejecutivos y auditorías:
-- [docs/professional_audit_v6.md](docs/professional_audit_v6.md) — Resumen v6
-- [docs/knowledge/](docs/knowledge/) — Repositorio de Teoría SMC
+Para teoría y fundamentos:
+- [docs/knowledge/](docs/knowledge/) — Repositorio de Teoría SMC (Wyckoff/SMC)
 
 ---
 *v6.1.0 Master Gold Titanium Hardened — El Estándar Maestro de la Terminal Algorítmica Local.*
