@@ -4,7 +4,7 @@ engine/router/gatekeeper.py — v5.7.155 Master Gold
 El Portero Institucional — 3 capas de filtrado en secuencia.
 
 FILTRO 1 — Direccional HTF:   ¿La señal sigue el sesgo institucional H1/H4?
-FILTRO 2 — Ratio R:R:          ¿La geometría matemática cumple R:R ≥ 1.8?
+FILTRO 2 — Ratio R:R:          ¿La geometría matemática cumple R:R ≥ 2.5?
 FILTRO 3 — Score de Confluencia: ¿El Jurado Neural otorga ≥ 75% de confianza?
 FILTRO 4 — Path Traversal:     ¿La señal sigue viva (no expiró, no tocó SL/TP)?
 
@@ -283,7 +283,7 @@ class SignalGatekeeper:
             sig["trade_quality"] = rr_res["trade_quality"]
 
             # Umbral de Rentabilidad Matemática v6.7.8 (Extreme Survival)
-            min_rr = 1.5 # Sniper Sync
+            min_rr = self._risk.min_rr # Sniper Sync Master Gold
             if not rr_res.get("approved", False):
                 if not silent:
                     logger.info(f"[GATEKEEPER] \U0001f534 DELTA BLOCK: R:R {sig.get('rr_ratio', 0):.2f} | Reason: {rr_res.get('reason', 'N/A')}")

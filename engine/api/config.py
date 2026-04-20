@@ -44,7 +44,7 @@ class Settings(BaseSettings):
     # Risk Management (leídos desde .env — ya no hardcodeados en el router)
     ACCOUNT_BALANCE: float = 1000.0
     MAX_RISK_PCT: float = 0.02
-    MIN_RR: float = 1.5
+    MIN_RR: float = 2.5
 
     # Telegram Bot
     TELEGRAM_BOT_TOKEN: str = ""

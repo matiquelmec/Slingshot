@@ -10,10 +10,10 @@ class RiskManager:
     v6.6.4 Sniper Master Edition.
     """
 
-    def __init__(self, account_balance: float = settings.ACCOUNT_BALANCE, base_risk_pct: float = settings.MAX_RISK_PCT, min_rr: float = 1.5):
+    def __init__(self, account_balance: float = settings.ACCOUNT_BALANCE, base_risk_pct: float = settings.MAX_RISK_PCT, min_rr: float = settings.MIN_RR):
         self.account_balance = account_balance
         self.base_risk_pct = base_risk_pct
-        self.min_rr = min_rr # 1.5R Neto - Disciplina Sniper v6.7
+        self.min_rr = min_rr # 2.5R Neto - Disciplina Sniper v6.7 Master Gold
         self.max_leverage = 50.0 
         self.daily_loss_usd = 0.0
         self.is_locked = False
@@ -64,10 +64,10 @@ class RiskManager:
 
     # --- MÓDULO SIGMA: SINTONIZADOR DE ACTIVOS --------------------------------
     ASSET_TUNING = {
-        "BTCUSDT":  {"atr_mult": 1.5, "tp1_ratio": 1.5, "tp1_vol": 0.60}, # Regresamos a 1.5R para mayor winrate
-        "ETHUSDT":  {"atr_mult": 3.0, "tp1_ratio": 2.0, "tp1_vol": 0.80}, # v7.6.0: Escalado Institucional (Anti-Comisiones)
-        "SOLUSDT":  {"atr_mult": 3.5, "tp1_ratio": 1.5, "tp1_vol": 0.80}, # v8.0.0: Sniper (Filtro Ultra + Cobro Rápido)
-        "PAXGUSDT": {"atr_mult": 2.5, "tp1_ratio": 2.0, "tp1_vol": 0.80}, # v8.2.0: Gold Standard (Volatilidad Baja)
+        "BTCUSDT":  {"atr_mult": 1.5, "tp1_ratio": 2.5, "tp1_vol": 0.60}, # v6.1 Master: Unificado a 2.5R
+        "ETHUSDT":  {"atr_mult": 3.0, "tp1_ratio": 2.5, "tp1_vol": 0.80}, # v6.1 Master: Unificado a 2.5R
+        "SOLUSDT":  {"atr_mult": 3.5, "tp1_ratio": 2.5, "tp1_vol": 0.80}, # v6.1 Master: Unificado a 2.5R
+        "PAXGUSDT": {"atr_mult": 2.5, "tp1_ratio": 2.5, "tp1_vol": 0.80}, # v6.1 Master: Unificado a 2.5R
     }
     DEFAULT_TUNING = {"atr_mult": 1.8, "tp1_ratio": 1.5, "tp1_vol": 0.50}
 
