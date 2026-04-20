@@ -38,7 +38,7 @@ graph TB
         BB["Binance WS<br/>Real-Time Feed"]
     end
 
-    C <--- "Lattice Protocol" ---> J
+    C <--> |"Lattice Protocol"| J
     L --> Z
     T --> BB
 ```
