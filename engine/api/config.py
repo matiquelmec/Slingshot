@@ -28,7 +28,7 @@ class Settings(BaseSettings):
     SECURITY_API_KEY: str = "SLINGSHOT_INTERNAL_V6"
 
     # Ollama LLM (Advisor Táctico)
-    OLLAMA_MODEL: str = "qwen3:8b"        # qwen3:8b = producción | gemma3:4b = VRAM reducida
+    OLLAMA_MODEL: str = "gemma3:4b"        # gemma3:4b = producción | gemma3:4b = VRAM reducida
     OLLAMA_URL: str = "http://localhost:11434"
 
     # Strategy Delta Δ: Tiered Priority (v6.0 Trident Audit)

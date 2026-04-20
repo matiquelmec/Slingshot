@@ -14,7 +14,7 @@ _active_queue_keys = set()
 _strategic_memo = {}
 _semantic_cache = {}
 
-DEFAULT_MODEL = settings.OLLAMA_MODEL  # Configurable via .env — default: qwen3:8b
+DEFAULT_MODEL = settings.OLLAMA_MODEL  # Configurable via .env — default: gemma3:4b
 OLLAMA_URL   = settings.OLLAMA_URL     # Configurable via .env — default: http://localhost:11434
 
 _ollama_cache = {"status": False, "last_check": 0, "confirmed_online": False}
