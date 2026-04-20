@@ -22,9 +22,16 @@ def calculate_seasonal_volume(df: pd.DataFrame, window_days: int = 5) -> pd.Seri
     temp_df['hour'] = temp_df['dt'].dt.hour
     temp_df['minute'] = temp_df['dt'].dt.minute
     
-    # Calculamos el promedio por slot (hora:minuto)
+    # Calculamos cuántas muestras hay por slot
+    slot_counts = temp_df.groupby(['hour', 'minute'])['volume'].transform('count')
     seasonal_profile = temp_df.groupby(['hour', 'minute'])['volume'].transform('mean')
-    return seasonal_profile
+    
+    # Si tenemos menos de 2 muestras para un slot, la estacionalidad no es confiable
+    # Usamos la mediana global del dataframe como fallback para esos slots
+    global_median = temp_df['volume'].median()
+    seasonal_profile = np.where(slot_counts >= 2, seasonal_profile, global_median)
+    
+    return pd.Series(seasonal_profile, index=df.index)
 
 def calculate_rvol(df: pd.DataFrame, window: int = 50, use_seasonality: bool = True, target_interval: str = None) -> pd.DataFrame:
     """
@@ -92,8 +99,8 @@ def calculate_absorption_index(df: pd.DataFrame, window: int = 50, target_interv
     z_score = (absorption_raw - median_abs) / mad_scaled
     
     # 5. Mapeo a Escala Apex (0-100)
-    # Usamos una función sigmoide para suavizar los extremos y que el 15 sigma no rompa la escala.
-    df['absorption_score'] = (1 / (1 + np.exp(-z_score * 0.5))) * 100
+    # Usamos una función sigmoide suave (0.15) para dar más recorrido y evitar saturación prematura.
+    df['absorption_score'] = (1 / (1 + np.exp(-z_score * 0.15))) * 100
     
     # Metadatos para el Dashboard
     df['absorption_raw'] = absorption_raw
