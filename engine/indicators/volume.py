@@ -1,200 +1,146 @@
 from engine.core.logger import logger
 import pandas as pd
 import numpy as np
+from scipy import stats
 
 def _format_pandas_freq(interval: str) -> str:
-    """Sanea el intervalo para compatibilidad con Pandas 2.2.0+ (ROE: PANDAS_STRICT_COMPLIANCE)"""
+    """Sanea el intervalo para compatibilidad con Pandas 2.2.0+"""
     if not interval: return None
-    # Mapeo explícito para evitar reemplazos erróneos
     mapping = {'1m': '1min', '3m': '3min', '5m': '5min', '15m': '15min', '30m': '30min', '1h': '1h', '4h': '4h', '1d': '1D'}
     return mapping.get(interval, interval.replace('m', 'min') if interval.endswith('m') else interval)
 
-def calculate_rvol(df: pd.DataFrame, window: int = 24, target_interval: str = None) -> pd.DataFrame:
+def calculate_seasonal_volume(df: pd.DataFrame, window_days: int = 5) -> pd.Series:
     """
-    Relative Volume (RVOL) - Nivel 3 (Gatillo Institucional).
-    Calcula si el volumen actual es inusualmente alto en comparación con la mediana reciente.
+    Normalización por Estacionalidad v8.0 (Institutional Apex).
+    Compara el volumen actual con el promedio histórico de su misma franja horaria.
+    """
+    if 'timestamp' not in df.columns or len(df) < 100:
+        return pd.Series(df['volume'].median(), index=df.index)
     
-    [FIX v6.6.18] Resuelto Shape Mismatch via Reindexing + Forward Fill.
+    temp_df = df.copy()
+    temp_df['dt'] = pd.to_datetime(temp_df['timestamp'])
+    temp_df['hour'] = temp_df['dt'].dt.hour
+    temp_df['minute'] = temp_df['dt'].dt.minute
+    
+    # Calculamos el promedio por slot (hora:minuto)
+    seasonal_profile = temp_df.groupby(['hour', 'minute'])['volume'].transform('mean')
+    return seasonal_profile
+
+def calculate_rvol(df: pd.DataFrame, window: int = 50, use_seasonality: bool = True) -> pd.DataFrame:
+    """
+    Relative Volume (RVOL) Apex Edition.
+    Usa Rango Percentil (0-100) y Estacionalidad para una lectura no-lineal.
     """
     df = df.copy()
     if df.empty: return df
 
-    # [SAFE_INIT] Garantizar existencia de columnas
-    df['vol_median'] = df['volume'].median()
-    df['rvol'] = 1.0
-
-    # 1. Asegurar homogeneidad de datos (Sutura Estadística)
-    work_df = df
-    has_resampled = False
-    
-    if target_interval and 'timestamp' in df.columns:
-        try:
-            pandas_freq = _format_pandas_freq(target_interval)
-            # Creamos un índice temporal para el resampling
-            df_ts = df.copy()
-            df_ts.index = pd.to_datetime(df['timestamp'])
-            
-            work_df = df_ts.resample(pandas_freq).agg({
-                'volume': 'sum', 'open': 'first', 'high': 'max', 'low': 'min', 'close': 'last'
-            }).dropna()
-            has_resampled = True
-        except Exception as e:
-            logger.warning(f"RVOL Resample Skip: {e}")
-            work_df = df
-
-    # 2. Chequeo de Warm-up
-    if len(work_df) < 20:
-        return df
-    
-    # 3. Robust Median SMA en el work_df (resampled or original)
-    work_df['vol_median'] = work_df['volume'].rolling(window=window, min_periods=20).median()
-    
-    # 4. Mapeo de vuelta al DF original (ROE: NO_DROPPED_COLUMNS)
-    if has_resampled:
-        # Reindexamos los valores calculados en HTF de vuelta al índice original (Datetime)
-        # y luego los asignamos al DataFrame original usando forward fill.
-        resampled_median = work_df['vol_median'].reindex(df_ts.index, method='ffill')
-        df['vol_median'] = resampled_median.values
+    # 1. Obtener Base de Comparación (Estacional o Mediana)
+    if use_seasonality and 'timestamp' in df.columns:
+        df['vol_baseline'] = calculate_seasonal_volume(df)
     else:
-        df['vol_median'] = work_df['vol_median']
-        
-    # 5. Calcular RVOL con Epsilon
-    df['rvol'] = df['volume'] / (df['vol_median'] + 1e-9)
-    df['rvol'] = df['rvol'].fillna(1.0)
+        df['vol_baseline'] = df['volume'].rolling(window=window, min_periods=20).median()
+    
+    # 2. Ratio Crudo
+    df['rvol_ratio'] = df['volume'] / (df['vol_baseline'] + 1e-9)
+    
+    # 3. Normalización por Rango Percentil (Robusto contra Outliers)
+    # Indica qué tan alto es el volumen actual respecto al historial (0.0 a 1.0)
+    df['rvol_pct'] = df['volume'].rolling(window=window*2, min_periods=20).rank(pct=True)
+    
+    # RVOL Final para el Dashboard (Escala Humana 0x - 5x)
+    df['rvol'] = df['rvol_ratio'].clip(0, 5.0)
     
     return df
 
-def calculate_absorption_index(df: pd.DataFrame, window: int = 50, target_interval: str = None) -> pd.DataFrame:
+def calculate_absorption_index(df: pd.DataFrame, window: int = 50) -> pd.DataFrame:
     """
-    Índice de Absorción Institucional (Lattice Nivel 4).
-    Mide la 'Presión de Volumen' sobre el 'Movimiento de Precio'.
-    
-    [FIX v6.6.18] Resuelto Shape Mismatch via Reindexing + Forward Fill.
+    VSA Intelligence Engine v8.0.
+    Mide 'Esfuerzo (Volumen)' vs 'Resultado (Precio)'.
+    Escala: 0-100 (Donde > 80 es Absorción Extrema / Smart Money Accumulation).
     """
     df = df.copy()
-    if df.empty: return df
+    if len(df) < 20: return df
 
-    # [SAFE_INIT] Garantizar existencia de columnas
-    df['absorption_raw'] = 0.0
-    df['absorption_score'] = 0.0
-
-    # 1. Homogeneidad de Datos
-    work_df = df
-    has_resampled = False
+    # 1. Esfuerzo (Volumen Relativo)
+    vol_median = df['volume'].rolling(window=window, min_periods=20).median()
+    effort = df['volume'] / (vol_median + 1e-9)
     
-    if target_interval and 'timestamp' in df.columns:
-        try:
-            pandas_freq = _format_pandas_freq(target_interval)
-            df_ts = df.copy()
-            df_ts.index = pd.to_datetime(df['timestamp'])
-            
-            work_df = df_ts.resample(pandas_freq).agg({
-                'volume': 'sum', 'open': 'first', 'high': 'max', 'low': 'min', 'close': 'last'
-            }).dropna()
-            has_resampled = True
-        except: 
-            work_df = df
-
-    # 2. Warm-up Check
-    if len(work_df) < 20:
-        return df
+    # 2. Resultado (Spread de la vela relativo a la volatilidad ATR)
+    # Usamos ATR para que el "resultado" sea comparable en cualquier mercado/TF
+    high_low = df['high'] - df['low']
+    close_prev = df['close'].shift(1)
+    tr = np.maximum(high_low, np.abs(df['high'] - close_prev), np.abs(df['low'] - close_prev))
+    atr = pd.Series(tr).rolling(window=20).mean()
     
-    # 3. Cálculo de Absorción Bruta
-    body_spread = (work_df['close'] - work_df['open']).abs()
-    candle_spread = (work_df['high'] - work_df['low'])
-    displacement = body_spread + (candle_spread * 0.1) + (work_df['close'] * 0.00001) + 1e-9
+    body_spread = (df['close'] - df['open']).abs()
+    result = body_spread / (atr + 1e-9)
     
-    work_df['absorption_raw'] = work_df['volume'] / displacement
+    # 3. Índice de Absorción (Effort / Result)
+    # Si hay mucho esfuerzo (vol) y poco resultado (cuerpo), hay absorción.
+    # Añadimos un pequeño floor al result para evitar infinitos.
+    absorption_raw = effort / (result + 0.1)
     
-    # 4. Normalización Robusta (Z-Score via MAD)
-    median = work_df['absorption_raw'].rolling(window=window, min_periods=20).median()
-    mad = (work_df['absorption_raw'] - median).abs().rolling(window=window, min_periods=20).median()
+    # 4. Normalización Sigma Robusta (Z-Score MAD)
+    median_abs = absorption_raw.rolling(window=window, min_periods=20).median()
+    mad = (absorption_raw - median_abs).abs().rolling(window=window, min_periods=20).median()
     mad_scaled = (mad * 1.4826) + 1e-9
     
-    work_df['absorption_score'] = (work_df['absorption_raw'] - median) / mad_scaled
+    z_score = (absorption_raw - median_abs) / mad_scaled
     
-    # 5. HARD CLAMP (ROE Directiva 2)
-    work_df['absorption_score'] = work_df['absorption_score'].clip(-15.0, 15.0)
+    # 5. Mapeo a Escala Apex (0-100)
+    # Usamos una función sigmoide para suavizar los extremos y que el 15 sigma no rompa la escala.
+    df['absorption_score'] = (1 / (1 + np.exp(-z_score * 0.5))) * 100
     
-    # 6. Re-mapeo al DF original (ROE: NO_DROPPED_COLUMNS)
-    if has_resampled:
-        # Proyectar scores de HTF a LTF
-        resampled_score = work_df['absorption_score'].reindex(df_ts.index, method='ffill')
-        resampled_raw = work_df['absorption_raw'].reindex(df_ts.index, method='ffill')
-        df['absorption_score'] = resampled_score.values
-        df['absorption_raw'] = resampled_raw.values
-    else:
-        df['absorption_score'] = work_df['absorption_score']
-        df['absorption_raw'] = work_df['absorption_raw']
+    # Metadatos para el Dashboard
+    df['absorption_raw'] = absorption_raw
     
     return df
 
-def calculate_zscore_robust(df: pd.DataFrame, window: int = 24, threshold: float = 3.5) -> pd.Series:
-    """
-    Protocolo Anti-Outlier v5.4 (Z-Score Robusto via MAD).
-    A diferencia del Z-Score estándar, el uso de Mediana y MAD evita que los picos 
-    volatiles oculten nuevas inserciones de capital.
-    """
-    if len(df) < window:
-        return pd.Series([False] * len(df))
-    
-    vol = df['volume']
-    median = vol.rolling(window=window, min_periods=1).median()
-    mad = (vol - median).abs().rolling(window=window, min_periods=1).median()
-    
-    # Escalamiento para consistencia con distribución normal
-    mad_scaled = mad * 1.4826
-    mad_scaled = mad_scaled.replace(0, 1.0)
-    
-    z_score = (vol - median).abs() / mad_scaled
-    return z_score > threshold
-
 def analyze_volume_footprint(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Analiza la firma (Footprint) del volumen.
-    """
+    """Analiza la firma del volumen con lógica VSA."""
     df = df.copy()
     
-    # 1. Delta básico (Aproximación por cuerpo/mecha)
-    df['vol_increasing'] = df['volume'] > df['volume'].shift(1)
+    # 1. Detección de Clímax (Basado en Desviación Estándar Robusta)
+    vol = df['volume']
+    mean_vol = vol.rolling(window=50).mean()
+    std_vol = vol.rolling(window=50).std()
+    df['is_climax_vol'] = vol > (mean_vol + (std_vol * 2.5))
     
-    # 2. Climax Volume (Percentil 95 Adaptativo)
-    rolling_95th = df['volume'].rolling(window=50).quantile(0.95)
-    df['is_climax_vol'] = df['volume'] > rolling_95th
-    
-    # 3. Absorción Institucional
+    # 2. Inyección de Inteligencia de Absorción
     df = calculate_absorption_index(df)
     
     return df
 
-def confirm_trigger(df: pd.DataFrame, min_rvol: float = 2.0) -> pd.DataFrame:
+def confirm_trigger(df: pd.DataFrame, min_rvol_pct: float = 0.85) -> pd.DataFrame:
     """
-    Gatillo Institucional v5.7.155 Master Gold.
-    Un trigger es válido si hay RVOL alto Y el volumen no es un outlier de error (Z < 6).
+    Gatillo Institucional Apex Edition.
+    Valida si el volumen actual es parte de un movimiento orquestado por el Smart Money.
     """
     df = calculate_rvol(df)
     df = analyze_volume_footprint(df)
     
-    # Filtro de Outliers destructivos (Error de Feed)
-    df['is_outlier_error'] = calculate_zscore_robust(df, threshold=8.0)
+    # Filtro de Outliers destructivos
+    vol_median = df['volume'].rolling(window=50).median()
+    df['is_outlier_error'] = df['volume'] > (vol_median * 15.0) # Error de feed si es > 15x la mediana
     
-    # Columna maestra de confirmación:
-    # 1. El volumen relativo debe ser institucional (>= min_rvol)
-    # 2. No debe ser un pico de error técnico (Z < 8)
-    # 3. Absorción significativa confirma que el 'Smart Money' está entrando
-    df['valid_trigger'] = (df['rvol'] >= min_rvol) & (~df['is_outlier_error'])
+    # Veredicto Apex:
+    # 1. El volumen debe estar en el top 15% (Percentile Rank > 0.85)
+    # 2. No debe ser un error de feed
+    # 3. Debe haber una absorción significativa (> 70) o ser un Clímax validado.
+    df['valid_trigger'] = (df['rvol_pct'] >= min_rvol_pct) & \
+                          (~df['is_outlier_error']) & \
+                          ((df['absorption_score'] > 70) | (df['is_climax_vol']))
     
-    # Marcar señales de Absorción Elite (donde se espera reversión o breakout)
-    df['is_absorption_elite'] = (df['absorption_score'] > 2.5) & (df['rvol'] > 1.5)
+    # Señales de Absorción de Elite para el Dashboard
+    df['is_absorption_elite'] = (df['absorption_score'] > 85) & (df['rvol_pct'] > 0.70)
     
     return df
 
 if __name__ == "__main__":
-    # Test de rendimiento del Kernel v5.7.155 Master Gold
     import time
     start = time.time()
     
-    # Simulación de datos (10,000 velas)
+    # Simulación de estrés (1,000 velas)
     test_df = pd.DataFrame({
         'timestamp': pd.date_range(start='2024-01-01', periods=1000, freq='15min'),
         'open': np.random.uniform(50000, 51000, 1000),
@@ -204,13 +150,11 @@ if __name__ == "__main__":
         'volume': np.random.uniform(100, 1000, 1000)
     })
     
-    # Añadir absorción sintética
-    test_df.loc[500, 'volume'] = 5000
-    test_df.loc[500, 'open'] = 51000
-    test_df.loc[500, 'close'] = 51001 # Cuerpo mínimo, volumen máximo
-    
     result = confirm_trigger(test_df)
     
     end = time.time()
-    logger.info(f"💎 [DELTA] Kernel de Volumen v5.4 optimizado en {(end-start)*1000:.2f}ms")
-    logger.info(f"Velas de Absorción detectadas: {len(result[result['is_absorption_elite']])}")
+    logger.info(f"💎 [APEX] Kernel de Volumen v8.0 optimizado en {(end-start)*1000:.2f}ms")
+    logger.info(f"Velas Elite detectadas: {len(result[result['is_absorption_elite']])}")
+    if not result.empty:
+        last = result.iloc[-1]
+        logger.info(f"Estado Final -> RVOL Pct: {last['rvol_pct']:.2%}, Absorción: {last['absorption_score']:.2f}")
