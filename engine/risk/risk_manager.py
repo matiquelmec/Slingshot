@@ -175,7 +175,7 @@ class RiskManager:
         tp2 = tp1 + (abs(tp1 - current_price) * 0.5) if signal_type == "LONG" else tp1 - (abs(tp1 - current_price) * 0.5)
         tp3 = tp2 + (abs(tp2 - tp1) * 0.5) if signal_type == "LONG" else tp2 - (abs(tp2 - tp1) * 0.5)
 
-        sl_dist_pct = risk / current_price if current_price > 0 else 0.01
+        sl_dist_pct = final_risk / current_price if current_price > 0 else 0.01
         pos_size_nominal = risk_amount_usdt / max(0.001, sl_dist_pct)
         leverage = min(50, math.ceil(pos_size_nominal / self.account_balance))
         
