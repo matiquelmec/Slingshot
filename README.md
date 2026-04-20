@@ -1,7 +1,7 @@
 # 🛡️ SLINGSHOT v6.1.0 Master Gold TITANIUM HARDENED
 > **"Institutional-Grade Algorithmic Terminal. Zero Latency. Zero Noise. Full Sovereignty."**
 
-![Status](https://img.shields.io/badge/Status-100%_HARDENED_&_OPERATIONAL-0d2a1a?style=for-the-badge&logo=codeproject&logoColor=fff)
+![Status](https://img.shields.io/badge/Status-100%25_HARDENED_OPERATIONAL-0d2a1a?style=for-the-badge&logo=codeproject&logoColor=fff)
 ![Version](https://img.shields.io/badge/Version-6.1.0_Titanium_Hardened-1a3a6e?style=for-the-badge)
 ![Engine](https://img.shields.io/badge/Engine-SMC_Asna--4-ffd700?style=for-the-badge&labelColor=0a0a0a)
 ![Performance](https://img.shields.io/badge/Latency-Sub--100ms-blue?style=for-the-badge)
