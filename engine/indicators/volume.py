@@ -94,7 +94,11 @@ def calculate_absorption_index(df: pd.DataFrame, window: int = 50, target_interv
     # 4. Normalización Sigma Robusta (Z-Score MAD)
     median_abs = absorption_raw.rolling(window=window, min_periods=20).median()
     mad = (absorption_raw - median_abs).abs().rolling(window=window, min_periods=20).median()
-    mad_scaled = (mad * 1.4826) + 1e-9
+    
+    # [APEX v8.0] Suelo de MAD Dinámico para evitar explosiones en baja volatilidad
+    # Usamos el 5% de la mediana como suelo mínimo de desviación
+    mad_floor = (median_abs * 0.05) + 1e-6
+    mad_scaled = np.maximum(mad * 1.4826, mad_floor)
     
     z_score = (absorption_raw - median_abs) / mad_scaled
     

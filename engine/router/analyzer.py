@@ -109,8 +109,10 @@ class MarketAnalyzer:
                 displacement = body_spread + (candle_spread * 0.1) + (float(df['close'].iloc[-1]) * 0.00001)
                 absorption_raw = current_vol / displacement if displacement > 0 else 0.0
                 # [AUDITORIA v6.6.13] Epsilon y Hard Clamp en Fast Path
-                # [APEX v8.0] Sigmoid Mapping en Fast Path (Suave 0.15)
-                abs_score_raw = (absorption_raw - st['abs_median']) / ((st['abs_mad'] * 1.4826) + 1e-9) if st.get('abs_mad', 0) > 0 else 0.0
+                # [APEX v8.0] Sigmoid Mapping en Fast Path (Suave 0.15 + MAD Floor)
+                mad_floor = (st['abs_median'] * 0.05) + 1e-6
+                mad_effective = max(st.get('abs_mad', 0) * 1.4826, mad_floor)
+                abs_score_raw = (absorption_raw - st['abs_median']) / mad_effective
                 live_absorption = round((1 / (1 + np.exp(-abs_score_raw * 0.15))) * 100, 2)
                 
                 # 🔴 [MODO EXPERIMENTO] Umbral de Élite adaptado a la nueva escala (> 75)
@@ -202,8 +204,10 @@ class MarketAnalyzer:
             absorption_raw = current_vol / displacement if displacement > 0 else 0.0
             
             # [AUDITORIA v6.6.13] Epsilon y Hard Clamp en Fast Path (O(1))
-            # [APEX v8.0] Sigmoid Mapping Suave (0.15)
-            abs_score_raw = (absorption_raw - st['abs_median']) / ((st['abs_mad'] * 1.4826) + 1e-9) if st['abs_mad'] > 0 else 0.0
+            # [APEX v8.0] Sigmoid Mapping Suave (0.15 + MAD Floor)
+            mad_floor = (st['abs_median'] * 0.05) + 1e-6
+            mad_effective = max(st['abs_mad'] * 1.4826, mad_floor)
+            abs_score_raw = (absorption_raw - st['abs_median']) / mad_effective
             absorption_score = (1 / (1 + np.exp(-abs_score_raw * 0.15))) * 100
             is_high_absorption = (absorption_score > 75.0) and (rvol > 1.1)
             
