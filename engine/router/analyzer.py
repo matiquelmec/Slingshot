@@ -109,14 +109,17 @@ class MarketAnalyzer:
                 displacement = body_spread + (candle_spread * 0.1) + (float(df['close'].iloc[-1]) * 0.00001)
                 absorption_raw = current_vol / displacement if displacement > 0 else 0.0
                 # [AUDITORIA v6.6.13] Epsilon y Hard Clamp en Fast Path
-                # [APEX v8.0] Sigmoid Mapping en Fast Path (Suave 0.15 + MAD Floor)
-                mad_floor = (st['abs_median'] * 0.05) + 1e-6
-                mad_effective = max(st.get('abs_mad', 0) * 1.4826, mad_floor)
-                abs_score_raw = (absorption_raw - st['abs_median']) / mad_effective
-                live_absorption = round((1 / (1 + np.exp(-abs_score_raw * 0.15))) * 100, 2)
+                # [APEX v8.2] Deterministic Ratio en Fast Path
+                rel_vol = current_vol / (st['vol_median'] + 1e-9)
                 
-                # 🔴 [MODO EXPERIMENTO] Umbral de Élite adaptado a la nueva escala (> 75)
-                live_elite = (live_absorption > 75.0) and (live_rvol > 1.1)
+                # Calculamos el spread relativo localmente
+                rel_spread = (body_spread / (st['atr_median'] + 1e-9)) / (st['spread_median_ratio'] + 0.1)
+                
+                apex_factor = rel_vol / (rel_spread + 0.1)
+                live_absorption = round((1 / (1 + np.exp(-(apex_factor - 1.0) * 1.5))) * 100, 2)
+                
+                # 🔴 [MODO EXPERIMENTO] Umbral de Élite (> 80)
+                live_elite = (live_absorption > 80.0) and (live_rvol > 1.2)
                 
                 # 3. Inyección atómica al diagnóstico
                 cached.diagnostic["volume"] = current_vol
@@ -204,12 +207,13 @@ class MarketAnalyzer:
             absorption_raw = current_vol / displacement if displacement > 0 else 0.0
             
             # [AUDITORIA v6.6.13] Epsilon y Hard Clamp en Fast Path (O(1))
-            # [APEX v8.0] Sigmoid Mapping Suave (0.15 + MAD Floor)
-            mad_floor = (st['abs_median'] * 0.05) + 1e-6
-            mad_effective = max(st['abs_mad'] * 1.4826, mad_floor)
-            abs_score_raw = (absorption_raw - st['abs_median']) / mad_effective
-            absorption_score = (1 / (1 + np.exp(-abs_score_raw * 0.15))) * 100
-            is_high_absorption = (absorption_score > 75.0) and (rvol > 1.1)
+            # [APEX v8.2] Deterministic Ratio (O(1))
+            rel_vol = current_vol / (st['vol_median'] + 1e-9)
+            rel_spread = (body_spread / (st['atr_median'] + 1e-9)) / (st['spread_median_ratio'] + 0.1)
+            
+            apex_factor = rel_vol / (rel_spread + 0.1)
+            absorption_score = (1 / (1 + np.exp(-(apex_factor - 1.0) * 1.5))) * 100
+            is_high_absorption = (absorption_score > 80.0) and (rvol > 1.2)
             
             # Dummy inject for diagnostic extraction later
             if 'absorption_raw' not in df.columns:
@@ -228,12 +232,14 @@ class MarketAnalyzer:
             df = calculate_rvol(df, target_interval=interval)
             df = calculate_absorption_index(df, target_interval=interval)
             
-            abs_raw = df['absorption_raw']
+            body_spread = (df['close'] - df['open']).abs()
+            spread_ratio = body_spread / (df['atr'] + 1e-9)
+            
             self._rvol_cache_key = vol_cache_key
             self._rvol_state = {
                 "vol_median": float(df['vol_median'].iloc[-1]) if 'vol_median' in df.columns else 1.0,
-                "abs_median": float(abs_raw.rolling(50).median().iloc[-1]) if len(abs_raw) >= 50 else float(abs_raw.median()),
-                "abs_mad": float((abs_raw - abs_raw.rolling(50).median()).abs().rolling(50).median().replace(0, 1.0).iloc[-1]) if len(abs_raw) >= 50 else 1.0
+                "atr_median": float(df['atr'].rolling(50).median().iloc[-1]) if 'atr' in df.columns else 0.1,
+                "spread_median_ratio": float(spread_ratio.rolling(50).median().iloc[-1]) if len(spread_ratio) >= 50 else 0.5
             }
             
             rvol = float(df['rvol'].iloc[-1]) if 'rvol' in df.columns else 0.0

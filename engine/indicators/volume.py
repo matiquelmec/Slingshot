@@ -94,28 +94,26 @@ def calculate_absorption_index(df: pd.DataFrame, window: int = 50, target_interv
     body_spread = (df['close'] - df['open']).abs()
     result = body_spread / (atr + 1e-9)
     
-    # 3. Índice de Absorción (Effort / Result)
-    # Si hay mucho esfuerzo (vol) y poco resultado (cuerpo), hay absorción.
-    # Añadimos un pequeño floor al result para evitar infinitos.
-    absorption_raw = effort / (result + 0.1)
+    # 3. [NUEVA LOGICA DETERMINISTA] Institutional Absorption Ratio
+    # En lugar de Z-Scores volátiles, usamos ratios físicos de Esfuerzo vs Resultado.
     
-    # 4. Normalización Sigma Robusta (Z-Score MAD)
-    median_abs = absorption_raw.rolling(window=window, min_periods=20).median()
-    mad = (absorption_raw - median_abs).abs().rolling(window=window, min_periods=20).median()
+    # A. RelVol: ¿Cuántas veces el volumen actual supera a la mediana?
+    rel_vol = effort / (effort.rolling(window=window).median() + 1e-9)
     
-    # [APEX v8.0] Suelo de MAD Dinámico para evitar explosiones en baja volatilidad
-    # Usamos el 5% de la mediana como suelo mínimo de desviación
-    mad_floor = (median_abs * 0.05) + 1e-6
-    mad_scaled = np.maximum(mad * 1.4826, mad_floor)
+    # B. RelSpread: ¿Cuántas veces el movimiento actual supera al ATR?
+    # Usamos un floor de 0.1 para evitar que dojis disparen el ratio al infinito.
+    rel_spread = result / (result.rolling(window=window).median() + 0.1)
     
-    z_score = (absorption_raw - median_abs) / mad_scaled
+    # C. Apex Factor: El ratio puro de absorción.
+    # Un factor de 1.0 significa equilibrio. > 2.0 significa absorción institucional clara.
+    apex_factor = rel_vol / (rel_spread + 0.1)
     
-    # 5. Mapeo a Escala Apex (0-100)
-    # Usamos una función sigmoide suave (0.15) para dar más recorrido y evitar saturación prematura.
-    df['absorption_score'] = (1 / (1 + np.exp(-z_score * 0.15))) * 100
+    # 4. Mapeo a Escala 0-100 (Log-Sigmoid)
+    # Calibrado para que Factor 1.0 -> Score 50, Factor 3.0 -> Score 85, Factor 5.0 -> Score 95
+    df['absorption_score'] = (1 / (1 + np.exp(-(apex_factor - 1.0) * 1.5))) * 100
     
-    # Metadatos para el Dashboard
-    df['absorption_raw'] = absorption_raw
+    # Metadatos
+    df['absorption_raw'] = apex_factor
     
     return df
 
