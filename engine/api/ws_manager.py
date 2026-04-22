@@ -167,6 +167,7 @@ class SymbolBroadcaster:
         self._processed_signals_this_candle = set()
         self._last_advisor_ts = 0
         self._advisor_task: Optional[asyncio.Task] = None
+        self._onchain_task: Optional[asyncio.Task] = None
         self._live_rvol: float = 0.0  # 🔴 v5.7.155 Master Gold: RVOL en tiempo real del Fast Path
         self._cached_live_dates = None  # ✅ ISS-012: Inicializado para evitar AttributeError en cleanup
 
@@ -499,6 +500,10 @@ class SymbolBroadcaster:
 
         # Disparamos todo el procesamiento pesado de forma asíncrona
         asyncio.create_task(_load_background_data())
+        
+        # [AUDITORIA v8.5.8] Bucle de Refresco On-Chain Independiente
+        if not self._onchain_task or self._onchain_task.done():
+            self._onchain_task = asyncio.create_task(self._onchain_loop())
 
         # 4. Inicialización mínima para el Stream Live (Sesiones)
         if history:
@@ -778,6 +783,34 @@ class SymbolBroadcaster:
                 h4_regime="STANDBY",
                 h1_regime="STANDBY"
             )
+
+    async def _onchain_loop(self):
+        """Bucle institucional para refrescar métricas On-Chain cada 60 segundos."""
+        logger.info(f"[ON-CHAIN] 🛰️ Iniciando Sentinel Loop para {self.symbol}")
+        while True:
+            try:
+                # 1. Obtener precio actual y régimen para el Sentinel
+                ref_price = self.latest_price
+                regime = "NEUTRAL"
+                if self._last_tactical:
+                    regime = self._last_tactical.get("data", {}).get("market_regime", "NEUTRAL")
+
+                # 2. Refrescar datos
+                onchain_summary = await self._onchain_sentinel.refresh(
+                    current_price=ref_price,
+                    market_regime=regime
+                )
+                
+                # 3. Broadcast
+                await self._broadcast({"type": "onchain_update", "data": onchain_summary})
+                
+                # Esperar 60 segundos antes del próximo pulso
+                await asyncio.sleep(60)
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                logger.error(f"[ON-CHAIN] ⚠️ Error en Sentinel Loop ({self.symbol}): {e}")
+                await asyncio.sleep(10) # Reintento rápido en caso de error de red
 
     # ── Handlers auxiliares ───────────────────────────────────────────────────
 

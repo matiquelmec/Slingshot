@@ -39,6 +39,27 @@ class OnChainSentinel:
         self._news_multiplier = 2.0 if news_sentiment == "BEARISH" else 1.0
         # Dynamic Whale Trigger (300% SMA_20)
         self._whale_threshold = max(avg_tick_volume * 3.0, 1000000.0) # Mínimo $1M institucional
+        
+        now_ts = datetime.now().timestamp()
+        
+        # 1. Fetch Open Interest desde Binance Futures REST (v8.5.6 Optimized)
+        try:
+            # Skip check para activos sin futuros
+            if self.symbol in ["PAXGUSDT", "EURUSDT", "USDCUSDT"]:
+                raise ValueError("Skip On-Chain: Spot Asset")
+
+            async with httpx.AsyncClient(timeout=5.0, follow_redirects=True) as client:
+                oi_resp = await client.get(
+                    f"https://fapi.binance.com/fapi/v1/openInterest",
+                    params={"symbol": self.symbol}
+                )
+                fr_resp = await client.get(
+                    f"https://fapi.binance.com/fapi/v1/fundingRate",
+                    params={"symbol": self.symbol, "limit": 1}
+                )
+
+        now_ts = datetime.now().timestamp()
+        
         # 1. Fetch Open Interest desde Binance Futures REST (v8.5.6 Optimized)
         try:
             # Skip check para activos sin futuros
@@ -56,8 +77,7 @@ class OnChainSentinel:
                 )
 
             current_oi = 0.0
-            self._funding_rate = 0.0
-
+            
             if oi_resp.status_code == 200:
                 oi_json = oi_resp.json()
                 current_oi = float(oi_json.get("openInterest", 0))
@@ -68,43 +88,76 @@ class OnChainSentinel:
                     self._funding_rate = float(fr_json[-1].get("fundingRate", 0)) * 100
         except Exception as e:
             logger.debug(f"[ON-CHAIN] Network Error for {self.symbol}: {e}")
-            # NO resetear current_oi a 0 para no romper el historial de delta
             current_oi = self._last_oi if self._last_oi else 0.0
 
-        # --- 3. Calcular Delta de Open Interest ---
-        if self._last_oi is not None and self._last_oi > 0:
-            self._oi_delta_pct = ((current_oi - self._last_oi) / self._last_oi) * 100
-            if abs(self._oi_delta_pct) < 0.000001: 
-                self._oi_delta_pct = 0.0
-        else:
-            self._oi_delta_pct = 0.0 # Primer tick o reset
+        # --- 2. Hidratación Histórica (SESSIÓN vs TICK) ---
+        # [AUDITORIA v8.5.8] Para evitar el "0.000000%" perpetuo al iniciar, 
+        # consultamos el historial de 1h de Binance si no tenemos referencia.
+        if not hasattr(self, "_reference_oi") or self._reference_oi is None:
+            try:
+                hist_oi = await self._fetch_historical_oi()
+                if hist_oi > 0:
+                    self._reference_oi = hist_oi
+                    self._reference_ts = now_ts - 3600
+                    logger.info(f"[ON-CHAIN] ⚓ Punto de referencia histórico cargado para {self.symbol}: {hist_oi:.0f}")
+                else:
+                    self._reference_oi = current_oi
+                    self._reference_ts = now_ts
+            except:
+                self._reference_oi = current_oi
+                self._reference_ts = now_ts
+        
+        # Rotación horaria del punto de referencia
+        if (now_ts - self._reference_ts > 3600):
+            self._reference_oi = current_oi
+            self._reference_ts = now_ts
+            logger.info(f"[ON-CHAIN] ⚓ Rotación horaria de referencia para {self.symbol}")
 
-        logger.debug(f"[ON-CHAIN] {self.symbol} Data: OI={current_oi} | Δ={self._oi_delta_pct:.4f}% | FR={self._funding_rate:.6f}%")
+        # Delta de la Sesión (mucho más representativo)
+        if self._reference_oi > 0:
+            self._oi_delta_pct = ((current_oi - self._reference_oi) / self._reference_oi) * 100
+        else:
+            self._oi_delta_pct = 0.0
+
         self._last_oi = current_oi
+        self._last_check_ts = now_ts
 
         # 3. Whale Tracker (Dynamic Trigger 300% SMA_20)
         await self._fetch_whale_alerts(min_value=self._whale_threshold)
 
         # 4. Determinar On-Chain Bias (Lógica Institucional)
-        is_ranging = market_regime in ("RANGING", "ACCUMULATION")
-        oi_rising = self._oi_delta_pct > 1.5
-
+        is_ranging = market_regime in ("RANGING", "ACCUMULATION", "CHOPPY")
+        oi_rising = self._oi_delta_pct > 0.5 # Sensibilidad ajustada para Delta de Sesión
+        
         if oi_rising and is_ranging:
-            self._onchain_bias = "BULLISH_ACCUMULATION"
-        elif any(alert.get('inflow_to_exchange') for alert in self._whale_alerts) or news_sentiment == "BEARISH":
-            self._onchain_bias = "BEARISH_WARNING"
+            self._onchain_bias = "INSTITUTIONAL_ACCUMULATION"
+        elif any(alert.get('inflow_to_exchange') for alert in self._whale_alerts):
+            self._onchain_bias = "BEARISH_INFLOW"
         elif self._funding_rate > 0.01 / self._news_multiplier:
-            self._onchain_bias = "OVERLEVERAGED_LONGS"
+            self._onchain_bias = "OVERLEVERAGED"
         else:
             self._onchain_bias = "NEUTRAL"
 
-        self._last_check_ts = datetime.now().timestamp()
+        # [ONCHAIN_DEBUG] | Last Data: SYNCED
+        debug_time = datetime.fromtimestamp(self._last_check_ts).strftime('%H:%M:%S')
+        logger.info(f"[ON-CHAIN] {self.symbol} | OI: {current_oi:.0f} | Δ(Session): {self._oi_delta_pct:.4f}% | FR: {self._funding_rate:.5f}% | Bias: {self._onchain_bias}")
         
-        # [ONCHAIN_DEBUG] | Last Data: {ts} | Status: SYNCED
-        debug_ts = datetime.fromtimestamp(self._last_check_ts).strftime('%H:%M:%S')
-        logger.info(f"[ONCHAIN_DEBUG] | Last Data: {debug_ts} | Status: SYNCED | News: {news_sentiment}")
-        
-        logger.info(f"[ON-CHAIN] {self.symbol}: OI={current_oi:.0f} | ΔOI={self._oi_delta_pct:.6f}% | FR={self._funding_rate:.5f} | Bias={self._onchain_bias}")
+        return self.get_summary()
+
+    async def _fetch_historical_oi(self) -> float:
+        """Fetch OI de hace 1 hora desde el endpoint de datos de Binance."""
+        try:
+            async with httpx.AsyncClient(timeout=5.0) as client:
+                url = "https://fapi.binance.com/futures/data/openInterestHist"
+                params = {"symbol": self.symbol, "period": "1h", "limit": 2}
+                resp = await client.get(url, params=params)
+                if resp.status_code == 200:
+                    data = resp.json()
+                    if len(data) >= 1:
+                        return float(data[0].get("sumOpenInterest", 0))
+        except Exception as e:
+            logger.debug(f"[ON-CHAIN] Error fetching historical OI: {e}")
+        return 0.0
         return self.get_summary()
 
     async def _fetch_whale_alerts(self, min_value: float = 10000000):
