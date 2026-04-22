@@ -129,6 +129,22 @@ class MarketAnalyzer:
                 # 🔴 [MODO EXPERIMENTO] Umbral relajado de 1.5x a 1.1x
                 cached.diagnostic["displacement_active"] = live_rvol >= 1.1
                 cached.displacement_valid = live_rvol >= 1.1
+            # [AUDITORIA HTF] Inyectar HTF Bias recién calculado incluso si es un Cache Hit
+            if htf_bias:
+                cached.htf_bias = {
+                    "direction": getattr(htf_bias, "direction", "NEUTRAL"),
+                    "strength": getattr(htf_bias, "strength", 0.0),
+                    "reason": getattr(htf_bias, "reason", "Actualizado vía caché veloz")
+                }
+                
+                # Actualizar también los gates
+                is_local_bullish = cached.market_regime in ['MARKUP', 'ACCUMULATION']
+                is_htf_bullish = str(cached.htf_bias["direction"]).upper() in ['BULLISH', 'STRONG_BULLISH']
+                is_local_bearish = cached.market_regime in ['MARKDOWN', 'DISTRIBUTION']
+                is_htf_bearish = str(cached.htf_bias["direction"]).upper() in ['BEARISH', 'STRONG_BEARISH']
+                cached.htf_alignment = (is_local_bullish == is_htf_bullish) or (is_local_bearish == is_htf_bearish)
+                cached.diagnostic["htf_align"] = cached.htf_alignment
+
             return cached
 
         df = df.copy()

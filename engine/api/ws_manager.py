@@ -75,10 +75,17 @@ from engine.api.advisor_bridge import AdvisorBridge
 
 async def fetch_binance_history(symbol: str, interval: str = "15m", limit: int = 300) -> list:
     """Descarga velas históricas desde Binance REST. Retorna lista de dicts estandarizados."""
-    url = "https://api.binance.com/api/v3/klines"
+    # v8.5.7: Migrado a fapi.binance.com para consistencia con On-Chain y mejores limites de tasa
+    url = "https://fapi.binance.com/fapi/v1/klines"
     params = {"symbol": symbol.upper(), "interval": interval, "limit": limit}
-    async with httpx.AsyncClient(timeout=10.0) as client:
+    async with httpx.AsyncClient(timeout=10.0, follow_redirects=True) as client:
         response = await client.get(url, params=params)
+        if response.status_code != 200:
+            logger.debug(f"[HISTORY] Error {response.status_code} fetching {symbol} {interval}. Trying mirror...")
+            # Fallback simple a espejo
+            url = "https://fapi1.binance.com/fapi/v1/klines"
+            response = await client.get(url, params=params)
+        
         response.raise_for_status()
         raw = response.json()
     return [
@@ -393,142 +400,152 @@ class SymbolBroadcaster:
     # ── Bootstrap (Fase 1 del stream) ────────────────────────────────────────
 
     async def _bootstrap(self):
-        """Descarga historial inicial y envía los primeros payloads a todos los clientes."""
-        logger.info(f"[BROADCASTER] {self._key} → Descargando historial desde Binance REST...")
+        """[OPTIMIZACIÓN v8.5.1] Carga PROGRESIVA: 15m primero, Macro después."""
+        logger.info(f"[BROADCASTER] {self._key} → Iniciando Bootstrap Progresivo...")
 
-        # 1. Historial de velas
+        # --- FASE 1: Prioridad Máxima (15m History para la UI) ---
         try:
             history = await fetch_binance_history(self.symbol, self.interval, limit=300)
-            self._history = sanitize_for_json(history)
-            self._live_buffer = deque(self._history[-300:], maxlen=300)
-            # ✅ ZERO-TRUST INITIALIZATION: Limpiamos la caché del Advisor para forzar re-análisis
-            await store.save_advisor_advice(self.symbol, {})
-            logger.info(f"[BROADCASTER] {self._key} → 300 velas enviadas y caché del Advisor invalidada.")
+            if history:
+                self._history = sanitize_for_json(history)
+                self._live_buffer = deque(self._history[-300:], maxlen=300)
+                # Emitir historial inmediatamente para que el usuario vea el gráfico
+                await self._broadcast({"type": "history", "data": self._history})
+                logger.info(f"[BROADCASTER] {self._key} → 🟢 UI Hydrated (15m).")
+
+                # --- SMC LIGHTNING-START (Fase Ultra Rápida) ---
+                try:
+                    df_fast = pd.DataFrame([i["data"] for i in self._history[-60:]]) # 60 velas para asegurar promedios
+                    df_fast["timestamp"] = pd.to_datetime(df_fast["timestamp"], unit="s")
+                    df_fast_ob = identify_order_blocks(df_fast)
+                    fast_smc = extract_smc_coordinates(df_fast_ob)
+                    await self._broadcast({"type": "smc_data", "data": fast_smc})
+                    logger.info(f"[BROADCASTER] {self._key} → ⚡ SMC Lightning-Start completado.")
+                except Exception as e:
+                    logger.warning(f"[BROADCASTER] {self._key} → Lightning SMC fallido: {e}")
         except Exception as e:
-            logger.error(f"[BROADCASTER] {self._key} → Binance REST falló: {e}")
+            logger.error(f"[BROADCASTER] {self._key} → Error en carga crítica 15m: {e}")
             history = []
 
-        # 2. Niveles Macro MTF (1h + 4h)
-        if self.interval not in ["1d", "1w"]:
+        # La función _load_background_data original estaba duplicada aquí. Se eliminó para mantener solo la versión completa inferior que incluye Liquidaciones, SMC y Drift Monitor.
+
+        # --- FASE 2: Carga y Cálculos Pesados en Segundo Plano ---
+        async def _load_background_data():
             try:
-                h1_raw = await fetch_binance_history(self.symbol, "1h", limit=200)
-                h4_raw = await fetch_binance_history(self.symbol, "4h", limit=200)
+                # 1. Peticiones Macro
+                tasks = [
+                    fetch_binance_history(self.symbol, "1h", limit=250),
+                    fetch_binance_history(self.symbol, "4h", limit=250),
+                    self._advisor_bridge.refresh_ghost()
+                ]
+                results = await asyncio.gather(*tasks, return_exceptions=True)
+                
+                h1_raw = results[0] if not isinstance(results[0], Exception) else []
+                h4_raw = results[1] if not isinstance(results[1], Exception) else []
 
-                def _get_levels(raw, tf):
-                    df = pd.DataFrame([i["data"] for i in raw])
-                    df["timestamp"] = pd.to_datetime(df["timestamp"], unit="s")
-                    df = identify_support_resistance(df, interval=tf)
-                    return get_key_levels(df)
+                # 2. Cálculos de Indicadores (SMC, Liquidaciones, etc.)
+                if history:
+                    df_init = pd.DataFrame([i["data"] for i in history])
+                    df_init["timestamp"] = pd.to_datetime(df_init["timestamp"], unit="s")
+                    
+                    # Precio de referencia para cálculos iniciales
+                    ref_price = self.latest_price if self.latest_price > 0 else df_init["close"].iloc[-1]
 
-                self._macro_levels = consolidate_mtf_levels(
-                    _get_levels(h1_raw, "1h"), _get_levels(h4_raw, "4h"), timeframe_weight=3
-                )
-                logger.info(f"[BROADCASTER] {self._key} → Niveles macro consolidados.")
-            except Exception as e:
-                logger.info(f"[BROADCASTER] {self._key} → MTF fallido: {e}")
+                    # Liquidaciones y SMC (Pesados)
+                    liq_clusters = estimate_liquidation_clusters(df_init, ref_price)
+                    await self._broadcast({"type": "liquidation_update", "data": liq_clusters})
 
-        # 3. Ghost Data (Fear & Greed, BTCD, Funding específico)
-        try:
-            asyncio.create_task(self._refresh_ghost())
-        except Exception as e:
-            logger.error(f"[BROADCASTER] {self._key} → Ghost Data inicial error: {e}")
+                    df_ob = identify_order_blocks(df_init)
+                    smc_new = extract_smc_coordinates(df_ob)
+                    self._persistent_smc = smc_new
+                    await self._broadcast({"type": "smc_data", "data": self._persistent_smc})
 
-        # 3.5 HTF Bias Analysis (4H + 1H)
-        try:
-            await self._refresh_htf_bias()
-        except Exception as e:
-            logger.error(f"[BROADCASTER] {self._key} → HTF Bias inicial error: {e}")
+                    # Drift Monitor
+                    try:
+                        from engine.inference.drift_monitor import drift_monitor
+                        from engine.ml.feature_engineer import FeatureEngineer
+                        fe = FeatureEngineer()
+                        drift_monitor.set_reference(fe.generate_features(df_init.copy()))
+                    except: pass
 
-        # 4. Bootstrap SMC + Sesiones + Pipeline inicial
+                    # On-Chain
+                    try:
+                        onchain_summary = await self._onchain_sentinel.refresh(
+                            current_price=ref_price,
+                            market_regime=df_init["market_regime"].iloc[-1] if "market_regime" in df_init.columns else "UNKNOWN"
+                        )
+                        await self._broadcast({"type": "onchain_update", "data": onchain_summary})
+                    except: pass
+
+                # 3. Macro Niveles y HTF Bias
+                if h1_raw and h4_raw:
+                    def _get_levels(raw, tf):
+                        df = pd.DataFrame([i["data"] for i in raw])
+                        df["timestamp"] = pd.to_datetime(df["timestamp"], unit="s")
+                        df = identify_support_resistance(df, interval=tf)
+                        return get_key_levels(df)
+
+                    self._macro_levels = consolidate_mtf_levels(
+                        _get_levels(h1_raw, "1h"), _get_levels(h4_raw, "4h"), timeframe_weight=3
+                    )
+                    await self._refresh_htf_bias()
+                    
+                    # Notificar actualización táctica final
+                    if history:
+                        await self._reprocess_initial_tactical(history)
+
+            except Exception as bg_e:
+                logger.error(f"[BROADCASTER] {self._key} → Error en cálculos de segundo plano: {bg_e}")
+
+        # Disparamos todo el procesamiento pesado de forma asíncrona
+        asyncio.create_task(_load_background_data())
+
+        # 4. Inicialización mínima para el Stream Live (Sesiones)
         if history:
-            df_init = pd.DataFrame([i["data"] for i in history])
-            df_init["timestamp"] = pd.to_datetime(df_init["timestamp"], unit="s")
-
-            # Sesiones (más rápidas — se envían primero)
             try:
                 self._session_manager.bootstrap([i["data"] for i in history])
-                session_state = self._session_manager.get_current_state()
-                await self._broadcast(session_state)
-            except Exception as e:
-                logger.error(f"[BROADCASTER] {self._key} → Sesión bootstrap error: {e}")
+                await self._broadcast(self._session_manager.get_current_state())
+            except: pass
 
-            # Liquidaciones iniciales (Trapped Money)
-            try:
-                liq_clusters = estimate_liquidation_clusters(df_init, self.latest_price)
-                await self._broadcast({"type": "liquidation_update", "data": liq_clusters})
-            except Exception as e:
-                logger.error(f"[BROADCASTER] {self._key} → Initial Liquidation error: {e}")
+    async def _reprocess_initial_tactical(self, history):
+        """Re-procesa el pipeline táctico una vez que los niveles macro están listos."""
+        try:
+            df = pd.DataFrame([i["data"] for i in history])
+            df["timestamp"] = pd.to_datetime(df["timestamp"], unit="s")
+            
+            self._router.set_context(session_data=self._session_manager.get_current_state().get("data", {}))
+            tactical = self._router.process_market_data(
+                df, asset=self.symbol, interval=self.interval,
+                macro_levels=self._macro_levels,
+                htf_bias=self._htf_bias
+            )
+            
+            # Hidratación con caché si existe
+            cached = await self._store.get_advisor_advice(self.symbol)
+            if cached:
+                tactical["advisor_log"] = cached
 
-            # Drift Monitor — referencia inicial
-            try:
-                fe = FeatureEngineer()
-                df_features = fe.generate_features(df_init.copy())
-                drift_monitor.set_reference(df_features)
-            except Exception as e:
-                logger.error(f"[BROADCASTER] {self._key} → Drift reference error: {e}")
-
-            # SMC inicial
-            try:
-                df_ob = identify_order_blocks(df_init)
-                smc_new = extract_smc_coordinates(df_ob)
-                if self._persistent_smc:
-                    self._persistent_smc = merge_smc_states(
-                        mitigate_smc_state(self._persistent_smc, df_ob['low'].iloc[-1], df_ob['high'].iloc[-1]),
-                        smc_new
-                    )
-                else:
-                    self._persistent_smc = smc_new
-                await self._broadcast({"type": "smc_data", "data": self._persistent_smc})
-            except Exception as e:
-                logger.error(f"[BROADCASTER] {self._key} → SMC inicial error: {e}")
-
-            # On-Chain inicial
-            try:
-                onchain_summary = await self._onchain_sentinel.refresh(
-                    current_price=self.latest_price,
-                    market_regime=df_init["market_regime"].iloc[-1] if "market_regime" in df_init.columns else "UNKNOWN"
-                )
-                await self._broadcast({"type": "onchain_update", "data": onchain_summary})
-                self._last_onchain_ts = time.time()
-            except Exception as e:
-                logger.error(f"[BROADCASTER] {self._key} → On-Chain inicial error: {e}")
-
-            # Pipeline táctico inicial
-            try:
-                self._router.set_context(session_data=self._session_manager.get_current_state().get("data", {}))
-                tactical = self._router.process_market_data(
-                    df_init.copy(), asset=self.symbol, interval=self.interval,
-                    macro_levels=self._macro_levels,
-                    htf_bias=self._htf_bias
-                )
-                # Inyectar último análisis cacheado para hidratación instantánea (Zero-Latency) v5.7.155 Master Gold
-                if hasattr(self, '_last_advisor') and self._last_advisor:
-                    tactical["advisor_log"] = self._last_advisor
-                elif self.symbol:
-                    # Intentar buscarlo en el store si no está en la instancia (ej: tras reinicio del registry)
-                    cached = await self._store.get_advisor_advice(self.symbol)
-                    if cached:
-                        tactical["advisor_log"] = cached
-
-                await self._broadcast({"type": "tactical_update", "data": tactical})
-                
-                # LLM Advisor inicial (no bloqueante para actualizar si es necesario)
-                asyncio.create_task(self._emit_advisor(tactical, self._session_manager.get_current_state()))
-            except Exception as e:
-                logger.error(f"[BROADCASTER] {self._key} → Pipeline inicial error: {e}")
+            await self._broadcast({"type": "tactical_update", "data": tactical})
+            logger.info(f"[BROADCASTER] {self._key} → 🔄 Pipeline táctico actualizado con niveles Macro.")
+        except Exception as e:
+            logger.error(f"[BROADCASTER] {self._key} → Error re-procesando táctico: {e}")
 
     # ── Stream en tiempo real (Fase 2 del stream) ────────────────────────────
 
     async def _stream_live(self):
         """Conexión al stream multiplexado de Binance (Capa de Red Pura)."""
-        # 1. Source Check: Futures Mark Price
+        # 1. Source Check: Futures Mark Price (Optimizado v8.5.6)
         try:
+            # Skip check para activos sin futuros
+            if self.symbol in ["PAXGUSDT", "EURUSDT", "USDCUSDT"]:
+                raise ValueError("Skip Futures Check: Spot Asset")
+
             futures_stream_url = f"wss://fstream.binance.com/ws/{self.symbol.lower()}@markPrice"
-            async with ws_client.connect(futures_stream_url, open_timeout=10) as fws:
+            async with ws_client.connect(futures_stream_url, open_timeout=3) as fws:
                 await fws.recv() 
-                logger.info(f"[SOURCE_CHECK] fapi.binance.com (Futures) CONECTADO.")
+                logger.info(f"[SOURCE_CHECK] fapi.binance.com (Futures) OK.")
         except Exception as e:
-            logger.warning(f"[SOURCE_CHECK] Fallo al verificar fapi.binance.com: {e}")
+            logger.debug(f"[SOURCE_CHECK] Futures check skipped for {self.symbol}: {e}")
 
         kline_stream = f"{self.symbol.lower()}@kline_{self.interval}"
         depth_stream = f"{self.symbol.lower()}@depth20@100ms"
@@ -737,6 +754,9 @@ class SymbolBroadcaster:
             h1_raw = await fetch_binance_history(self.symbol, "1h", limit=250)
             h4_raw = await fetch_binance_history(self.symbol, "4h", limit=250)
             
+            if not h1_raw or not h4_raw:
+                raise ValueError("API devolvió datos vacíos para HTF Bias")
+                
             df_h1 = pd.DataFrame([i["data"] for i in h1_raw])
             df_h4 = pd.DataFrame([i["data"] for i in h4_raw])
             
@@ -749,6 +769,15 @@ class SymbolBroadcaster:
             logger.debug(f"[BROADCASTER] {self._key} → 🧭 HTF Bias Refrescado: {self._htf_bias.direction}")
         except Exception as e:
             logger.error(f"[BROADCASTER] {self._key} → Error refrescando HTF Bias: {e}")
+            # Fallback seguro para evitar UI congelada en "Analizando..."
+            from engine.core.confluence import HTFBias
+            self._htf_bias = HTFBias(
+                direction="NEUTRAL",
+                strength=0.0,
+                reason="Calibrando temporalidad superior...",
+                h4_regime="STANDBY",
+                h1_regime="STANDBY"
+            )
 
     # ── Handlers auxiliares ───────────────────────────────────────────────────
 

@@ -39,17 +39,20 @@ class OnChainSentinel:
         self._news_multiplier = 2.0 if news_sentiment == "BEARISH" else 1.0
         # Dynamic Whale Trigger (300% SMA_20)
         self._whale_threshold = max(avg_tick_volume * 3.0, 1000000.0) # Mínimo $1M institucional
+        # 1. Fetch Open Interest desde Binance Futures REST (v8.5.6 Optimized)
         try:
-            # 1. Fetch Open Interest desde Binance Futures REST (no requiere auth)
-            symbol_futures = self.symbol  # e.g. BTCUSDT
-            async with httpx.AsyncClient(timeout=8.0) as client:
+            # Skip check para activos sin futuros
+            if self.symbol in ["PAXGUSDT", "EURUSDT", "USDCUSDT"]:
+                raise ValueError("Skip On-Chain: Spot Asset")
+
+            async with httpx.AsyncClient(timeout=5.0, follow_redirects=True) as client:
                 oi_resp = await client.get(
                     f"https://fapi.binance.com/fapi/v1/openInterest",
-                    params={"symbol": symbol_futures}
+                    params={"symbol": self.symbol}
                 )
                 fr_resp = await client.get(
-                    f"https://fapi.binance.com/fapi/v1/premiumIndex",
-                    params={"symbol": symbol_futures}
+                    f"https://fapi.binance.com/fapi/v1/fundingRate",
+                    params={"symbol": self.symbol, "limit": 1}
                 )
 
             current_oi = 0.0
@@ -61,44 +64,48 @@ class OnChainSentinel:
 
             if fr_resp.status_code == 200:
                 fr_json = fr_resp.json()
-                self._funding_rate = float(fr_json.get("lastFundingRate", 0))
-
-            # 2. Calcular Delta OI (Precision Audit: 6 decimals)
-            if self._last_oi and self._last_oi > 0:
-                self._oi_delta_pct = ((current_oi - self._last_oi) / self._last_oi) * 100
-                if abs(self._oi_delta_pct) < 0.000001: 
-                    self._oi_delta_pct = 0.0
-            self._last_oi = current_oi
-
-            # 3. Whale Tracker (Dynamic Trigger 300% SMA_20)
-            await self._fetch_whale_alerts(min_value=self._whale_threshold)
-
-            # 4. Determinar On-Chain Bias (Lógica Institucional)
-            is_ranging = market_regime in ("RANGING", "ACCUMULATION")
-            oi_rising = self._oi_delta_pct > 1.5
-
-            if oi_rising and is_ranging:
-                self._onchain_bias = "BULLISH_ACCUMULATION"
-            elif any(alert.get('inflow_to_exchange') for alert in self._whale_alerts) or news_sentiment == "BEARISH":
-                self._onchain_bias = "BEARISH_WARNING"
-            elif self._funding_rate > 0.01 / self._news_multiplier:
-                self._onchain_bias = "OVERLEVERAGED_LONGS"
-            else:
-                self._onchain_bias = "NEUTRAL"
-
-            self._last_check_ts = datetime.now().timestamp()
-            
-            # [ONCHAIN_DEBUG] | Last Data: {ts} | Status: SYNCED
-            debug_ts = datetime.fromtimestamp(self._last_check_ts).strftime('%H:%M:%S')
-            logger.info(f"[ONCHAIN_DEBUG] | Last Data: {debug_ts} | Status: SYNCED | News: {news_sentiment}")
-            
-            logger.info(f"[ON-CHAIN] {self.symbol}: OI={current_oi:.0f} | ΔOI={self._oi_delta_pct:.6f}% | FR={self._funding_rate:.5f} | Bias={self._onchain_bias}")
-            return self.get_summary()
-
+                if isinstance(fr_json, list) and len(fr_json) > 0:
+                    self._funding_rate = float(fr_json[-1].get("fundingRate", 0)) * 100
         except Exception as e:
-            logger.error(f"[ON-CHAIN] Error al refrescar métricas: {e}")
-            return self.get_summary()
+            logger.debug(f"[ON-CHAIN] Network Error for {self.symbol}: {e}")
+            # NO resetear current_oi a 0 para no romper el historial de delta
+            current_oi = self._last_oi if self._last_oi else 0.0
 
+        # --- 3. Calcular Delta de Open Interest ---
+        if self._last_oi is not None and self._last_oi > 0:
+            self._oi_delta_pct = ((current_oi - self._last_oi) / self._last_oi) * 100
+            if abs(self._oi_delta_pct) < 0.000001: 
+                self._oi_delta_pct = 0.0
+        else:
+            self._oi_delta_pct = 0.0 # Primer tick o reset
+
+        logger.debug(f"[ON-CHAIN] {self.symbol} Data: OI={current_oi} | Δ={self._oi_delta_pct:.4f}% | FR={self._funding_rate:.6f}%")
+        self._last_oi = current_oi
+
+        # 3. Whale Tracker (Dynamic Trigger 300% SMA_20)
+        await self._fetch_whale_alerts(min_value=self._whale_threshold)
+
+        # 4. Determinar On-Chain Bias (Lógica Institucional)
+        is_ranging = market_regime in ("RANGING", "ACCUMULATION")
+        oi_rising = self._oi_delta_pct > 1.5
+
+        if oi_rising and is_ranging:
+            self._onchain_bias = "BULLISH_ACCUMULATION"
+        elif any(alert.get('inflow_to_exchange') for alert in self._whale_alerts) or news_sentiment == "BEARISH":
+            self._onchain_bias = "BEARISH_WARNING"
+        elif self._funding_rate > 0.01 / self._news_multiplier:
+            self._onchain_bias = "OVERLEVERAGED_LONGS"
+        else:
+            self._onchain_bias = "NEUTRAL"
+
+        self._last_check_ts = datetime.now().timestamp()
+        
+        # [ONCHAIN_DEBUG] | Last Data: {ts} | Status: SYNCED
+        debug_ts = datetime.fromtimestamp(self._last_check_ts).strftime('%H:%M:%S')
+        logger.info(f"[ONCHAIN_DEBUG] | Last Data: {debug_ts} | Status: SYNCED | News: {news_sentiment}")
+        
+        logger.info(f"[ON-CHAIN] {self.symbol}: OI={current_oi:.0f} | ΔOI={self._oi_delta_pct:.6f}% | FR={self._funding_rate:.5f} | Bias={self._onchain_bias}")
+        return self.get_summary()
 
     async def _fetch_whale_alerts(self, min_value: float = 10000000):
         """Consume la API de Whale Alert o usa un scraper ligero como fallback."""

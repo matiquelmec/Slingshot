@@ -7,12 +7,29 @@ from engine.core.logger import logger
 from engine.core.store import store
 from engine.api.config import settings
 
+import os
+
 # --- AI QUEUE SYSTEM ---
 _ai_queue = asyncio.PriorityQueue()
 _ai_task_counter = 0
 _active_queue_keys = set()
 _strategic_memo = {}
 _semantic_cache = {}
+_symbol_tasks = {} # [v8.5.4] Seguimiento de tareas para cancelación activa
+
+CACHE_FILE = os.path.join("engine", "data", "ai_cache.json")
+
+def _load_persistent_cache():
+    global _semantic_cache
+    try:
+        if os.path.exists(CACHE_FILE):
+            with open(CACHE_FILE, "r", encoding="utf-8") as f:
+                _semantic_cache = json.load(f)
+                logger.info(f"[ADVISOR] 🧠 Caché semántica cargada: {len(_semantic_cache)} entradas.")
+    except Exception as e:
+        logger.warning(f"[ADVISOR] Error cargando caché persistente: {e}")
+
+_load_persistent_cache()
 
 DEFAULT_MODEL = settings.OLLAMA_MODEL  # Configurable via .env — default: gemma3:4b
 OLLAMA_URL   = settings.OLLAMA_URL     # Configurable via .env — default: http://localhost:11434
@@ -86,18 +103,21 @@ async def generate_tactical_advice(symbol: str,
                                  liquidations: list = None, 
                                  economic_events: list = None,
                                  onchain_data: dict = None,
-                                 mtf_context: dict = None) -> str:
+                                 mtf_context: dict = None,
+                                 is_absorption_alert: bool = False) -> str:
     """
-    v5.9.5-MTF Master: Genera asesoría táctica consolidada multi-temporal.
-    Sintetiza 1m, 5m y 15m para detectar trampas y confirmar confluencias reales.
+    v8.5.5-Full: Genera asesoría táctica consolidada multi-temporal con contexto completo.
     """
-    # 1. Caché Semántica de Alta Velocidad
+    global _ai_task_counter, _symbol_tasks, _semantic_cache, _strategic_memo
     signal = tactical_data.get("signal", "NEUTRAL")
     regime = tactical_data.get("regime", "IDLE")
     price = tactical_data.get("price", 0.0)
     
-    # El hash semántico ahora incluye el estado de las señales MTF para refrescar si algo cambia en otra temporalidad
-    mtf_signals = "_".join([f"{k}:{v.get('signal', 'N')}" for k, v in (mtf_context or {}).items()])
+    # [OPTIMIZACIÓN v8.5.3] Filtrado de ruido MTF para estabilidad del Advisor
+    # Solo consideramos temporalidades >= 15m para invalidar la caché semántica
+    relevant_tfs = ["15m", "1h", "4h", "1d", "1w"]
+    mtf_signals = "_".join([f"{k}:{v.get('signal', 'N')}" for k, v in (mtf_context or {}).items() if k in relevant_tfs])
+    
     semantic_hash = hashlib.md5(f"{symbol}_{regime}_{signal}_{mtf_signals}_{current_session}".encode()).hexdigest()
     
     if semantic_hash in _semantic_cache:
@@ -108,11 +128,13 @@ async def generate_tactical_advice(symbol: str,
     if not await check_ollama_status():
         return "ADVISOR: OLLAMA_OFFLINE. Operando bajo parámetros técnicos puros."
 
-    # 2. SISTEMA DE UMBRAL POR VOLATILIDAD (0.15% Delta Logic)
+    # 2. SISTEMA DE UMBRAL POR VOLATILIDAD (0.1% Delta Logic v8.5.3)
     if symbol in _strategic_memo:
         last_p = _strategic_memo[symbol]["price"]
         diff = abs(last_p - price) / (price or 1)
-        if diff < 0.0015 and signal == "NEUTRAL":
+        # Si el precio se mueve < 0.05% y el régimen es el mismo, mantenemos el veredicto
+        if diff < 0.0005:
+            logger.info(f"[ADVISOR] 🧊 Manteniendo análisis (Precio estable < 0.05% delta).")
             return _strategic_memo[symbol]["advice"]
 
     if not await check_ollama_status():
@@ -156,22 +178,25 @@ RESPONDE SOLO EL JSON:
 {{"verdict": "...", "threat": "...", "logic": "..."}}"""
 
     # 3. Gestión de Prioridad y Cola (v5.9.5 MTF Priority)
+    
     # Si hay CUALQUIER señal en CUALQUIER temporalidad, subimos prioridad
     has_any_signal = any(d.get('signal', 'NEUTRAL') != 'NEUTRAL' for d in (mtf_context or {}).values()) or signal != "NEUTRAL"
-    is_priority = has_any_signal or (symbol == "BTCUSDT")
-    priority = 0 if is_priority else 50
-    
-    queue_key = f"TACTICAL_{symbol}"
-    if queue_key in _active_queue_keys:
-        return "ADVISOR: ANALYZANDO_TICK_EN_COLA..."
+    # [v8.5.4] Gestión de tareas por símbolo: Cancelamos la anterior para evitar atascamiento
+    if symbol in _symbol_tasks:
+        old_fut = _symbol_tasks[symbol]
+        if not old_fut.done():
+            old_fut.cancel()
+            logger.debug(f"[ADVISOR] 🚫 Cancelada tarea previa de {symbol}")
 
+    priority = 0 # Prioridad máxima para cualquier consulta táctica activa
+    
     try:
-        _active_queue_keys.add(queue_key)
+        # queue_key = f"TACTICAL_{symbol}" # Obsoleto en v8.5.4
         loop = asyncio.get_running_loop()
         future = loop.create_future()
         
-        global _ai_task_counter
         _ai_task_counter += 1
+        _symbol_tasks[symbol] = future # [v8.5.4] Registro de tarea activa para permitir cancelación
         
         await _ai_queue.put((priority, _ai_task_counter, {
             'asset': symbol,
@@ -183,12 +208,30 @@ RESPONDE SOLO EL JSON:
         advice = await future
         _strategic_memo[symbol] = {"price": price, "advice": advice}
         _semantic_cache[semantic_hash] = {"price": price, "advice": advice}
+        
+        # [OPTIMIZACIÓN v8.5] Persistir en disco
+        _save_persistent_cache()
+        
         return advice
     except Exception as e:
         logger.error(f"[ADVISOR] ❌ Error en Tactical Advisory ({symbol}): {e}")
         return "ADVISOR LOG: OLLAMA_TIMEOUT. Siguiendo técnica pura."
     finally:
-        _active_queue_keys.discard(queue_key)
+        pass
+
+def _save_persistent_cache():
+    try:
+        # Limitamos el tamaño de la caché para no saturar el disco (ej: últimas 500 entradas)
+        global _semantic_cache
+        if len(_semantic_cache) > 500:
+            # Eliminar entradas antiguas si es necesario
+            keys_to_keep = list(_semantic_cache.keys())[-500:]
+            _semantic_cache = {k: _semantic_cache[k] for k in keys_to_keep}
+
+        with open(CACHE_FILE, "w", encoding="utf-8") as f:
+            json.dump(_semantic_cache, f, indent=2, ensure_ascii=False)
+    except Exception as e:
+        logger.error(f"[ADVISOR] Error guardando caché en disco: {e}")
 
 async def generate_news_sentiment_batch(headlines: list[str]) -> list[dict]:
     """
@@ -305,9 +348,13 @@ async def generate_news_sentiment(headline: str) -> dict:
 
 async def ai_worker():
     """Worker que procesa la cola de IA."""
-    async with httpx.AsyncClient(timeout=60.0) as client:
+    async with httpx.AsyncClient(timeout=90.0) as client:
         while True:
             priority, count, task = await _ai_queue.get()
+            if task['future'].cancelled():
+                _ai_queue.task_done()
+                continue
+
             try:
                 payload = {
                     "model": DEFAULT_MODEL,
@@ -318,16 +365,35 @@ async def ai_worker():
                 if task.get('format') == 'json':
                     payload['format'] = 'json'
 
+                # Petición a Ollama con posibilidad de cancelación
                 response = await client.post(f"{OLLAMA_URL}/api/generate", json=payload)
+                
+                if task['future'].cancelled():
+                    _ai_queue.task_done()
+                    continue
+
                 if response.status_code == 200:
                     result = response.json()
                     content = result.get("response", "").strip()
-                    task['future'].set_result(content)
+                    if not content:
+                        logger.warning(f"[AI_WORKER] Ollama devolvió respuesta vacía para {task.get('asset')}")
+                        content = json.dumps({"verdict": "SIDEWAYS", "logic": "EMPTY_RESPONSE", "threat": "LOW"})
+                    
+                    logger.info(f"[AI_WORKER] ✅ Respuesta recibida para {task.get('asset')} ({len(content)} bytes)")
+                    if not task['future'].done():
+                        task['future'].set_result(content)
                 else:
-                    task['future'].set_exception(Exception(f"Ollama error: {response.status_code}"))
+                    logger.error(f"[AI_WORKER] ❌ Error de Ollama: {response.status_code} para {task.get('asset')}")
+                    if not task['future'].done():
+                        task['future'].set_exception(Exception(f"Ollama error: {response.status_code}"))
             except Exception as e:
-                task['future'].set_exception(e)
+                if not task['future'].done():
+                    task['future'].set_exception(e)
             finally:
+                # Limpiar rastreador de símbolos si esta era la tarea activa
+                asset = task.get('asset')
+                if asset in _symbol_tasks and _symbol_tasks[asset] == task['future']:
+                    del _symbol_tasks[asset]
                 _ai_queue.task_done()
 
 def start_ai_worker():

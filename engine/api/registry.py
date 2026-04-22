@@ -89,6 +89,13 @@ class BroadcasterRegistry:
         async with self._lock:
             if key not in self._broadcasters:
                 await store.flush_symbol(symbol.upper()) # Flush & Sync
+                
+                # [OPTIMIZACIÓN v8.5] Auto-persistir activos de la Watchlist
+                from engine.api.config import settings
+                if symbol.upper() in settings.MASTER_WATCHLIST:
+                    persistent = True
+                    logger.info(f"[REGISTRY] 💎 {key} detectado en Watchlist. Iniciando como PERSISTENTE.")
+
                 broadcaster = SymbolBroadcaster(symbol, interval, persistent=persistent)
                 self._broadcasters[key] = broadcaster
                 await broadcaster.start()
@@ -112,13 +119,19 @@ class BroadcasterRegistry:
             await broadcaster.unsubscribe(client_id)
 
             if broadcaster.subscriber_count() == 0 and not broadcaster.persistent:
+                # [OPTIMIZACIÓN v8.5] Comprobar si es un activo Keep-Alive (Master Watchlist)
+                from engine.api.config import settings
+                if symbol.upper() in settings.MASTER_WATCHLIST:
+                    logger.debug(f"[REGISTRY] 💎 Broadcaster {key} es un activo Keep-Alive. No se eliminará.")
+                    return
+
                 async def _delayed_cleanup():
-                    await asyncio.sleep(60.0) 
+                    await asyncio.sleep(600.0) # Periodo de Gracia aumentado a 10 min
                     async with self._lock:
                         if key in self._broadcasters and self._broadcasters[key].subscriber_count() == 0:
                             await self._broadcasters[key].stop()
                             del self._broadcasters[key]
-                            logger.info(f"[REGISTRY] 🗑️ Broadcaster eliminado tras Grace Period: {key}")
+                            logger.info(f"[REGISTRY] 🗑️ Broadcaster eliminado tras Grace Period (10 min): {key}")
                 
                 asyncio.create_task(_delayed_cleanup())
 

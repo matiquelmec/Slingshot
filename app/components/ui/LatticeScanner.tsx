@@ -19,19 +19,27 @@ export default function LatticeScanner() {
 
     // Construir lista de pares reales desde el marketSummary del backend
     const pairs = useMemo(() => {
-        const entries = Object.values(marketSummary);
-        if (entries.length === 0) return [];
+        const entries = { ...marketSummary };
+        
+        // 🛡️ OMEGA STABILITY: Asegurar que los Master siempre existan en el mapa visual
+        MASTER_WATCHLIST.forEach(symbol => {
+            if (!entries[symbol]) {
+                entries[symbol] = { asset: symbol, price: 0, regime: 'SYNCING...', strategy: 'STANDBY', bias: 'NEUTRAL', trend: 0 };
+            }
+        });
 
-        return entries
+        return Object.values(entries)
             .filter(p => p.asset && p.asset.endsWith('USDT'))
             .sort((a, b) => {
-                // Prioridad 1: Master Watchlist al principio
-                const isAMaster = MASTER_WATCHLIST.includes(a.asset);
-                const isBMaster = MASTER_WATCHLIST.includes(b.asset);
-                if (isAMaster && !isBMaster) return -1;
-                if (!isAMaster && isBMaster) return 1;
+                // Prioridad 1: Master Watchlist al principio (Orden Estricto según MASTER_WATCHLIST)
+                const indexA = MASTER_WATCHLIST.indexOf(a.asset);
+                const indexB = MASTER_WATCHLIST.indexOf(b.asset);
                 
-                // Prioridad 2: Orden por precio (o cualquier otro criterio)
+                if (indexA !== -1 && indexB !== -1) return indexA - indexB;
+                if (indexA !== -1) return -1;
+                if (indexB !== -1) return 1;
+                
+                // Prioridad 2: Orden por precio para el resto
                 return (b.price || 0) - (a.price || 0);
             });
     }, [marketSummary]);

@@ -19,6 +19,7 @@ import asyncio
 import time
 import httpx
 import json
+import pandas as pd  # v8.5.7: Requerido para pd.to_datetime en eventos económicos
 from dataclasses import dataclass
 from typing import Optional, List, Tuple
 
@@ -142,21 +143,36 @@ async def _fetch_btc_dominance() -> float:
 async def fetch_funding_rate(symbol: str = "BTCUSDT") -> float:
     """
     Última tasa de financiación del perpetual en Binance Futures.
+    v8.5.7: Usa /fapi/v1/fundingRate (más estable que premiumIndex) + Mirror Failover.
     """
-    try:
-        async with httpx.AsyncClient(timeout=8.0) as client:
-            r = await client.get(
-                "https://fapi.binance.com/fapi/v1/premiumIndex",
-                params={"symbol": symbol.upper()}
-            )
-            r.raise_for_status()
-            data = r.json()
-            if isinstance(data, dict) and "lastFundingRate" in data:
-                return float(data["lastFundingRate"]) * 100  # → porcentaje
-            return 0.0
-    except Exception as e:
-        logger.error(f"[GHOST] ⚠️  Funding Rate fetch error for {symbol}: {e}")
+    if symbol.upper() in ["USDCUSDT", "EURUSDT"]:
         return 0.0
+
+    # Lista de mirrors para máxima resiliencia
+    mirrors = [
+        "https://fapi.binance.com/fapi/v1/fundingRate",
+        "https://fapi1.binance.com/fapi/v1/fundingRate",
+        "https://fapi2.binance.com/fapi/v1/fundingRate"
+    ]
+    
+    for url in mirrors:
+        try:
+            async with httpx.AsyncClient(timeout=5.0, follow_redirects=True) as client:
+                r = await client.get(url, params={"symbol": symbol.upper(), "limit": 1})
+                if r.status_code == 200:
+                    data = r.json()
+                    if isinstance(data, list) and len(data) > 0:
+                        # Usar el último elemento para asegurar que es el más reciente
+                        rate = float(data[-1].get("fundingRate", 0)) * 100
+                        logger.debug(f"[GHOST] Funding {symbol} fetched: {rate:.6f}% from {url}")
+                        return rate
+                else:
+                    logger.debug(f"[GHOST] Mirror {url} returned status {r.status_code}")
+        except Exception as e:
+            logger.debug(f"[GHOST] Mirror {url} error: {e}")
+            continue
+            
+    return 0.0
 
 
 # ── Lógica de filtrado macro ──────────────────────────────────────────────────
@@ -227,18 +243,21 @@ async def refresh_ghost_data(symbol: str = "BTCUSDT", macro_ctx: Optional[MacroS
     """
     global _cache
 
-    # OPTIMIZACIÓN v5.7.156: Respetar TTL incluso con macro_ctx inyectado 
-    # para evitar recalcular en cada tick del Fast Path.
+    # OPTIMIZACIÓN v8.5.7: El caché macro se respeta, pero el FUNDING debe
+    # consultarse siempre por activo (no compartir caché de BTC con ETH)
     if is_cache_fresh() and macro_ctx is not None:
-        # Solo actualizamos los campos dinámicos del macro_ctx sin re-fetch de APIs externas
         _cache.dxy_trend = macro_ctx.dxy_trend
         _cache.dxy_price = macro_ctx.dxy_price
         _cache.nasdaq_trend = macro_ctx.nasdaq_trend
         _cache.nasdaq_change_pct = macro_ctx.nas100_change_pct
-        return _cache
+        
+        # Aunque el macro esté fresco, buscamos el funding de este símbolo particular
+        local_funding = await fetch_funding_rate(symbol)
+        return compute_symbol_ghost(_cache, symbol, local_funding)
 
     if macro_ctx is None and is_cache_fresh():
-        return _cache
+        local_funding = await fetch_funding_rate(symbol)
+        return compute_symbol_ghost(_cache, symbol, local_funding)
 
     results = await asyncio.gather(
         _fetch_fear_greed(),
@@ -276,10 +295,13 @@ async def refresh_ghost_data(symbol: str = "BTCUSDT", macro_ctx: Optional[MacroS
         n_sent = sum(vals) / len(vals)
 
     # Calcular sesgo macro consolidado
+    dxy_trend = macro_ctx.dxy_trend if macro_ctx else "NEUTRAL"
+    nasdaq_trend = macro_ctx.nasdaq_trend if macro_ctx else "NEUTRAL"
+    
     bias, b_longs, b_shorts, reason = _compute_bias(
         fng_val, btcd, funding, 
-        dxy=macro_ctx.dxy_trend, 
-        nasdaq=macro_ctx.nasdaq_trend,
+        dxy=dxy_trend, 
+        nasdaq=nasdaq_trend,
         news_sentiment=n_sent,
         active_event=active_event_name
     )
@@ -299,11 +321,11 @@ async def refresh_ghost_data(symbol: str = "BTCUSDT", macro_ctx: Optional[MacroS
         reason           = reason,
         last_updated     = cache_time,
         is_stale         = False,
-        dxy_trend        = macro_ctx.dxy_trend,
-        dxy_price        = macro_ctx.dxy_price,
-        nasdaq_trend     = macro_ctx.nasdaq_trend,
-        nasdaq_change_pct= macro_ctx.nas100_change_pct,
-        risk_appetite    = macro_ctx.risk_appetite,
+        dxy_trend        = macro_ctx.dxy_trend if macro_ctx else "NEUTRAL",
+        dxy_price        = macro_ctx.dxy_price if macro_ctx else 0.0,
+        nasdaq_trend     = macro_ctx.nasdaq_trend if macro_ctx else "NEUTRAL",
+        nasdaq_change_pct= macro_ctx.nas100_change_pct if macro_ctx else 0.0,
+        risk_appetite    = macro_ctx.risk_appetite if macro_ctx else "NEUTRAL",
         news_sentiment   = n_sent,
         active_event     = active_event_name
     )
@@ -317,24 +339,9 @@ def get_ghost_state(symbol: Optional[str] = None) -> GhostState:
     if not symbol or symbol.upper() == _cache.funding_symbol.upper():
         return _cache
     
-    return GhostState(
-        fear_greed_value = _cache.fear_greed_value,
-        fear_greed_label = _cache.fear_greed_label,
-        btc_dominance    = _cache.btc_dominance,
-        funding_rate     = 0.0,
-        funding_symbol   = symbol.upper(),
-        macro_bias       = _cache.macro_bias,
-        block_longs      = _cache.block_longs,
-        block_shorts     = _cache.block_shorts,
-        reason           = _cache.reason,
-        last_updated     = _cache.last_updated,
-        is_stale         = _cache.is_stale,
-        dxy_trend        = _cache.dxy_trend,
-        dxy_price        = _cache.dxy_price,
-        nasdaq_trend     = _cache.nasdaq_trend,
-        nasdaq_change_pct= _cache.nasdaq_change_pct,
-        risk_appetite    = _cache.risk_appetite
-    )
+    # v8.5.7: No forzar 0.0 si el simbolo no coincide. Retornar el cache actual 
+    # para evitar parpadeos en 0 en el Radar Macro.
+    return _cache
 
 
 def compute_symbol_ghost(global_cache: GhostState, symbol: str, local_funding: float) -> GhostState:

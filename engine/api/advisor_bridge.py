@@ -211,11 +211,13 @@ class AdvisorBridge:
         if not await check_ollama_status():
             logger.info(f"[ADVISOR_BRIDGE] ⚠️ Ollama offline para {self._symbol}")
             await bc._broadcast({"type": "advisor_update", "data": {
+                "asset":      self._symbol,
                 "content": (
                     "⚠️ MOTOR IA OFFLINE: El motor Ollama no responde en localhost:11434. "
                     "Asegúrate de que Ollama esté abierto."
                 ),
                 "timestamp":  current_candle_ts,
+                "status":     "OFFLINE",
                 "updated_at": datetime.now(timezone.utc).isoformat(),
             }})
             return
@@ -271,17 +273,27 @@ class AdvisorBridge:
                 f"Signals: {len(approved_signals)}A/{len(blocked_signals)}B"
             )
 
-            if not is_active_signal and not is_trending and conf_score < 70:
+            if not is_active_signal and not is_trending and conf_score < 40:
                 # Bypass total — mercado en standby
-                advice = json.dumps({
+                advice_json = {
                     "verdict": "SIDEWAYS",
-                    "logic":   f"Confluencia {conf_score}% (Standby)",
+                    "logic":   f"CONFLUENCIA BAJA ({conf_score}%). AGUARDANDO VOLATILIDAD... 🛡️",
                     "threat":  "LOW",
-                })
-                logger.info(f"[ADVISOR_BRIDGE] 🛡️ Gatekeeping ACTIVE para {self._symbol}. LLM bypassed.")
+                }
+                advice = json.dumps(advice_json)
+                logger.info(f"[ADVISOR_BRIDGE] 🛡️ Gatekeeping ACTIVE para {self._symbol}. Motivo: Confluencia {conf_score}% (Standby)")
+                
+                # Broadcast inmediato del bypass para limpiar loading en UI
+                await bc._broadcast({"type": "advisor_update", "data": {
+                    "content":    advice_json["logic"],
+                    "symbol":     self._symbol,
+                    "status":     "GATEKEEPING",
+                    "updated_at": datetime.now(timezone.utc).isoformat(),
+                }})
             else:
                 # ── 9. Loading indicator ──────────────────────────────────────
                 await bc._broadcast({"type": "advisor_update", "data": {
+                    "asset":      self._symbol,
                     "content":    "CONECTANDO CON EL MOTOR CUÁNTICO (Ollama)... ⚡",
                     "timestamp":  current_candle_ts,
                     "status":     "LOADING_IA",
@@ -298,6 +310,7 @@ class AdvisorBridge:
                 sanitized.pop("candles", None)
                 mtf_context = await bc._store.get_mtf_context(self._symbol)
 
+                # Prioridad 0 para el símbolo activo del usuario
                 advice = await asyncio.wait_for(
                     generate_tactical_advice(
                         self._symbol,
@@ -310,7 +323,7 @@ class AdvisorBridge:
                         onchain_data     = bc._last_onchain.get("data") if bc._last_onchain else None,
                         mtf_context      = mtf_context,
                     ),
-                    timeout=60.0,
+                    timeout=90.0,
                 )
                 logger.info(f"[ADVISOR_BRIDGE] ✅ Análisis LLM completado para {self._symbol}")
 
@@ -319,6 +332,7 @@ class AdvisorBridge:
                 "timestamp":  current_candle_ts,
                 "asset":      self._symbol,
                 "content":    advice,
+                "status":     "COMPLETE",
                 "updated_at": datetime.now(timezone.utc).isoformat(),
             }
             await bc._store.save_advisor_advice(self._symbol, advice_obj)
@@ -328,6 +342,7 @@ class AdvisorBridge:
         except asyncio.TimeoutError:
             logger.info(f"[ADVISOR_BRIDGE] ⚠️ Timeout en LLM Advisor ({self._symbol})")
             error_obj = {
+                "asset":   self._symbol,
                 "content": (
                     "⚠️ MOTOR IA SATURADO: Ollama está tardando demasiado. "
                     "Reintentando en la próxima vela..."
@@ -346,7 +361,9 @@ class AdvisorBridge:
             import traceback
             logger.error(f"[ADVISOR_BRIDGE] ❌ {self._symbol}:{self._interval} → Advisor error: {e}")
             await bc._broadcast({"type": "advisor_update", "data": {
+                "asset":      self._symbol,
                 "content":    f"ADVISOR OFFLINE: {e}",
+                "status":     "ERROR",
                 "timestamp":  current_candle_ts,
                 "updated_at": datetime.now(timezone.utc).isoformat(),
             }})

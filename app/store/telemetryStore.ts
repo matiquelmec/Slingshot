@@ -387,6 +387,8 @@ export const useTelemetryStore = create<TelemetryState>((set, get) => {
                     });
                 } else if (data.type === 'tactical_update') {
                     const d = data.data;
+                    if (!d) return;
+                    
                     const incomingSignals: Signal[] = d.signals ?? [];
                     const isElite = MASTER_WATCHLIST.includes(d.asset);
 
@@ -476,6 +478,8 @@ export const useTelemetryStore = create<TelemetryState>((set, get) => {
                     });
                 } else if (data.type === 'advisor_update') {
                     const advice = data.data;
+                    if (!advice) return;
+                    
                     set((state) => {
                         const asset = advice?.asset || state.activeSymbol; 
                         return {
@@ -538,25 +542,23 @@ export const useTelemetryStore = create<TelemetryState>((set, get) => {
                     const g = data.data || {};
                     const activeSym = get().activeSymbol;
                     
-                    // Solo actualizar si el mensaje es para el activo que estamos viendo
-                    if (g.symbol && g.symbol === activeSym) {
-                        set({ ghostData: g });
-                        set((state) => {
-                            const biasIcons: Record<string, string> = {
-                                BULLISH: '🟢', BEARISH: '🔴', NEUTRAL: '⚪',
-                                BLOCK_LONGS: '🟠', BLOCK_SHORTS: '🟤', CONFLICTED: '🟡'
-                            };
-                            const icon = biasIcons[g.macro_bias] ?? '⚪';
-                            const fund = g.funding_rate != null ? Number(g.funding_rate).toFixed(4) : "0.0000";
-                            const newLog: NeuralLog = {
-                                id: Math.random().toString(36).substring(7),
-                                timestamp: new Date().toLocaleTimeString('en-US', { hour12: false }),
-                                type: g.block_longs || g.block_shorts ? 'ALERT' : 'SENSOR',
-                                message: `[GHOST] ${icon} F&G=${g.fear_greed_value ?? '?'} (${g.fear_greed_label ?? 'N/A'}) | BTCD=${g.btc_dominance ?? '?'}% | Fund=${fund}% | Bias=${g.macro_bias ?? 'N/A'}`
-                            };
-                            return { neuralLogs: [newLog, ...state.neuralLogs].slice(0, 5) };
-                        });
-                    }
+                    // [v8.5.7] Macro Radar es GLOBAL: Actualizar siempre con la última telemetría macro disponible
+                    set({ ghostData: { ...g, symbol: g.symbol || activeSym } });
+                    set((state) => {
+                        const biasIcons: Record<string, string> = {
+                            BULLISH: '🟢', BEARISH: '🔴', NEUTRAL: '⚪',
+                            BLOCK_LONGS: '🟠', BLOCK_SHORTS: '🟤', CONFLICTED: '🟡'
+                        };
+                        const icon = biasIcons[g.macro_bias] ?? '⚪';
+                        const fund = g.funding_rate != null ? Number(g.funding_rate).toFixed(4) : "0.0000";
+                        const newLog: NeuralLog = {
+                            id: Math.random().toString(36).substring(7),
+                            timestamp: new Date().toLocaleTimeString('en-US', { hour12: false }),
+                            type: g.block_longs || g.block_shorts ? 'ALERT' : 'SENSOR',
+                            message: `[GHOST] ${icon} F&G=${g.fear_greed_value ?? '?'} (${g.fear_greed_label ?? 'N/A'}) | BTCD=${g.btc_dominance ?? '?'}% | Fund=${fund}% | Bias=${g.macro_bias ?? 'N/A'}`
+                        };
+                        return { neuralLogs: [newLog, ...state.neuralLogs].slice(0, 5) };
+                    });
                 } else if (data.type === 'drift_alert') {
                     const drift = data.data || {};
                     set((state) => {
@@ -587,13 +589,14 @@ export const useTelemetryStore = create<TelemetryState>((set, get) => {
                     set({ liquidations: data.data as LiquidationCluster[] });
                 } else if (data.type === 'onchain_update') {
                     const metrics = data.data as OnChainMetrics;
-                    if (metrics.symbol === get().activeSymbol) {
+                    if (metrics && metrics.symbol === get().activeSymbol) {
                         set({ onchainMetrics: metrics });
                     }
                 }
             } catch (err) {
-                console.error("Critical error in WS message handler:", {
-                    error: err,
+                console.error("❌ [WS-HANDLER] Critical error:", {
+                    error: err instanceof Error ? err.message : err,
+                    stack: err instanceof Error ? err.stack : null,
                     messageType: data?.type,
                     payload: data?.data
                 });
