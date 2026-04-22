@@ -42,30 +42,11 @@ class OnChainSentinel:
         
         now_ts = datetime.now().timestamp()
         
-        # 1. Fetch Open Interest desde Binance Futures REST (v8.5.6 Optimized)
-        try:
-            # Skip check para activos sin futuros
-            if self.symbol in ["PAXGUSDT", "EURUSDT", "USDCUSDT"]:
-                raise ValueError("Skip On-Chain: Spot Asset")
 
-            async with httpx.AsyncClient(timeout=5.0, follow_redirects=True) as client:
-                oi_resp = await client.get(
-                    f"https://fapi.binance.com/fapi/v1/openInterest",
-                    params={"symbol": self.symbol}
-                )
-                fr_resp = await client.get(
-                    f"https://fapi.binance.com/fapi/v1/fundingRate",
-                    params={"symbol": self.symbol, "limit": 1}
-                )
 
-        now_ts = datetime.now().timestamp()
         
         # 1. Fetch Open Interest desde Binance Futures REST (v8.5.6 Optimized)
         try:
-            # Skip check para activos sin futuros
-            if self.symbol in ["PAXGUSDT", "EURUSDT", "USDCUSDT"]:
-                raise ValueError("Skip On-Chain: Spot Asset")
-
             async with httpx.AsyncClient(timeout=5.0, follow_redirects=True) as client:
                 oi_resp = await client.get(
                     f"https://fapi.binance.com/fapi/v1/openInterest",
