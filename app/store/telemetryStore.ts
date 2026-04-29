@@ -612,14 +612,17 @@ export const useTelemetryStore = create<TelemetryState>((set, get) => {
                 } else if (data.type === 'news_update') {
                     const newsItem = data.data as NewsItem;
                     set((state) => {
-                        // Anti-duplicados (por ID o título estricto)
-                        const exists = state.news.some(n => 
-                            n.id === newsItem.id || 
-                            n.title === newsItem.title
-                        );
-                        if (exists) return state; // Ignorar si ya existe
+                        const existingIdx = state.news.findIndex(n => n.id === newsItem.id);
                         
-                        return { news: [newsItem, ...state.news].slice(0, 15) }; // Mantener un feed denso y corporativo (max 15)
+                        if (existingIdx !== -1) {
+                            // Si ya existe, actualizamos el item (ej: de 'analyzing' a 'finalizado')
+                            const updatedNews = [...state.news];
+                            updatedNews[existingIdx] = newsItem;
+                            return { news: updatedNews };
+                        }
+                        
+                        // Si es nueva, la añadimos al inicio
+                        return { news: [newsItem, ...state.news].slice(0, 15) };
                     });
                 } else if (data.type === 'liquidation_update') {
                     set({ liquidations: data.data as LiquidationCluster[] });

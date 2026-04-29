@@ -1,0 +1,18 @@
+{
+  "69cecd140a7e220c5d56cf02035ff9b2": {
+    "price": 0.0,
+    "advice": "{\"verdict\": \"AVOID\", \"threat\": \"MEDIUM\", \"logic\": \"Low RVOL, SMC inactive.\"}"
+  },
+  "59d56990e8bf87775504ac258f55499f": {
+    "price": 0.0,
+    "advice": "{\"verdict\": \"AVOID\", \"threat\": \"MEDIUM\", \"logic\": \"Low RVOL, SMC active\"}"
+  },
+  "39fd8607e9cb793c9d0bf070c7031bd3": {
+    "price": 0.0,
+    "advice": "{\"verdict\": \"GO\", \"threat\": \"LOW\", \"logic\": \"SMC con RVOL alta\"}"
+  },
+  "d85dd5e99f098ed5ee969d62a12b6b5f": {
+    "price": 0.0,
+    "advice": "{\"verdict\": \"AVOID\", \"threat\": \"MEDIUM\", \"logic\": \"Low RVOL, SMC active\"}"
+  }
+}
