@@ -580,6 +580,19 @@ export const useTelemetryStore = create<TelemetryState>((set, get) => {
                     
                     // [v8.5.7] Macro Radar es GLOBAL: Actualizar siempre con la última telemetría macro disponible
                     set({ ghostData: { ...g, symbol: g.symbol || activeSym } });
+                    
+                    // ⚓ Sincronizar onchainMetrics desde ghost_update para redundancia (v8.5.9)
+                    if (g.symbol === activeSym && g.oi_delta_pct !== undefined) {
+                        set({ onchainMetrics: {
+                            symbol: g.symbol,
+                            oi_delta_pct: Number(g.oi_delta_pct),
+                            funding_rate: Number(g.funding_rate),
+                            onchain_bias: g.onchain_bias,
+                            whale_alerts_count: g.whale_alerts_count || 0,
+                            ts: g.last_updated || Date.now() / 1000
+                        }});
+                    }
+
                     set((state) => {
                         const biasIcons: Record<string, string> = {
                             BULLISH: '🟢', BEARISH: '🔴', NEUTRAL: '⚪',

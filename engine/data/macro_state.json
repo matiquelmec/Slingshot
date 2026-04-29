@@ -1,7 +1,7 @@
 {
-  "fear_greed_value": 50,
-  "fear_greed_label": "Neutral",
-  "btc_dominance": 50.0,
+  "fear_greed_value": 26,
+  "fear_greed_label": "Fear",
+  "btc_dominance": 58.04,
   "funding_rate": 0.001305,
   "funding_symbol": "BTCUSDT",
   "macro_bias": "BLOCK_LONGS",
@@ -9,12 +9,12 @@
   "block_shorts": false,
   "reason": "DXY Alcista: Presi\u00f3n vendedora global | NASDAQ Bajista: Risk-Off",
   "dxy_trend": "BULLISH",
-  "dxy_price": 98.68,
+  "dxy_price": 98.75,
   "nasdaq_trend": "BEARISH",
   "nasdaq_change_pct": -0.89,
   "risk_appetite": "RISK_OFF",
   "news_sentiment": 0.5,
   "active_event": "",
-  "last_updated": 1777447614.638638,
+  "last_updated": 1777450973.9955664,
   "is_stale": false
 }

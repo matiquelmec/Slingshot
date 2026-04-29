@@ -50,15 +50,11 @@ from engine.indicators.ghost_data import (
     refresh_ghost_data, get_ghost_state, filter_signals_by_macro,
     is_cache_fresh, fetch_funding_rate, compute_symbol_ghost
 )
+
 from engine.ml.features import FeatureEngineer
-from engine.ml.inference import ml_engine
 from engine.ml.drift_monitor import drift_monitor
-from engine.notifications.telegram import send_signal_async
-from engine.notifications.filter import signal_filter
-from engine.api.advisor import generate_tactical_advice, check_ollama_status
-from engine.core.store import store
 from engine.indicators.htf_analyzer import HTFAnalyzer
-from engine.indicators.onchain import OnChainSentinel
+from engine.core.store import store
 
 # ✅ v6.0.1 — Módulos extraídos (Refactor ISS-011)
 from engine.api.signal_handler import SignalHandler
@@ -150,9 +146,8 @@ class SymbolBroadcaster:
         
         self._last_onchain_ts = 0.0 # Forza refresh inmediato
         self._last_whale_scan_ts = 0.0 # v5.7.15 DOM Scanner
-        self._onchain_sentinel = OnChainSentinel(symbol=self.symbol)
         self._last_onchain = None
-        self._last_onchain_ts = 0.0
+        self._onchain_task = None
 
         # Caché del último estado para nuevos suscriptores
         self._last_ghost     = None
@@ -392,6 +387,9 @@ class SymbolBroadcaster:
                 retry_delay = 2.0  # reset en caso de éxito
             except asyncio.CancelledError:
                 raise
+            except (asyncio.TimeoutError, TimeoutError):
+                logger.info(f"[BROADCASTER] 🔄 Conexión refrescada por inactividad: {self._key}")
+                await asyncio.sleep(1.0)
             except Exception as e:
                 logger.error(f"[BROADCASTER] ⚠️ Error en {self._key}: {e}. Reintentando en {retry_delay}s...")
                 traceback.print_exc()
@@ -501,10 +499,6 @@ class SymbolBroadcaster:
         # Disparamos todo el procesamiento pesado de forma asíncrona
         asyncio.create_task(_load_background_data())
         
-        # [AUDITORIA v8.5.8] Bucle de Refresco On-Chain Independiente
-        if not self._onchain_task or self._onchain_task.done():
-            self._onchain_task = asyncio.create_task(self._onchain_loop())
-
         # 4. Inicialización mínima para el Stream Live (Sesiones)
         if history:
             try:
@@ -573,7 +567,7 @@ class SymbolBroadcaster:
             
             # EL BUCLE PRINCIPAL AHORA TIENE COMPLEJIDAD CICLOMÁTICA DE 3.
             while True:
-                raw = await asyncio.wait_for(binance_ws.recv(), timeout=30.0)
+                raw = await asyncio.wait_for(binance_ws.recv(), timeout=60.0)
                 data = json.loads(raw)
                 stream_type = data.get("stream", "")
                 payload_data = data.get("data", {})
@@ -784,33 +778,7 @@ class SymbolBroadcaster:
                 h1_regime="STANDBY"
             )
 
-    async def _onchain_loop(self):
-        """Bucle institucional para refrescar métricas On-Chain cada 60 segundos."""
-        logger.info(f"[ON-CHAIN] 🛰️ Iniciando Sentinel Loop para {self.symbol}")
-        while True:
-            try:
-                # 1. Obtener precio actual y régimen para el Sentinel
-                ref_price = self.latest_price
-                regime = "NEUTRAL"
-                if self._last_tactical:
-                    regime = self._last_tactical.get("data", {}).get("market_regime", "NEUTRAL")
 
-                # 2. Refrescar datos
-                onchain_summary = await self._onchain_sentinel.refresh(
-                    current_price=ref_price,
-                    market_regime=regime
-                )
-                
-                # 3. Broadcast
-                await self._broadcast({"type": "onchain_update", "data": onchain_summary})
-                
-                # Esperar 60 segundos antes del próximo pulso
-                await asyncio.sleep(60)
-            except asyncio.CancelledError:
-                break
-            except Exception as e:
-                logger.error(f"[ON-CHAIN] ⚠️ Error en Sentinel Loop ({self.symbol}): {e}")
-                await asyncio.sleep(10) # Reintento rápido en caso de error de red
 
     # ── Handlers auxiliares ───────────────────────────────────────────────────
 

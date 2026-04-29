@@ -5,6 +5,7 @@ from engine.api.config import settings
 from engine.api.registry import registry
 import engine.indicators.macro as macro
 from engine.indicators.ghost_data import refresh_ghost_data, load_local_state, get_ghost_state
+from engine.indicators.onchain_provider import refresh_all_onchain
 from engine.core.session_manager import SessionManager
 from engine.workers.news_worker import NewsWorker
 from engine.workers.calendar_worker import CalendarWorker
@@ -33,6 +34,8 @@ class SlingshotOrchestrator:
         
         # Iniciar Worker de Radar Macro (Ghost Data)
         asyncio.create_task(self._ghost_worker())
+        # Iniciar Worker de Métricas On-Chain Centralizadas (v8.5.9)
+        asyncio.create_task(self._onchain_worker())
         # Iniciar Worker de Sesiones Globales
         asyncio.create_task(self._session_worker())
         # Iniciar Worker de Noticias en Tiempo Real
@@ -125,12 +128,19 @@ class SlingshotOrchestrator:
                 # 2. Refrescar métricas globales pesadas
                 state = await refresh_ghost_data(global_only=True, macro_ctx=m_ctx)
                 
+                # 3. Propagar la actualización a todos los activos bajo vigilancia
+                # Esto obliga a cada broadcaster a recalcular su bias con el nuevo caché global
+                # y enviar el 'ghost_update' a sus clientes conectados.
+                for broadcaster in registry._broadcasters.values():
+                    if hasattr(broadcaster, '_advisor_bridge'):
+                        asyncio.create_task(broadcaster._advisor_bridge.refresh_ghost())
+
                 logger.info(f"[ORCHESTRATOR] 🔮 Macro Sentinel sincronizado: {state.macro_bias} (F&G: {state.fear_greed_value})")
             except Exception as e:
                 logger.error(f"⚠️ [ORCHESTRATOR] Error en ciclo Sentinel: {e}")
             
-            # Esperar 15 minutos (900s)
-            await asyncio.sleep(900)
+            # Esperar 5 minutos (300s) para mantener el radar vivo (v8.7.1)
+            await asyncio.sleep(300)
 
     async def _session_worker(self):
         """Worker que sincroniza el estado de las sesiones globales cada minuto."""
@@ -163,6 +173,27 @@ class SlingshotOrchestrator:
         """Parada coordinada."""
         self._stop_event.set()
         logger.info("[ORCHESTRATOR] Deteniendo motor maestro...")
+
+    async def _onchain_worker(self):
+        """Worker centralizado para telemetría institucional (v8.5.9)."""
+        logger.info("📡 [ORCHESTRATOR] OnChain Sentinel activado.")
+        
+        # 🚀 Primer refresco inmediato para evitar valores '0' al inicio
+        try:
+            await self.sync_watchlists()
+            if self.radar_assets:
+                await refresh_all_onchain(list(self.radar_assets))
+        except Exception as e:
+            logger.error(f"❌ [ORCHESTRATOR] Error en refresco inicial OnChain: {e}")
+
+        while not self._stop_event.is_set():
+            try:
+                if self.radar_assets:
+                    await refresh_all_onchain(list(self.radar_assets))
+            except Exception as e:
+                logger.error(f"⚠️ [ORCHESTRATOR] Error en On-Chain worker: {e}")
+            
+            await asyncio.sleep(60)
 
 async def run_orchestrator():
     orchestrator = SlingshotOrchestrator()

@@ -30,9 +30,11 @@ from engine.indicators.ghost_data import (
     get_ghost_state,
     fetch_funding_rate,
     compute_symbol_ghost,
+    refresh_ghost_data,
 )
 from engine.api.advisor import generate_tactical_advice
 from engine.api.advisor import check_ollama_status
+from engine.indicators.onchain_provider import get_onchain_summary
 
 if TYPE_CHECKING:
     pass
@@ -91,8 +93,20 @@ class AdvisorBridge:
         Solo consulta el Funding local y lo combina con el caché macro del Orchestrator.
         """
         try:
-            # 1. Obtener GhostState optimizado (Sentinel Mode: Solo Funding + Global Cache)
+            # 1. Obtener GhostState optimizado (Macro)
             ghost = await refresh_ghost_data(self._symbol)
+            
+            # 2. Obtener Métricas On-Chain Centralizadas (v8.5.9)
+            onchain = get_onchain_summary(self._symbol.upper())
+            
+            # [DEBUG] Verificar datos on-chain antes de emitir
+            if onchain.get("oi_delta_pct", 0) != 0:
+                logger.debug(f"[BRIDGE] OnChain Sync for {self._symbol}: Δ={onchain['oi_delta_pct']}% | FR={onchain['funding_rate']}%")
+            
+            # 3. Guardar snapshot para el LLM Advisor
+            onchain_msg = {"type": "onchain_update", "data": onchain}
+            self._bc._last_onchain = onchain_msg
+            await self._bc._broadcast(onchain_msg)
 
             # ── System Verdict Unificado (v5.7.155 Master Gold) ──────────────
             ml_dir = (self._bc._last_ml or {}).get("direction", "NEUTRAL")
@@ -113,12 +127,15 @@ class AdvisorBridge:
                                                 system_verdict = "STAND_BY"
             else:                               system_verdict = "NEUTRAL"
 
+            # 4. Broadcast consolidado
             await self._bc._broadcast({"type": "ghost_update", "data": {
                 "symbol":            self._symbol,
                 "fear_greed_value":  ghost.fear_greed_value,
                 "fear_greed_label":  ghost.fear_greed_label,
                 "btc_dominance":     ghost.btc_dominance,
-                "funding_rate":      ghost.funding_rate,
+                "funding_rate":      onchain["funding_rate"], # Usar dato validado central
+                "oi_delta_pct":      onchain["oi_delta_pct"], # Cambiado de "oi" a "oi_delta_pct" para el Frontend
+                "onchain_bias":      onchain["onchain_bias"], # Cambiado de "bias" a "onchain_bias"
                 "funding_symbol":    ghost.funding_symbol,
                 "macro_bias":        ghost.macro_bias,
                 "block_longs":       ghost.block_longs,
