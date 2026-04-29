@@ -4,6 +4,7 @@ import React, { useState, useMemo, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { Activity, Zap, ShieldCheck, Search } from 'lucide-react';
 import { useTelemetryStore, MASTER_WATCHLIST } from '../../store/telemetryStore';
+import { formatCurrency } from '../../utils/formatters';
 
 const ROW_HEIGHT = 44;
 const VISIBLE_ROWS = 12;
@@ -167,7 +168,7 @@ export default function LatticeScanner() {
                                     {/* Price */}
                                     <div className="col-span-3 text-right">
                                         <span className="text-[10px] font-black font-mono text-white/70">
-                                            ${pair.price ? pair.price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—'}
+                                            {formatCurrency(pair.price)}
                                         </span>
                                     </div>
                                 </div>

@@ -3,7 +3,8 @@
 import React, { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { Activity, Zap, TrendingUp, TrendingDown, Minus } from 'lucide-react';
-import { useTelemetryStore, Timeframe } from '../../store/telemetryStore';
+import { formatCurrency } from '../../utils/formatters';
+import { useTelemetryStore, Timeframe, MASTER_WATCHLIST } from '../../store/telemetryStore';
 
 interface MarketState {
     asset: string;
@@ -89,9 +90,10 @@ export default function ActiveAssetsMonitor() {
         }
     });
 
-    // 4. Aplicar el filtro de la watchlist del usuario
+    // 4. Aplicar el filtro de la watchlist del usuario + Master Watchlist (Elite Assets)
     const states = Array.from(displayMap.values()).filter((s: any) => 
-        watchlist.includes(s.asset.toUpperCase())
+        (watchlist && watchlist.includes(s.asset.toUpperCase())) || 
+        (MASTER_WATCHLIST && MASTER_WATCHLIST.includes(s.asset.toUpperCase()))
     );
 
     const getBiasIcon = (bias?: string) => {
@@ -173,7 +175,7 @@ export default function ActiveAssetsMonitor() {
 
                             <div className="mt-auto pt-2">
                                 <div className="text-xl font-mono font-bold text-white flex items-center justify-between">
-                                    ${state.price?.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                    {formatCurrency(state.price)}
                                     <span className={`text-[8px] px-1 py-0.5 rounded ${state.ml_dir === 'ALCISTA' ? 'bg-neon-cyan/10 text-neon-cyan' : 'bg-neon-red/10 text-neon-red'}`}>
                                         {state.ml_dir === 'ALCISTA' ? '↗' : '↘'}
                                     </span>

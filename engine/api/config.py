@@ -32,11 +32,18 @@ class Settings(BaseSettings):
     OLLAMA_URL: str = "http://localhost:11434"
 
     # Strategy Delta Δ: Tiered Priority (v6.0 Trident Audit)
-    MASTER_WATCHLIST: list[str] = ["BTCUSDT", "ETHUSDT", "SOLUSDT", "PAXGUSDT"]
+    RADAR_ASSETS: str = "BTCUSDT,ETHUSDT,SOLUSDT,PAXGUSDT"
+    
+    @property
+    def MASTER_WATCHLIST(self) -> list[str]:
+        return [s.strip() for s in self.RADAR_ASSETS.split(",") if s.strip()]
+
     PRIORITY_TIERS: dict[str, float] = {
         "BTCUSDT": 0.5,   # Tier 1: Alta Volatilidad (0.5s)
         "SOLUSDT": 0.5,   # Tier 1
+        "XRPUSDT": 0.5,   # Tier 1
         "ETHUSDT": 1.5,   # Tier 2: Media Volatilidad (1.5s)
+        "XAGUSDT": 1.5,   # Tier 2: Silver
         "PAXGUSDT": 5.0,  # Tier 3: Commodities tokenizados (5.0s)
     }
     DEFAULT_PULSE_INTERVAL: float = 2.0

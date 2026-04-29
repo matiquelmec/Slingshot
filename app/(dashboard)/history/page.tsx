@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Database, TrendingUp, TrendingDown, Target, Clock, AlertTriangle, CheckCircle2, XCircle, RefreshCw, Info } from 'lucide-react';
+import { formatCurrency } from '../../utils/formatters';
 
 
 interface SignalEvent {
@@ -178,13 +179,13 @@ export default function HistoryPage() {
                                             <SignalTypeBadge type={sig.signal_type} />
                                         </div>
                                         <div className="col-span-1 text-[11px] font-mono text-white/80">
-                                            ${sig.entry_price?.toLocaleString()}
+                                            {formatCurrency(sig.entry_price)}
                                         </div>
                                         <div className="col-span-1 text-[11px] font-mono text-neon-green/80 flex items-center gap-1">
-                                            <Target size={10} /> ${sig.take_profit_3r?.toLocaleString() || 'N/A'}
+                                            <Target size={10} /> {formatCurrency(sig.take_profit_3r) || 'N/A'}
                                         </div>
                                         <div className="col-span-1 text-[11px] font-mono text-neon-red/80">
-                                            ${sig.stop_loss?.toLocaleString()}
+                                            {formatCurrency(sig.stop_loss)}
                                         </div>
                                         <div className="col-span-2 flex flex-col gap-0.5">
                                             <span className="text-[9px] font-bold text-white/60 truncate" title={sig.regime}>{sig.regime}</span>

@@ -177,6 +177,7 @@ async def fetch_funding_rate(symbol: str = "BTCUSDT") -> float:
 
 # ── Lógica de filtrado macro ──────────────────────────────────────────────────
 def _compute_bias(
+    symbol: str,
     fng: int, 
     btcd: float, 
     funding: float, 
@@ -186,167 +187,161 @@ def _compute_bias(
     active_event: str = ""
 ) -> tuple[str, bool, bool, str]:
     """
-    Determina el sesgo macro y si se deben bloquear señales LONG o SHORT.
-    Incorpora Capa 1: DXY y NASDAQ v4.0.
+    [INTELLIGENT DECOUPLING v8.7.0] 
+    Determina el sesgo macro diferenciando entre activos CRIPTO y METALES PRECIOSOS.
     """
     reasons = []
     block_longs = False
     block_shorts = False
-
-    # 💠 Reglas Institucionales v4.0 (Capa 1)
-    if dxy == "BULLISH":
-        reasons.append("DXY Alcista: Presión vendedora global")
-        if fng < 40: block_longs = True
     
-    if nasdaq == "BEARISH":
-        reasons.append("NASDAQ Bajista: Risk-Off")
-        if funding > 0.05: block_shorts = False # Permitir shorts si hay euforia en caída
+    # 🔍 Identificar Clase de Activo
+    IS_METAL = any(m in symbol.upper() for m in ["PAXG", "XAG", "GOLD", "SILVER"])
+    IS_CRYPTO = not IS_METAL
 
-    # 💠 Reglas de Narrativa v5.7.155 Master Gold (Persistence Layer)
-    if active_event:
-        if news_sentiment < 0.4:
-            block_longs = True
-            reasons.append(f"SENTIMIENTO BAJISTA RECIENTE: {active_event}")
-        elif news_sentiment > 0.6:
+    # 💠 1. Lógica para METALES PRECIOSOS (Safe Havens)
+    if IS_METAL:
+        if dxy == "BULLISH":
+            reasons.append("DXY Alcista: Presión técnica en Metales")
+            if news_sentiment < 0.4: block_longs = True
+            
+        if nasdaq == "BEARISH":
+            reasons.append("NASDAQ Bajista: Posible flujo hacia Safe Havens")
+            block_shorts = True 
+
+        if active_event and news_sentiment > 0.6:
+            reasons.append(f"IMPULSO METALES: {active_event}")
             block_shorts = True
-            reasons.append(f"SENTIMIENTO ALCISTA RECIENTE: {active_event}")
 
-    # 💠 Determinar Bias Final
+    # 💠 2. Lógica para CRIPTO (Risk Assets)
+    else:
+        if dxy == "BULLISH":
+            reasons.append("DXY Alcista: Presión vendedora en Risk-Assets")
+            if fng < 40: block_longs = True
+        
+        if nasdaq == "BEARISH":
+            reasons.append("NASDAQ Bajista: Correlación Risk-Off")
+            if fng < 30: block_longs = True
+
+        if btcd > 55 and symbol.upper() != "BTCUSDT":
+            reasons.append("BTC Dominance Alta: Alts bajo presión")
+            if news_sentiment < 0.5: block_longs = True
+
+    # 💠 3. Reglas de Narrativa (Comunes)
+    if active_event:
+        if news_sentiment < 0.35:
+            block_longs = True
+            reasons.append(f"SENTIMIENTO BAJISTA: {active_event}")
+        elif news_sentiment > 0.65:
+            block_shorts = True
+            reasons.append(f"SENTIMIENTO ALCISTA: {active_event}")
+
+    # 💠 4. Determinar Bias Final
     if block_longs and not block_shorts:
         bias = "BLOCK_LONGS"
     elif block_shorts and not block_longs:
         bias = "BLOCK_SHORTS"
     elif block_longs and block_shorts:
         bias = "CONFLICTED"
-    elif not block_longs and not block_shorts:
-        if dxy == "BEARISH" and nasdaq == "BULLISH":
-            bias = "BULLISH"
-            reasons.append("Contexto Perfecto: DXY Bajista + NASDAQ Alcista")
-        elif fng >= 60 and funding > 0:
-            bias = "BULLISH"
-        elif fng <= 35 or dxy == "BULLISH":
-            bias = "BEARISH"
-        else:
-            bias = "NEUTRAL"
     else:
-        bias = "NEUTRAL"
+        # Lógica de tendencia natural
+        if IS_METAL:
+            if dxy == "BEARISH" or nasdaq == "BEARISH": bias = "BULLISH"
+            elif dxy == "BULLISH": bias = "BEARISH"
+            else: bias = "NEUTRAL"
+        else:
+            if dxy == "BEARISH" and nasdaq == "BULLISH" and fng > 45: bias = "BULLISH"
+            elif fng <= 35 or dxy == "BULLISH": bias = "BEARISH"
+            else: bias = "NEUTRAL"
 
-    reason_str = " | ".join(reasons) if reasons else "Condiciones macro estables."
+    reason_str = " | ".join(reasons) if reasons else "Condiciones estables."
     return bias, block_longs, block_shorts, reason_str
 
 
 # ── Función principal de actualización ───────────────────────────────────────
-async def refresh_ghost_data(symbol: str = "BTCUSDT", macro_ctx: Optional[MacroState] = None) -> GhostState:
+async def refresh_ghost_data(symbol: str = "BTCUSDT", macro_ctx: Optional[MacroState] = None, global_only: bool = False) -> GhostState:
     """
-    Descarga todos los datos fantasma en paralelo y actualiza el caché global.
-    Si macro_ctx es inyectado explícitamente, FUERZA la recalculación (bypass TTL).
+    [PRECISION OPTIMIZATION v8.6.0] Macro Sentinel Architecture.
+    
+    - Si global_only=True: Refresca solo F&G y BTC.D (Llamada pesada).
+    - Si global_only=False: Usa el caché global y solo refresca el Funding del símbolo (Llamada ligera).
     """
     global _cache
 
-    # OPTIMIZACIÓN v8.5.7: El caché macro se respeta, pero el FUNDING debe
-    # consultarse siempre por activo (no compartir caché de BTC con ETH)
-    if is_cache_fresh() and macro_ctx is not None:
-        _cache.dxy_trend = macro_ctx.dxy_trend
-        _cache.dxy_price = macro_ctx.dxy_price
-        _cache.nasdaq_trend = macro_ctx.nasdaq_trend
-        _cache.nasdaq_change_pct = macro_ctx.nas100_change_pct
+    # 1. Si solo queremos refrescar lo GLOBAL (Llamada por el Orchestrator)
+    if global_only:
+        logger.debug(f"[GHOST-SENTINEL] 📡 Refrescando métricas globales (F&G + BTC.D)...")
+        results = await asyncio.gather(
+            _fetch_fear_greed(),
+            _fetch_btc_dominance(),
+            return_exceptions=True
+        )
+        fng_tuple = results[0] if not isinstance(results[0], Exception) else (50, "Neutral")
+        btcd      = results[1] if not isinstance(results[1], Exception) else 50.0
+        fng_val, fng_label = fng_tuple
+
+        # Actualizar caché global manteniendo el funding anterior
+        _cache.fear_greed_value = fng_val
+        _cache.fear_greed_label = fng_label
+        _cache.btc_dominance    = btcd
+        _cache.last_updated     = time.time()
+        _cache.is_stale         = False
         
-        # Aunque el macro esté fresco, buscamos el funding de este símbolo particular
-        local_funding = await fetch_funding_rate(symbol)
-        return compute_symbol_ghost(_cache, symbol, local_funding)
+        if macro_ctx:
+            _cache.dxy_trend = macro_ctx.dxy_trend
+            _cache.dxy_price = macro_ctx.dxy_price
+            _cache.nasdaq_trend = macro_ctx.nasdaq_trend
+            _cache.nasdaq_change_pct = macro_ctx.nas100_change_pct
+            _cache.risk_appetite = macro_ctx.risk_appetite
 
-    if macro_ctx is None and is_cache_fresh():
-        local_funding = await fetch_funding_rate(symbol)
-        return compute_symbol_ghost(_cache, symbol, local_funding)
+        # 💠 Integración de Narrativa v8.7.0 (News & Events)
+        try:
+            from engine.core.store import store
+            events = await store.get_economic_events(limit=5)
+            news = await store.get_news(limit=5)
 
-    results = await asyncio.gather(
-        _fetch_fear_greed(),
-        _fetch_btc_dominance(),
-        fetch_funding_rate(symbol),
-        return_exceptions=True
-    )
+            # Detectar Evento Reciente
+            active_event_name = ""
+            now = time.time()
+            for ev in events:
+                ev_ts = pd.to_datetime(ev.get('date', ev.get('timestamp'))).timestamp()
+                if (now - ev_ts) / 3600 <= 12 and ev.get('impact') in ('High', 'HIGH'):
+                    active_event_name = ev.get('title', 'Macro Event')
+                    break
+            
+            # Calcular News Sentiment
+            n_sent = 0.5
+            if news:
+                s_map = {"BULLISH": 1.0, "NEUTRAL": 0.5, "BEARISH": 0.0}
+                vals = [s_map.get(n.get('sentiment', 'NEUTRAL'), 0.5) for n in news]
+                n_sent = sum(vals) / len(vals)
 
-    fng_tuple = results[0] if not isinstance(results[0], Exception) else (50, "Neutral")
-    btcd      = results[1] if not isinstance(results[1], Exception) else 50.0
-    funding   = results[2] if not isinstance(results[2], Exception) else 0.0
-    fng_val, fng_label = fng_tuple
+            _cache.news_sentiment = n_sent
+            _cache.active_event = active_event_name
+        except Exception as e:
+            logger.warning(f"[GHOST-SENTINEL] ⚠️ Error analizando narrativa: {e}")
 
-    # Integración con Capa 1 y 2 v5.7.155 Master Gold (Narrativa & Store)
-    from engine.core.store import MemoryStore
-    store = MemoryStore()
-    events = await store.get_economic_events(limit=5)
-    news = await store.get_news(limit=5)
+        save_local_state(_cache)
+        return _cache
 
-    # Detectar Evento Reciente Dominante
-    active_event_name = ""
-    now = time.time()
-    for ev in events:
-        ev_ts = pd.to_datetime(ev.get('date', ev.get('timestamp'))).timestamp()
-        diff = (now - ev_ts) / 3600
-        if ev.get('impact') in ('High', 'HIGH') and 0 <= diff <= 12: # Ultimas 12h
-            active_event_name = ev.get('title', 'Macro Event')
-            break
-    
-    # Calcular News Sentiment
-    n_sent = 0.5
-    if news:
-        s_map = {"BULLISH": 1.0, "NEUTRAL": 0.5, "BEARISH": 0.0}
-        vals = [s_map.get(n.get('sentiment', 'NEUTRAL'), 0.5) for n in news]
-        n_sent = sum(vals) / len(vals)
+    # 2. Si queremos refrescar un SÍMBOLO (Llamada por el Broadcaster)
+    if not is_cache_fresh() and not macro_ctx:
+        logger.warning(f"[GHOST-SENTINEL] ⚠️ Global Cache STALE. Forzando refresh macro para {symbol}...")
+        await refresh_ghost_data(global_only=True)
 
-    # Calcular sesgo macro consolidado
-    dxy_trend = macro_ctx.dxy_trend if macro_ctx else "NEUTRAL"
-    nasdaq_trend = macro_ctx.nasdaq_trend if macro_ctx else "NEUTRAL"
-    
-    bias, b_longs, b_shorts, reason = _compute_bias(
-        fng_val, btcd, funding, 
-        dxy=dxy_trend, 
-        nasdaq=nasdaq_trend,
-        news_sentiment=n_sent,
-        active_event=active_event_name
-    )
-
-    is_failed = funding == 0.0 and btcd == 50.0 and fng_val == 50
-    cache_time = time.time() if not is_failed else time.time() - _TTL_SECONDS + 30
-
-    _cache = GhostState(
-        fear_greed_value = fng_val,
-        fear_greed_label = fng_label,
-        btc_dominance    = btcd,
-        funding_rate     = funding,
-        funding_symbol   = symbol,
-        macro_bias       = bias,
-        block_longs      = b_longs,
-        block_shorts     = b_shorts,
-        reason           = reason,
-        last_updated     = cache_time,
-        is_stale         = False,
-        dxy_trend        = macro_ctx.dxy_trend if macro_ctx else "NEUTRAL",
-        dxy_price        = macro_ctx.dxy_price if macro_ctx else 0.0,
-        nasdaq_trend     = macro_ctx.nasdaq_trend if macro_ctx else "NEUTRAL",
-        nasdaq_change_pct= macro_ctx.nas100_change_pct if macro_ctx else 0.0,
-        risk_appetite    = macro_ctx.risk_appetite if macro_ctx else "NEUTRAL",
-        news_sentiment   = n_sent,
-        active_event     = active_event_name
-    )
-
-    save_local_state(_cache)
-    return _cache
+    # Solo refrescamos el Funding (Muy ligero)
+    funding = await fetch_funding_rate(symbol)
+    return compute_symbol_ghost(_cache, symbol, funding)
 
 
 def get_ghost_state(symbol: Optional[str] = None) -> GhostState:
     """Devuelve el estado macro global."""
-    if not symbol or symbol.upper() == _cache.funding_symbol.upper():
-        return _cache
-    
-    # v8.5.7: No forzar 0.0 si el simbolo no coincide. Retornar el cache actual 
-    # para evitar parpadeos en 0 en el Radar Macro.
     return _cache
 
 
 def compute_symbol_ghost(global_cache: GhostState, symbol: str, local_funding: float) -> GhostState:
     """Combina el estado global con datos específicos de un activo."""
     bias, block_long, block_short, reason = _compute_bias(
+        symbol,
         global_cache.fear_greed_value, 
         global_cache.btc_dominance, 
         local_funding,
@@ -372,7 +367,9 @@ def compute_symbol_ghost(global_cache: GhostState, symbol: str, local_funding: f
         dxy_price        = global_cache.dxy_price,
         nasdaq_trend     = global_cache.nasdaq_trend,
         nasdaq_change_pct= global_cache.nasdaq_change_pct,
-        risk_appetite    = global_cache.risk_appetite
+        risk_appetite    = global_cache.risk_appetite,
+        news_sentiment   = global_cache.news_sentiment,
+        active_event     = global_cache.active_event
     )
 
 

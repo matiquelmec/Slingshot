@@ -136,6 +136,36 @@ export default function TradingChart() {
 
 
     }, [candles, indicators]);
+    
+    // ── Update Dynamic Precision for Price Scale ──
+    useEffect(() => {
+        if (!candleSeriesRef.current || !latestPrice) return;
+
+        let precision = 2;
+        let minMove = 0.01;
+
+        if (latestPrice < 0.001) {
+            precision = 8;
+            minMove = 0.00000001;
+        } else if (latestPrice < 0.1) {
+            precision = 6;
+            minMove = 0.000001;
+        } else if (latestPrice < 10) {
+            precision = 4;
+            minMove = 0.0001;
+        } else if (latestPrice < 100) {
+            precision = 3;
+            minMove = 0.001;
+        }
+
+        candleSeriesRef.current.applyOptions({
+            priceFormat: {
+                type: 'price',
+                precision: precision,
+                minMove: minMove,
+            },
+        });
+    }, [latestPrice]);
 
     // ── 🔴 LIVE PRICE LINE v5.7.155 Master Gold: Línea horizontal dinámica del precio actual ──
     useEffect(() => {

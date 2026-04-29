@@ -81,15 +81,8 @@ async def startup_event():
     
     asyncio.create_task(global_orchestrator.start())
 
-    # 🏁 Startup: Activar Radar Center para activos de Élite (Simulation)
-    logger.info("[RADAR] 📡 Activando Radar Center para BTC, ETH, SOL, PAXG (Multi-TF)...")
-    elite_assets = ["BTCUSDT", "ETHUSDT", "SOLUSDT", "PAXGUSDT"]
-    intervals = ["1m", "5m", "15m"]
-    
-    # Iniciar broadcasters persistentes para la simulación
-    for asset in elite_assets:
-        for interval in intervals:
-            asyncio.create_task(registry.get_or_create(asset, interval, persistent=True))
+    # 🏁 Startup: Activar Radar Center para activos de la Watchlist (Simulation)
+    logger.info(f"[RADAR] 📡 Activando Radar Center para {len(settings.MASTER_WATCHLIST)} activos (Multi-TF)...")
     
     # Iniciar Monitor de Salud Institucional (30s Report)
     await registry.start_simulation_monitor()

@@ -398,7 +398,9 @@ async def ai_worker():
 
 def start_ai_worker():
     global _ai_worker_task
-    _ai_worker_task = asyncio.create_task(ai_worker())
+    # [v6.0.1] Paralelización del Advisor: 3 workers para evitar cuellos de botella
+    for _ in range(3):
+        asyncio.create_task(ai_worker())
     asyncio.create_task(background_ollama_check())
 
 async def background_ollama_check():

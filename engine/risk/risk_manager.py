@@ -1,8 +1,8 @@
 from engine.api.config import settings
 import math
 
-# Factor de Fricción (Ajustado a 0.04% para niveles de volumen institucional)
-FEE_SLIPPAGE_IMPACT = 0.0004 
+# El factor estático original se ha movido al módulo SIGMA (ASSET_TUNING) para control dinámico
+# FEE_SLIPPAGE_IMPACT = 0.0004 
 
 
 class RiskManager:
@@ -23,6 +23,7 @@ class RiskManager:
         try:
             entry = float(signal_data.get("price", 0))
             atr   = float(signal_data.get("atr_value", 0))
+            asset = str(signal_data.get("asset", "UNKNOWN")).upper()
             
             # Filtro de Volatilidad Relajado (0.1% para 15m)
             if atr < (entry * 0.001):
@@ -38,7 +39,16 @@ class RiskManager:
             
             risk = abs(entry - sl)
             reward = abs(tp - entry)
-            friction = entry * FEE_SLIPPAGE_IMPACT
+            
+            # --- SPREAD WATCHDOG (Fricción Dinámica) ---
+            tuning = self.ASSET_TUNING.get(asset, self.DEFAULT_TUNING)
+            dynamic_friction_pct = tuning.get("spread_impact", 0.0004) # Fallback 0.04%
+            
+            friction = entry * dynamic_friction_pct
+            
+            # KILL SWITCH: Si la fricción (spread + fee) representa más del 20% del stop loss, es suicidio matemático
+            if risk > 0 and friction > (risk * 0.20):
+                return {"approved": False, "rr_ratio": 0.0, "trade_quality": "HIGH_SPREAD", "reason": f"Spread Kill Switch: Fricción ({dynamic_friction_pct*100:.3f}%) muy alta para SL."}
             
             if (risk + friction) <= 0:
                  return {"approved": False, "rr_ratio": 0.0, "trade_quality": "ERR", "reason": "Zero risk calculated"}
@@ -64,12 +74,14 @@ class RiskManager:
 
     # --- MÓDULO SIGMA: SINTONIZADOR DE ACTIVOS --------------------------------
     ASSET_TUNING = {
-        "BTCUSDT":  {"atr_mult": 1.5, "tp1_ratio": 2.5, "tp1_vol": 0.60}, # v6.1 Master: Unificado a 2.5R
-        "ETHUSDT":  {"atr_mult": 3.0, "tp1_ratio": 2.5, "tp1_vol": 0.80}, # v6.1 Master: Unificado a 2.5R
-        "SOLUSDT":  {"atr_mult": 3.5, "tp1_ratio": 2.5, "tp1_vol": 0.80}, # v6.1 Master: Unificado a 2.5R
-        "PAXGUSDT": {"atr_mult": 2.5, "tp1_ratio": 2.5, "tp1_vol": 0.80}, # v6.1 Master: Unificado a 2.5R
+        "BTCUSDT":  {"atr_mult": 1.5, "tp1_ratio": 2.5, "tp1_vol": 0.60, "spread_impact": 0.0002}, # 0.02% (Alta Liquidez)
+        "ETHUSDT":  {"atr_mult": 3.0, "tp1_ratio": 2.5, "tp1_vol": 0.80, "spread_impact": 0.0003}, # 0.03%
+        "SOLUSDT":  {"atr_mult": 3.5, "tp1_ratio": 2.5, "tp1_vol": 0.80, "spread_impact": 0.0008}, # 0.08% (Volátil)
+        "XRPUSDT":  {"atr_mult": 2.5, "tp1_ratio": 2.5, "tp1_vol": 0.70, "spread_impact": 0.0005}, # 0.05%
+        "PAXGUSDT": {"atr_mult": 2.5, "tp1_ratio": 2.5, "tp1_vol": 0.80, "spread_impact": 0.0015}, # 0.15% (Baja Liquidez/Oro)
+        "XAGUSDT":  {"atr_mult": 2.5, "tp1_ratio": 2.5, "tp1_vol": 0.80, "spread_impact": 0.0015}, # 0.15% (Plata)
     }
-    DEFAULT_TUNING = {"atr_mult": 1.8, "tp1_ratio": 1.5, "tp1_vol": 0.50}
+    DEFAULT_TUNING = {"atr_mult": 1.8, "tp1_ratio": 1.5, "tp1_vol": 0.50, "spread_impact": 0.0010} # Default 0.1%
 
     def calculate_position(
         self,

@@ -85,34 +85,23 @@ class AdvisorBridge:
         state_str = json.dumps(state, sort_keys=True, default=str)
         return hashlib.md5(state_str.encode()).hexdigest()
 
-    async def refresh_ghost(self, global_ghost=None):
+    async def refresh_ghost(self):
         """
-        Refresca Ghost Data (Funding específico + contexto global) y broadcast.
-
-        Flujo:
-          1. Obtener Fear & Greed + Dominancia (global_ghost o fetch fresco)
-          2. Obtener Funding del símbolo en tiempo real
-          3. Calcular Bias híbrido (compute_symbol_ghost)
-          4. Calcular system_verdict unificado (Macro + ML)
-          5. Broadcast → ghost_update
+        [PRECISION v8.6.0] Refresca Ghost Data usando el Sentinel Global.
+        Solo consulta el Funding local y lo combina con el caché macro del Orchestrator.
         """
         try:
-            if not global_ghost:
-                global_ghost = get_ghost_state()
-
-            local_funding = await fetch_funding_rate(self._symbol)
-            ghost         = compute_symbol_ghost(global_ghost, self._symbol, local_funding)
+            # 1. Obtener GhostState optimizado (Sentinel Mode: Solo Funding + Global Cache)
+            ghost = await refresh_ghost_data(self._symbol)
 
             # ── System Verdict Unificado (v5.7.155 Master Gold) ──────────────
-            # Reconcilia Macro (Ghost) + ML en un veredicto único.
-            # Contradicción → STAND_BY. Evita señales conflictivas en el frontend.
             ml_dir = (self._bc._last_ml or {}).get("direction", "NEUTRAL")
             ml_normalized = (
                 "BULLISH" if ml_dir == "ALCISTA"
                 else ("BEARISH" if ml_dir == "BAJISTA" else "NEUTRAL")
             )
 
-            macro_dir     = ghost.macro_bias  # BULLISH / BEARISH / BLOCK_LONGS / BLOCK_SHORTS / NEUTRAL
+            macro_dir     = ghost.macro_bias
             macro_bullish = macro_dir in ("BULLISH", "BLOCK_SHORTS")
             macro_bearish = macro_dir in ("BEARISH",  "BLOCK_LONGS")
             ml_bullish    = ml_normalized == "BULLISH"
@@ -144,7 +133,7 @@ class AdvisorBridge:
                 "system_verdict":    system_verdict,
             }})
         except Exception as e:
-            logger.error(f"[ADVISOR_BRIDGE] {self._symbol}:{self._interval} → Ghost refresh error: {e}")
+            logger.error(f"[ADVISOR_BRIDGE] {self._symbol} → Ghost Sentinel error: {e}")
 
     async def emit(self, tactical: dict, session_state: dict, is_absorption_alert: bool = False):
         """

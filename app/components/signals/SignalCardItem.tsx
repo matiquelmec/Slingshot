@@ -5,6 +5,7 @@ import { motion } from 'framer-motion';
 import { Signal } from '../../types/signal';
 import { useTelemetryStore } from '../../store/telemetryStore';
 import { getSignalLifecycle, getSignalStyle } from '../../utils/signalLogic';
+import { formatCurrency } from '../../utils/formatters';
 
 interface SignalCardItemProps {
     signal: Signal;
@@ -134,15 +135,15 @@ const SignalCardItem: React.FC<SignalCardItemProps> = ({ signal, currentPrice })
                     <span className="text-white/30 text-[8px] tracking-widest uppercase">Entry</span>
                     {signal.entry_zone_top && signal.entry_zone_bottom ? (
                         <span className="text-white/80 font-bold">
-                            ${signal.entry_zone_bottom.toLocaleString(undefined, { maximumFractionDigits: 1 })} – ${signal.entry_zone_top.toLocaleString(undefined, { maximumFractionDigits: 1 })}
+                            {formatCurrency(signal.entry_zone_bottom)} – {formatCurrency(signal.entry_zone_top)}
                         </span>
                     ) : (
-                        <span className="text-white/60 font-bold">${signal.price?.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                        <span className="text-white/60 font-bold">{formatCurrency(signal.price)}</span>
                     )}
                 </div>
                 <div className="flex flex-col gap-0.5 bg-red-500/10 rounded px-2 py-1 border border-red-500/30">
                     <span className="text-red-400 text-[8px] tracking-widest uppercase font-black">Stop Loss</span>
-                    <span className="text-red-500 font-black">${signal.stop_loss?.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                    <span className="text-red-500 font-black">{formatCurrency(signal.stop_loss)}</span>
                 </div>
                 <div className="flex flex-col gap-0.5 bg-green-500/10 rounded px-2 py-1 border border-green-500/30 col-span-2">
                     <div className="flex justify-between items-center mb-0.5">
@@ -150,11 +151,11 @@ const SignalCardItem: React.FC<SignalCardItemProps> = ({ signal, currentPrice })
                     </div>
                     <div className="flex items-center gap-2">
                         <span className="text-green-300 text-[8px] font-bold">T1:</span>
-                        <span className="text-green-400 font-black">${signal.tp1?.toLocaleString(undefined, { minimumFractionDigits: 2 }) || '---'}</span>
+                        <span className="text-green-400 font-black">{formatCurrency(signal.tp1) || '---'}</span>
                         <span className="text-green-300 text-[8px] font-bold ml-1">T2:</span>
-                        <span className="text-green-400 font-black">${signal.tp2?.toLocaleString(undefined, { minimumFractionDigits: 2 }) || '---'}</span>
+                        <span className="text-green-400 font-black">{formatCurrency(signal.tp2) || '---'}</span>
                         <span className="text-green-500 text-[10px]">⚡</span>
-                        <span className="text-green-300 font-black">${(signal.tp3 || signal.take_profit_3r)?.toLocaleString(undefined, { minimumFractionDigits: 2 }) || '---'}</span>
+                        <span className="text-green-300 font-black">{formatCurrency(signal.tp3 || signal.take_profit_3r) || '---'}</span>
                     </div>
                 </div>
             </div>

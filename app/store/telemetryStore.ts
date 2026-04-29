@@ -18,11 +18,12 @@ export type Timeframe = '1m' | '3m' | '5m' | '15m' | '30m' | '1h' | '2h' | '4h' 
 // Las interfaces NeuralLog, KeyLevel, TacticalDecision, SessionInfo, SessionData, OrderBlockData, SMCDataPayload y GhostData 
 // han sido movidas a ../types/signal.ts para centralizar la lógica de tipos.
 
-export const MASTER_WATCHLIST = ["BTCUSDT", "ETHUSDT", "SOLUSDT", "PAXGUSDT"];
+export const MASTER_WATCHLIST = ["BTCUSDT", "ETHUSDT", "SOLUSDT", "XRPUSDT", "XAGUSDT", "PAXGUSDT"];
 
 interface TelemetryState {
     advisorLogs: Record<string, any>; // 🧠 Mapeo de análisis por activo (v5.7.155 Master Gold)
     isConnected: boolean;
+    connectionStatus: 'CONNECTING' | 'CONNECTED' | 'STALLED' | 'DISCONNECTED'; // 🩺 Health Monitor
     isCalibrating: boolean;
     activeSymbol: string;
     activeTimeframe: Timeframe;
@@ -62,6 +63,7 @@ export const useTelemetryStore = create<TelemetryState>((set, get) => {
     let ws: WebSocket | null = null;
     let retryCount = 0;
     let retryTimeout: ReturnType<typeof setTimeout> | null = null;
+    let watchdogInterval: ReturnType<typeof setInterval> | null = null;
     const MAX_RETRIES = 5;
 
     // Cargar historial de señales desde localStorage al iniciar
@@ -165,26 +167,31 @@ export const useTelemetryStore = create<TelemetryState>((set, get) => {
             clearTimeout(retryTimeout);
             retryTimeout = null;
         }
+        if (watchdogInterval) {
+            clearInterval(watchdogInterval);
+            watchdogInterval = null;
+        }
 
         if (!isRetry) {
-            retryCount = 0; // Reset counter on fresh connect
+            retryCount = 0;
             set({
                 activeSymbol: symbol,
                 activeTimeframe: timeframe,
                 activeConnectionId: connectionId,
-                candles: [],
+                candles: [], // Asset-specific: Reset
                 isConnected: false,
+                connectionStatus: 'CONNECTING',
                 isCalibrating: true,
-                smcData: null,
+                smcData: null, // Asset-specific: Reset
                 sessionData: null,
                 latestPrice: null,
-                liquidityHeatmap: null,
-                // advisorLogs: {},  <-- REMOVED: Mantener caché entre símbolos para hidratación instantánea v5.7.155 Master Gold
-                mlProjection: { direction: 'NEUTRAL', probability: 50, reason: "Aguardando conexión de telemetría..." },
+                liquidityHeatmap: null, // Asset-specific: Reset
+                onchainMetrics: null, // Asset-specific: Reset
+                mlProjection: { direction: 'NEUTRAL', probability: 50, reason: "Sincronizando..." },
                 tacticalDecision: {
-                    regime: "ANALIZANDO NUEVO RIESGO...",
+                    regime: "ANALIZANDO...",
                     strategy: "STANDBY",
-                    reasoning: `Sincronizando telemetría para ${symbol}.`,
+                    reasoning: `Cargando telemetría para ${symbol}.`,
                     current_price: null,
                     nearest_support: null,
                     nearest_resistance: null,
@@ -192,14 +199,14 @@ export const useTelemetryStore = create<TelemetryState>((set, get) => {
                     key_levels: { resistances: [], supports: [] }
                 },
                 htfBias: null,
-                ghostData: null, // Restablecer al desconectar
-                auditedSignals: {}, 
-                auditedIds: []
+                // [UX OPTIMIZATION] NO resetear news, economicEvents ni marketSummary.
+                // Son datos globales que no deberían parpadear al cambiar de moneda.
             });
 
-            // 🚀 Hidratación REST asíncrona: evita que el Frontend parpadee en "Sincronizando..." 
-            // mientras espera el ciclo 1s-3s (Fast Path) del primer ghost_update por WebSocket.
+            // 🚀 Hidratación Instantánea (REST Hybrid Mode)
             const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000';
+            
+            // 1. Ghost Data (Macro Context)
             fetch(`${BASE_URL}/api/v1/ghost`)
                 .then(res => res.json())
                 .then(data => {
@@ -207,10 +214,23 @@ export const useTelemetryStore = create<TelemetryState>((set, get) => {
                     if (connectionId === currentId && data.ghost) {
                         set({ ghostData: { ...data.ghost, symbol } });
                     }
-                }).catch(err => console.error("Ghost hydration failed", err));
+                }).catch(() => {});
+
+            // 2. News (Global) - Solo si el array está vacío
+            if (get().news.length === 0) {
+                fetch(`${BASE_URL}/api/v1/news`)
+                    .then(res => res.json())
+                    .then(data => {
+                        if (Array.isArray(data)) set({ news: data.slice(0, 15) });
+                    }).catch(() => {});
+            }
+
+            // 3. Calendar (Global) - Solo si el array está vacío
+            if (get().economicEvents.length === 0) {
+                get().fetchEconomicEvents();
+            }
 
         } else {
-            // Si es un reintento, mantenemos el ID pero lo registramos como activo
             set({ activeConnectionId: connectionId });
         }
 
@@ -236,7 +256,23 @@ export const useTelemetryStore = create<TelemetryState>((set, get) => {
             ws = new WebSocket(`${BASE_WS}/api/v1/stream/${symbol}?interval=${timeframe}&token=${tokenData.token}`);
             
             ws.onopen = () => {
-                set({ isConnected: true });
+                set({ isConnected: true, connectionStatus: 'CONNECTED' });
+                
+                // 🩺 Iniciar Watchdog (Deadman's Switch)
+                watchdogInterval = setInterval(() => {
+                    const now = Date.now();
+                    const gap = now - lastMsgTimestamp;
+                    
+                    if (gap > 15_000 && get().connectionStatus !== 'DISCONNECTED') {
+                        set({ connectionStatus: 'DISCONNECTED' });
+                        console.error("⚠️ [WATCHDOG] Conexión perdida (>15s sin datos).");
+                    } else if (gap > 5_000 && get().connectionStatus === 'CONNECTED') {
+                        set({ connectionStatus: 'STALLED' });
+                        console.warn("⚠️ [WATCHDOG] Latencia de red detectada (>5s sin datos).");
+                    } else if (gap <= 5_000 && get().connectionStatus !== 'CONNECTED') {
+                        set({ connectionStatus: 'CONNECTED' });
+                    }
+                }, 1000);
             };
         } catch (error) {
             console.error("[AUTH] Fallo al hacer fetch del JWT para el WS:", error);

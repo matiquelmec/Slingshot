@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Shield, ShieldAlert, Crosshair, StopCircle, Lock, ServerCog, Activity, AlertTriangle, CheckCircle2 } from 'lucide-react';
 import { useTelemetryStore } from '../../store/telemetryStore';
+import { formatCurrency, formatPrice } from '../../utils/formatters';
 
 export default function OmegaCentinelPanel() {
     // Estado simulado para la integración posterior con WebSocket OMEGA
@@ -18,14 +19,7 @@ export default function OmegaCentinelPanel() {
     const viewMode = useTelemetryStore(state => state.viewMode);
     
     // Helper para formateo de precios profesional
-    const formatPrice = (val: number | undefined, asset: string) => {
-        if (!val) return '---';
-        const decimals = asset.includes('USDT') && val < 10 ? 4 : 2;
-        return val.toLocaleString(undefined, { 
-            minimumFractionDigits: decimals, 
-            maximumFractionDigits: decimals 
-        });
-    };
+    // Using formatPrice from utils/formatters
 
     // Obtener señales en ejecución o pendientes
     // [v8.3.2] Clean up signalIds to prevent duplicate keys in React (Set conversion)
@@ -158,7 +152,7 @@ export default function OmegaCentinelPanel() {
                                 <div className="grid grid-cols-3 gap-2 text-[9px] font-mono mb-3">
                                     <div className="flex flex-col gap-1">
                                         <span className="text-white/30">ENTRY</span>
-                                        <span className="text-white font-bold">${formatPrice(order.entry, order.asset)}</span>
+                                        <span className="text-white font-bold">{formatCurrency(order.entry)}</span>
                                     </div>
                                     <div className="flex flex-col gap-1">
                                         <span className="text-white/30">PnL %</span>
@@ -176,20 +170,20 @@ export default function OmegaCentinelPanel() {
                                     <div className="flex flex-col gap-1">
                                         <span className="text-white/30">STOP LOSS</span>
                                         <span className={`font-bold ${order.shield_active ? 'text-neon-cyan' : 'text-red-400'}`}>
-                                            {order.shield_active ? '🛡️ BE' : `$${formatPrice(order.sl, order.asset)}`}
+                                            {order.shield_active ? '🛡️ BE' : formatCurrency(order.sl)}
                                         </span>
                                     </div>
                                     <div className="flex flex-col gap-1">
                                         <span className="text-neon-cyan/50">TP1</span>
-                                        <span className="text-neon-cyan font-bold">${formatPrice(order.tp1, order.asset)}</span>
+                                        <span className="text-neon-cyan font-bold">{formatCurrency(order.tp1)}</span>
                                     </div>
                                     <div className="flex flex-col gap-1">
                                         <span className="text-neon-cyan/50">TP2</span>
-                                        <span className="text-neon-cyan font-bold">${formatPrice(order.tp2, order.asset)}</span>
+                                        <span className="text-neon-cyan font-bold">{formatCurrency(order.tp2)}</span>,StartLine:188,TargetContent:
                                     </div>
                                     <div className="flex flex-col gap-1">
                                         <span className="text-neon-cyan/50">TP3</span>
-                                        <span className="text-neon-cyan font-bold">${formatPrice(order.tp3, order.asset)}</span>
+                                        <span className="text-neon-cyan font-bold">{formatCurrency(order.tp3)}</span>
                                     </div>
                                 </div>
 

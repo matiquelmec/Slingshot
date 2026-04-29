@@ -75,7 +75,9 @@ export default function OverviewPage() {
                 { id: '1', asset: 'BTCUSDT', interval: '15m', alerts_enabled: true },
                 { id: '2', asset: 'ETHUSDT', interval: '15m', alerts_enabled: true },
                 { id: '3', asset: 'SOLUSDT', interval: '15m', alerts_enabled: true },
-                { id: '4', asset: 'PAXGUSDT', interval: '15m', alerts_enabled: true }
+                { id: '4', asset: 'XRPUSDT', interval: '15m', alerts_enabled: true },
+                { id: '5', asset: 'XAGUSDT', interval: '15m', alerts_enabled: true },
+                { id: '7', asset: 'PAXGUSDT', interval: '15m', alerts_enabled: true }
             ];
             setWatchlist(defaultWatchlist);
             localStorage.setItem('slingshot_watchlist', JSON.stringify(defaultWatchlist));

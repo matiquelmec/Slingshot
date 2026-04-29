@@ -1,4 +1,5 @@
 import { Signal, QuantDiagnostic, SessionData, TacticalDecision } from '../types/signal';
+import { formatCurrency } from './formatters';
 
 // =============== ESTRATEGIAS VISUALES DE SEÑALES ===============
 
@@ -14,16 +15,21 @@ export function getSignalLifecycle(sig: Signal, currentPrice: number | null, now
     const expiryTs = sig.expiry_timestamp ? new Date(sig.expiry_timestamp).getTime() : null;
 
     // 0. BLOQUEADA POR AUDITORÍA (Risk Manager / Macro / HTF)
-    if (sig.status === 'BLOCKED_BY_MACRO' || sig.status === 'BLOCKED_BY_FILTER' || sig.status === 'BLOCKED_BY_HTF' || sig.status === 'BLOCKED_BY_CONFIDENCE' || sig.status === 'BLOCKED_BY_VOLATILITY' || sig.status === 'STAND_BY' || sig.status === 'BLOCKED_EXPIRED') {
+    const blockedStatuses = ['BLOCKED_BY_MACRO', 'BLOCKED_BY_FILTER', 'BLOCKED_BY_HTF', 'BLOCKED_BY_CONFIDENCE', 'BLOCKED_BY_VOLATILITY', 'STAND_BY', 'BLOCKED_EXPIRED', 'BLOCKED_BY_SESSION', 'DELTA_VETO', 'SIGMA_VETO', 'BLOCKED_CHOPPY'];
+    if (blockedStatuses.includes(sig.status as string)) {
         const typeStr = sig.status === 'BLOCKED_BY_MACRO' ? 'MACRO' : 
                         sig.status === 'BLOCKED_BY_HTF' ? 'HTF' : 
                         sig.status === 'BLOCKED_BY_CONFIDENCE' ? 'Score' :
                         sig.status === 'BLOCKED_BY_VOLATILITY' ? 'Volatilidad' :
+                        sig.status === 'BLOCKED_BY_SESSION' ? 'Sesión' :
+                        sig.status === 'DELTA_VETO' ? 'Delta' :
+                        sig.status === 'SIGMA_VETO' ? 'Sigma' :
+                        sig.status === 'BLOCKED_CHOPPY' ? 'Choppy' :
                         sig.status === 'STAND_BY' ? 'Conflicto IA/SMC' :
                         sig.status === 'BLOCKED_EXPIRED' ? 'Expirada' : 'Filtro';
         
-        const borderColor = sig.status === 'BLOCKED_BY_HTF' ? 'border-amber-500/30' : sig.status === 'STAND_BY' ? 'border-cyan-500/30' : 'border-red-500/10';
-        const textColor = sig.status === 'BLOCKED_BY_HTF' ? 'text-amber-500/60' : sig.status === 'STAND_BY' ? 'text-cyan-400/60' : 'text-white/40';
+        const borderColor = sig.status === 'BLOCKED_BY_HTF' ? 'border-amber-500/30' : sig.status === 'STAND_BY' ? 'border-cyan-500/30' : sig.status === 'BLOCKED_BY_SESSION' ? 'border-orange-500/30' : 'border-red-500/10';
+        const textColor = sig.status === 'BLOCKED_BY_HTF' ? 'text-amber-500/60' : sig.status === 'STAND_BY' ? 'text-cyan-400/60' : sig.status === 'BLOCKED_BY_SESSION' ? 'text-orange-500/60' : 'text-white/40';
 
         const whySignal = sig.confluence?.reasoning || 'Criterio técnico base cumplido.';
         const rejectionDetail = sig.rejection_reason || (sig as any).blocked_reason || 
@@ -46,8 +52,8 @@ export function getSignalLifecycle(sig: Signal, currentPrice: number | null, now
             return {
                 status: 'EN_ZONA',
                 label: isLocked ? '🔒 PROFITS LOCKED' : isShielded ? '🛡️ SHIELD ACTIVE (BE)' : '⚡ POSITION OPEN (FILLED)',
-                reason: isLocked ? `Posición protegida en TP1 ($${sig.tp1?.toLocaleString()}). Buscando TP3.` : 
-                        isShielded ? `Precio tocó TP1. Stop Loss movido a Break-even ($${sig.price?.toLocaleString()}).` :
+                reason: isLocked ? `Posición protegida en TP1 (${formatCurrency(sig.tp1)}). Buscando TP3.` : 
+                        isShielded ? `Precio tocó TP1. Stop Loss movido a Break-even (${formatCurrency(sig.price)}).` :
                         `Precio entró en zona. Orden ejecutada. Vigilando niveles de salida.`,
                 color: 'text-neon-cyan',
                 bgColor: 'bg-neon-cyan/10 border-neon-cyan/40 shadow-[0_0_15px_rgba(0,229,255,0.1)]',
@@ -57,7 +63,7 @@ export function getSignalLifecycle(sig: Signal, currentPrice: number | null, now
             return {
                 status: 'INVALIDADA',
                 label: '🛑 STOP LOSS HIT',
-                reason: `Posición cerrada por Stop Loss en $${currentPrice?.toLocaleString() || sig.stop_loss?.toLocaleString()}. Gestión de riesgo OMEGA aplicada.`,
+                reason: `Posición cerrada por Stop Loss en ${formatCurrency(currentPrice) || formatCurrency(sig.stop_loss)}. Gestión de riesgo OMEGA aplicada.`,
                 color: 'text-neon-red',
                 bgColor: 'bg-neon-red/10 border-neon-red/30 opacity-70',
             };
@@ -79,7 +85,7 @@ export function getSignalLifecycle(sig: Signal, currentPrice: number | null, now
             return {
                 status: 'INVALIDADA',
                 label: '✗ INVALIDADA',
-                reason: `Precio actual $${currentPrice.toLocaleString()} superó el Stop Loss $${sig.stop_loss.toLocaleString()} — tesis bajista rota.`,
+                reason: `Precio actual ${formatCurrency(currentPrice)} superó el Stop Loss ${formatCurrency(sig.stop_loss)} — tesis bajista rota.`,
                 color: 'text-neon-red',
                 bgColor: 'bg-neon-red/5 border-neon-red/20 opacity-50',
             };
@@ -88,7 +94,7 @@ export function getSignalLifecycle(sig: Signal, currentPrice: number | null, now
             return {
                 status: 'INVALIDADA',
                 label: '✗ INVALIDADA',
-                reason: `Precio actual $${currentPrice.toLocaleString()} rompió Stop Loss $${sig.stop_loss.toLocaleString()} — tesis alcista rota.`,
+                reason: `Precio actual ${formatCurrency(currentPrice)} rompió Stop Loss ${formatCurrency(sig.stop_loss)} — tesis alcista rota.`,
                 color: 'text-neon-red',
                 bgColor: 'bg-neon-red/5 border-neon-red/20 opacity-50',
             };
@@ -114,7 +120,7 @@ export function getSignalLifecycle(sig: Signal, currentPrice: number | null, now
             return {
                 status: 'EN_ZONA',
                 label: '⚡ EN ZONA — ENTRY WINDOW',
-                reason: `Precio actual $${currentPrice.toLocaleString()} dentro de zona ($${sig.entry_zone_bottom.toLocaleString()} – $${sig.entry_zone_top.toLocaleString()}). Confirmar volumen.`,
+                reason: `Precio actual ${formatCurrency(currentPrice)} dentro de zona (${formatCurrency(sig.entry_zone_bottom)} – ${formatCurrency(sig.entry_zone_top)}). Confirmar volumen.`,
                 color: 'text-neon-cyan',
                 bgColor: 'bg-neon-cyan/5 border-neon-cyan/30',
             };
@@ -135,8 +141,8 @@ export function getSignalLifecycle(sig: Signal, currentPrice: number | null, now
         : '';
 
     const zoneText = sig.entry_zone_bottom != null && sig.entry_zone_top != null
-        ? `Esperando zona ($${sig.entry_zone_bottom.toLocaleString()} – $${sig.entry_zone_top.toLocaleString()}). ${distText}`
-        : `Esperando retorno al nivel de entrada ($${sig.price?.toLocaleString(undefined, { minimumFractionDigits: 2 }) ?? 'N/A'}). ${distText}`;
+        ? `Esperando zona (${formatCurrency(sig.entry_zone_bottom)} – ${formatCurrency(sig.entry_zone_top)}). ${distText}`
+        : `Esperando retorno al nivel de entrada (${formatCurrency(sig.price)}). ${distText}`;
 
     return {
         status: 'PENDING',

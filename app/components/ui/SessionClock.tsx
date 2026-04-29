@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Clock, Zap, TrendingUp, TrendingDown, Minus } from 'lucide-react';
 import { useTelemetryStore } from '../../store/telemetryStore';
 import { SessionData, SessionInfo } from '../../types/signal';
+import { formatCurrency } from '../../utils/formatters';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -29,10 +30,7 @@ const STATUS_STYLE: Record<string, string> = {
     PENDING: 'text-white/50',
 };
 
-function fmt(n: number | null, decimals = 0) {
-    if (n == null) return '—';
-    return '$' + n.toLocaleString('en-US', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
-}
+// fmt function removed and replaced by formatCurrency from utils/formatters
 
 function formatSessionTimes(startUTC: number, endUTC: number) {
     // Si no tenemos datos iniciales (undefined safe)
@@ -92,7 +90,7 @@ function SessionRow({ id, info }: { id: string; info: SessionInfo & { prev_high?
             <div className="text-right">
                 <p className="text-[9px] text-white/30 font-bold tracking-wider mb-0.5">HIGH</p>
                 <p className={`text-[11px] font-bold font-mono ${showPrev ? 'text-white/30' : 'text-neon-green/80'}`}>
-                    {fmt(displayHigh, 0)}
+                    {formatCurrency(displayHigh)}
                 </p>
                 {showPrev && <p className="text-[7px] text-white/20 tracking-wider">ayer</p>}
                 <SweepBadge swept={info.swept_high} label="H" />
@@ -102,7 +100,7 @@ function SessionRow({ id, info }: { id: string; info: SessionInfo & { prev_high?
             <div className="text-right">
                 <p className="text-[9px] text-white/30 font-bold tracking-wider mb-0.5">LOW</p>
                 <p className={`text-[11px] font-bold font-mono ${showPrev ? 'text-white/30' : 'text-neon-red/80'}`}>
-                    {fmt(displayLow, 0)}
+                    {formatCurrency(displayLow)}
                 </p>
                 {showPrev && <p className="text-[7px] text-white/20 tracking-wider">ayer</p>}
                 <SweepBadge swept={info.swept_low} label="L" />
@@ -227,7 +225,7 @@ export default function SessionClock() {
                             <span className="text-[9px] font-bold text-neon-green/60 tracking-wider">PDH</span>
                             {sessionData?.pdh_swept && <span className="text-[8px] text-neon-red font-bold ml-auto">⚡ BARRIDO</span>}
                         </div>
-                        <p className="text-[12px] font-black text-neon-green/90 font-mono">{fmt(sessionData?.pdh ?? null, 0)}</p>
+                        <p className="text-[12px] font-black text-neon-green/90 font-mono">{formatCurrency(sessionData?.pdh ?? null)}</p>
                         <p className="text-[8px] text-neon-green/30 mt-0.5">Objetivo alcista</p>
                     </div>
                     <div className="bg-neon-red/5 border border-neon-red/20 rounded-lg p-2">
@@ -236,7 +234,7 @@ export default function SessionClock() {
                             <span className="text-[9px] font-bold text-neon-red/60 tracking-wider">PDL</span>
                             {sessionData?.pdl_swept && <span className="text-[8px] text-neon-red font-bold ml-auto">⚡ BARRIDO</span>}
                         </div>
-                        <p className="text-[12px] font-black text-neon-red/90 font-mono">{fmt(sessionData?.pdl ?? null, 0)}</p>
+                        <p className="text-[12px] font-black text-neon-red/90 font-mono">{formatCurrency(sessionData?.pdl ?? null)}</p>
                         <p className="text-[8px] text-neon-red/30 mt-0.5">Objetivo bajista</p>
                     </div>
                 </div>

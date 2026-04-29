@@ -4,6 +4,7 @@ import React from 'react';
 import { useTelemetryStore, MASTER_WATCHLIST } from '../../store/telemetryStore';
 import { motion } from 'framer-motion';
 import { Zap, Activity } from 'lucide-react';
+import { formatCurrency } from '../../utils/formatters';
 
 export default function EliteConsole() {
     const marketSummary = useTelemetryStore((state) => state.marketSummary);
@@ -48,9 +49,8 @@ export default function EliteConsole() {
                             </div>
                         </div>
 
-                        {/* Price */}
                         <span className="text-base font-mono font-black text-white leading-none">
-                            ${data.price ? data.price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—'}
+                            {formatCurrency(data.price)}
                         </span>
 
                         {/* Regime Bar */}

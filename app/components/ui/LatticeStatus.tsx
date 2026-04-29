@@ -6,9 +6,9 @@ import { useTelemetryStore } from '../../store/telemetryStore';
 import { Shield, Zap, AlertCircle, RefreshCw } from 'lucide-react';
 
 export default function LatticeStatus() {
-    const { tacticalDecision, isConnected } = useTelemetryStore();
+    const { tacticalDecision, isConnected, connectionStatus } = useTelemetryStore();
     const d = tacticalDecision;
-    const isStale = d.is_stale || !isConnected;
+    const isStale = d.is_stale || connectionStatus === 'STALLED' || connectionStatus === 'DISCONNECTED' || !isConnected;
 
     return (
         <div className="flex items-center gap-4 px-6 h-14 bg-[#050B14]/80 backdrop-blur-md border-b border-white/5 relative z-50">
@@ -35,16 +35,18 @@ export default function LatticeStatus() {
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: -5 }}
                     className={`px-3 py-1.5 rounded-full border flex items-center gap-2 ${
-                        isStale 
+                        connectionStatus === 'DISCONNECTED' 
                         ? 'bg-neon-red/10 border-neon-red/30 text-neon-red shadow-[0_0_10px_rgba(255,0,0,0.2)]' 
+                        : connectionStatus === 'STALLED'
+                        ? 'bg-yellow-400/10 border-yellow-400/30 text-yellow-400 shadow-[0_0_10px_rgba(250,204,21,0.2)]'
                         : d.strategy?.includes('STANDBY') 
-                        ? 'bg-yellow-400/10 border-yellow-400/30 text-yellow-400' 
+                        ? 'bg-white/10 border-white/30 text-white/80' 
                         : 'bg-neon-green/10 border-neon-green/30 text-neon-green shadow-[0_0_10px_rgba(0,255,0,0.1)]'
                     }`}
                 >
-                    {isStale ? <RefreshCw size={12} className="animate-spin" /> : <Shield size={12} />}
+                    {connectionStatus === 'DISCONNECTED' ? <AlertCircle size={12} className="animate-pulse" /> : connectionStatus === 'STALLED' ? <RefreshCw size={12} className="animate-spin" /> : <Shield size={12} />}
                     <span className="text-[9px] font-black tracking-widest uppercase">
-                        {isStale ? 'SYNCING...' : d.strategy?.includes('STANDBY') ? 'STANDBY' : 'OPERATIONAL'}
+                        {connectionStatus === 'DISCONNECTED' ? 'DISCONNECTED' : connectionStatus === 'STALLED' ? 'DATA LAG (STALLED)' : d.strategy?.includes('STANDBY') ? 'STANDBY' : 'OPERATIONAL'}
                     </span>
                 </motion.div>
             </AnimatePresence>

@@ -106,6 +106,22 @@ class SignalGatekeeper:
                         event_name = ev.get('title', 'Noticia Crítica')
                         break
 
+        # ── Filtro 0.5: Session Veto (Ruido de Cierre) ──────────────────────
+        # Institucionalmente se evita operar en los últimos minutos de velas mayores (H4/D1).
+        # Vetamos si estamos en los últimos 5 minutos de bloques de 4 horas (0, 4, 8, 12, 16, 20)
+        # Ojo: la hora actual de un cierre a las 04:00 es las 03:55-03:59.
+        minute_of_hour = now.minute
+        hour_of_day = now.hour
+        
+        if minute_of_hour >= 55:
+            # Si la siguiente hora es divisible por 4 (cierre de H4) o es medianoche (cierre D1)
+            if (hour_of_day + 1) % 4 == 0 or hour_of_day == 23:
+                if not silent:
+                    logger.warning(f"[GATEKEEPER] [SESSION_VETO] Bloqueo por ruido de cierre H4/D1 ({now.strftime('%H:%M')} UTC).")
+                for sig in signals:
+                    self._block(sig, "BLOCKED_BY_SESSION", "Session Veto: Alta volatilidad por cierre de vela mayor", result)
+                return result
+
         # 🧠 [DELTA v6.1] Cerebro de Régimen (Mandatos de Supervivencia)
         regime_info = regime_details or {"regime": "UNKNOWN", "bias": "NEUTRAL", "confidence": 0}
         regime_type = str(regime_info.get("regime", "UNKNOWN")).upper()

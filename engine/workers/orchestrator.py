@@ -73,7 +73,7 @@ class SlingshotOrchestrator:
         En v5.7.155 Master Gold, restringimos estrictamente la vigilancia a los activos VIP
         para garantizar latencia cero y optimización de recursos.
         """
-        vip_assets = {"BTCUSDT", "ETHUSDT", "SOLUSDT", "PAXGUSDT"}
+        vip_assets = set(settings.MASTER_WATCHLIST)
         
         # 1. Eliminar activos que ya no son VIP (si existieran)
         to_remove = self.radar_assets - vip_assets
@@ -101,31 +101,35 @@ class SlingshotOrchestrator:
                     await self.spawn_persistent_broadcaster(symbol, interval)
 
     async def _ghost_worker(self):
-        """Worker secundario que refresca los datos macro globales cada 15 min."""
-        logger.info("🔮 [ORCHESTRATOR] Sensor Macro (Ghost) activado.")
+        """
+        [MACRO SENTINEL v8.6.0] Refresca los datos macro globales cada 15 min.
+        Centraliza las peticiones pesadas (DXY, NASDAQ, F&G, BTC.D) para todos los sensores.
+        """
+        logger.info("🔮 [ORCHESTRATOR] Macro Sentinel activado.")
         
-        # Sincronización FORZADA al inicio para evitar NEUTRAL por defecto
+        # Sincronización FORZADA al inicio
         try:
             await macro.update_macro_context()
             m_ctx = macro.get_macro_context()
-            await refresh_ghost_data("BTCUSDT", macro_ctx=m_ctx)
+            # 🚀 El Orchestrator es el ÚNICO que hace global_only=True
+            await refresh_ghost_data(global_only=True, macro_ctx=m_ctx)
         except Exception as e:
-            logger.error(f"⚠️ [ORCHESTRATOR] Error en sincronización inicial: {e}")
+            logger.error(f"⚠️ [ORCHESTRATOR] Error en Sentinel inicial: {e}")
 
         while not self._stop_event.is_set():
             try:
-                # 1. Actualizar Capa 1: Contexto Global (DXY/NASDAQ) v4.0 PRIMERO
+                # 1. Actualizar Capa 1: Contexto Global (DXY/NASDAQ)
                 await macro.update_macro_context()
                 m_ctx = macro.get_macro_context()
 
-                # 2. Refrescar datos macro (usando BTC como proxy global) DESPUÉS
-                state = await refresh_ghost_data("BTCUSDT", macro_ctx=m_ctx)
+                # 2. Refrescar métricas globales pesadas
+                state = await refresh_ghost_data(global_only=True, macro_ctx=m_ctx)
                 
-                logger.info(f"[ORCHESTRATOR] 🔮 Radar Macro actualizado: {state.macro_bias} (DXY: {state.dxy_trend})")
+                logger.info(f"[ORCHESTRATOR] 🔮 Macro Sentinel sincronizado: {state.macro_bias} (F&G: {state.fear_greed_value})")
             except Exception as e:
-                logger.error(f"⚠️ [ORCHESTRATOR] Error en Radar Macro: {e}")
+                logger.error(f"⚠️ [ORCHESTRATOR] Error en ciclo Sentinel: {e}")
             
-            # Esperar 15 minutos (900s) para el próximo ciclo macro
+            # Esperar 15 minutos (900s)
             await asyncio.sleep(900)
 
     async def _session_worker(self):

@@ -142,73 +142,58 @@ class NewsWorker:
         if len(all_new_items) > 10:
             all_new_items = all_new_items[:10]
 
-        logger.info(f"🧠 [NEWS-WORKER] Analizando {len(all_new_items)} noticias (Tiered Master v6.5)...")
-        
-        chunk_size = 5
+        # Sincronizar, guardar y emitir inmediatamente (Análisis en Segundo Plano)
         base_ts = datetime.now(timezone.utc)
-        
-        for i in range(0, len(all_new_items), chunk_size):
-            chunk = all_new_items[i:i + chunk_size]
+        for j, item in enumerate(all_new_items):
+            news_id = hashlib.sha256(item["link"].encode('utf-8')).hexdigest()
             
-            # Separar noticias que necesitan IA de las que no (Tier 3)
-            ia_titles = []
-            ia_indices = []
-            final_chunk_results = [None] * len(chunk)
+            # 🚀 PRE-GUARDADO Y BROADCAST (Velocidad Institucional)
+            news_item = {
+                "id": news_id,
+                "title": item["original_title"],
+                "url": item["link"],
+                "source": item["source"],
+                "timestamp": (base_ts + timedelta(milliseconds=j)).isoformat(),
+                "sentiment": "NEUTRAL",
+                "score": 0.5,
+                "impact": "Tier " + str(item["tier"]) + " - Procesando...",
+                "tier": item["tier"],
+                "weight": 1.0,
+                "analyzing": True if item["tier"] != 3 else False
+            }
+            
+            await store.save_news(news_item)
+            await registry.broadcast_global({"type": "news_update", "data": news_item})
 
-            for idx, item in enumerate(chunk):
-                if item["tier"] == 3:
-                    # Tier 3 (Verde): Bypass IA
-                    final_chunk_results[idx] = {
-                        "sentiment": "NEUTRAL", 
-                        "score": 0.5, 
-                        "impact": "Noticia de categoría C (Tier 3) - Bypass IA.",
-                        "weight": 1.0
-                    }
-                else:
-                    ia_titles.append(item["original_title"])
-                    ia_indices.append(idx)
+            # Lanzar análisis en segundo plano para Tier 1 y 2
+            if item["tier"] < 3:
+                asyncio.create_task(self._analyze_single_news(news_item))
 
-            # Analizar solo lo relevante
-            if ia_titles:
-                try:
-                    res = await generate_news_sentiment_batch(ia_titles)
-                    # Asegurar que el modelo no omitió ítems o rellenar si faltan
-                    for step_i, original_idx in enumerate(ia_indices):
-                        if step_i < len(res):
-                            analysis = res[step_i]
-                            analysis["weight"] = 3.0 if chunk[original_idx]["tier"] == 1 else 1.5
-                            final_chunk_results[original_idx] = analysis
-                        else:
-                            # Fallback si Ollama trunca el array JSON
-                            final_chunk_results[original_idx] = {
-                                "sentiment": "NEUTRAL", 
-                                "score": 0.5, 
-                                "impact": "Análisis truncado por LLM.",
-                                "weight": 1.0
-                            }
-                except Exception as e:
-                    logger.error(f"❌ [NEWS-WORKER] Error en chunk IA: {e}")
-
-            # Sincronizar, guardar y emitir
-            for j, item in enumerate(chunk):
-                analysis = final_chunk_results[j] or {}
-                
-                news_id = hashlib.sha256(item["link"].encode('utf-8')).hexdigest()
-                news_item = {
-                    "id": news_id,
-                    "title": analysis.get("translated_title", item["original_title"]),
-                    "url": item["link"],
-                    "source": item["source"],
-                    "timestamp": (base_ts + timedelta(milliseconds=i+j)).isoformat(),
-                    "sentiment": analysis.get("sentiment", "NEUTRAL"),
-                    "score": analysis.get("score", 0.5),
-                    "impact": analysis.get("impact", "Análisis pendiente."),
-                    "tier": item["tier"],
-                    "weight": analysis.get("weight", 1.0)
-                }
-                
-                await store.save_news(news_item)
-                await registry.broadcast_global({"type": "news_update", "data": news_item})
+    async def _analyze_single_news(self, news_item: dict):
+        """Analiza una noticia específica sin bloquear el flujo principal."""
+        try:
+            # En v6.6 simplificamos a análisis unitario para evitar truncamiento de batches
+            from engine.api.advisor import generate_news_sentiment
+            analysis = await generate_news_sentiment(news_item["title"])
+            
+            # Actualizar el item original
+            news_item.update({
+                "title": analysis.get("translated_title", news_item["title"]),
+                "sentiment": analysis.get("sentiment", "NEUTRAL"),
+                "score": analysis.get("score", 0.5),
+                "impact": analysis.get("impact", "Completado."),
+                "weight": 3.0 if news_item["tier"] == 1 else 1.5,
+                "analyzing": False
+            })
+            
+            await store.save_news(news_item)
+            await registry.broadcast_global({"type": "news_update", "data": news_item})
+            logger.info(f"🧠 [NEWS-ANALYSIS] ✅ Noticia analizada: {news_item['title'][:50]}...")
+            
+        except Exception as e:
+            logger.error(f"❌ [NEWS-ANALYSIS] Error analizando {news_item.get('id')}: {e}")
+            news_item["analyzing"] = False
+            await store.save_news(news_item)
 
     def stop(self):
         self._stop_event.set()
