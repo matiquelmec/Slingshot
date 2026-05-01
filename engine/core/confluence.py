@@ -107,17 +107,41 @@ class ConfluenceManager:
             else:
                 checklist.append({"factor": "Zonas POI", "status": "NEUTRAL", "detail": "Precio flotando fuera de zonas de liquidez"})
 
-        # 3. LIQUIDEZ Y KILLZONES (Peso 15)
+        # 3. LIQUIDEZ Y KILLZONES (Peso 15 + Bonos v8.8.0)
         liq_weight = 15
         total_weight += liq_weight
         current_session = session_data.get('current_session', 'OFF_HOURS')
-        in_kz = current_session in ('LONDON', 'NEW_YORK', 'LONDON_NY_OVERLAP', 'ASIA')
+        
+        # Killzones Expandidas
+        in_kz = current_session in (
+            'LONDON_KILLZONE', 'NY_KILLZONE', 'LONDON_NY_OVERLAP', 
+            'ASIA', 'FRANKFURT_OPEN', 'NY_SILVER_BULLET_PM'
+        )
+        
+        # Detección de barrido (Sweep) en cualquier sesión
+        sessions = session_data.get('sessions', {})
         sweep = any((is_long and s.get('swept_low')) or (not is_long and s.get('swept_high')) 
-                    for s in session_data.get('sessions', {}).values())
+                    for s in sessions.values())
+        
+        # 💎 BONO ELITE: Asia Session Sweep (Pilar de Slingshot)
+        asia_sweep = False
+        if current_session != 'ASIA' and 'asia' in sessions:
+            asia = sessions['asia']
+            if (is_long and asia.get('swept_low')) or (not is_long and asia.get('swept_high')):
+                asia_sweep = True
+
         liq_pts = (7 if in_kz else 0) + (8 if sweep else 0)
+        if asia_sweep and in_kz: 
+            liq_pts += 10 # Bono extra por barrido de Asia en Killzone
+            
         score += liq_pts
-        checklist.append({"factor": "Liquidez/KZ", "status": "CONFIRMADO" if liq_pts >= 10 else "PARCIAL" if liq_pts > 0 else "BAJO",
-                           "detail": f"{current_session} {'+ Sweep' if sweep else ''}"})
+        
+        status = "CONFIRMADO" if liq_pts >= 15 else "PARCIAL" if liq_pts > 0 else "BAJO"
+        detail = f"{current_session}"
+        if asia_sweep: detail += " + ASIA SWEEP ⚡"
+        elif sweep: detail += " + Sweep"
+        
+        checklist.append({"factor": "Liquidez/KZ", "status": status, "detail": detail})
 
         # 4. HUELLA DE VOLUMEN (RVOL) (Peso 10)
         vol_weight = 10

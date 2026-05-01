@@ -214,6 +214,38 @@ export default function QuantDiagnosticPanel() {
                     </div>
                 </div>
 
+                {/* 3.5 LIQUIDEZ & SESIONES (v8.8.0) */}
+                <div className="bg-white/[0.02] border border-white/5 rounded-xl p-3">
+                    <div className="flex items-center justify-between mb-2">
+                        <span className="text-[9px] font-bold text-white/40 tracking-[0.2em] uppercase">LIQUIDITY & SESSIONS</span>
+                        {useTelemetryStore.getState().sessionData?.is_killzone && (
+                            <span className="flex h-1.5 w-1.5 rounded-full bg-yellow-400 animate-pulse shadow-[0_0_5px_yellow]" />
+                        )}
+                    </div>
+                    <div className="space-y-2">
+                        {/* Asia Sweep Status */}
+                        <div className="flex items-center justify-between">
+                            <span className="text-[10px] text-white/50">Asia Liquidity Sweep</span>
+                            {(() => {
+                                const sessions = useTelemetryStore.getState().sessionData?.sessions;
+                                const swept = sessions?.asia?.swept_high || sessions?.asia?.swept_low;
+                                return (
+                                    <span className={`text-[10px] font-bold ${swept ? 'text-neon-cyan animate-pulse' : 'text-white/20'}`}>
+                                        {swept ? 'DETECTADO ⚡' : 'ESPERANDO'}
+                                    </span>
+                                );
+                            })()}
+                        </div>
+                        {/* Power Overlap Status */}
+                        <div className="flex items-center justify-between">
+                            <span className="text-[10px] text-white/50">Power Overlap (NY/LON)</span>
+                            <span className={`text-[10px] font-bold ${useTelemetryStore.getState().sessionData?.is_overlap ? 'text-indigo-400' : 'text-white/20'}`}>
+                                {useTelemetryStore.getState().sessionData?.is_overlap ? 'ACTIVO 🔥' : 'INACTIVO'}
+                            </span>
+                        </div>
+                    </div>
+                </div>
+
 
                 {/* 4. Fibonacci (si disponible) */}
                 {d.fibonacci && (

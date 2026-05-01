@@ -16,11 +16,14 @@ const SESSION_META: Record<string, { label: string; flag: string; color: string;
 };
 
 const SESSION_DISPLAY: Record<string, { label: string; color: string; bg: string }> = {
-    ASIA: { label: 'ASIA', color: 'text-orange-400', bg: 'bg-orange-400/10 border-orange-400/30' },
-    LONDON_KILLZONE: { label: 'LONDON KILLZONE', color: 'text-blue-300', bg: 'bg-blue-400/15 border-blue-400/40' },
-    LONDON: { label: 'LONDON', color: 'text-blue-400', bg: 'bg-blue-400/10 border-blue-400/20' },
-    NY_KILLZONE: { label: 'NY KILLZONE', color: 'text-purple-300', bg: 'bg-purple-400/15 border-purple-400/40' },
-    NEW_YORK: { label: 'NUEVA YORK', color: 'text-purple-400', bg: 'bg-purple-400/10 border-purple-400/20' },
+    ASIA: { label: 'ASIA RANGE', color: 'text-orange-400', bg: 'bg-orange-400/10 border-orange-400/30' },
+    LONDON_KILLZONE: { label: 'LONDON OPEN', color: 'text-blue-300', bg: 'bg-blue-400/15 border-blue-400/40' },
+    LONDON: { label: 'LONDON SESSION', color: 'text-blue-400', bg: 'bg-blue-400/10 border-blue-400/20' },
+    NY_KILLZONE: { label: 'NY OPEN', color: 'text-purple-300', bg: 'bg-purple-400/15 border-purple-400/40' },
+    LONDON_NY_OVERLAP: { label: 'POWER OVERLAP ⚡', color: 'text-indigo-300', bg: 'bg-indigo-500/20 border-indigo-500/50 shadow-[0_0_15px_rgba(99,102,241,0.2)]' },
+    NY_SILVER_BULLET_PM: { label: 'SILVER BULLET PM 🏹', color: 'text-yellow-400', bg: 'bg-yellow-400/15 border-yellow-400/40 shadow-[0_0_15px_rgba(250,204,21,0.2)]' },
+    FRANKFURT_OPEN: { label: 'FRANKFURT PRE-OPEN', color: 'text-slate-300', bg: 'bg-slate-400/10 border-slate-400/30' },
+    NEW_YORK: { label: 'NY SESSION', color: 'text-purple-400', bg: 'bg-purple-400/10 border-purple-400/20' },
     OFF_HOURS: { label: 'OFF HOURS', color: 'text-white/30', bg: 'bg-white/[0.03] border-white/10' },
 };
 
@@ -184,20 +187,30 @@ export default function SessionClock() {
             <div className="px-4 pt-3 pb-2">
                 <div className={`flex items-center justify-between px-3 py-2 rounded-xl border ${disp.bg}`}>
                     <div className="flex items-center gap-2">
-                        {isKz && (
+                        {(isKz || sessionData?.is_silver_bullet || sessionData?.is_overlap) && (
                             <motion.div
                                 animate={{ scale: [1, 1.2, 1], opacity: [1, 0.6, 1] }}
                                 transition={{ repeat: Infinity, duration: 1.2 }}
                             >
-                                <Zap size={13} className="text-yellow-400" />
+                                <Zap size={13} className={sessionData?.is_silver_bullet ? "text-yellow-400" : "text-neon-cyan"} />
                             </motion.div>
                         )}
                         <span className={`text-[11px] font-black tracking-widest ${disp.color}`}>
                             {disp.label}
                         </span>
                     </div>
-                    {isKz && (
+                    {sessionData?.is_silver_bullet && (
                         <span className="text-[9px] font-bold text-yellow-400 bg-yellow-400/10 border border-yellow-400/30 px-2 py-0.5 rounded-full tracking-wider">
+                            SILVER BULLET 🏹
+                        </span>
+                    )}
+                    {sessionData?.is_overlap && !sessionData?.is_silver_bullet && (
+                        <span className="text-[9px] font-bold text-indigo-400 bg-indigo-400/10 border border-indigo-400/30 px-2 py-0.5 rounded-full tracking-wider">
+                            POWER OVERLAP ⚡
+                        </span>
+                    )}
+                    {isKz && !sessionData?.is_silver_bullet && !sessionData?.is_overlap && (
+                        <span className="text-[9px] font-bold text-blue-400 bg-blue-400/10 border border-blue-400/30 px-2 py-0.5 rounded-full tracking-wider">
                             KILLZONE ACTIVA
                         </span>
                     )}

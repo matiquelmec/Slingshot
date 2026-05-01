@@ -2,7 +2,7 @@
 > **"Institutional-Grade Algorithmic Terminal. Zero Latency. SMC Mitigation. Full Sovereignty."**
 
 ![Status](https://img.shields.io/badge/Status-100%25_HARDENED_OPERATIONAL-0d2a1a?style=for-the-badge&logo=codeproject&logoColor=fff)
-![Version](https://img.shields.io/badge/Version-8.7.5_Titanium_Hardened-1a3a6e?style=for-the-badge)
+![Version](https://img.shields.io/badge/Version-8.8.0_Session_Master-1a3a6e?style=for-the-badge)
 ![Engine](https://img.shields.io/badge/Engine-Sigma_Omega_Delta-ffd700?style=for-the-badge&labelColor=0a0a0a)
 ![Performance](https://img.shields.io/badge/Latency-Sub--50ms-blue?style=for-the-badge)
 

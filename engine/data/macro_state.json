@@ -10,12 +10,12 @@
   "reason": "DXY Alcista: Presi\u00f3n vendedora global | NASDAQ Bajista: Risk-Off",
   "oi_delta_pct": 0.0,
   "dxy_trend": "BEARISH",
-  "dxy_price": 97.91,
+  "dxy_price": 97.92,
   "nasdaq_trend": "BULLISH",
   "nasdaq_change_pct": 1.46,
   "risk_appetite": "RISK_ON",
-  "news_sentiment": 0.6,
+  "news_sentiment": 0.5,
   "active_event": "",
-  "last_updated": 1777640327.0752397,
+  "last_updated": 1777641103.5328715,
   "is_stale": false
 }

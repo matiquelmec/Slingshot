@@ -32,6 +32,7 @@ _CHILE_TZ  = ZoneInfo("America/Santiago")
 _NY_TZ     = ZoneInfo("America/New_York")
 _LONDON_TZ = ZoneInfo("Europe/London")
 _TOKYO_TZ  = ZoneInfo("Asia/Tokyo")
+_FRA_TZ    = ZoneInfo("Europe/Berlin") # Frankfurt
 
 # --- GLOBAL SESSION CACHE v5.7.156 (Bootstrap Sync) ---
 # Almacena el resultado del bootstrap por símbolo para que se haga solo una vez
@@ -384,19 +385,42 @@ class SessionManager:
             },
         }
 
-        # ── Sesión activa ─────────────────────────────────────────────────
+        # ── Sesión activa (v8.8.0 Institutional Precision) ─────────────────
+        is_silver_bullet = False
+        is_overlap = False
+        
+        # 1. Definir Sesión Base
         if 9 <= tokyo_hour < 15:
-            session_name, is_killzone = "ASIA", False
-        elif 8 <= lon_hour < 11:
-            session_name, is_killzone = "LONDON_KILLZONE", True
-        elif 11 <= lon_hour < 16 and ny_hour < 8:
-            session_name, is_killzone = "LONDON", False
-        elif 8 <= ny_hour < 11:
-            session_name, is_killzone = "NY_KILLZONE", True
-        elif 11 <= ny_hour < 16:
-            session_name, is_killzone = "NEW_YORK", False
+            session_name = "ASIA"
+        elif 8 <= lon_hour < 16 and ny_hour < 8:
+            session_name = "LONDON"
+        elif 8 <= ny_hour < 16:
+            session_name = "NEW_YORK"
         else:
-            session_name, is_killzone = "OFF_HOURS", False
+            session_name = "OFF_HOURS"
+
+        # 2. Refinar con Killzones y Overlaps
+        if 8 <= lon_hour < 11:
+            session_name = "LONDON_KILLZONE"
+            is_killzone = True
+        
+        if 8 <= ny_hour < 11:
+            if session_name == "LONDON_KILLZONE" or lon_hour >= 8:
+                session_name = "LONDON_NY_OVERLAP"
+            else:
+                session_name = "NY_KILLZONE"
+            is_killzone = True
+            is_overlap = True
+
+        # Silver Bullets (SMC Standard)
+        if (10 <= ny_hour < 11) or (14 <= ny_hour < 15):
+            is_silver_bullet = True
+            if ny_hour >= 14: session_name = "NY_SILVER_BULLET_PM"
+
+        # Frankfurt Pre-Open
+        if 7 <= lon_hour < 8:
+            session_name = "FRANKFURT_OPEN"
+            is_killzone = True
 
         return {
             "type": "session_update",
@@ -407,6 +431,8 @@ class SessionManager:
                 "local_time_ny":       now_ny.strftime("%H:%M"),
                 "local_time_lon":      now_lon.strftime("%H:%M"),
                 "is_killzone":         is_killzone,
+                "is_silver_bullet":    is_silver_bullet,
+                "is_overlap":          is_overlap,
                 "sessions":            sessions_info,
                 "pdh":       self._state.get("pdh"),
                 "pdl":       self._state.get("pdl"),
@@ -447,23 +473,32 @@ class SessionManager:
         lon_hour = now_lon.hour
         tok_hour = now_tokyo.hour
 
-        # Detección de sesión activa
+        # Detección de sesión activa (v8.8.0 Sync)
+        is_silver_bullet = False
+        is_overlap = False
+        
         if 9 <= tok_hour < 15:
             session_name, is_killzone = "ASIA", False
+        elif 7 <= lon_hour < 8:
+            session_name, is_killzone = "FRANKFURT_OPEN", True
         elif 8 <= lon_hour < 11:
             session_name, is_killzone = "LONDON_KILLZONE", True
-        elif 11 <= lon_hour < 16 and ny_hour < 8:
-            session_name, is_killzone = "LONDON", False
         elif 8 <= ny_hour < 11:
-            session_name, is_killzone = "NY_KILLZONE", True
+            session_name, is_killzone = "LONDON_NY_OVERLAP", True
+            is_overlap = True
         elif 11 <= ny_hour < 16:
-            session_name, is_killzone = "NEW_YORK", False
+            if 14 <= ny_hour < 15:
+                session_name, is_killzone, is_silver_bullet = "NY_SILVER_BULLET_PM", True, True
+            else:
+                session_name, is_killzone = "NEW_YORK", False
         else:
             session_name, is_killzone = "OFF_HOURS", False
 
         return {
             "current_session": session_name,
             "is_killzone": is_killzone,
+            "is_silver_bullet": is_silver_bullet,
+            "is_overlap": is_overlap,
             "local_time_ny": now_ny.strftime("%H:%M"),
             "local_time_lon": now_lon.strftime("%H:%M"),
             "local_time_chile": now_utc.astimezone(_CHILE_TZ).strftime("%H:%M"),
