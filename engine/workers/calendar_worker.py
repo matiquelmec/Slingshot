@@ -29,78 +29,69 @@ class CalendarWorker:
                 logger.error(f"⚠️ [CALENDAR-WORKER] Error en ciclo de calendario: {e}")
 
     async def fetch_and_process_calendar(self):
-        logger.info("🌐 [CALENDAR-WORKER] Descargando calendario económico...")
+        logger.info("🌐 [CALENDAR-WORKER] Sincronizando calendario económico...")
+        
+        # 1. CARGAR CACHÉ LOCAL PRIMERO (Inyección Prioritaria v8.8.4)
+        local_events = []
+        try:
+            import json, os
+            # Path absoluto robusto
+            current_file = os.path.abspath(__file__)
+            base_dir = os.path.dirname(os.path.dirname(current_file))
+            file_path = os.path.join(base_dir, "data", "economic_calendar.json")
+            
+            if os.path.exists(file_path):
+                with open(file_path, "r", encoding="utf-8") as f:
+                    local_events = json.load(f)
+                    if local_events:
+                        await store.save_economic_events(local_events)
+                        logger.info(f"✅ [CALENDAR-WORKER] {len(local_events)} eventos inyectados desde cache local.")
+        except Exception as fe:
+            logger.error(f"❌ [CALENDAR-WORKER] Error cargando inyección local: {fe}")
+
+        # 2. INTENTAR ACTUALIZAR DESDE API (Si hay internet)
         headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-            "Accept": "application/json",
-            "Accept-Language": "en-US,en;q=0.9"
+            "User-Agent": "Mozilla/5.0",
+            "Accept": "application/json"
         }
-        async with httpx.AsyncClient(timeout=30.0, headers=headers) as client:
+        async with httpx.AsyncClient(timeout=10.0, headers=headers) as client:
             try:
                 response = await client.get(CALENDAR_URL)
                 if response.status_code == 200:
-                    events = response.json()
+                    api_events = response.json()
                     relevant_events = []
                     now = datetime.now(timezone.utc)
-                    now_iso = now.isoformat()
                     
-                    for event in events:
-                        event_date_str = event.get("date", "")
-                        if not event_date_str: continue
-                        
+                    for event in api_events:
+                        # ... lógica de filtrado ...
                         try:
-                            # Parsear fecha del evento (manejando offsets de FF)
-                            event_date = datetime.fromisoformat(event_date_str.replace('Z', '+00:00'))
+                            event_date = datetime.fromisoformat(event.get("date", "").replace('Z', '+00:00'))
                             diff_hours = (now - event_date).total_seconds() / 3600
                             
-                            # LOGICA DE PERSISTENCIA PROFESIONAL:
-                            # 1. Todo lo futuro (diff_hours < 0)
-                            # 2. Todo lo ocurrido en las últimas 24 horas (0 <= diff_hours <= 24)
-                            is_relevant_time = diff_hours <= 24 
-                            
-                            if is_relevant_time:
+                            if diff_hours <= 24: # Mantener solo lo reciente o futuro
                                 if event["country"] in ["USD", "EUR", "ALL"] or event["impact"] == "High":
-                                    # Añadir flag de estado para el LLM
-                                    status = "LIVE" if abs((event_date - now).total_seconds()) < 1800 else \
-                                            ("UPCOMING" if event_date > now else "RECENT_PAST")
-                                    
                                     relevant_events.append({
                                         "title": event["title"],
                                         "country": event["country"],
                                         "impact": event["impact"],
                                         "date": event["date"],
-                                        "status": status,
+                                        "status": "UPCOMING" if event_date > now else "RECENT_PAST",
                                         "forecast": event.get("forecast", ""),
                                         "previous": event.get("previous", ""),
                                     })
-                        except Exception as ee:
-                            logger.error(f"⚠️ [CALENDAR-WORKER] Error procesando evento {event.get('title')}: {ee}")
+                        except: continue
 
-                    # Ordenar: Lo más inminente o reciente primero
-                    relevant_events.sort(key=lambda x: abs((datetime.fromisoformat(x['date'].replace('Z', '+00:00')) - now).total_seconds()))
-                    await store.save_economic_events(relevant_events)
-                    logger.info(f"✅ [CALENDAR-WORKER] {len(relevant_events)} eventos macro sincronizados.")
-                else:
-                    logger.error(f"⚠️ [CALENDAR-WORKER] Error API ({response.status_code}). Usando caché local...")
-                    raise Exception("API_ERROR")
-                    
-            except Exception:
-                # Fallback: leer del archivo local
-                try:
-                    import json, os
-                    # Path absoluto para evitar errores
-                    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-                    file_path = os.path.join(base_dir, "data", "economic_calendar.json")
-                    
-                    if os.path.exists(file_path):
-                        with open(file_path, "r", encoding="utf-8") as f:
-                            relevant_events = json.load(f)
-                            await store.save_economic_events(relevant_events)
-                            logger.info(f"✅ [CALENDAR-WORKER] {len(relevant_events)} eventos cargados desde CACHE LOCAL.")
-                    else:
-                        logger.info("❌ [CALENDAR-WORKER] No se encontró caché local ni conexión API.")
-                except Exception as fe:
-                    logger.error(f"❌ [CALENDAR-WORKER] Error en fallback local: {fe}")
+                    if relevant_events:
+                        # Mezclar con locales evitando duplicados por título+fecha
+                        titles_in_store = {e['title'] + e['date'] for e in local_events}
+                        final_events = local_events + [e for e in relevant_events if (e['title'] + e['date']) not in titles_in_store]
+                        
+                        # Ordenar por cercanía a 'now'
+                        final_events.sort(key=lambda x: abs((datetime.fromisoformat(x['date'].replace('Z', '+00:00')) - now).total_seconds()))
+                        await store.save_economic_events(final_events)
+                        logger.info(f"📡 [CALENDAR-WORKER] Calendario actualizado con {len(relevant_events)} eventos de la API.")
+            except Exception as ae:
+                logger.debug(f"ℹ️ [CALENDAR-WORKER] API no disponible o timeout ({ae}). Usando solo inyección local.")
 
     def stop(self):
         self._stop_event.set()

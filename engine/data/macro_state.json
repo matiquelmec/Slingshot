@@ -1,7 +1,7 @@
 {
   "fear_greed_value": 26,
   "fear_greed_label": "Fear",
-  "btc_dominance": 58.45,
+  "btc_dominance": 58.5,
   "funding_rate": 0.001305,
   "funding_symbol": "BTCUSDT",
   "macro_bias": "BLOCK_LONGS",
@@ -9,13 +9,13 @@
   "block_shorts": false,
   "reason": "DXY Alcista: Presi\u00f3n vendedora global | NASDAQ Bajista: Risk-Off",
   "oi_delta_pct": 0.0,
-  "dxy_trend": "BEARISH",
-  "dxy_price": 97.9,
+  "dxy_trend": "BULLISH",
+  "dxy_price": 98.21,
   "nasdaq_trend": "BULLISH",
-  "nasdaq_change_pct": 1.46,
+  "nasdaq_change_pct": 1.45,
   "risk_appetite": "RISK_ON",
   "news_sentiment": 0.6,
-  "active_event": "",
-  "last_updated": 1777641706.943843,
+  "active_event": "NFP: Non-Farm Payrolls (Master Event)",
+  "last_updated": 1777677858.595403,
   "is_stale": false
 }

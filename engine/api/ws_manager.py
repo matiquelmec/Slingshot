@@ -581,8 +581,8 @@ class SymbolBroadcaster:
         kline_stream = f"{self.symbol.lower()}@kline_{self.interval}"
         depth_stream = f"{self.symbol.lower()}@depth20@100ms"
         
-        # v8.5.8 FIX: XAGUSDT and other futures need fstream.binance.com for WS depth and klines
-        is_spot_only = self.symbol in ["PAXGUSDT", "EURUSDT", "USDCUSDT"]
+        # v8.8.3 FIX: Dynamic Stream Routing
+        is_spot_only = self.symbol in ["EURUSDT", "USDCUSDT"]
         base_ws_url = "wss://stream.binance.com:9443" if is_spot_only else "wss://fstream.binance.com"
         binance_url  = f"{base_ws_url}/stream?streams={kline_stream}/{depth_stream}"
 
@@ -594,8 +594,8 @@ class SymbolBroadcaster:
 
         async with ws_client.connect(
             binance_url, 
-            ping_interval=20, 
-            ping_timeout=20,
+            ping_interval=30, 
+            ping_timeout=60,
             open_timeout=30, 
             close_timeout=10
         ) as binance_ws:
@@ -675,15 +675,21 @@ class SymbolBroadcaster:
         from engine.execution.omega_listener import omega_centinel
         await omega_centinel.check_live_price(self.symbol, float(kline["c"]), self)
 
-        # SESIONES
-        self._session_manager.update(candle_payload["data"])
-        await self._broadcast(self._session_manager.get_current_state())
+        # SESIONES (v8.8.3 Stability Guard)
+        try:
+            self._session_manager.update(candle_payload["data"])
+            await self._broadcast(self._session_manager.get_current_state())
+        except Exception as se:
+            logger.error(f"[SESSION-ERROR] {self.symbol} → Error actualizando sesiones: {se}")
 
         # ENRUTAMIENTO BIFURCADO
-        await self._execute_fast_path(candle_payload, raw_data)
-        
-        if kline.get("x", False):
-            await self._execute_slow_path(candle_payload)
+        try:
+            await self._execute_fast_path(candle_payload, raw_data)
+            
+            if kline.get("x", False):
+                await self._execute_slow_path(candle_payload)
+        except Exception as pe:
+            logger.error(f"[PIPELINE-ERROR] {self.symbol} → Error en ruta crítica: {pe}")
 
     async def _execute_fast_path(self, candle_payload: dict, raw_data: dict):
         """Lógica de inter-vela (Tiered Priority)."""

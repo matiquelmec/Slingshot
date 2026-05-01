@@ -388,6 +388,7 @@ class SessionManager:
         # ── Sesión activa (v8.8.0 Institutional Precision) ─────────────────
         is_silver_bullet = False
         is_overlap = False
+        is_killzone = False
         
         # 1. Definir Sesión Base
         if 9 <= tokyo_hour < 15:
