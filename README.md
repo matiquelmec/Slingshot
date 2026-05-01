@@ -2,9 +2,9 @@
 > **"Institutional-Grade Algorithmic Terminal. Zero Latency. SMC Mitigation. Full Sovereignty."**
 
 ![Status](https://img.shields.io/badge/Status-100%25_HARDENED_OPERATIONAL-0d2a1a?style=for-the-badge&logo=codeproject&logoColor=fff)
-![Version](https://img.shields.io/badge/Version-8.5.9_Titanium_Hardened-1a3a6e?style=for-the-badge)
+![Version](https://img.shields.io/badge/Version-8.7.5_Titanium_Hardened-1a3a6e?style=for-the-badge)
 ![Engine](https://img.shields.io/badge/Engine-Sigma_Omega_Delta-ffd700?style=for-the-badge&labelColor=0a0a0a)
-![Performance](https://img.shields.io/badge/Latency-Sub--100ms-blue?style=for-the-badge)
+![Performance](https://img.shields.io/badge/Latency-Sub--50ms-blue?style=for-the-badge)
 
 ## 🎯 Nuestra Misión: Democratizar el Smart Money
 Slingshot no es solo un bot de trading; es una **Terminal de Inteligencia Institucional** diseñada para nivelar el campo de juego entre el trader retail y los grandes fondos de inversión. El sistema utiliza principios avanzados de **SMC (Smart Money Concepts)** y **Wyckoff** para identificar el rastro de la liquidez institucional antes de que el movimiento ocurra.
@@ -51,6 +51,9 @@ Utilizamos un modelo **Qwen-3:8B** (vía Ollama) corriendo localmente. Actúa co
 
 ### 3. Gestión de Riesgo (Risk:Reward) Hardened
 El sistema implementa un **Hard-Veto Protocol** en la etapa SIGMA. Si una señal cumple la estrategia SMC pero falla en el perfil de riesgo (ej: RR < 2.5), el sistema la bloquea preventivamente, enviando la auditoría forense al Radar Terminal.
+
+### 4. Telemetría On-Chain Centralizada (v8.7.5)
+Se ha implementado un proveedor único para métricas de **Open Interest y Funding Rates** con un sistema de semáforo de concurrencia y TTL de 45s. Esto elimina errores de rate-limiting (429) y garantiza coherencia total entre el motor de IA y el Radar Center.
 
 ---
 

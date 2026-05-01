@@ -1,5 +1,5 @@
 # 🛡️ Auditoría Profesional Exhaustiva — Slingshot Gen 1
-## v8.5.9 "Master Gold Titanium (Sigma/Omega/Delta)" | Mayo 2026
+## v8.7.5 "Master Gold Titanium (Sigma/Omega/Delta)" | Mayo 2026
 
 **Auditor:** Antigravity (Advanced AI Coding — DeepMind)  
 **Fecha:** 1 de Mayo, 2026  
@@ -38,11 +38,12 @@ Slingshot es una **terminal de trading institucional** que combina análisis té
 - **17 tests operativos** consolidados en `engine/tests/` (migrados desde scripts/)
 - BroadcasterRegistry **extraído** como módulo independiente (`registry.py`)
 
-### Evolución v6.0 → v8.5.9 (Refactor Sigma/Delta/Omega)
+### Evolución v6.0 → v8.7.5 (Refactor Sigma/Delta/Omega)
 
-| ID | Severidad | Módulo | Estado v8.5.9 |
+| ID | Severidad | Módulo | Estado v8.7.5 |
 |:---|:----------|:-------|:------------|
 | ARC-001 | 🔴 CRÍTICO | `confluence.py` | ✅ **RTO MITIGATION** — Ahora cruza precio actual vs Zonas vivas SMC, en vez de vela actual. |
+| ARC-004 | 🔴 CRÍTICO | `onchain_provider.py` | ✅ **CENTRALIZED** — Telemetría On-Chain unificada con Semáforo(3) y TTL 45s. |
 | ARC-002 | 🟠 ALTO | `gatekeeper.py` | ✅ **PURGADO** — Eliminados vetos redundantes (News Macro), integrados a Confluence. |
 | ARC-003 | 🟠 ALTO | `gatekeeper.py` | ✅ **SIGMA SYNC** — Inyectado `smc_map` vivo al Confluence Manager. |
 | BUG-001 | 🔴 CRÍTICO | `confluence.py` | ✅ **CORREGIDO** — Lógica `if/elif/else` |
@@ -92,7 +93,7 @@ graph TB
         I3["ghost_data.py<br/>Ghost Candles (16.3 KB)"]
         I4["macro.py<br/>DXY/NQ (7.3 KB)"]
         I5["regime.py<br/>Wyckoff (5.1 KB)"]
-        I6["onchain.py<br/>Sentinel (6.9 KB)"]
+        I6["onchain_provider.py<br/>Centralized Sentinel (10.5 KB)"]
         I7["smt.py<br/>Divergence (2.8 KB)"]
     end
 
