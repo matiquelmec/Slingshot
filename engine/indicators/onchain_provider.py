@@ -43,7 +43,7 @@ async def refresh_all_onchain(symbols: List[str]):
     await asyncio.gather(*tasks)
 
 # Activos que no existen en Binance Futures y deben ser ignorados por el provider
-FUTURES_EXCLUDED_SYMBOLS = ["PAXGUSDT", "XAGUSDT", "EURUSDT", "USDCUSDT"]
+FUTURES_EXCLUDED_SYMBOLS = ["EURUSDT", "USDCUSDT"]
 
 # ── Cliente Global Throttled (v8.7.0) ─────────────────────────────────────────
 _shared_client: Optional[httpx.AsyncClient] = None
@@ -174,14 +174,18 @@ def get_onchain_summary(symbol: str) -> Dict:
             "oi_delta_pct": s.delta_session,
             "funding_rate": s.funding_rate,
             "onchain_bias": s.bias,
+            "is_spot_only": False,
             "whale_alerts_count": 0, # Placeholder (v8.5.9)
             "ts": s.last_updated
         }
+    
+    is_spot = sym_up in FUTURES_EXCLUDED_SYMBOLS
     return {
         "symbol": symbol, 
         "oi_delta_pct": 0, 
         "funding_rate": 0, 
         "onchain_bias": "NEUTRAL", 
+        "is_spot_only": is_spot,
         "whale_alerts_count": 0,
         "ts": 0
     }

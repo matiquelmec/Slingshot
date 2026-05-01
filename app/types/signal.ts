@@ -192,6 +192,7 @@ export interface OnChainMetrics {
         timestamp: number;
     } | null;
     onchain_bias: string;
+    is_spot_only?: boolean;
     ts: number;
 }
 

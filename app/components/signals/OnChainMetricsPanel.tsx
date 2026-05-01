@@ -43,18 +43,28 @@ const OnChainMetricsPanel: React.FC<OnChainMetricsPanelProps> = ({ metrics }) =>
                 <div className="space-y-1">
                     <div className="text-[9px] text-white/30 uppercase tracking-tighter">Open Interest Δ</div>
                     <div className={`text-sm font-mono font-bold flex items-center gap-1 ${oi_delta_pct > 0 ? 'text-neon-green' : oi_delta_pct < 0 ? 'text-red-400' : 'text-white/20'}`}>
-                        {oi_delta_pct > 0 ? <TrendingUp size={12} /> : oi_delta_pct < 0 ? <TrendingDown size={12} /> : <Activity size={12} className="animate-pulse" />}
-                        {oi_delta_pct !== 0 ? (
-                            <>{oi_delta_pct > 0 ? '+' : ''}{oi_delta_pct.toFixed(6)}%</>
+                        {metrics.is_spot_only ? (
+                            <span className="text-[10px] tracking-tight text-white/30">SPOT ASSET</span>
                         ) : (
-                            <span className="text-[10px] tracking-tight">CALIBRANDO</span>
+                            <>
+                                {oi_delta_pct > 0 ? <TrendingUp size={12} /> : oi_delta_pct < 0 ? <TrendingDown size={12} /> : <Activity size={12} className="animate-pulse" />}
+                                {oi_delta_pct !== 0 ? (
+                                    <>{oi_delta_pct > 0 ? '+' : ''}{oi_delta_pct.toFixed(6)}%</>
+                                ) : (
+                                    <span className="text-[10px] tracking-tight">CALIBRANDO</span>
+                                )}
+                            </>
                         )}
                     </div>
                 </div>
                 <div className="space-y-1">
                     <div className="text-[9px] text-white/30 uppercase tracking-tighter">Funding Rate</div>
                     <div className="text-sm font-mono font-bold text-white/80">
-                        {funding_rate.toFixed(4)}%
+                        {metrics.is_spot_only ? (
+                            <span className="text-[10px] tracking-tight text-white/20 uppercase font-bold">No-Derivatives</span>
+                        ) : (
+                            <>{funding_rate.toFixed(4)}%</>
+                        )}
                     </div>
                 </div>
             </div>
