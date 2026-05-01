@@ -42,9 +42,13 @@ const OnChainMetricsPanel: React.FC<OnChainMetricsPanelProps> = ({ metrics }) =>
             <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1">
                     <div className="text-[9px] text-white/30 uppercase tracking-tighter">Open Interest Δ</div>
-                    <div className={`text-sm font-mono font-bold flex items-center gap-1 ${oi_delta_pct >= 0 ? 'text-neon-green' : 'text-red-400'}`}>
-                        {oi_delta_pct >= 0 ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
-                        {oi_delta_pct > 0 ? '+' : ''}{oi_delta_pct.toFixed(6)}%
+                    <div className={`text-sm font-mono font-bold flex items-center gap-1 ${oi_delta_pct > 0 ? 'text-neon-green' : oi_delta_pct < 0 ? 'text-red-400' : 'text-white/20'}`}>
+                        {oi_delta_pct > 0 ? <TrendingUp size={12} /> : oi_delta_pct < 0 ? <TrendingDown size={12} /> : <Activity size={12} className="animate-pulse" />}
+                        {oi_delta_pct !== 0 ? (
+                            <>{oi_delta_pct > 0 ? '+' : ''}{oi_delta_pct.toFixed(6)}%</>
+                        ) : (
+                            <span className="text-[10px] tracking-tight">CALIBRANDO</span>
+                        )}
                     </div>
                 </div>
                 <div className="space-y-1">

@@ -1,7 +1,7 @@
 {
   "fear_greed_value": 26,
   "fear_greed_label": "Fear",
-  "btc_dominance": 58.42,
+  "btc_dominance": 58.45,
   "funding_rate": 0.001305,
   "funding_symbol": "BTCUSDT",
   "macro_bias": "BLOCK_LONGS",
@@ -16,6 +16,6 @@
   "risk_appetite": "RISK_ON",
   "news_sentiment": 0.5,
   "active_event": "",
-  "last_updated": 1777641103.5328715,
+  "last_updated": 1777641405.3719883,
   "is_stale": false
 }

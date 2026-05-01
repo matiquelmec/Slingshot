@@ -126,9 +126,23 @@ async def refresh_symbol_onchain(symbol: str, force: bool = False):
         state = _cache[symbol]
         
         if success:
-            # Hidratación de referencia histórica si no existe
+            # 🚀 [v8.8.1] Hidratación Histórica Inteligente
+            # Si no tenemos referencia, intentamos obtener el OI de hace 1h para tener un delta real inmediato
             if state.reference_oi is None or state.reference_oi == 0:
-                state.reference_oi = new_oi
+                try:
+                    # Intentar obtener el primer punto del historial (hace ~1h o 5min según limit)
+                    hist_r = await client.get(f"{MIRRORS[0]}/fapi/v1/openInterestHist", params={"symbol": symbol, "period": "5m", "limit": 12})
+                    if hist_r.status_code == 200:
+                        hist_data = hist_r.json()
+                        if isinstance(hist_data, list) and len(hist_data) > 0:
+                            state.reference_oi = float(hist_data[0].get("sumOpenInterest", new_oi))
+                            logger.info(f"[ONCHAIN] 📚 Referencia Histórica cargada para {symbol}: {state.reference_oi:,.0f}")
+                except Exception as e:
+                    logger.debug(f"[ONCHAIN] Fallo al cargar historial de OI para {symbol}: {e}")
+                
+                # Fallback a precio actual si el historial falla
+                if state.reference_oi is None or state.reference_oi == 0:
+                    state.reference_oi = new_oi
             
             # Calcular Delta
             if state.reference_oi > 0:
@@ -142,8 +156,8 @@ async def refresh_symbol_onchain(symbol: str, force: bool = False):
             state.last_updated = datetime.now().timestamp()
             
             # Bias Simplificado (v8.5.9) - Alineado con Frontend (BULLISH_ACCUMULATION / BEARISH_DISTRIBUTION)
-            if state.delta_session > 0.1: state.bias = "BULLISH_ACCUMULATION"
-            elif state.delta_session < -0.1: state.bias = "BEARISH_DISTRIBUTION"
+            if state.delta_session > 0.05: state.bias = "BULLISH_ACCUMULATION"
+            elif state.delta_session < -0.05: state.bias = "BEARISH_DISTRIBUTION"
             elif state.funding_rate > 0.01: state.bias = "OVERLEVERAGED"
             else: state.bias = "NEUTRAL"
         else:

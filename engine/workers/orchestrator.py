@@ -175,7 +175,7 @@ class SlingshotOrchestrator:
         logger.info("[ORCHESTRATOR] Deteniendo motor maestro...")
 
     async def _onchain_worker(self):
-        """Worker centralizado para telemetría institucional (v8.5.9)."""
+        """Worker centralizado para telemetría institucional (v8.8.1)."""
         logger.info("📡 [ORCHESTRATOR] OnChain Sentinel activado.")
         
         # 🚀 Primer refresco inmediato para evitar valores '0' al inicio
@@ -189,10 +189,22 @@ class SlingshotOrchestrator:
         while not self._stop_event.is_set():
             try:
                 if self.radar_assets:
+                    # 1. Refrescar caché global
                     await refresh_all_onchain(list(self.radar_assets))
+                    
+                    # 2. Propagar a los broadcasters activos para refresco visual (v8.8.1)
+                    for broadcaster in registry._broadcasters.values():
+                        try:
+                            # Forzar un ghost refresh que incluya la nueva data onchain
+                            if hasattr(broadcaster, '_refresh_ghost'):
+                                asyncio.create_task(broadcaster._refresh_ghost())
+                        except: pass
+                        
+                logger.debug("[ORCHESTRATOR] 📡 OnChain Sentinel sincronizado.")
             except Exception as e:
                 logger.error(f"⚠️ [ORCHESTRATOR] Error en On-Chain worker: {e}")
             
+            # Sincronización cada 60s (v8.8.1)
             await asyncio.sleep(60)
 
 async def run_orchestrator():
