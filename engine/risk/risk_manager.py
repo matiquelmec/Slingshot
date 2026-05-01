@@ -119,73 +119,103 @@ class RiskManager:
         sl = current_price - risk_dist if signal_type == "LONG" else current_price + risk_dist
         tp1 = current_price + (risk_dist * tuning["tp1_ratio"]) if signal_type == "LONG" else current_price - (risk_dist * tuning["tp1_ratio"])
 
-        # Intento de SL Estructural (Order Blocks / Key Levels)
+        # Intento de SL Estructural Profundo (Protected Low/High)
         if smc_data or key_levels:
             if signal_type == "LONG":
-                # Buscar el OB Alcista o Soporte más cercano por debajo del precio
+                # Buscar el OB Alcista o Soporte más PROFUNDO por debajo del precio
                 obs = smc_data.get("order_blocks", {}).get("bullish", []) if smc_data else []
                 sups = key_levels.get("supports", []) if key_levels else []
                 structural_floors = [ob["bottom"] for ob in obs] + [s["price"] for s in sups]
                 valid_floors = [f for f in structural_floors if f < current_price]
                 if valid_floors:
-                    best_floor = max(valid_floors)
-                    # Colocamos SL 0.2 ATR por debajo del piso estructural
-                    sl_candidate = best_floor - (fallback_atr * 0.2)
-                    # No alejamos el SL más de 2x del riesgo base por seguridad
-                    if sl_candidate > (current_price - risk_dist * 1.5):
+                    best_floor = min(valid_floors) # <-- EL SECRETO: El más lejano/profundo
+                    sl_candidate = best_floor - (fallback_atr * 0.5) # Le damos más aire al SL (0.5 ATR)
+                    # Límite de seguridad para no fundir la cuenta: 3x del riesgo base
+                    if sl_candidate > (current_price - risk_dist * 3.0):
                         sl = sl_candidate
             else:
-                # Buscar el OB Bajista o Resistencia más cercana por arriba del precio
+                # Buscar el OB Bajista o Resistencia más ALTA por arriba del precio
                 obs = smc_data.get("order_blocks", {}).get("bearish", []) if smc_data else []
                 res = key_levels.get("resistances", []) if key_levels else []
                 structural_ceilings = [ob["top"] for ob in obs] + [r["price"] for r in res]
                 valid_ceilings = [c for c in structural_ceilings if c > current_price]
                 if valid_ceilings:
-                    best_ceiling = min(valid_ceilings)
-                    sl_candidate = best_ceiling + (fallback_atr * 0.2)
-                    if sl_candidate < (current_price + risk_dist * 1.5):
+                    best_ceiling = max(valid_ceilings) # <-- EL SECRETO: El más alto/protegido
+                    sl_candidate = best_ceiling + (fallback_atr * 0.5)
+                    if sl_candidate < (current_price + risk_dist * 3.0):
                         sl = sl_candidate
 
-        # Intento de TP Inteligente (Liquidation Clusters / Opposite OBs)
-        if liquidations or smc_data:
-            if signal_type == "LONG":
-                # Target: Liquidaciones de SHORT o OB Bajistas
-                liq_targets = [l["price"] for l in (liquidations or []) if l["type"] == "SHORT_LIQ" and l["price"] > current_price]
-                ob_targets = [ob["bottom"] for ob in (smc_data.get("order_blocks", {}).get("bearish", []) if smc_data else []) if ob["bottom"] > current_price]
-                all_targets = liq_targets + ob_targets
-                if all_targets:
-                    # Apuntamos al cluster más cercano que nos dé al menos el RR mínimo
-                    all_targets.sort()
-                    for target in all_targets:
-                        potential_rr = (target - current_price) / abs(current_price - sl)
-                        if potential_rr >= self.min_rr:
-                            tp1 = target
-                            break
-            else:
-                # Target: Liquidaciones de LONG o OB Alcistas
-                liq_targets = [l["price"] for l in (liquidations or []) if l["type"] == "LONG_LIQ" and l["price"] < current_price]
-                ob_targets = [ob["top"] for ob in (smc_data.get("order_blocks", {}).get("bullish", []) if smc_data else []) if ob["top"] < current_price]
-                all_targets = liq_targets + ob_targets
-                if all_targets:
-                    all_targets.sort(reverse=True)
-                    for target in all_targets:
-                        potential_rr = (current_price - target) / abs(current_price - sl)
-                        if potential_rr >= self.min_rr:
-                            tp1 = target
-                            break
-
-        # Red de Seguridad: Asegurar RR 2.5 en el setup final
+        # Recálculo de riesgo final
         final_risk = abs(current_price - sl)
-        final_reward = abs(tp1 - current_price)
-        if final_risk > 0:
-            final_rr = final_reward / final_risk
-            if final_rr < self.min_rr:
-                # Si la estructura no da para el RR, forzamos salida matemática
-                tp1 = current_price + (final_risk * self.min_rr) if signal_type == "LONG" else current_price - (final_risk * self.min_rr)
+        if final_risk <= 0: final_risk = current_price * 0.01
 
-        # Targets Secundarios
-        tp2 = tp1 + (abs(tp1 - current_price) * 0.5) if signal_type == "LONG" else tp1 - (abs(tp1 - current_price) * 0.5)
-        tp3 = tp2 + (abs(tp2 - tp1) * 0.5) if signal_type == "LONG" else tp2 - (abs(tp2 - tp1) * 0.5)
+        # Intento de TP Magnético (FVG, Liquidaciones, HTF External Liquidity)
+        tp2, tp3 = tp1, tp1
+        all_targets = []
+        
+        if signal_type == "LONG":
+            liq_targets = [l["price"] for l in (liquidations or []) if l["type"] == "SHORT_LIQ" and l["price"] > current_price]
+            ob_targets = [ob["bottom"] for ob in (smc_data.get("order_blocks", {}).get("bearish", []) if smc_data else []) if ob["bottom"] > current_price]
+            fvg_targets = [fvg["bottom"] for fvg in (smc_data.get("fvg", {}).get("bearish", []) if smc_data else []) if fvg["bottom"] > current_price]
+            
+            htf_targets = []
+            if kwargs.get("htf_bias"):
+                hb = kwargs.get("htf_bias")
+                if getattr(hb, "pdh", 0) > current_price: htf_targets.append(hb.pdh)
+                if getattr(hb, "pwh", 0) > current_price: htf_targets.append(hb.pwh)
+
+            all_targets = liq_targets + ob_targets + fvg_targets + htf_targets
+            if all_targets:
+                all_targets.sort() # De más cercano a más lejano
+                
+                # TP1: Primer target que cumpla al menos 2.0R (asegurar el trade)
+                for t in all_targets:
+                    if (t - current_price) / final_risk >= 2.0:
+                        tp1 = t
+                        break
+                
+                # TP2: FVG opuesto o bloque estructural medio
+                mid_targets = [t for t in all_targets if t > tp1]
+                if mid_targets: tp2 = mid_targets[0]
+                else: tp2 = tp1 + (final_risk * 1.5)
+                
+                # TP3: Liquidez Externa (El target más lejano)
+                tp3 = all_targets[-1]
+                if tp3 <= tp2: tp3 = tp2 + (final_risk * 2.0)
+
+        else: # SHORT
+            liq_targets = [l["price"] for l in (liquidations or []) if l["type"] == "LONG_LIQ" and l["price"] < current_price]
+            ob_targets = [ob["top"] for ob in (smc_data.get("order_blocks", {}).get("bullish", []) if smc_data else []) if ob["top"] < current_price]
+            fvg_targets = [fvg["top"] for fvg in (smc_data.get("fvg", {}).get("bullish", []) if smc_data else []) if fvg["top"] < current_price]
+            
+            htf_targets = []
+            if kwargs.get("htf_bias"):
+                hb = kwargs.get("htf_bias")
+                if getattr(hb, "pdl", float('inf')) < current_price and getattr(hb, "pdl", 0) > 0: htf_targets.append(hb.pdl)
+                if getattr(hb, "pwl", float('inf')) < current_price and getattr(hb, "pwl", 0) > 0: htf_targets.append(hb.pwl)
+
+            all_targets = liq_targets + ob_targets + fvg_targets + htf_targets
+            if all_targets:
+                all_targets.sort(reverse=True) # De más cercano a más lejano (hacia abajo)
+                
+                for t in all_targets:
+                    if (current_price - t) / final_risk >= 2.0:
+                        tp1 = t
+                        break
+                
+                mid_targets = [t for t in all_targets if t < tp1]
+                if mid_targets: tp2 = mid_targets[0]
+                else: tp2 = tp1 - (final_risk * 1.5)
+                
+                tp3 = all_targets[-1]
+                if tp3 >= tp2: tp3 = tp2 - (final_risk * 2.0)
+
+        # Red de Seguridad Final (Garantizar RR mínimo)
+        final_reward = abs(tp1 - current_price)
+        if final_risk > 0 and (final_reward / final_risk) < self.min_rr:
+            tp1 = current_price + (final_risk * self.min_rr) if signal_type == "LONG" else current_price - (final_risk * self.min_rr)
+            tp2 = tp1 + (final_risk * 1.0) if signal_type == "LONG" else tp1 - (final_risk * 1.0)
+            tp3 = tp2 + (final_risk * 2.0) if signal_type == "LONG" else tp2 - (final_risk * 2.0)
 
         sl_dist_pct = final_risk / current_price if current_price > 0 else 0.01
         pos_size_nominal = risk_amount_usdt / max(0.001, sl_dist_pct)

@@ -83,8 +83,10 @@ def test_enrich_signal():
     risk = {
         "risk_amount_usdt": 50.0, "risk_pct": 1.0, "leverage": 5,
         "position_size_usdt": 5000.0, "stop_loss": 84000.0,
+        "tp1": 86000.0, "tp2": 88000.0, "tp3": 90000.0,
         "take_profit_3r": 88000.0, "entry_zone_top": 85100.0,
         "entry_zone_bottom": 84900.0, "expiry_candles": 3,
+        "tp1_vol_pct": 0.60
     }
     enriched = enrich_signal(sig, risk, "15m")
 

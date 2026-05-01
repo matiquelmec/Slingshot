@@ -14,5 +14,9 @@
   "d85dd5e99f098ed5ee969d62a12b6b5f": {
     "price": 0.0,
     "advice": "{\"verdict\": \"AVOID\", \"threat\": \"MEDIUM\", \"logic\": \"Low RVOL, SMC active\"}"
+  },
+  "42ed79c614e942435c8e708c1b57478b": {
+    "price": 0.0,
+    "advice": "{\"verdict\": \"AVOID\", \"threat\": \"MEDIUM\", \"logic\": \"Low RVOL, inactive regime\"}"
   }
 }

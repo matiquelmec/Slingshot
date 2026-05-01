@@ -41,6 +41,8 @@ class GatekeeperContext:
     liquidation_clusters: list = field(default_factory=list)
     onchain_bias: str = "NEUTRAL"
     heatmap: dict = field(default_factory=dict) # v5.7 Neural Heatmap
+    correlated_df: pd.DataFrame | None = None # [SMT Divergence]
+    ghost_data: dict = field(default_factory=dict) # [v8.6.0] Ghost Sentinel Macro Data
 
 
 @dataclass
@@ -88,23 +90,8 @@ class SignalGatekeeper:
         except Exception:
             df_time = df_low = df_high = now_utc = None
 
-        # ── Filtro 0: News Blackout Protocol (FTMO SAFE) ─────────────────
-        # Si estamos dentro de +/- 15 min de una noticia High Impact, Veto Total
-        news_multiplier = 1.0
+        # ── (Filtro 0 News Blackout delegado 100% al Confluence Manager v8.5.9) ──
         now = pd.Timestamp.now(tz='UTC')
-        
-        if context.economic_events:
-            for ev in context.economic_events:
-                if str(ev.get('impact', '')).upper() == 'HIGH':
-                    ev_date = ev.get('date', ev.get('timestamp'))
-                    if not ev_date: continue
-                    ev_time = pd.to_datetime(ev_date, utc=True)
-                    diff_mins = abs((ev_time - now).total_seconds() / 60)
-                    
-                    if diff_mins <= 15:
-                        news_multiplier = 0.0
-                        event_name = ev.get('title', 'Noticia Crítica')
-                        break
 
         # ── Filtro 0.5: Session Veto (Ruido de Cierre) ──────────────────────
         # Institucionalmente se evita operar en los últimos minutos de velas mayores (H4/D1).
@@ -112,6 +99,28 @@ class SignalGatekeeper:
         # Ojo: la hora actual de un cierre a las 04:00 es las 03:55-03:59.
         minute_of_hour = now.minute
         hour_of_day = now.hour
+
+        # ── Filtro 0.1: Ghost Sentinel Macro Veto (v8.6.0) ───────────────────
+        # Bloquea según sentimiento macro global (DXY, Nasdaq, Fear & Greed)
+        ghost = context.ghost_data.get("data", {}) if context.ghost_data else {}
+        if ghost:
+            block_longs = ghost.get("block_longs", False)
+            block_shorts = ghost.get("block_shorts", False)
+            reason = ghost.get("reason", "Macro Bias Restrictivo")
+            
+            new_signals = []
+            for sig in signals:
+                sig_type = sig.get("signal_type", "LONG")
+                if sig_type == "LONG" and block_longs:
+                    sig["gatekeeper_veto"] = f"GHOST_SENTINEL: {reason}"
+                    result.blocked.append(sig)
+                elif sig_type == "SHORT" and block_shorts:
+                    sig["gatekeeper_veto"] = f"GHOST_SENTINEL: {reason}"
+                    result.blocked.append(sig)
+                else:
+                    new_signals.append(sig)
+            signals = new_signals
+            if not signals: return result # Salida temprana si todo fue vetado por Macro
         
         if minute_of_hour >= 55:
             # Si la siguiente hora es divisible por 4 (cierre de H4) o es medianoche (cierre D1)
@@ -222,13 +231,11 @@ class SignalGatekeeper:
                     liquidation_clusters=context.liquidation_clusters,
                     htf_bias=htf_bias,
                     onchain_bias=context.onchain_bias,
-                    heatmap=context.heatmap
+                    heatmap=context.heatmap,
+                    smc_map=smc_map,
+                    correlated_df=context.correlated_df
                 )
                 sig["confluence"] = confluence_result
-                # [Audit v8.2.2] Aplicamos el multiplicador de noticias al score
-                if news_multiplier == 0.0:
-                    sig["confluence"]["score"] = 0
-                    sig["confluence"]["veto_reason"] = f"News Veto: {event_name}"
 
             except Exception as e:
                 logger.error(f"[GATEKEEPER] ConfluenceManager error: {e}")

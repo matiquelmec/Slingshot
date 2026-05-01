@@ -58,6 +58,8 @@ class SlingshotRouter:
         liquidation_clusters: list | None = None,
         onchain_bias: str | None = None,
         heatmap: dict | None = None,
+        correlated_df: pd.DataFrame | None = None,
+        ghost_data: dict | None = None,
     ):
         """Actualiza el contexto del Jurado de Confluencia para el próximo ciclo."""
         if ml_projection        is not None: self._context.ml_projection        = ml_projection
@@ -67,6 +69,8 @@ class SlingshotRouter:
         if liquidation_clusters is not None: self._context.liquidation_clusters  = liquidation_clusters
         if onchain_bias         is not None: self._context.onchain_bias          = onchain_bias
         if heatmap              is not None: self._context.heatmap               = heatmap
+        if correlated_df        is not None: self._context.correlated_df         = correlated_df
+        if ghost_data           is not None: self._context.ghost_data            = ghost_data
 
     # ── API pública: Pipeline Principal ──────────────────────────────────────
 
@@ -135,6 +139,7 @@ class SlingshotRouter:
                 smc_data=market_map.smc,
                 atr_value=sig.get("atr_value", 0.0),
                 asset=asset,
+                htf_bias=htf_bias
             )
             enriched.append(enrich_signal(sig, risk_data, interval))
 

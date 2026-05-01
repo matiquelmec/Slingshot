@@ -1,9 +1,9 @@
-# 🛡️ SLINGSHOT v6.1.0 Master Gold TITANIUM HARDENED
-> **"Institutional-Grade Algorithmic Terminal. Zero Latency. Zero Noise. Full Sovereignty."**
+# 🛡️ SLINGSHOT v8.5.9 Master Gold TITANIUM (Sigma/Omega/Delta)
+> **"Institutional-Grade Algorithmic Terminal. Zero Latency. SMC Mitigation. Full Sovereignty."**
 
 ![Status](https://img.shields.io/badge/Status-100%25_HARDENED_OPERATIONAL-0d2a1a?style=for-the-badge&logo=codeproject&logoColor=fff)
-![Version](https://img.shields.io/badge/Version-6.1.0_Titanium_Hardened-1a3a6e?style=for-the-badge)
-![Engine](https://img.shields.io/badge/Engine-SMC_Asna--4-ffd700?style=for-the-badge&labelColor=0a0a0a)
+![Version](https://img.shields.io/badge/Version-8.5.9_Titanium_Hardened-1a3a6e?style=for-the-badge)
+![Engine](https://img.shields.io/badge/Engine-Sigma_Omega_Delta-ffd700?style=for-the-badge&labelColor=0a0a0a)
 ![Performance](https://img.shields.io/badge/Latency-Sub--100ms-blue?style=for-the-badge)
 
 ## 🎯 Nuestra Misión: Democratizar el Smart Money
@@ -11,54 +11,46 @@ Slingshot no es solo un bot de trading; es una **Terminal de Inteligencia Instit
 
 ---
 
-## 🏛️ El Blueprint — Arquitectura de Grado Profesional
-Slingshot opera sobre un ecosistema desacoplado que garantiza una ejecución sin bloqueos y una visualización en tiempo real.
+## 🏛️ El Blueprint — Arquitectura Sigma/Delta/Omega
+
+Slingshot opera sobre una trinidad arquitectónica que garantiza ejecución sin bloqueos y limpieza en la señal.
 
 ```mermaid
 graph TB
-    subgraph "Frontend — Next.js 15 (La Terminal)"
+    subgraph "DELTA — Next.js 15 (Transmisión & Radar)"
         A["Dashboard<br/>Multi-Asset Radar"] --> B["TelemetryStore<br/>(Zustand 5)"]
         B --> C["WebSocket Client<br/>MasterSync v2"]
         A --> D["TradingChart<br/>LW Charts + SMC Overlays"]
     end
 
-    subgraph "Backend — Python FastAPI (El Cerebro)"
+    subgraph "SIGMA — Backend FastAPI (Inteligencia & Filtrado)"
         J["main.py<br/>FastAPI Engine"] --> K["ws_manager.py<br/>Broadcaster Registry"]
-        K --> L["SymbolBroadcaster<br/>(por activo:intervalo)"]
-        L --> M["SlingshotRouter<br/>Pipeline Analítico"]
-        M --> P["ConfluenceManager<br/>14-Factor Filter"]
-        M --> Q["RiskManager<br/>FTMO Compliance"]
-        L --> S["Advisor LLM<br/>(Qwen-3 Local)"]
-        L --> T["ExecutionEngine<br/>Binance Master"]
+        K --> L["SlingshotRouter<br/>Pipeline Analítico"]
+        L --> M["ConfluenceManager<br/>RTO Mitigation Core"]
+        L --> N["SignalGatekeeper<br/>Institutional Filter"]
+        M --> S["Advisor LLM<br/>(Qwen-3 Local)"]
     end
 
-    subgraph "Data Layer"
-        Z["MemoryStore<br/>(RAM Persistent)"]
-        AA["JSON Records<br/>Session History"]
-        BB["Binance WS<br/>Real-Time Feed"]
+    subgraph "OMEGA — Ejecución Institucional"
+        T["OmegaCentinel<br/>Position Management"] --> BB["Exchange Native<br/>(OCO / TP / SL)"]
     end
 
     C <--> |"Lattice Protocol"| J
-    L --> Z
-    T --> BB
+    L --> T
 ```
 
 ---
 
 ## 🧠 Metodología Educativa & Algorítmica
 
-### 1. Confluencia de 14 Factores
-El motor no dispara señales basándose en un solo indicador. Cada oportunidad es filtrada por un protocolo de **14 capas**, incluyendo:
-- **Estructura HTF:** Alineación con marcos temporales superiores (4H/Daily).
-- **Zonas de Interés (POI):** Identificación de Order Blocks (OB) y Fair Value Gaps (FVG).
-- **Absorción de Volumen:** Análisis dinámico de RVOL para detectar "Absorption Index" institucional.
-- **Liquidez Externa/Interna:** Monitoreo de barridas de liquidez (EQL/EQH).
+### 1. Sistema de Mitigación RTO (Return To Origin)
+El motor no opera en la formación de la huella, opera en la **Mitigación Institucional**. Extrae el mapa vivo de liquidez (`smc_map`) y cruza el precio actual con los Order Blocks y FVGs históricos vivos.
 
 ### 2. Inferencia IA Local (Sovereign AI)
-Utilizamos un modelo **Qwen-3:8B** (vía Ollama) corriendo localmente. Esto garantiza que tus datos y estrategias nunca salgan de tu hardware. La IA actúa como un "Analista Senior" que valida el contexto narrativo de cada señal generada por el motor matemático.
+Utilizamos un modelo **Qwen-3:8B** (vía Ollama) corriendo localmente. Actúa como un "Analista Senior" que valida el contexto narrativo de cada señal generada por el motor matemático, asegurando que tus datos nunca salgan de tu hardware.
 
-### 3. Gestión de Riesgo Hardened
-El sistema implementa un **Hard-Veto Protocol**. Si una señal cumple la estrategia pero falla en el perfil de riesgo (ej: RR < 2.5), el sistema la bloquea preventivamente y notifica la razón técnica del rechazo.
+### 3. Gestión de Riesgo (Risk:Reward) Hardened
+El sistema implementa un **Hard-Veto Protocol** en la etapa SIGMA. Si una señal cumple la estrategia SMC pero falla en el perfil de riesgo (ej: RR < 2.5), el sistema la bloquea preventivamente, enviando la auditoría forense al Radar Terminal.
 
 ---
 

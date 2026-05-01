@@ -50,6 +50,7 @@ from engine.indicators.ghost_data import (
     refresh_ghost_data, get_ghost_state, filter_signals_by_macro,
     is_cache_fresh, fetch_funding_rate, compute_symbol_ghost
 )
+from engine.indicators.onchain_provider import get_onchain_summary
 
 from engine.ml.features import FeatureEngineer
 from engine.ml.drift_monitor import drift_monitor
@@ -70,29 +71,48 @@ from engine.api.advisor_bridge import AdvisorBridge
 # ──────────────────────────────────────────────────────────────────────────────
 
 async def fetch_binance_history(symbol: str, interval: str = "15m", limit: int = 300) -> list:
-    """Descarga velas históricas desde Binance REST. Retorna lista de dicts estandarizados."""
-    # v8.5.7: Migrado a fapi.binance.com para consistencia con On-Chain y mejores limites de tasa
+    """Descarga velas históricas desde Binance REST. Retorna lista de dicts estandarizados con reintentos."""
     url = "https://fapi.binance.com/fapi/v1/klines"
     params = {"symbol": symbol.upper(), "interval": interval, "limit": limit}
-    async with httpx.AsyncClient(timeout=10.0, follow_redirects=True) as client:
-        response = await client.get(url, params=params)
-        if response.status_code != 200:
-            logger.debug(f"[HISTORY] Error {response.status_code} fetching {symbol} {interval}. Trying mirror...")
-            # Fallback simple a espejo
-            url = "https://fapi1.binance.com/fapi/v1/klines"
-            response = await client.get(url, params=params)
-        
-        response.raise_for_status()
-        raw = response.json()
-    return [
-        {"type": "candle", "data": {
-            "timestamp": k[0] / 1000,
-            "open": float(k[1]), "high": float(k[2]),
-            "low": float(k[3]),  "close": float(k[4]),
-            "volume": float(k[5]),
-        }}
-        for k in raw
-    ]
+    
+    # [OPTIMIZACIÓN v8.6.1] Jitter y Reintentos para evitar 429 masivos al arrancar
+    import random
+    max_retries = 3
+    
+    for attempt in range(max_retries):
+        try:
+            # Staggering: Añadimos un pequeño retraso aleatorio (0-500ms) por cada intento
+            await asyncio.sleep(random.uniform(0.1, 0.5) * attempt)
+            
+            async with httpx.AsyncClient(timeout=12.0, follow_redirects=True) as client:
+                response = await client.get(url, params=params)
+                if response.status_code == 429:
+                    wait_time = int(response.headers.get("Retry-After", 2))
+                    logger.warning(f"[HISTORY] Rate Limited (429) for {symbol}. Esperando {wait_time}s...")
+                    await asyncio.sleep(wait_time)
+                    continue
+                
+                if response.status_code != 200:
+                    mirror_url = "https://fapi1.binance.com/fapi/v1/klines"
+                    response = await client.get(mirror_url, params=params)
+                
+                response.raise_for_status()
+                raw = response.json()
+                return [
+                    {"type": "candle", "data": {
+                        "timestamp": k[0] / 1000,
+                        "open": float(k[1]), "high": float(k[2]),
+                        "low": float(k[3]),  "close": float(k[4]),
+                        "volume": float(k[5]),
+                    }}
+                    for k in raw
+                ]
+        except Exception as e:
+            if attempt == max_retries - 1:
+                logger.error(f"[HISTORY] Error final descargando {symbol}:{interval} tras {max_retries} intentos: {e}")
+                return []
+            await asyncio.sleep(1.0 * (attempt + 1))
+    return []
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -366,6 +386,8 @@ class SymbolBroadcaster:
         if self._task and not self._task.done():
             return
         self._task = asyncio.create_task(self._run(), name=f"broadcaster-{self._key}")
+        # [v8.6.1] Iniciar el worker de sesgo HTF de forma independiente
+        asyncio.create_task(self._htf_bias_worker(), name=f"htf-worker-{self._key}")
 
     async def stop(self):
         """Cancela el loop y libera recursos."""
@@ -431,16 +453,25 @@ class SymbolBroadcaster:
         # --- FASE 2: Carga y Cálculos Pesados en Segundo Plano ---
         async def _load_background_data():
             try:
+                # 0. Staggering inicial (Thundering Herd Prevention)
+                import random
+                await asyncio.sleep(random.uniform(0.5, 3.0))
+                
                 # 1. Peticiones Macro
                 tasks = [
-                    fetch_binance_history(self.symbol, "1h", limit=250),
+                    fetch_binance_history(self.symbol, "1w", limit=100),
+                    fetch_binance_history(self.symbol, "1d", limit=150),
                     fetch_binance_history(self.symbol, "4h", limit=250),
+                    fetch_binance_history(self.symbol, "1h", limit=250),
                     self._advisor_bridge.refresh_ghost()
                 ]
                 results = await asyncio.gather(*tasks, return_exceptions=True)
                 
-                h1_raw = results[0] if not isinstance(results[0], Exception) else []
-                h4_raw = results[1] if not isinstance(results[1], Exception) else []
+                # Desempaquetado silencioso para el pre-calentamiento (Se refrescará en _refresh_htf_bias de todas formas)
+                w1_raw = results[0] if not isinstance(results[0], Exception) else []
+                d1_raw = results[1] if not isinstance(results[1], Exception) else []
+                h4_raw = results[2] if not isinstance(results[2], Exception) else []
+                h1_raw = results[3] if not isinstance(results[3], Exception) else []
 
                 # 2. Cálculos de Indicadores (SMC, Liquidaciones, etc.)
                 if history:
@@ -468,13 +499,14 @@ class SymbolBroadcaster:
                     except: pass
 
                     # On-Chain
+                    # On-Chain (v8.5.9 Sigma Sync)
                     try:
-                        onchain_summary = await self._onchain_sentinel.refresh(
-                            current_price=ref_price,
-                            market_regime=df_init["market_regime"].iloc[-1] if "market_regime" in df_init.columns else "UNKNOWN"
-                        )
+                        onchain_summary = get_onchain_summary(self.symbol)
+                        self._last_onchain = onchain_summary
                         await self._broadcast({"type": "onchain_update", "data": onchain_summary})
-                    except: pass
+                        logger.info(f"[ONCHAIN] {self.symbol} → ⚓ Hydration complete.")
+                    except Exception as oe:
+                        logger.warning(f"[ONCHAIN] {self.symbol} → Error in bootstrap: {oe}")
 
                 # 3. Macro Niveles y HTF Bias
                 if h1_raw and h4_raw:
@@ -487,9 +519,8 @@ class SymbolBroadcaster:
                     self._macro_levels = consolidate_mtf_levels(
                         _get_levels(h1_raw, "1h"), _get_levels(h4_raw, "4h"), timeframe_weight=3
                     )
-                    await self._refresh_htf_bias()
                     
-                    # Notificar actualización táctica final
+                    # Notificar actualización táctica final (el bias lo maneja el worker)
                     if history:
                         await self._reprocess_initial_tactical(history)
 
@@ -548,7 +579,11 @@ class SymbolBroadcaster:
 
         kline_stream = f"{self.symbol.lower()}@kline_{self.interval}"
         depth_stream = f"{self.symbol.lower()}@depth20@100ms"
-        binance_url  = f"wss://stream.binance.com:9443/stream?streams={kline_stream}/{depth_stream}"
+        
+        # v8.5.8 FIX: XAGUSDT and other futures need fstream.binance.com for WS depth and klines
+        is_spot_only = self.symbol in ["PAXGUSDT", "EURUSDT", "USDCUSDT"]
+        base_ws_url = "wss://stream.binance.com:9443" if is_spot_only else "wss://fstream.binance.com"
+        binance_url  = f"{base_ws_url}/stream?streams={kline_stream}/{depth_stream}"
 
         # 🛡️ PROTECCIÓN DE HANDSHAKE (Thundering Herd Prevention)
         import random
@@ -574,7 +609,7 @@ class SymbolBroadcaster:
 
                 # Dispatcher de Capa 1
                 if stream_type == depth_stream:
-                    self._process_depth_stream(payload_data)
+                    await self._process_depth_stream(payload_data)
                 elif stream_type.startswith(self.symbol.lower()):
                     await self._process_kline_stream(payload_data, data)
                 else:
@@ -584,18 +619,37 @@ class SymbolBroadcaster:
     # DELEGADOS DE EJECUCIÓN (AISLAMIENTO DE COMPLEJIDAD)
     # ---------------------------------------------------------------------
 
-    def _process_depth_stream(self, payload_data: dict):
+    async def _process_depth_stream(self, payload_data: dict):
         """Procesa exclusivamente el Neural Heatmap (Fast Path visual)."""
-        price = self.latest_price or 1.0
+        price = getattr(self, "latest_price", None) or 1.0
+        
+        # v8.5.8 FIX: Soporte dual para Spot (bids/asks) y Futuros (b/a)
+        raw_bids = payload_data.get("bids") or payload_data.get("b", [])
+        raw_asks = payload_data.get("asks") or payload_data.get("a", [])
+        
         self._heatmap = analyze_neural_heatmap(
-            bids=payload_data.get("bids", []),
-            asks=payload_data.get("asks", []),
+            bids=raw_bids,
+            asks=raw_asks,
             current_price=price
         )
         self._liquidity = {
             "bids": [{"price": b["price"], "volume": b["volume"]} for b in self._heatmap.get("hot_bids", [])],
             "asks": [{"price": a["price"], "volume": a["volume"]} for a in self._heatmap.get("hot_asks", [])]
         }
+
+        # v8.5.9 FIX: Desacoplar broadcast del kline stream (1 seg throttling)
+        now = time.time()
+        if now - getattr(self, '_last_heatmap_broadcast_ts', 0) > 1.0:
+            self._last_heatmap_broadcast_ts = now
+            await self._broadcast({
+                "type": "neural_pulse",
+                "data": {
+                    "ml_projection": self._last_ml, 
+                    "liquidity_heatmap": self._heatmap, 
+                    "latency_ms": 0, 
+                    "rvol_live": getattr(self, '_live_rvol', 0)
+                }
+            })
 
     async def _process_kline_stream(self, payload_data: dict, raw_data: dict):
         """Enrutador de velas: Separa el Fast Path (Tick) del Slow Path (Close)."""
@@ -695,6 +749,17 @@ class SymbolBroadcaster:
             "data": {"ml_projection": self._last_ml, "liquidity_heatmap": self._heatmap, "latency_ms": delta_fast.get("latency_ms", 0), "rvol_live": self._live_rvol}
         })
 
+        # --- [ON-CHAIN REFRESH] Sincronización con el Caché Global (v8.6.1) ---
+        now = time.time()
+        if now - self._last_onchain_ts > 180: # Cada 3 minutos (180s)
+            self._last_onchain_ts = now
+            try:
+                onchain_summary = get_onchain_summary(self.symbol)
+                if onchain_summary and onchain_summary.get("oi_delta_pct", 0) != 0:
+                    self._last_onchain = onchain_summary
+                    await self._broadcast({"type": "onchain_update", "data": onchain_summary})
+            except: pass
+
     async def _execute_slow_path(self, candle_payload: dict):
         """Lógica de cierre de vela (Strategy Delta Δ)."""
         self._processed_signals_this_candle.clear()
@@ -721,9 +786,24 @@ class SymbolBroadcaster:
             news_items   = await self._store.get_news()
             econ_events  = await self._store.get_economic_events(limit=5)
             
+            # --- [SMT Divergence] Sincronización del Activo Espejo ---
+            correlated_df = None
+            mirror_asset = "ETHUSDT" if self.symbol in ["BTCUSDT", "SOLUSDT"] else "BTCUSDT"
+            from engine.api.registry import registry
+            mirror_broadcaster = registry.get_broadcaster(mirror_asset, self.interval)
+            
+            if mirror_broadcaster and len(mirror_broadcaster._live_buffer) > 0:
+                try:
+                    correlated_df = pd.DataFrame([i["data"] for i in mirror_broadcaster._live_buffer])
+                    correlated_df["timestamp"] = pd.to_datetime(correlated_df["timestamp"], unit="s")
+                except Exception as e:
+                    logger.error(f"[WS_MANAGER] Error cargando espejo SMT para {self.symbol}: {e}")
+            # ---------------------------------------------------------
+            
             self._router.set_context(
                 ml_projection=self._last_ml, session_data=(self._last_session or {}).get("data", {}),
-                news_items=news_items, economic_events=econ_events, liquidation_clusters=delta_slow.get("liquidation_clusters", [])
+                news_items=news_items, economic_events=econ_events, liquidation_clusters=delta_slow.get("liquidation_clusters", []),
+                correlated_df=correlated_df, ghost_data=self._last_ghost
             )
             
             final_tactical = await asyncio.to_thread(
@@ -747,36 +827,55 @@ class SymbolBroadcaster:
             logger.info(f"[DELTA] 🧹 Limpieza de memoria completada para {self.symbol}")
 
 
-    async def _refresh_htf_bias(self):
-        """Re-evalúa el sesgo institucional (4H + 1H) para el enrutamiento top-down."""
-        try:
-            h1_raw = await fetch_binance_history(self.symbol, "1h", limit=250)
-            h4_raw = await fetch_binance_history(self.symbol, "4h", limit=250)
-            
-            if not h1_raw or not h4_raw:
-                raise ValueError("API devolvió datos vacíos para HTF Bias")
+    async def _htf_bias_worker(self):
+        """[CORE v8.6.1] Worker de Sesgo HTF: Mantiene el bias institucional actualizado cada 15 min."""
+        while True:
+            try:
+                # 1. Obtener cierres HTF con el nuevo fetch robusto
+                tasks = [
+                    fetch_binance_history(self.symbol, "1w", limit=100),
+                    fetch_binance_history(self.symbol, "1d", limit=150),
+                    fetch_binance_history(self.symbol, "4h", limit=250),
+                    fetch_binance_history(self.symbol, "1h", limit=250),
+                ]
+                # Usamos gather para máxima velocidad de sincronización
+                results = await asyncio.gather(*tasks, return_exceptions=True)
                 
-            df_h1 = pd.DataFrame([i["data"] for i in h1_raw])
-            df_h4 = pd.DataFrame([i["data"] for i in h4_raw])
-            
-            df_h1["timestamp"] = pd.to_datetime(df_h1["timestamp"], unit="s")
-            df_h4["timestamp"] = pd.to_datetime(df_h4["timestamp"], unit="s")
-            
-            self._htf_bias = self._htf_analyzer.analyze_bias(df_h4, df_h1)
-            self._last_htf_ts = time.time()
-            
-            logger.debug(f"[BROADCASTER] {self._key} → 🧭 HTF Bias Refrescado: {self._htf_bias.direction}")
-        except Exception as e:
-            logger.error(f"[BROADCASTER] {self._key} → Error refrescando HTF Bias: {e}")
-            # Fallback seguro para evitar UI congelada en "Analizando..."
-            from engine.core.confluence import HTFBias
-            self._htf_bias = HTFBias(
-                direction="NEUTRAL",
-                strength=0.0,
-                reason="Calibrando temporalidad superior...",
-                h4_regime="STANDBY",
-                h1_regime="STANDBY"
-            )
+                w1_raw = results[0] if not isinstance(results[0], Exception) else []
+                d1_raw = results[1] if not isinstance(results[1], Exception) else []
+                h4_raw = results[2] if not isinstance(results[2], Exception) else []
+                h1_raw = results[3] if not isinstance(results[3], Exception) else []
+                
+                if not d1_raw or not h4_raw or not h1_raw:
+                    raise ValueError("API devolvió datos insuficientes para HTF Bias")
+                    
+                df_1w = pd.DataFrame([i["data"] for i in w1_raw]) if w1_raw else pd.DataFrame()
+                df_1d = pd.DataFrame([i["data"] for i in d1_raw])
+                df_h4 = pd.DataFrame([i["data"] for i in h4_raw])
+                df_h1 = pd.DataFrame([i["data"] for i in h1_raw])
+                
+                if not df_1w.empty: df_1w["timestamp"] = pd.to_datetime(df_1w["timestamp"], unit="s")
+                df_1d["timestamp"] = pd.to_datetime(df_1d["timestamp"], unit="s")
+                df_h4["timestamp"] = pd.to_datetime(df_h4["timestamp"], unit="s")
+                df_h1["timestamp"] = pd.to_datetime(df_h1["timestamp"], unit="s")
+                
+                self._htf_bias = self._htf_analyzer.analyze_bias(df_1w, df_1d, df_h4, df_h1)
+                self._last_htf_ts = time.time()
+                
+                logger.debug(f"[HTF_WORKER] {self._key} → 🧭 Sesgo Sincronizado: {self._htf_bias.direction}")
+                
+                # Una vez sincronizado, dormimos 15 min (900s)
+                await asyncio.sleep(900)
+                
+            except Exception as e:
+                logger.error(f"[HTF_WORKER] {self._key} → Error de sincronización: {e}. Reintentando en 30s...")
+                from engine.indicators.htf_analyzer import HTFBias
+                if self._htf_bias is None: # Solo aplicamos fallback si es el arranque
+                    self._htf_bias = HTFBias(
+                        direction="NEUTRAL", strength=0.0, reason="Calibrando...",
+                        w1_regime="STANDBY", d1_regime="STANDBY", h4_regime="STANDBY", h1_regime="STANDBY"
+                    )
+                await asyncio.sleep(30) # Reintento rápido en caso de fallo inicial
 
 
 

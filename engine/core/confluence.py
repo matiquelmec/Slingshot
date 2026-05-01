@@ -73,17 +73,39 @@ class ConfluenceManager:
         else:
             checklist.append({"factor": "Narrativa SMC", "status": "DIVERGENTE", "detail": f"Régimen {regime}"})
 
-        # 2. PUNTOS DE INTERÉS OB/FVG (Peso 20)
+        # 2. PUNTOS DE INTERÉS OB/FVG (Mitigación RTO Institucional) (Peso 20)
         poi_weight = 20
         total_weight += poi_weight
-        has_ob = bool(current.get('ob_bullish' if is_long else 'ob_bearish', False))
-        has_fvg = bool(current.get('fvg_bullish' if is_long else 'fvg_bearish', False))
-        poi_pts = (10 if has_ob else 0) + (10 if has_fvg else 0)
-        score += poi_pts
+        
+        smc_map = kwargs.get('smc_map', {})
+        price = float(signal.get('price', current.get('close', 0)))
+        
+        active_obs = smc_map.get("order_blocks", {}).get("bullish" if is_long else "bearish", [])
+        active_fvgs = smc_map.get("fvgs", {}).get("bullish" if is_long else "bearish", [])
+        
+        mitigating_ob = any(ob['bottom'] <= price <= ob['top'] for ob in active_obs)
+        mitigating_fvg = any(fvg['bottom'] <= price <= fvg['top'] for fvg in active_fvgs)
+        
+        poi_pts = (10 if mitigating_ob else 0) + (10 if mitigating_fvg else 0)
+        has_ob = mitigating_ob # Para compatibilidad de razonamiento más abajo
+        
         if poi_pts > 0:
-            checklist.append({"factor": "Zonas POI", "status": "CONFIRMADO", "detail": f"{'OB' if has_ob else ''} {'FVG' if has_fvg else ''} detectado"})
+            score += poi_pts
+            detail = []
+            if mitigating_ob: detail.append("OB")
+            if mitigating_fvg: detail.append("FVG")
+            checklist.append({"factor": "Zonas POI", "status": "CONFIRMADO", "detail": f"Mitigando {' + '.join(detail)} (RTO)"})
         else:
-            checklist.append({"factor": "Zonas POI", "status": "NEUTRAL", "detail": "Sin POI inmediato"})
+            # Fallback a creación reciente (por si operamos el despegue inicial)
+            has_ob_creation = bool(current.get('ob_bullish' if is_long else 'ob_bearish', False))
+            has_fvg_creation = bool(current.get('fvg_bullish' if is_long else 'fvg_bearish', False))
+            if has_ob_creation or has_fvg_creation:
+                poi_pts = (5 if has_ob_creation else 0) + (5 if has_fvg_creation else 0)
+                score += poi_pts
+                has_ob = has_ob_creation
+                checklist.append({"factor": "Zonas POI", "status": "PARCIAL", "detail": "Ruptura (momentum) sin mitigación previa"})
+            else:
+                checklist.append({"factor": "Zonas POI", "status": "NEUTRAL", "detail": "Precio flotando fuera de zonas de liquidez"})
 
         # 3. LIQUIDEZ Y KILLZONES (Peso 15)
         liq_weight = 15
@@ -398,6 +420,39 @@ class ConfluenceManager:
                         "detail": f"Inversión en OTE {gp_pts}pts{whale_txt}"
                     })
 
+
+        # 🚀 11.5. GHOST SENTINEL MACRO BIAS (v8.6.0 Institutional)
+        context_obj = kwargs.get('context')
+        ghost = context_obj.ghost_data.get("data", {}) if context_obj and hasattr(context_obj, 'ghost_data') else {}
+        if ghost:
+            macro_bias = ghost.get("macro_bias", "NEUTRAL")
+            risk_appetite = ghost.get("risk_appetite", "NEUTRAL")
+            
+            macro_bullish = macro_bias in ("BULLISH", "BLOCK_SHORTS")
+            macro_bearish = macro_bias in ("BEARISH", "BLOCK_LONGS")
+            
+            ghost_pts = 0
+            ghost_weight = 20 # Peso específico para el Radar de Confluencia
+            total_weight += ghost_weight
+            
+            if is_long and macro_bullish: ghost_pts = ghost_weight
+            elif not is_long and macro_bearish: ghost_pts = ghost_weight
+            elif is_long and macro_bearish: ghost_pts = 0 # No sumamos si hay divergencia
+            elif not is_long and macro_bullish: ghost_pts = 0
+            else: ghost_pts = ghost_weight // 2 # Neutralidad suma la mitad
+            
+            score += ghost_pts
+            checklist.append({
+                "factor": "Ghost Sentinel", 
+                "status": "CONFIRMADO" if ghost_pts == ghost_weight else "NEUTRAL" if ghost_pts > 0 else "DIVERGENTE", 
+                "detail": f"Macro: {macro_bias} ({ghost_pts}/{ghost_weight} pts)"
+            })
+            
+            # Bonus de Apetito de Riesgo
+            if (is_long and risk_appetite == "RISK_ON") or (not is_long and risk_appetite == "RISK_OFF"):
+                score += 5
+                total_weight += 5
+                checklist.append({"factor": "Risk Appetite", "status": "FAVORABLE", "detail": f"{risk_appetite} (+5 pts)"})
 
         # 🚀 12. VETO DE VOLATILIDAD MACRO (EVENTOS ECONÓMICOS) v5.7.155 Master Gold Titanium
         if high_impact_near:

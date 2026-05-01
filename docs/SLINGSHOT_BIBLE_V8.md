@@ -1,11 +1,15 @@
 # 🛡️ Auditoría Profesional Exhaustiva — Slingshot Gen 1
-## v6.1.0 "Master Gold Titanium Hardened" | Abril 2026
+## v8.5.9 "Master Gold Titanium (Sigma/Omega/Delta)" | Mayo 2026
 
 **Auditor:** Antigravity (Advanced AI Coding — DeepMind)  
-**Fecha:** 20 de Abril, 2026  
-**Metodología:** Delta (Δ) Estructura · Omega (Ω) Código · Sigma (Σ) Seguridad  
+**Fecha:** 1 de Mayo, 2026  
+**Paradigma:** 
+- **Delta (Δ):** Transmisión de Alta Frecuencia y Radar Frontend.
+- **Sigma (Σ):** Inteligencia, Mitigación RTO SMC y Filtrado Institucional.
+- **Omega (Ω):** Centinela de Posición y Ejecución.
+
 **Archivos Auditados:** 104 módulos · ~16,200 LOC Python · ~10,500 LOC TypeScript  
-**Veredicto:** ✅ Producción Institucional — Motor de Ejecución Binance Activo
+**Veredicto:** ✅ Producción Institucional — Motor de Mitigación RTO y Ejecución Activos
 
 ---
 
@@ -34,14 +38,15 @@ Slingshot es una **terminal de trading institucional** que combina análisis té
 - **17 tests operativos** consolidados en `engine/tests/` (migrados desde scripts/)
 - BroadcasterRegistry **extraído** como módulo independiente (`registry.py`)
 
-### Evolución v5.9.x → v6.0 (Bugs Corregidos)
+### Evolución v6.0 → v8.5.9 (Refactor Sigma/Delta/Omega)
 
-| ID | Severidad | Módulo | Estado v6.1 |
+| ID | Severidad | Módulo | Estado v8.5.9 |
 |:---|:----------|:-------|:------------|
+| ARC-001 | 🔴 CRÍTICO | `confluence.py` | ✅ **RTO MITIGATION** — Ahora cruza precio actual vs Zonas vivas SMC, en vez de vela actual. |
+| ARC-002 | 🟠 ALTO | `gatekeeper.py` | ✅ **PURGADO** — Eliminados vetos redundantes (News Macro), integrados a Confluence. |
+| ARC-003 | 🟠 ALTO | `gatekeeper.py` | ✅ **SIGMA SYNC** — Inyectado `smc_map` vivo al Confluence Manager. |
 | BUG-001 | 🔴 CRÍTICO | `confluence.py` | ✅ **CORREGIDO** — Lógica `if/elif/else` |
-| BUG-008 | 🔴 CRÍTICO | `volume.py` | ✅ **CORREGIDO** — Resampling Shape Mismatch (Safe Init + Reindex) |
-| BUG-009 | 🔴 CRÍTICO | `binance_executor.py` | ✅ **OPERATIVO** — Migración a CCXT Sync + asyncio.to_thread |
-| BUG-010 | 🟠 ALTO | `RadarFeed.tsx` | ✅ **CORREGIDO** — Eliminado Math.random() de las keys (Anti-Flicker) |
+| BUG-008 | 🔴 CRÍTICO | `volume.py` | ✅ **CORREGIDO** — Resampling Shape Mismatch |
 | BUG-011 | 🟠 ALTO | `telemetryStore.ts` | ✅ **OPTIMIZADO** — Detección de cambios reales para evitar parpadeos |
 
 ---

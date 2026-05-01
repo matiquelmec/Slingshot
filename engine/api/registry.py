@@ -141,6 +141,11 @@ class BroadcasterRegistry:
             for key, b in self._broadcasters.items()
         }
 
+    def get_broadcaster(self, symbol: str, interval: str):
+        """Retorna un broadcaster existente sin crearlo."""
+        key = f"{symbol.upper()}:{interval}"
+        return self._broadcasters.get(key)
+
     async def broadcast_global(self, message: dict):
         """Envía un mensaje a todos los clientes conectados en todos los broadcasters."""
         tasks = []
