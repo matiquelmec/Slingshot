@@ -48,9 +48,9 @@ from engine.indicators.liquidations import estimate_liquidation_clusters
 from engine.indicators.liquidity import detect_liquidity_clusters, analyze_neural_heatmap
 from engine.indicators.ghost_data import (
     refresh_ghost_data, get_ghost_state, filter_signals_by_macro,
-    is_cache_fresh, fetch_funding_rate, compute_symbol_ghost
+    is_cache_fresh, compute_symbol_ghost
 )
-from engine.indicators.onchain_provider import get_onchain_summary
+from engine.indicators.onchain_provider import get_onchain_summary, refresh_symbol_onchain
 
 from engine.ml.features import FeatureEngineer
 from engine.ml.drift_monitor import drift_monitor
@@ -210,11 +210,12 @@ class SymbolBroadcaster:
         if history_to_send:
             await queue.put({"type": "history", "data": history_to_send})
         
-        # ✅ SYNC INSTANTÁNEO: Enviar últimas señales ACTIVAS de alta calidad (v5.7.15)
-        last_signals = await store.get_signals(asset=self.symbol)
-        # [v8.2.0] Sincronizar todas las señales ACTIVAS, delegamos el margen de supervivencia al backend.
-        for sig in list(last_signals)[-20:]:
-            if sig.get("status") == "ACTIVE":
+        # ✅ SYNC INSTANTÁNEO: Enviar últimas señales ACTIVAS y POSICIONES (v8.6.1 Global Sync)
+        # Sincronizamos todas las señales del mercado para alimentar el Radar Feed global
+        all_active_signals = await store.get_signals()
+        for sig in list(all_active_signals)[-30:]:
+            # Sincronizamos tanto las pendientes (PENDING/ACTIVE) como las ya ejecutadas (FILLED)
+            if sig.get("status") in ["PENDING", "ACTIVE", "FILLED"]:
                 await queue.put({"type": "signal_auditor_update", "data": sig})
 
         # ✅ SYNC INSTANTÁNEO: Radar Center (Global Context)
@@ -286,8 +287,8 @@ class SymbolBroadcaster:
         
         msg_type = clean.get("type", "")
         
-        # [AUDITORIA v8.3.0] Validación de pertenencia de asset
-        if msg_type in ["tactical_update", "signal_auditor_update", "execution_update"]:
+        # [AUDITORIA v8.6.4] Permitir leaks de Auditoría y Ejecución para el Radar Global
+        if msg_type in ["tactical_update"]:
             payload = clean.get("data", {})
             asset = payload.get("asset") if isinstance(payload, dict) else payload.get("symbol") if isinstance(payload, dict) else "?"
             if asset and asset != self.symbol and asset != "?":
@@ -755,7 +756,7 @@ class SymbolBroadcaster:
             self._last_onchain_ts = now
             try:
                 onchain_summary = get_onchain_summary(self.symbol)
-                if onchain_summary and onchain_summary.get("oi_delta_pct", 0) != 0:
+                if onchain_summary:
                     self._last_onchain = onchain_summary
                     await self._broadcast({"type": "onchain_update", "data": onchain_summary})
             except: pass
@@ -967,8 +968,10 @@ class SymbolBroadcaster:
             if not global_ghost:
                 global_ghost = get_ghost_state()
             
-            # 2. Obtener Funding específico de este símbolo en tiempo real
-            local_funding = await fetch_funding_rate(self.symbol)
+            # 2. Obtener Funding específico de este símbolo en tiempo real (Centralizado v8.7.0)
+            await refresh_symbol_onchain(self.symbol)
+            onchain = get_onchain_summary(self.symbol)
+            local_funding = onchain.get("funding_rate", 0.0)
             
             # 3. Calcular Bias híbrido
             ghost = compute_symbol_ghost(global_ghost, self.symbol, local_funding)

@@ -324,14 +324,14 @@ def get_key_levels(df: pd.DataFrame) -> dict:
     """
     def _fmt(levels: list[dict]) -> list[dict]:
         return [{
-            'price':         l['price'],
-            'touches':       l['touches'],
-            'zone_top':      l['zone_top'],
-            'zone_bottom':   l['zone_bottom'],
-            'type':          l['type'],             # SUPPORT | RESISTANCE
-            'origin':        l['origin'],           # PIVOT | ROLE_REVERSAL
-            'strength':      l['strength'],         # WEAK | MODERATE | STRONG
-            'is_active':     l['is_active'],
+            'price':         l.get('price', 0.0),
+            'touches':       l.get('touches', 1),
+            'zone_top':      l.get('zone_top', l.get('price', 0.0)),
+            'zone_bottom':   l.get('zone_bottom', l.get('price', 0.0)),
+            'type':          l.get('type', 'SUPPORT'),
+            'origin':        l.get('origin', 'PIVOT'),
+            'strength':      l.get('strength', 'WEAK'),
+            'is_active':     l.get('is_active', True),
             'ob_confluence': l.get('ob_confluence', False),
             'volume_score':  l.get('volume_score', 1.0),
             'mtf_confluence': l.get('mtf_confluence', False),

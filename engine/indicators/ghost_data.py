@@ -54,6 +54,7 @@ class GhostState:
     block_longs: bool               = False
     block_shorts: bool              = False
     reason: str                     = "Sin datos macro disponibles."
+    oi_delta_pct: float             = 0.0         # % delta del OI para el frontend
 
     # Capa 1 v4.0: Contexto Global
     dxy_trend: str                  = "NEUTRAL"   # BULLISH / BEARISH / NEUTRAL
@@ -110,7 +111,7 @@ def save_local_state(state: GhostState):
 # ── Fetchers individuales ─────────────────────────────────────────────────────
 async def _fetch_fear_greed() -> tuple[int, str]:
     try:
-        async with httpx.AsyncClient(timeout=8.0) as client:
+        async with httpx.AsyncClient(timeout=10.0, verify=False) as client:
             r = await client.get(f"{FNG_BASE}/fng/?limit=1&format=json")
             r.raise_for_status()
             data = r.json()["data"][0]
@@ -122,7 +123,7 @@ async def _fetch_fear_greed() -> tuple[int, str]:
 
 async def _fetch_btc_dominance() -> float:
     try:
-        async with httpx.AsyncClient(timeout=8.0) as client:
+        async with httpx.AsyncClient(timeout=10.0, verify=False) as client:
             r = await client.get(f"{COINGECKO_BASE}/global")
             r.raise_for_status()
             pct = r.json()["data"]["market_cap_percentage"]["btc"]
@@ -130,28 +131,6 @@ async def _fetch_btc_dominance() -> float:
     except Exception as e:
         logger.error(f"[GHOST] ⚠️  BTC Dominance fetch error: {e}")
         return _cache.btc_dominance
-
-
-async def fetch_funding_rate(symbol: str = "BTCUSDT") -> float:
-    if symbol.upper() in ["USDCUSDT", "EURUSDT"]:
-        return 0.0
-    mirrors = [
-        "https://fapi.binance.com/fapi/v1/fundingRate",
-        "https://fapi1.binance.com/fapi/v1/fundingRate",
-        "https://fapi2.binance.com/fapi/v1/fundingRate"
-    ]
-    for url in mirrors:
-        try:
-            async with httpx.AsyncClient(timeout=5.0, follow_redirects=True) as client:
-                r = await client.get(url, params={"symbol": symbol.upper(), "limit": 1})
-                if r.status_code == 200:
-                    data = r.json()
-                    if isinstance(data, list) and len(data) > 0:
-                        rate = float(data[-1].get("fundingRate", 0)) * 100
-                        return rate
-        except:
-            continue
-    return 0.0
 
 
 # ── Lógica de filtrado macro ──────────────────────────────────────────────────
@@ -211,6 +190,7 @@ def _compute_bias(
 # ── Función principal de actualización ───────────────────────────────────────
 async def refresh_ghost_data(symbol: str = "BTCUSDT", macro_ctx: Optional[MacroState] = None, global_only: bool = False) -> GhostState:
     global _cache
+    from engine.indicators.onchain_provider import refresh_symbol_onchain, get_onchain_summary
 
     if global_only:
         async with _api_lock:
@@ -265,8 +245,11 @@ async def refresh_ghost_data(symbol: str = "BTCUSDT", macro_ctx: Optional[MacroS
     if not is_cache_fresh() and not macro_ctx:
         await refresh_ghost_data(global_only=True)
 
-    funding = await fetch_funding_rate(symbol)
-    return compute_symbol_ghost(_cache, symbol, funding)
+    # 🚀 Centralización v8.7.0: Delegamos el fetch de red al provider especializado
+    await refresh_symbol_onchain(symbol)
+    onchain = get_onchain_summary(symbol)
+    
+    return compute_symbol_ghost(_cache, symbol, onchain.get("funding_rate", 0.0))
 
 
 def compute_symbol_ghost(global_cache: GhostState, symbol: str, local_funding: float) -> GhostState:
@@ -275,11 +258,15 @@ def compute_symbol_ghost(global_cache: GhostState, symbol: str, local_funding: f
         dxy=global_cache.dxy_trend, nasdaq=global_cache.nasdaq_trend,
         news_sentiment=global_cache.news_sentiment, active_event=global_cache.active_event
     )
+    from engine.indicators.onchain_provider import get_onchain_summary
+    onchain = get_onchain_summary(symbol)
+    
     return GhostState(
         fear_greed_value=global_cache.fear_greed_value,
         fear_greed_label=global_cache.fear_greed_label,
         btc_dominance=global_cache.btc_dominance,
         funding_rate=local_funding,
+        oi_delta_pct=onchain.get("oi_delta_pct", 0.0),
         funding_symbol=symbol,
         macro_bias=bias,
         block_longs=bl,

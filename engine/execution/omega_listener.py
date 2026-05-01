@@ -119,8 +119,10 @@ class OmegaCentinel:
             if changed:
                 sig["current_price"] = current_price
                 await store.save_signal(sig)
-                if broadcaster:
-                    await broadcaster._broadcast({"type": "execution_update", "data": sig})
+                from engine.api.registry import registry
+                await registry.broadcast_global({"type": "execution_update", "data": sig})
+                # También notificamos al Radar Feed como un update de auditoría
+                await registry.broadcast_global({"type": "signal_auditor_update", "data": sig})
                 updated_any = True
 
 # Instancia global centinela

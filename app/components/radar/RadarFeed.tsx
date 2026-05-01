@@ -20,9 +20,10 @@ export default function RadarFeed() {
     const auditedSignals = useTelemetryStore(state => state.auditedSignals) as unknown as Record<string, Signal>;
 
     useEffect(() => {
+        const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000';
         const fetchInitialHydration = async () => {
             try {
-                const res = await fetch(`http://localhost:8000/api/v1/signals?status=ALL`);
+                const res = await fetch(`${BASE_URL}/api/v1/signals?status=ALL`);
                 if (res.ok) {
                     const data = await res.json();
                     if (data && data.length > 0) {

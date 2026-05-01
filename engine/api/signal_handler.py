@@ -17,6 +17,7 @@ import asyncio
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING
 
+from engine.api.registry import registry
 from engine.core.logger import logger
 from engine.core.store import store
 from engine.indicators.ghost_data import get_ghost_state, filter_signals_by_macro
@@ -100,16 +101,17 @@ class SignalHandler:
         for sig in final_approved:
             asyncio.create_task(self.persist(sig, tactical, status="ACTIVE", silent=silent))
 
-        # ── Log de Rechazadas (solo servidor, NUNCA UI) ───────────────────────
-        from engine.api.registry import registry
+        # ── Persistencia de Bloqueadas (Audit Mode v8.6.7) ────────────────────
         for sig in macro_blocked:
             motivo = sig.get("blocked_reason", "Bloqueada por filtro macro")
+            asyncio.create_task(self.persist(sig, tactical, status="BLOCKED_MACRO", rejection_reason=motivo, silent=silent))
             registry.record_veto(self._symbol, f"MACRO: {motivo}")
             if not silent:
                 logger.info(f"[GATEKEEPER] 🔇 Señal macro-bloqueada ({self._symbol}): {motivo}")
 
         for sig in unique_blocked:
             motivo = sig.get("blocked_reason", "Rechazada por filtro táctico")
+            asyncio.create_task(self.persist(sig, tactical, status="BLOCKED_TACTICAL", rejection_reason=motivo, silent=silent))
             registry.record_veto(self._symbol, f"TACTICAL: {motivo}")
             if not silent:
                 logger.info(f"[GATEKEEPER] 🔇 Señal router-bloqueada ({self._symbol}): {motivo}")
@@ -206,9 +208,9 @@ class SignalHandler:
         # ── Persistencia en RAM ───────────────────────────────────────────────
         asyncio.create_task(store.save_signal(realtime_data))
 
-        # ── Broadcast al Dashboard (solo calidad institucional) ───────────────
-        if status == "ACTIVE":
-            await self._bc._broadcast({"type": "signal_auditor_update", "data": realtime_data})
+        # ── Broadcast Global al Radar (v8.6.5) ────────────────────────────────
+        # [COHERENCIA TOTAL] Emitimos todos los estados (PENDING, ACTIVE, FILLED)
+        await registry.broadcast_global({"type": "signal_auditor_update", "data": realtime_data})
 
         icon = "✅" if status == "ACTIVE" else "🚫"
         if not silent:

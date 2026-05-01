@@ -81,8 +81,8 @@ def enrich_signal(signal: dict, risk_data: dict, interval: str) -> dict:
         "tp2":               risk_data["tp2"],
         "tp3":               risk_data["tp3"],
         "take_profit_3r":    risk_data["tp2"], # Legacy: vinculamos 1.8R como TP principal
-        "entry_zone_top":    risk_data["entry_zone_top"],
-        "entry_zone_bottom": risk_data["entry_zone_bottom"],
+        "entry_zone_top":    risk_data.get("entry_zone_top", signal.get("price")),
+        "entry_zone_bottom": risk_data.get("entry_zone_bottom", signal.get("price")),
         "expiry_candles":    risk_data.get("expiry_candles", 3),
         "expiry_timestamp":  expiry_timestamp_str,
         "tp1_vol":           risk_data.get("tp1_vol_pct", 0.60), # Sintonía SIGMA (v7.5.0)

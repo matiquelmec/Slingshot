@@ -341,7 +341,7 @@ class SignalGatekeeper:
                 if not silent:
                     logger.info(f"[GATEKEEPER] \U0001f507 SEÑAL DÉBIL o VETADA: {reason}")
                 
-                status = "BLOCKED_NEWS" if news_multiplier == 0.0 else "BLOCKED_BY_CONFIDENCE"
+                status = "BLOCKED_NEWS" if ("Macro" in reason or "News" in reason) else "BLOCKED_BY_CONFIDENCE"
                 self._block(sig, status, reason, result)
                 continue
 

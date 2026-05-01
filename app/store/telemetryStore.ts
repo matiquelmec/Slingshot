@@ -213,6 +213,17 @@ export const useTelemetryStore = create<TelemetryState>((set, get) => {
                     const currentId = get().activeConnectionId;
                     if (connectionId === currentId && data.ghost) {
                         set({ ghostData: { ...data.ghost, symbol } });
+                        // ⚓ Hidratación Instantánea de Métricas On-Chain (v8.6.7)
+                        if (data.ghost.oi_delta_pct !== undefined) {
+                            set({ onchainMetrics: {
+                                symbol: symbol,
+                                oi_delta_pct: Number(data.ghost.oi_delta_pct),
+                                funding_rate: Number(data.ghost.funding_rate),
+                                onchain_bias: data.ghost.onchain_bias || 'NEUTRAL',
+                                whale_alerts_count: 0,
+                                ts: data.ghost.last_updated || Date.now() / 1000
+                            }});
+                        }
                     }
                 }).catch(() => {});
 

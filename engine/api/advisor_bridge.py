@@ -28,7 +28,6 @@ from engine.core.logger import logger
 from engine.api.json_utils import sanitize_for_json
 from engine.indicators.ghost_data import (
     get_ghost_state,
-    fetch_funding_rate,
     compute_symbol_ghost,
     refresh_ghost_data,
 )

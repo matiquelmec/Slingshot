@@ -42,18 +42,53 @@ async def refresh_all_onchain(symbols: List[str]):
     tasks = [refresh_symbol_onchain(s) for s in symbols]
     await asyncio.gather(*tasks)
 
-async def refresh_symbol_onchain(symbol: str):
-    """Lógica de refresco resiliente para un símbolo específico."""
+# Activos que no existen en Binance Futures y deben ser ignorados por el provider
+FUTURES_EXCLUDED_SYMBOLS = ["PAXGUSDT", "XAGUSDT", "EURUSDT", "USDCUSDT"]
+
+# ── Cliente Global Throttled (v8.7.0) ─────────────────────────────────────────
+_shared_client: Optional[httpx.AsyncClient] = None
+_semaphore = asyncio.Semaphore(3) # Máximo 3 peticiones simultáneas a Binance
+
+async def get_client() -> httpx.AsyncClient:
+    global _shared_client
+    if _shared_client is None or _shared_client.is_closed:
+        _shared_client = httpx.AsyncClient(
+            timeout=15.0, 
+            verify=False, 
+            follow_redirects=True,
+            limits=httpx.Limits(max_keepalive_connections=10, max_connections=20)
+        )
+    return _shared_client
+
+async def refresh_symbol_onchain(symbol: str, force: bool = False):
+    """
+    Lógica de refresco resiliente para un símbolo específico.
+    v8.7.0: Incluye TTL de 45s para evitar redundancia entre workers.
+    """
     symbol = symbol.upper()
     
-    # 1. Intentar obtener datos desde mirrors
+    if symbol in FUTURES_EXCLUDED_SYMBOLS:
+        logger.debug(f"[ONCHAIN] {symbol} saltado (Activo Spot-Only)")
+        return
+
+    # 0. Verificar TTL (v8.7.0) — Evita spam si varios workers piden el dato
+    async with _lock:
+        if not force and symbol in _cache:
+            age = datetime.now().timestamp() - _cache[symbol].last_updated
+            if age < 45: # 45 segundos de frescura garantizada
+                return
+
+    # 1. Intentar obtener datos desde mirrors con Semáforo
     success = False
     new_oi = 0.0
     new_fr = 0.0
+    last_error = "Desconocido"
     
-    for base_url in MIRRORS:
-        try:
-            async with httpx.AsyncClient(timeout=5.0) as client:
+    client = await get_client()
+    
+    async with _semaphore:
+        for base_url in MIRRORS:
+            try:
                 # Obtenemos OI y FR secuencialmente para máxima estabilidad
                 oi_r = await client.get(f"{base_url}/fapi/v1/openInterest", params={"symbol": symbol})
                 if oi_r.status_code == 200:
@@ -71,8 +106,17 @@ async def refresh_symbol_onchain(symbol: str):
                         
                         success = True
                         break
-        except Exception as e:
-            continue
+                elif oi_r.status_code == 429:
+                    last_error = "Rate Limit 429"
+                    logger.warning(f"[ONCHAIN] ⚠️ Binance Rate Limit (429) detectado en {base_url}")
+                    await asyncio.sleep(2) # Pausa de cortesía
+                else:
+                    last_error = f"HTTP {oi_r.status_code}"
+                    logger.debug(f"[ONCHAIN] Mirror {base_url} retornó {oi_r.status_code} para {symbol}")
+            except Exception as e:
+                last_error = str(e)
+                logger.debug(f"[ONCHAIN] Mirror {base_url} falló (Excepción) para {symbol}: {e}")
+                continue
 
     # 2. Actualizar Caché Global
     async with _lock:
@@ -103,7 +147,8 @@ async def refresh_symbol_onchain(symbol: str):
             elif state.funding_rate > 0.01: state.bias = "OVERLEVERAGED"
             else: state.bias = "NEUTRAL"
         else:
-            logger.warning(f"[ONCHAIN-PROVIDER] ⚠️ No se pudo refrescar {symbol}. Manteniendo caché previo.")
+            # [HARDENING v8.7.0] Solo loguear error real si no es un activo excluido
+            logger.error(f"❌ [ONCHAIN-PROVIDER] FALLO TOTAL en {symbol} ({last_error}).")
 
 def get_onchain_summary(symbol: str) -> Dict:
     """Helper para obtener un dict listo para JSON alineado con el Frontend."""
