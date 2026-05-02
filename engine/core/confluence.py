@@ -296,26 +296,31 @@ class ConfluenceManager:
             score += econ_weight
             checklist.append({"factor": "Macro", "status": "NEUTRAL", "detail": "Sin eventos macro activos"})
 
-        # 7. CLUSTERS DE LIQUIDACIÓN (Peso 10) v4.0
+        # 7. CLUSTERS DE LIQUIDACIÓN (Peso 10) v4.0 (Enhanced Volume Filtering)
         liq_cluster_weight = 10
         total_weight += liq_cluster_weight
         price = float(current.get('close', 0))
         cluster_hit = False
+        hit_strength = 0
+        
         for cluster in liq_clusters:
             # Si el precio está cerca de un cluster masivo de liquidación en la dirección del trade
             c_price = float(cluster.get('price', 0))
+            c_strength = int(cluster.get('strength', 0))
             dist = abs(price - c_price) / price
-            # Si el cluster está en la dirección del trade (imán de liquidez)
-            if dist < 0.01: # Dentro del 1%
+            
+            # FILTRO CRÍTICO v2.0: Distancia < 1% Y Fuerza > 50%
+            if dist < 0.01 and c_strength > 50:
                 if (is_long and c_price > price) or (not is_long and c_price < price):
                     cluster_hit = True
+                    hit_strength = c_strength
                     break
         
         if cluster_hit:
             score += liq_cluster_weight
-            checklist.append({"factor": "Liq Clusters", "status": "CONFIRMADO", "detail": "Imán de liquidez detectado"})
+            checklist.append({"factor": "Liq Clusters", "status": "CONFIRMADO", "detail": f"Imán de liquidez masiva detectado ({hit_strength}%)"})
         else:
-            checklist.append({"factor": "Liq Clusters", "status": "NEUTRAL", "detail": "Sin clusters cercanos"})
+            checklist.append({"factor": "Liq Clusters", "status": "NEUTRAL", "detail": "Sin clusters institucionales cercanos"})
 
         # 8. PUNTUACIÓN DE NOTICIAS
         if news_score >= 0.7: score += 5

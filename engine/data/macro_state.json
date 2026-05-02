@@ -1,7 +1,7 @@
 {
-  "fear_greed_value": 26,
+  "fear_greed_value": 39,
   "fear_greed_label": "Fear",
-  "btc_dominance": 58.5,
+  "btc_dominance": 58.49,
   "funding_rate": 0.001305,
   "funding_symbol": "BTCUSDT",
   "macro_bias": "BLOCK_LONGS",
@@ -14,8 +14,8 @@
   "nasdaq_trend": "BULLISH",
   "nasdaq_change_pct": 1.45,
   "risk_appetite": "RISK_ON",
-  "news_sentiment": 0.6,
+  "news_sentiment": 0.5,
   "active_event": "NFP: Non-Farm Payrolls (Master Event)",
-  "last_updated": 1777677858.595403,
+  "last_updated": 1777680062.1335776,
   "is_stale": false
 }

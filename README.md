@@ -1,9 +1,9 @@
-# 🛡️ SLINGSHOT v8.5.9 Master Gold TITANIUM (Sigma/Omega/Delta)
+# 🛡️ SLINGSHOT v8.8.5 Master Gold TITANIUM (Volume Pulse Edition)
 > **"Institutional-Grade Algorithmic Terminal. Zero Latency. SMC Mitigation. Full Sovereignty."**
 
 ![Status](https://img.shields.io/badge/Status-100%25_HARDENED_OPERATIONAL-0d2a1a?style=for-the-badge&logo=codeproject&logoColor=fff)
-![Version](https://img.shields.io/badge/Version-8.8.2_Institutional_Sentinel-1a3a6e?style=for-the-badge)
-![Engine](https://img.shields.io/badge/Engine-Sigma_Omega_Delta-ffd700?style=for-the-badge&labelColor=0a0a0a)
+![Version](https://img.shields.io/badge/Version-8.8.5_Volume_Pulse-1a3a6e?style=for-the-badge)
+![Engine](https://img.shields.io/badge/Engine-Sigma_Omega_Delta_v2-ffd700?style=for-the-badge&labelColor=0a0a0a)
 ![Performance](https://img.shields.io/badge/Latency-Sub--50ms-blue?style=for-the-badge)
 
 ## 🎯 Nuestra Misión: Democratizar el Smart Money
@@ -49,11 +49,16 @@ El motor no opera en la formación de la huella, opera en la **Mitigación Insti
 ### 2. Inferencia IA Local (Sovereign AI)
 Utilizamos un modelo **Qwen-3:8B** (vía Ollama) corriendo localmente. Actúa como un "Analista Senior" que valida el contexto narrativo de cada señal generada por el motor matemático, asegurando que tus datos nunca salgan de tu hardware.
 
-### 3. Gestión de Riesgo (Risk:Reward) Hardened
+### 3. Rekt Radar v2.0: Volume-Weighted Liquidity Mapping (v8.8.5)
+Upgrade crítico del motor de liquidaciones. El sistema ya no solo proyecta apalancamiento teórico; ahora **pondera los clusters de liquidación por volumen real institucional** detectado en los pivotes de mercado. 
+- **Filtro de Confluencia:** El `ConfluenceManager` solo otorga el bono de "Imán de Liquidez" (+10 pts) si el cluster tiene una fuerza > 50%.
+- **Visualización Dinámica:** Grosor y opacidad de líneas en el chart basados en la intensidad de volumen (Institutional Footprint).
+
+### 4. Gestión de Riesgo (Risk:Reward) Hardened
 El sistema implementa un **Hard-Veto Protocol** en la etapa SIGMA. Si una señal cumple la estrategia SMC pero falla en el perfil de riesgo (ej: RR < 2.5), el sistema la bloquea preventivamente, enviando la auditoría forense al Radar Terminal.
 
-### 4. Telemetría On-Chain Centralizada (v8.7.5)
-Se ha implementado un proveedor único para métricas de **Open Interest y Funding Rates** con un sistema de semáforo de concurrencia y TTL de 45s. Esto elimina errores de rate-limiting (429) y garantiza coherencia total entre el motor de IA y el Radar Center.
+### 5. Telemetría On-Chain Centralizada
+Se ha implementado un proveedor único para métricas de **Open Interest y Funding Rates** con un sistema de semáforo de concurrencia y TTL de 45s. Esto garantiza coherencia total entre el motor de IA y el Radar Center.
 
 ---
 
@@ -78,7 +83,7 @@ Hemos diseñado un orquestador para Windows que inicializa ambos servidores en a
 slingshot_gen1/
 ├── 📁 engine/          # El Cerebro Algorítmico (FastAPI + SMC Strategy)
 │   ├── 📁 execution/   # ✅ Motor de Ejecución Binance Activo
-│   ├── 📁 indicators/  # Kernels de Volumen, Estructura y Liquidez
+│   ├── 📁 indicators/  # Kernels de Volumen, Estructura y Liquidez (v2.0 Volume Engine)
 │   ├── 📁 tests/       # 🛡️ 17 tests operativos de integridad
 ├── 📁 app/             # La Terminal UI (Next.js 15 + Zustand 5)
 ├── 📁 docs/            # El Centro de Conocimiento Unificado
@@ -90,5 +95,5 @@ slingshot_gen1/
 - **[docs/knowledge/](docs/knowledge/)**: Nuestra base de conocimientos sobre el Régimen de Mercado Profesional y Teoría SMC.
 
 ---
-*v6.1.0 Master Gold Titanium Hardened — El Estándar Maestro de la Terminal Algorítmica Local.*
-*Unified & Hardened by Antigravity — April 20, 2026*
+*v8.8.5 Master Gold Titanium Hardened — El Estándar Maestro de la Terminal Algorítmica Local.*
+*Unified & Hardened by Antigravity — May 1, 2026*
