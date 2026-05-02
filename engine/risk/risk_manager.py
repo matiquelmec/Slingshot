@@ -154,7 +154,7 @@ class RiskManager:
         all_targets = []
         
         if signal_type == "LONG":
-            liq_targets = [l["price"] for l in (liquidations or []) if l["type"] == "SHORT_LIQ" and l["price"] > current_price]
+            liq_targets = [l["price"] for l in (liquidations or []) if l["type"] == "SHORT_LIQ" and l["price"] > current_price and l.get("strength", 0) > 50]
             ob_targets = [ob["bottom"] for ob in (smc_data.get("order_blocks", {}).get("bearish", []) if smc_data else []) if ob["bottom"] > current_price]
             fvg_targets = [fvg["bottom"] for fvg in (smc_data.get("fvg", {}).get("bearish", []) if smc_data else []) if fvg["bottom"] > current_price]
             
@@ -184,7 +184,7 @@ class RiskManager:
                 if tp3 <= tp2: tp3 = tp2 + (final_risk * 2.0)
 
         else: # SHORT
-            liq_targets = [l["price"] for l in (liquidations or []) if l["type"] == "LONG_LIQ" and l["price"] < current_price]
+            liq_targets = [l["price"] for l in (liquidations or []) if l["type"] == "LONG_LIQ" and l["price"] < current_price and l.get("strength", 0) > 50]
             ob_targets = [ob["top"] for ob in (smc_data.get("order_blocks", {}).get("bullish", []) if smc_data else []) if ob["top"] < current_price]
             fvg_targets = [fvg["top"] for fvg in (smc_data.get("fvg", {}).get("bullish", []) if smc_data else []) if fvg["top"] < current_price]
             

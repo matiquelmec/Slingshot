@@ -88,14 +88,19 @@ graph TB
     end
 
     subgraph "Indicators (13 módulos)"
-        I1["structure.py<br/>OB/FVG/S&R (25.6 KB)"]
-        I2["fibonacci.py<br/>Dynamic Fib (8.8 KB)"]
-        I3["ghost_data.py<br/>Ghost Candles (16.3 KB)"]
-        I4["macro.py<br/>DXY/NQ (7.3 KB)"]
-        I5["regime.py<br/>Wyckoff (5.1 KB)"]
-        I6["onchain_provider.py<br/>Centralized Sentinel (10.5 KB)"]
-        I7["smt.py<br/>Divergence (2.8 KB)"]
-        I8["liquidations.py<br/>Rekt Radar v2.0 (12.4 KB)"]
+        I1["structure.py<br/>OB/FVG/S&R"]
+        I2["fibonacci.py<br/>Dynamic Fib"]
+        I3["ghost_data.py<br/>Ghost Candles"]
+        I4["macro.py<br/>DXY/NQ"]
+        I5["regime.py<br/>Wyckoff"]
+        I6["onchain_provider.py<br/>Sentinel"]
+        I7["smt.py<br/>Divergence"]
+        I8["liquidations.py<br/>Rekt Radar v2.0"]
+        I9["liquidity.py<br/>Neural Heatmap"]
+        I10["volume.py<br/>Volume Profile"]
+        I11["sessions.py<br/>Kill Zones"]
+        I12["htf_analyzer.py<br/>Higher TF"]
+        I13["market_analyzer.py<br/>Market Sync"]
     end
 
     subgraph "Data Layer"
