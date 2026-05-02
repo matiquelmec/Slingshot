@@ -61,7 +61,7 @@ async def test_advisor_v5_output():
     
     # Llamar al advisor real con la firma v5.7.155 Master Gold
     advice = await generate_tactical_advice(
-        asset="BTCUSDT",
+        symbol="BTCUSDT",
         tactical_data=tactical_data,
         current_session="LONDRES (OPEN)",
         ml_projection=tactical_data["ml_projection"]
