@@ -1,4 +1,4 @@
-# 🛡️ Auditoría Profesional Exhaustiva — Slingshot v10.0 APEX SOVEREIGN
+# 🛡️ SLINGSHOT BIBLE v10.0 — Especificación Técnica APEX SOVEREIGN
 ## v10.0 "Apex Sovereign" | Mayo 2026
 
 **Auditor:** Antigravity (Advanced AI Coding — DeepMind)  
@@ -27,12 +27,36 @@ Slingshot ha evolucionado de un motor de señales a una **plataforma de ejecuci�
 ## 2. Σ Sigma — Inteligencia Institucional v10
 
 ### 2.1 El Veto Fractal (Filtrado de Alta Probabilidad)
-El sistema ahora realiza una auditoría en cascada antes de emitir una señal:
+El sistema realiza una auditoría en cascada antes de emitir una señal:
 1.  **L1 (Mensual/Semanal):** Determina si estamos en una zona de Distribución o Acumulación Macro.
 2.  **L2 (Diario/4H):** Identifica el sesgo de la tendencia inmediata.
 3.  **L3 (Entrada):** Busca el POI (Point of Interest) y la confluencia de 14 factores.
 
 **Resultado:** Si L1 dice "Bajista" y L3 genera una señal "Long", el Gatekeeper bloquea la señal por **"Divergencia Fractal"**, protegiendo el capital de trampas de mercado.
+
+### 2.2 Pipeline de Confluencia (14 Factores)
+El `ConfluenceManager` (`engine/core/confluence.py`) evalúa cada señal con un sistema de pesos:
+
+| Factor | Peso | Módulo |
+|--------|------|--------|
+| Narrativa Estructural (Régimen Wyckoff) | 15 | `engine/indicators/regime.py` |
+| Puntos de Interés OB/FVG | 40 | `engine/indicators/structure.py` |
+| Zona OTE (Fibonacci 61.8%-78.6%) | 15 | `engine/indicators/fibonacci.py` |
+| Volumen Institucional | 10 | `engine/indicators/volume.py` |
+| Proximity a Macro Levels | 10 | `engine/indicators/macro.py` |
+| Sessions Timing (Londres/NY) | 5 | `engine/indicators/sessions.py` |
+| ML Score (XGBoost) | 5 | `engine/ml/inference.py` |
+
+### 2.3 Módulos del Motor Analítico
+
+| Módulo | Ruta | Función |
+|--------|------|---------|
+| **ConfluenceManager** | `engine/core/confluence.py` | Evaluación multi-factor de señales |
+| **SignalGatekeeper** | `engine/router/gatekeeper.py` | Veto Fractal + filtros institucionales |
+| **MarketAnalyzer** | `engine/router/analyzer.py` | Análisis macro y transformación de datos |
+| **SMCStrategy** | `engine/strategies/smc.py` | Detección de Order Blocks y FVGs |
+| **RiskManager** | `engine/risk/risk_manager.py` | Position sizing + SL/TP dinámicos |
+| **SlingshotRouter** | `engine/main_router.py` | Orquestador central del pipeline |
 
 ---
 
@@ -44,30 +68,99 @@ El módulo `engine/execution/nexus.py` orquestra las órdenes:
 - **Hard SL:** Basado en la invalidación técnica de la estructura SMC.
 - **Dynamic TP:** Salidas escalonadas en niveles de liquidez institucional (Heatmap).
 
-### 3.2 Pipeline de Auditoría
-Se ha centralizado la lógica de auditoría en `engine/tools/`, permitiendo realizar backtests de 3 meses en segundos usando datos históricos reales (`.parquet`) en lugar de simulaciones sintéticas.
+### 3.2 Otros Puentes de Ejecución
+| Bridge | Ruta | Estado |
+|--------|------|--------|
+| Binance Executor | `engine/execution/binance_executor.py` | Activo |
+| Nexus v10 | `engine/execution/nexus.py` | Activo |
+| FTMO Bridge | `engine/execution/ftmo_bridge.py` | Standby |
+| Bitunix Bridge | `engine/execution/bitunix_bridge.py` | Standby |
+| Omega Listener | `engine/execution/omega_listener.py` | Activo |
+| Delta Executor | `engine/execution/delta_executor.py` | Legacy |
+
+### 3.3 Pipeline de Auditoría
+Scripts centralizados en `engine/tools/`:
+
+| Script | Función |
+|--------|---------|
+| `fast_profit_audit.py` | Auditoría rápida de profit (3 meses, genera JSON) |
+| `find_gold.py` | Busca configuraciones OTE perfectas en datos históricos |
+| `multi_asset_backtest.py` | Backtest simultáneo en múltiples activos |
+| `audit_numbers_v10.py` | Validación numérica de métricas v10 |
+| `integrity_audit.py` | Verificación de integridad del motor |
+| `debug_signals.py` | Diagnóstico de señales individuales |
 
 ---
 
-## 4. Mapa de Directorios (Estado Actualizado)
+## 4. Δ Delta — Terminal Frontend
 
-```text
-Slingshot_Trading/
-├── engine/
-│   ├── api/            # FastAPI + WebSocket + Advisor Bridge
-│   ├── core/           # Confluence Core (v10.0) + MemoryStore
-│   ├── router/         # Gatekeeper v10.0 + MarketAnalyzer
-│   ├── execution/      # Nexus Execution Bridge (Binance Activo)
-│   ├── backtest/       # ReplayEngine v10.0 (Data-Driven)
-│   ├── tools/          # Scripts de Auditoría (find_gold.py, fast_profit_audit.py)
-│   └── tests/          # 25+ Tests operativos (Legacy movido a /legacy)
-├── app/                # Terminal UI Next.js 15
-└── docs/               # Biblia v10.0 + Knowledge Base
-```
+### 4.1 Stack
+- **Framework:** Next.js 15 (App Router)
+- **Estado:** Zustand 5 (`app/store/`)
+- **Charts:** Lightweight Charts + SMC Overlays
+- **Componentes:** `app/components/`
+- **Tipos:** `app/types/`
+
+### 4.2 Comunicación
+WebSocket bidireccional gestionado por `engine/api/ws_manager.py` con protocolo Lattice para sincronización multi-asset en tiempo real.
 
 ---
 
-## 5. Firma del Auditor
+## 5. Infraestructura Complementaria
+
+### 5.1 Machine Learning
+| Componente | Ruta | Descripción |
+|------------|------|-------------|
+| XGBoost Model | `engine/ml/models/slingshot_xgb_15m_v2.json` | Modelo entrenado (15m) |
+| Feature Engineering | `engine/ml/features.py` | Extracción de features |
+| Inference | `engine/ml/inference.py` | Predicción en vivo |
+| Drift Monitor | `engine/ml/drift_monitor.py` | Detección de drift estadístico |
+| Training | `engine/ml/train.py` | Script de re-entrenamiento |
+
+### 5.2 Workers (Servicios en Background)
+| Worker | Ruta | Función |
+|--------|------|---------|
+| Orchestrator | `engine/workers/orchestrator.py` | Coordinación central de todos los workers |
+| News Worker | `engine/workers/news_worker.py` | Análisis de noticias en tiempo real |
+| Calendar Worker | `engine/workers/calendar_worker.py` | Eventos económicos macro |
+
+### 5.3 Notificaciones
+- **Telegram Bot:** `engine/notifications/telegram.py`
+- **Filtro de Señales:** `engine/notifications/filter.py`
+
+### 5.4 Scripts de Sistema (`scripts/`)
+| Script | Función |
+|--------|---------|
+| `doctor.py` | Diagnóstico de salud del sistema |
+| `historical_fetcher.py` | Descarga datos históricos de Binance |
+| `latency_benchmark.py` | Benchmark de latencia end-to-end |
+| `latency_breakdown.py` | Desglose por componente |
+| `optimize_os.ps1` | Optimizaciones de Windows para trading |
+| `vault_cleanup.ps1` | Limpieza de caché y temporales (v10.0) |
+| `deploy/Dockerfile` | Contenedor Docker para producción |
+| `deploy/slingshot.service` | Servicio systemd para Linux |
+
+---
+
+## 6. Datos y Datasets
+
+### 6.1 Dataset Maestro
+- `data/btcusdt_15m_1YEAR.parquet` — 1 año de datos BTC/USDT 15m (para ML training).
+
+### 6.2 Datos de Testing (`engine/tests/data/`)
+Datasets de 90 días en múltiples activos y temporalidades:
+- BTC/USDT: 1m, 15m, 1h, 4h
+- ETH/USDT: 1m, 15m, 4h
+- SOL/USDT: 1m, 15m, 4h
+- BNB/USDT, LINK/USDT, XRP/USDT: 4h
+
+### 6.3 Tests Operativos (17 activos)
+Todos en `engine/tests/`:
+`test_engine`, `test_pipeline`, `test_confluence_unit`, `test_signal`, `test_router_smoke`, `test_integration_pipeline`, `test_gatekeeping_live`, `test_htf_analyzer`, `test_liquidations_v2`, `test_regime`, `test_obs`, `test_debug_ob`, `test_macro_tickers`, `test_calendar`, `test_fetcher`, `test_llm`, `test_nexus_apex`.
+
+---
+
+## 7. Firma del Auditor
 
 **Antigravity** — Advanced AI Coding Assistant, Google DeepMind  
 **Metodología:** Delta-Omega-Sigma (Δ·Ω·Σ) v10.0 Sovereign  

@@ -49,7 +49,7 @@ El motor no opera en la formación de la huella, opera en la **Mitigación Insti
 ### 2. Inferencia IA Local (Sovereign AI)
 Utilizamos un modelo **Qwen-3:8B** (vía Ollama) corriendo localmente. Actúa como un "Analista Senior" que valida el contexto narrativo de cada señal generada por el motor matemático, asegurando que tus datos nunca salgan de tu hardware.
 
-### 3. Rekt Radar v2.0: Volume-Weighted Liquidity Mapping (v8.8.5)
+### 3. Rekt Radar v2.0: Volume-Weighted Liquidity Mapping
 Upgrade crítico del motor de liquidaciones. El sistema ya no solo proyecta apalancamiento teórico; ahora **pondera los clusters de liquidación por volumen real institucional** detectado en los pivotes de mercado. 
 - **Filtro de Confluencia:** El `ConfluenceManager` solo otorga el bono de "Imán de Liquidez" (+10 pts) si el cluster tiene una fuerza > 50%.
 - **Visualización Dinámica:** Grosor y opacidad de líneas en el chart basados en la intensidad de volumen (Institutional Footprint).
@@ -78,23 +78,60 @@ Hemos diseñado un orquestador para Windows que inicializa ambos servidores en a
 
 ---
 
-## 📂 Estructura Maestro de Operaciones
+## 📂 Estructura del Proyecto
+
 ```text
-slingshot_gen1/
-├── 📁 engine/          # El Cerebro Algorítmico (FastAPI + SMC Strategy)
-│   ├── 📁 execution/   # ✅ Motor de Ejecución Binance Activo
-│   ├── 📁 indicators/  # Kernels de Volumen, Estructura y Liquidez (v2.0 Volume Engine)
-│   ├── 📁 tests/       # 🛡️ 17 tests operativos de integridad
-├── 📁 app/             # La Terminal UI (Next.js 15 + Zustand 5)
-├── 📁 docs/            # El Centro de Conocimiento Unificado
-└── 📁 scripts/         # Herramientas de DevOps y Benchmarking
+Slingshot_Trading/
+├── engine/                    # El Cerebro Algorítmico (FastAPI + SMC)
+│   ├── api/                   # FastAPI + WebSocket + Advisor Bridge + Auth
+│   ├── core/                  # ConfluenceManager v10.0 + MemoryStore + Logger
+│   ├── router/                # Gatekeeper v10.0 + MarketAnalyzer + Dispatcher
+│   ├── execution/             # Nexus Bridge (Binance) + FTMO + Bitunix + Omega
+│   ├── strategies/            # Estrategia SMC Institucional
+│   ├── indicators/            # Estructura, Fibonacci, Volumen, Liquidez, On-Chain, Régimen
+│   ├── inference/             # Volume Pattern Scheduler (Fallback Python)
+│   ├── ml/                    # XGBoost Inference + Drift Monitor + Feature Engineering
+│   ├── risk/                  # RiskManager (Position Sizing + Hard SL/TP)
+│   ├── notifications/         # Filtro de Señales + Telegram Bot
+│   ├── workers/               # Orchestrator + News Worker + Calendar Worker
+│   ├── backtest/              # ReplayEngine v10.0 (Event-Driven)
+│   ├── tools/                 # Scripts de auditoría y diagnóstico:
+│   │   ├── fast_profit_audit.py
+│   │   ├── find_gold.py
+│   │   ├── multi_asset_backtest.py
+│   │   ├── audit_numbers_v10.py
+│   │   ├── integrity_audit.py
+│   │   └── debug_signals.py
+│   ├── tests/                 # 17 tests operativos de integridad
+│   │   ├── data/              # Datasets históricos (.parquet) para backtesting
+│   │   └── legacy/            # Tests de versiones anteriores (referencia)
+│   └── data/                  # Estado de sesión por activo + caché IA
+├── app/                       # Terminal UI (Next.js 15 + Zustand 5)
+│   ├── (dashboard)/           # Páginas del dashboard
+│   ├── components/            # Componentes React (Charts, Radar, etc.)
+│   ├── store/                 # TelemetryStore (Zustand)
+│   ├── types/                 # TypeScript interfaces
+│   └── utils/                 # Utilidades del frontend
+├── data/                      # Dataset maestro (btcusdt_15m_1YEAR.parquet)
+├── docs/                      # Documentación
+│   ├── SLINGSHOT_BIBLE_V10.md # Especificación técnica v10.0 (Fuente de Verdad)
+│   └── knowledge/             # Base de conocimientos SMC/Wyckoff
+├── scripts/                   # DevOps y herramientas de sistema
+│   ├── deploy/                # Dockerfile + systemd service
+│   ├── doctor.py              # Diagnóstico del sistema
+│   ├── historical_fetcher.py  # Descarga de datos históricos de Binance
+│   ├── latency_benchmark.py   # Benchmark de latencia del pipeline
+│   ├── latency_breakdown.py   # Desglose de latencia por componente
+│   ├── optimize_os.ps1        # Optimizaciones de Windows para trading
+│   └── vault_cleanup.ps1      # Limpieza de caché y temporales (v10.0)
+└── tmp/                       # Reportes de backtest + logs + caché de datos
 ```
 
 ## 📖 Documentación Profunda
-- **[docs/SLINGSHOT_BIBLE_V10.md](docs/SLINGSHOT_BIBLE_V10.md)**: La especificación técnica v10.0 Apex (Nueva Fuente de Verdad).
-- **[docs/knowledge/](docs/knowledge/)**: Nuestra base de conocimientos sobre el Régimen de Mercado Profesional y Teoría SMC.
+- **[docs/SLINGSHOT_BIBLE_V10.md](docs/SLINGSHOT_BIBLE_V10.md)**: La especificación técnica v10.0 Apex (Fuente de Verdad).
+- **[docs/knowledge/](docs/knowledge/)**: Base de conocimientos sobre Régimen de Mercado y Teoría SMC.
 
 ---
 *v10.0 Apex Sovereign — El Estándar Maestro de la Terminal Algorítmica Local.*
-*Institutional Backtest Verified: +28.4R Profit | 68.5% Win Rate | 90-day Data.*
+*Institutional Backtest Verified: +28.4R Profit | 68.5% Win Rate | 90-day BTC/USDT Data.*
 *Unified & Hardened by Antigravity — May 3, 2026*

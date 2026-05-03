@@ -1,7 +1,7 @@
 {
   "fear_greed_value": 47,
   "fear_greed_label": "Neutral",
-  "btc_dominance": 58.44,
+  "btc_dominance": 58.45,
   "funding_rate": 0.001305,
   "funding_symbol": "BTCUSDT",
   "macro_bias": "BLOCK_LONGS",
@@ -10,12 +10,12 @@
   "reason": "DXY Alcista: Presi\u00f3n vendedora global | NASDAQ Bajista: Risk-Off",
   "oi_delta_pct": 0.0,
   "dxy_trend": "BEARISH",
-  "dxy_price": 98.21,
+  "dxy_price": 27.41,
   "nasdaq_trend": "BULLISH",
   "nasdaq_change_pct": 1.45,
   "risk_appetite": "RISK_ON",
-  "news_sentiment": 0.5,
+  "news_sentiment": 0.4,
   "active_event": "Fed Chair Powell Speaks (Sunday Prep)",
-  "last_updated": 1777792004.3412704,
+  "last_updated": 1777792620.4013143,
   "is_stale": false
 }
