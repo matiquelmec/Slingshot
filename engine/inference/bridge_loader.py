@@ -5,6 +5,17 @@
 # la interfaz compatible para volume_pattern.py usando
 # solo el fallback de Python puro.
 
+import ctypes
+
+
+class TickNode(ctypes.Structure):
+    """Estructura mantenida para compatibilidad con volume_pattern.py."""
+    _fields_ = [
+        ("close", ctypes.c_double),
+        ("volume", ctypes.c_double),
+        ("rvol", ctypes.c_double)
+    ]
+
 
 class DLLBridge:
     """Stub compatible — siempre usa fallback Python."""
