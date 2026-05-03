@@ -37,15 +37,17 @@ El sistema realiza una auditoría en cascada antes de emitir una señal:
 ### 2.2 Pipeline de Confluencia (14 Factores)
 El `ConfluenceManager` (`engine/core/confluence.py`) evalúa cada señal con un sistema de pesos:
 
-| Factor | Peso | Módulo |
+| Factor | Peso Dinámico | Módulo |
 |--------|------|--------|
-| Narrativa Estructural (Régimen Wyckoff) | 15 | `engine/indicators/regime.py` |
-| Puntos de Interés OB/FVG | 40 | `engine/indicators/structure.py` |
-| Zona OTE (Fibonacci 61.8%-78.6%) | 15 | `engine/indicators/fibonacci.py` |
-| Volumen Institucional | 10 | `engine/indicators/volume.py` |
-| Proximity a Macro Levels | 10 | `engine/indicators/macro.py` |
-| Sessions Timing (Londres/NY) | 5 | `engine/indicators/sessions.py` |
-| ML Score (XGBoost) | 5 | `engine/ml/inference.py` |
+| Puntos de Interés (OB/FVG) | 40 | `engine/indicators/structure.py` |
+| Liquidez y Sweeps | 30 | Memoria Interna / `smc.py` |
+| Eventos Económicos | 20 | `engine/workers/calendar_worker.py` |
+| Neural Heatmap | 20 | `engine/indicators/liquidations.py` |
+| Radar de Confluencia (Ghost) | 20 | `engine/indicators/ghost_data.py` |
+| Narrativa Estructural (Régimen) | 15 | `engine/indicators/regime.py` |
+| Volumen Institucional (RVOL) | 15 | `engine/indicators/volume.py` |
+| ML Score (XGBoost) | 10 | `engine/ml/inference.py` |
+| Clusters de Liquidez On-Chain | 10 | `engine/indicators/onchain_provider.py` |
 
 ### 2.3 Módulos del Motor Analítico
 

@@ -301,29 +301,6 @@ class ConfluenceManager:
         if news_score >= 0.7: score += 5
         elif news_score <= 0.3: score -= 5
 
-        # 9. SMT DIVERGENCE (Bono 25) v10.0 Sovereign (Consumo Centralizado)
-        smt_weight = 25
-        total_weight += smt_weight
-        smt_status = "NEUTRAL"
-        smt_detail = "Sin activo de comparación"
-        
-        # El SMT ahora viene pre-calculado en kwargs['smt_result']
-        smt_result = kwargs.get('smt_result', {})
-        if smt_result:
-            div_type = smt_result.get('divergence', 'NONE')
-            strength = smt_result.get('strength', 0)
-            
-            if (is_long and div_type == 'BULLISH_SMT') or (not is_long and div_type == 'BEARISH_SMT'):
-                smt_pts = int(smt_weight * strength)
-                score += smt_pts
-                smt_status = "CONFIRMADO ✅"
-                smt_detail = f"{smt_result['reason']} (Fuerza: {strength*100:.0f}%)"
-            elif div_type != 'NONE':
-                smt_status = "DIVERGENTE ⚠️"
-                smt_detail = "Divergencia correlacionada opuesta"
-            
-        checklist.append({"factor": "SMT Divergence", "status": smt_status, "detail": smt_detail})
-
         # 🚀 9.5. NEURAL HEATMAP (Peso 20) v5.7 Platinum
         heatmap_weight = 20
         total_weight += heatmap_weight
@@ -524,38 +501,6 @@ class ConfluenceManager:
             logger.error(f"[CONFLUENCE] Error crítico en Time-Decay: {e}")
             # Fallback seguro: No vetar por error de sistema
             if 'multiplier' not in locals(): multiplier = 1.0
-
-        # 🚀 9. SMT DIVERGENCE (Peso 15) — v4.0 Institutional
-        smt_weight = 15
-        smt_strength = 0
-        if correlated_df is not None and not correlated_df.empty:
-            total_weight += smt_weight
-            try:
-                # SMT: Divergencia entre activos correlacionados (BTC/ETH)
-                # Buscamos si el asset correlacionado NO confirmó el Swing High/Low
-                c_current = correlated_df.iloc[-1]
-                c_prev = correlated_df.iloc[-2]
-                
-                curr_c = float(current.get('close', 0))
-                prev_c = float(df['close'].iloc[-2])
-                
-                curr_corr_c = float(c_current.get('close', 0))
-                prev_corr_c = float(c_prev.get('close', 0))
-                
-                # SMT BULLISH: BTC hace Lower Low, pero ETH hace Higher Low
-                if is_long:
-                    if curr_c < prev_c and curr_corr_c > prev_corr_c:
-                        smt_strength = 1.0
-                        score += smt_weight
-                        checklist.append({"factor": "SMT Divergence", "status": "CONFIRMADO", "detail": "Acumulación SMT Detectada (+15pts)"})
-                # SMT BEARISH: BTC hace Higher High, pero ETH hace Lower High
-                else:
-                    if curr_c > prev_c and curr_corr_c < prev_corr_c:
-                        smt_strength = 1.0
-                        score += smt_weight
-                        checklist.append({"factor": "SMT Divergence", "status": "CONFIRMADO", "detail": "Distribución SMT Detectada (+15pts)"})
-            except Exception as e:
-                logger.error(f"[SMT] Error calculating divergence: {e}")
 
         # 🚀 10. ALINEACIÓN HTF (Peso 25 — EL ANCLA) v5.7.155 Master Gold
         onchain_weight = 15
