@@ -452,7 +452,7 @@ class SymbolBroadcaster:
 
                     # Drift Monitor
                     try:
-                        from engine.inference.drift_monitor import drift_monitor
+                        from engine.ml.drift_monitor import drift_monitor
                         from engine.ml.feature_engineer import FeatureEngineer
                         fe = FeatureEngineer()
                         drift_monitor.set_reference(fe.generate_features(df_init.copy()))

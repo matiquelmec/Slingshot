@@ -1,26 +1,17 @@
-import ctypes
-import os
+# ============================================================
+# SLINGSHOT v10.0 APEX SOVEREIGN — Bridge Loader (Fallback Only)
+# ============================================================
+# El bridge C fue deprecado en v10.0. Este módulo mantiene
+# la interfaz compatible para volume_pattern.py usando
+# solo el fallback de Python puro.
 
-class TickNode(ctypes.Structure):
-    _fields_ = [
-        ("close", ctypes.c_double),
-        ("volume", ctypes.c_double),
-        ("rvol", ctypes.c_double)
-    ]
 
 class DLLBridge:
+    """Stub compatible — siempre usa fallback Python."""
     def __init__(self):
         self.lib = None
-        self._load()
-
-    def _load(self):
-        dll_path = os.path.join(os.path.dirname(__file__), "backbone_bridge.dll")
-        if os.path.exists(dll_path):
-            self.lib = ctypes.CDLL(dll_path)
-            self.lib.process_tensor_batch.argtypes = [ctypes.POINTER(TickNode), ctypes.c_int, ctypes.POINTER(ctypes.c_double)]
-            self.lib.process_tensor_batch.restype = None
 
     def is_loaded(self):
-        return self.lib is not None
+        return False
 
 bridge = DLLBridge()
