@@ -9,6 +9,12 @@ from engine.indicators.onchain_provider import refresh_all_onchain
 from engine.core.session_manager import SessionManager
 from engine.workers.news_worker import NewsWorker
 from engine.workers.calendar_worker import CalendarWorker
+from engine.execution.nexus import nexus
+from engine.indicators.htf_analyzer import HTFAnalyzer
+from engine.indicators.data_utils import fetch_binance_history
+from engine.core.store import store
+import pandas as pd
+import time
 
 class SlingshotOrchestrator:
     """
@@ -24,6 +30,7 @@ class SlingshotOrchestrator:
         self._stop_event = asyncio.Event()
         self.news_worker = NewsWorker()
         self.calendar_worker = CalendarWorker()
+        self.htf_analyzer = HTFAnalyzer()
 
     async def start(self):
         logger.info(f"🚀 [ORCHESTRATOR] Iniciando Motor Local Master (Modo 100% Dinámico)...")
@@ -34,6 +41,8 @@ class SlingshotOrchestrator:
         
         # Iniciar Worker de Radar Macro (Ghost Data)
         asyncio.create_task(self._ghost_worker())
+        # Iniciar Worker de Sesgo Fractal Centralizado (v10.0 Sovereign)
+        asyncio.create_task(self._fractal_worker())
         # Iniciar Worker de Métricas On-Chain Centralizadas (v8.5.9)
         asyncio.create_task(self._onchain_worker())
         # Iniciar Worker de Sesiones Globales
@@ -42,6 +51,9 @@ class SlingshotOrchestrator:
         asyncio.create_task(self.news_worker.start())
         # Iniciar Worker de Calendario Económico
         asyncio.create_task(self.calendar_worker.start())
+        
+        # 🚀 [APEX] Iniciar Dashboard de Ejecución Nexus
+        nexus.start_dashboard()
         
         # Si la DB está vacía, podemos poner BTC por defecto para que el motor no esté ocioso
         if not self.radar_assets:
@@ -141,6 +153,79 @@ class SlingshotOrchestrator:
             
             # Esperar 5 minutos (300s) para mantener el radar vivo (v8.7.1)
             await asyncio.sleep(300)
+
+    async def _fractal_worker(self):
+        """
+        [SOVEREIGN FRACTAL v10.0] El Cerebro Central.
+        Analiza 1M, 1W, 1D, 4H y 1H para todos los activos VIP.
+        Sincroniza el resultado en el MemoryStore para que todos los broadcasters lo usen.
+        """
+        logger.info("🏛️ [ORCHESTRATOR] Fractal Intelligence Worker activado.")
+        
+        while not self._stop_event.is_set():
+            assets = list(self.radar_assets)
+            if not assets:
+                await asyncio.sleep(10)
+                continue
+                
+            for symbol in assets:
+                try:
+                    # 1. Obtener cierres HTF
+                    tasks = [
+                        fetch_binance_history(symbol, "1M", limit=50),
+                        fetch_binance_history(symbol, "1w", limit=100),
+                        fetch_binance_history(symbol, "1d", limit=150),
+                        fetch_binance_history(symbol, "4h", limit=250),
+                        fetch_binance_history(symbol, "1h", limit=250),
+                    ]
+                    results = await asyncio.gather(*tasks, return_exceptions=True)
+                    
+                    m1_raw = results[0] if not isinstance(results[0], Exception) else []
+                    w1_raw = results[1] if not isinstance(results[1], Exception) else []
+                    d1_raw = results[2] if not isinstance(results[2], Exception) else []
+                    h4_raw = results[3] if not isinstance(results[3], Exception) else []
+                    h1_raw = results[4] if not isinstance(results[4], Exception) else []
+                    
+                    if not d1_raw or not h4_raw or not h1_raw:
+                        continue
+                        
+                    df_1m = pd.DataFrame([i["data"] for i in m1_raw]) if m1_raw else pd.DataFrame()
+                    df_1w = pd.DataFrame([i["data"] for i in w1_raw]) if w1_raw else pd.DataFrame()
+                    df_1d = pd.DataFrame([i["data"] for i in d1_raw])
+                    df_h4 = pd.DataFrame([i["data"] for i in h4_raw])
+                    df_h1 = pd.DataFrame([i["data"] for i in h1_raw])
+                    
+                    # 2. Análisis Top-Down Profesional
+                    if not df_1m.empty: df_1m["timestamp"] = pd.to_datetime(df_1m["timestamp"], unit="s")
+                    if not df_1w.empty: df_1w["timestamp"] = pd.to_datetime(df_1w["timestamp"], unit="s")
+                    df_1d["timestamp"] = pd.to_datetime(df_1d["timestamp"], unit="s")
+                    df_h4["timestamp"] = pd.to_datetime(df_h4["timestamp"], unit="s")
+                    df_h1["timestamp"] = pd.to_datetime(df_h1["timestamp"], unit="s")
+                    
+                    bias = self.htf_analyzer.analyze_bias(df_1m, df_1w, df_1d, df_h4, df_h1)
+                    
+                    # 3. Persistencia en el Fractal Store
+                    await store.save_htf_bias(symbol, bias)
+                    
+                    # 4. Actualizar Radar Global
+                    await store.update_market_state(symbol, {
+                        "htf_direction": bias.direction,
+                        "m1_regime": bias.m1_regime,
+                        "w1_regime": bias.w1_regime,
+                        "d1_regime": bias.d1_regime,
+                        "h4_regime": bias.h4_regime,
+                        "h1_regime": bias.h1_regime
+                    })
+                    
+                    # Pequeño delay entre activos para no saturar
+                    await asyncio.sleep(0.5)
+                    
+                except Exception as e:
+                    logger.error(f"❌ [ORCHESTRATOR] Error fractal en {symbol}: {e}")
+
+            # Ciclo completo cada 15 min
+            logger.info("🏛️ [ORCHESTRATOR] Sincronización Fractal completada.")
+            await asyncio.sleep(900)
 
     async def _session_worker(self):
         """Worker que sincroniza el estado de las sesiones globales cada minuto."""

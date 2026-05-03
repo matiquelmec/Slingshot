@@ -6,9 +6,9 @@ import os
 from datetime import datetime, timedelta
 
 # Configuración Institucional
-TARGET_ASSETS = ["BTCUSDT", "SOLUSDT", "ETHUSDT"]
-INTERVAL = "1m"
-DAYS_TO_FETCH = 30
+TARGET_ASSETS = ["BTCUSDT", "ETHUSDT", "SOLUSDT", "BNBUSDT", "XRPUSDT", "LINKUSDT"]
+INTERVAL = "4h"
+DAYS_TO_FETCH = 90
 DATA_DIR = os.path.join(os.path.dirname(__file__), "../engine/tests/data")
 
 async def fetch_binance_klines(symbol: str, start_ts: int, end_ts: int, limit: int = 1000):
@@ -57,13 +57,15 @@ async def build_historical_dataset(symbol: str):
         return
 
     # Formateo a DataFrame Delta
-    cols = ['t', 'o', 'h', 'l', 'c', 'v', 'close_time', 'qav', 'num_trades', 'taker_base_vol', 'taker_quote_vol', 'ignore']
-    df = pd.DataFrame(all_klines, columns=cols)
+    df = pd.DataFrame(all_klines, columns=['t', 'o', 'h', 'l', 'c', 'v', 'T', 'q', 'n', 'V', 'Q', 'B'])
     
-    # Casting estricto para el Engine
+    # [SOLUCION DEFINITIVA v8.8.8] Forzar float64 primero para evitar overflow de 32-bits en la inferencia inicial
+    df['t'] = pd.to_numeric(df['t'], errors='coerce').astype('float64')
+    df['t'] = (df['t'] / 1000).astype('int64') # Convertir a segundos directamente
+    
+    # [AUDITORIA v8.5] Convertir a numerico para evitar errores de tipo en backtest
     for col in ['o', 'h', 'l', 'c', 'v']:
-        df[col] = df[col].astype(float)
-    df['t'] = (df['t'].astype(int) // 1000) # Convertir a segundos para Slingshot
+        df[col] = pd.to_numeric(df[col]).astype(float)
     
     # Guardar en bóveda
     os.makedirs(DATA_DIR, exist_ok=True)

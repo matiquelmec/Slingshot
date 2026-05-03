@@ -1,0 +1,94 @@
+
+{
+  "fase_1": {
+    "exito": true,
+    "metricas": {
+      "total_archivos_app": 11,
+      "total_archivos_engine": 85,
+      "total_modulos_detectados": 96,
+      "archivos_tests": 18,
+      "verificacion_tests_404": false
+    },
+    "discrepancy_matrix": [
+      {
+        "elemento": "engine/tests/",
+        "esperado": 17,
+        "encontrado": 18,
+        "detalle": "Existe un archivo adicional en el directorio de pruebas."
+      }
+    ]
+  },
+  "fase_2": {
+    "exito": true,
+    "metricas": {
+      "ws_manager_loc": 947,
+      "registry_weight_kb": 8.47,
+      "json_utils_weight_kb": 3.97,
+      "modulos_extraidos": ["advisor_bridge.py", "signal_handler.py", "processors.py"],
+      "bug_001_fix": "CONFIRMADO (L237-251 en confluence.py)",
+      "bug_003_fix": "CONFIRMADO (MIN_RR_REQUIRED = settings.MIN_RR en risk_manager.py)"
+    },
+    "discrepancy_matrix": [
+      {
+        "elemento": "engine/api/ws_manager.py",
+        "esperado": "~1287 LOC",
+        "encontrado": "947 LOC",
+        "detalle": "Diferencia de 340 líneas respecto a la expectativa."
+      },
+      {
+        "elemento": "fast_path.py / slow_path.py",
+        "esperado": "Archivos extraídos",
+        "encontrado": "Funciones dentro de processors.py",
+        "detalle": "La lógica de paths no reside en archivos independientes con esos nombres."
+      }
+    ]
+  },
+  "fase_3": {
+    "exito": true,
+    "metricas": {
+      "requirements_v6_header": "CONFIRMADO",
+      "packages_detectados": ["beautifulsoup4", "scipy", "orjson"],
+      "next_version": "15.0",
+      "zustand_version": "^5.0.11",
+      "lightweight_charts_version": "^5.1.0",
+      "auth_token_endpoint": "CONFIRMADO (/api/v1/auth/token)"
+    },
+    "discrepancy_matrix": [
+      {
+        "elemento": "package.json version",
+        "esperado": "v6.0.1",
+        "encontrado": "6.0.0",
+        "detalle": "La versión en package.json no coincide con el header de ws_manager.py."
+      }
+    ]
+  },
+  "fase_4": {
+    "exito": true,
+    "metricas": {
+      "model_declaration": "qwen3:8b",
+      "ollama_cache_init": "PRE-INITIALIZED (Module Scope)"
+    },
+    "discrepancy_matrix": []
+  },
+  "fase_5": {
+    "exito": true,
+    "metricas": {
+      "complexity_max": 26,
+      "circular_imports": ["ws_manager.py <-> registry.py (Managed via Local Import)"],
+      "dead_code": [
+        "RiskManager.validate_signal: sl/tp shadowed",
+        "RiskManager: MIN_RR_REQUIRED defined but unused (class uses self.min_rr)"
+      ]
+    },
+    "discrepancy_matrix": []
+  },
+  "fase_6": {
+    "exito": true,
+    "metricas": {
+      "launcher_boot_delay": "3s (Sleep hardcoded)",
+      "os_priority": "HIGH (Python), ABOVE_NORMAL (Ollama)",
+      "affinity_optimization": "ACTIVO (optimize_os.ps1)"
+    },
+    "discrepancy_matrix": []
+  }
+}

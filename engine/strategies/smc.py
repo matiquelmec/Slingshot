@@ -13,20 +13,22 @@ class SMCInstitutionalStrategy:
     def __init__(self):
         self.scheduler = VolumePatternScheduler()
 
-    def analyze(self, df: pd.DataFrame) -> pd.DataFrame:
+    def analyze(self, df: pd.DataFrame, interval: str = "15m") -> pd.DataFrame:
         if df.empty or len(df) < 10:
             return df
 
         df = df.copy()
-        df['body_size'] = abs(df['close'] - df['open'])
-        body_ma = df['body_size'].rolling(10).mean()
         
-        # v6.6: Bajamos el umbral de 1.5 a 1.2 para capturar el inicio del movimiento
-        df['strong_momentum'] = df['body_size'] > (body_ma * 1.2)
-
-        # 3. Order Blocks (v6.6 - Más frecuente)
-        df['ob_bullish'] = (df['close'] > df['open']) & (df['strong_momentum'])
-        df['ob_bearish'] = (df['close'] < df['open']) & (df['strong_momentum'])
+        # 3. Order Blocks Institucionales y FVG (Calculados en Analyzer)
+        # Respetamos el cálculo complejo y NO lo sobrescribimos.
+        # Si por alguna razón no llegan, inicializamos en False para proteger capital.
+        for col in ['ob_bullish', 'ob_bearish']:
+            if col not in df.columns:
+                df[col] = False
+                
+        for col in ['fvg_bullish', 'fvg_bearish']:
+            if col not in df.columns:
+                df[col] = True # Fallback permisivo si no hay datos de FVG
 
         # 4. Liquidity Sweeps (Dinamizados)
         lookback_liquidity = 20 
@@ -36,25 +38,45 @@ class SMCInstitutionalStrategy:
         df['recent_sweep_bull'] = (df['low'] < min_prev).rolling(window=10).max().astype(bool)
         df['recent_sweep_bear'] = (df['high'] > max_prev).rolling(window=10).max().astype(bool)
         
+        # 5. Memoria de Estructura Dinámica [Fase 1.3]
+        # Extraer minutos del string de intervalo (ej: "15m" -> 15, "1h" -> 60)
+        try:
+            val = int("".join(filter(str.isdigit, interval)))
+            if "h" in interval.lower(): val *= 60
+            elif "d" in interval.lower(): val *= 1440
+        except:
+            val = 15
+            
+        # En timeframes macros (>15m) los Order Blocks tardan más en mitigarse
+        ob_memory_window = 15 if val > 15 else 5
+        
+        df['recent_ob_bull'] = df['ob_bullish'].rolling(window=ob_memory_window).max().astype(bool)
+        df['recent_ob_bear'] = df['ob_bearish'].rolling(window=ob_memory_window).max().astype(bool)
+
+        # [RELAJACIÓN v9.2] FVG Memory para Swing Trading
+        fvg_window = 3 if val > 15 else 1
+        df['recent_fvg_bull'] = df['fvg_bullish'].rolling(window=fvg_window).max().astype(bool)
+        df['recent_fvg_bear'] = df['fvg_bearish'].rolling(window=fvg_window).max().astype(bool)
+
         df['rvol_robust'] = df['volume'] / (df['volume'].rolling(20).mean() + 1e-9)
         return df
 
     def find_opportunities(self, df: pd.DataFrame, asset: str = "UNKNOWN", htf_bias: str = "NEUTRAL") -> list[dict]:
         if df.empty or len(df) < 64: return []
         
-        long_mask = (df['ob_bullish'] & df['recent_sweep_bull'])
-        short_mask = (df['ob_bearish'] & df['recent_sweep_bear'])
+        # La Santa Trinidad Sincronizada: Bloque Reciente + Sweep + Confirmación FVG
+        long_mask = (df['recent_ob_bull'] & df['recent_sweep_bull'] & df['recent_fvg_bull'])
+        short_mask = (df['recent_ob_bear'] & df['recent_sweep_bear'] & df['recent_fvg_bear'])
 
         opportunities = []
         indices = np.where(long_mask | short_mask)[0]
         
-        # Solo velas recientes
-        last_indices = range(len(df) - 15, len(df))
+        # Solo la vela actual (v8.9.0 Sniper Focus)
+        last_idx = len(df) - 1
         
-        for idx in indices:
-            if idx in last_indices:
-                sig_type = "LONG" if long_mask[idx] else "SHORT"
-                opportunities.append(self._format_signal(idx, sig_type, df.iloc[idx], asset))
+        if last_idx in indices:
+            sig_type = "LONG" if long_mask[last_idx] else "SHORT"
+            opportunities.append(self._format_signal(last_idx, sig_type, df.iloc[last_idx], asset))
 
         return opportunities
 

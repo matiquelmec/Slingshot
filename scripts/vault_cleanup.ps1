@@ -1,41 +1,38 @@
-# Slingshot v5.4.3 — Vault Cleanup Script (PowerShell)
-# Mantenimiento preventivo: Limpia caches y archivos temporales para evitar "drift" de datos.
+# Slingshot v10.0 Sovereign — Apex Vault Cleanup Script (PowerShell)
+# Mantenimiento Institucional: Sincroniza la bóveda y limpia residuos de ejecución.
 
 Write-Host "  ============================================" -ForegroundColor Cyan
-Write-Host "       SLINGSHOT - VAULT CLEANUP             " -ForegroundColor Cyan
+Write-Host "       SLINGSHOT v10.0 - APEX CLEANUP        " -ForegroundColor Cyan
 Write-Host "  ============================================" -ForegroundColor Cyan
 Write-Host ""
 
-# 1. Limpiar caches de Python
-Write-Host "  [1/4] Limpiando __pycache__ ..." -ForegroundColor Yellow
-Get-ChildItem -Path $PSScriptRoot\.. -Include __pycache__ -Recurse -ErrorAction SilentlyContinue | Remove-Item -Recurse -Force
+# 1. Limpiar caches de Python y Compilación
+Write-Host "  [1/4] Purgando __pycache__ y residuos .pyc ..." -ForegroundColor Yellow
+Get-ChildItem -Path $PSScriptRoot\.. -Include __pycache__, *.pyc -Recurse -ErrorAction SilentlyContinue | Remove-Item -Recurse -Force
 Write-Host "        OK." -ForegroundColor Green
 
-# 2. Limpiar directorio /tmp
-Write-Host "  [2/4] Vaciando /tmp ..." -ForegroundColor Yellow
+# 2. Saneamiento de /tmp (Preservando Auditoría)
+Write-Host "  [2/4] Saneando /tmp (Respetando Reportes Vivos) ..." -ForegroundColor Yellow
 if (Test-Path "$PSScriptRoot\..\tmp") {
-    Get-ChildItem -Path "$PSScriptRoot\..\tmp" -Exclude "logs", "data" -ErrorAction SilentlyContinue | Remove-Item -Force
+    # Borramos logs rotados pero dejamos el reporte de backtest y logs activos
+    Get-ChildItem -Path "$PSScriptRoot\..\tmp" -Exclude "backtest_report_BTCUSDT.json", "slingshot.log", "data" -ErrorAction SilentlyContinue | Remove-Item -Force
 }
 Write-Host "        OK." -ForegroundColor Green
 
-# 3. Limpiar carpeta .next (Frontend Cache)
-Write-Host "  [3/4] Limpiando cache de Next.js (.next) ..." -ForegroundColor Yellow
-if (Test-Path "$PSScriptRoot\..\.next") {
-    # No borramos todo, solo el cache si es posible, o todo para "Fresh Start"
-    # Por seguridad en desarrollo borramos el cache de fetch
-    if (Test-Path "$PSScriptRoot\..\.next\cache") {
-        Remove-Item -Path "$PSScriptRoot\..\.next\cache" -Recurse -Force -ErrorAction SilentlyContinue
-    }
+# 3. Mantenimiento de la Bóveda Legacy
+Write-Host "  [3/4] Verificando Integridad de la Bóveda (.vault_v9_legacy) ..." -ForegroundColor Yellow
+if (!(Test-Path "$PSScriptRoot\..\.vault_v9_legacy")) {
+    New-Item -ItemType Directory -Path "$PSScriptRoot\..\.vault_v9_legacy" -Force | Out-Null
 }
 Write-Host "        OK." -ForegroundColor Green
 
-# 4. Limpiar Pytest Cache
-Write-Host "  [4/4] Limpiando .pytest_cache ..." -ForegroundColor Yellow
-if (Test-Path "$PSScriptRoot\..\.pytest_cache") {
-    Remove-Item -Path "$PSScriptRoot\..\.pytest_cache" -Recurse -Force -ErrorAction SilentlyContinue
+# 4. Limpieza de Frontend (Next.js)
+Write-Host "  [4/4] Limpiando Cache de Aplicación (.next/cache) ..." -ForegroundColor Yellow
+if (Test-Path "$PSScriptRoot\..\.next\cache") {
+    Remove-Item -Path "$PSScriptRoot\..\.next\cache" -Recurse -Force -ErrorAction SilentlyContinue
 }
 Write-Host "        OK." -ForegroundColor Green
 
 Write-Host ""
-Write-Host "  ✅ SISTEMA SINCRONIZADO Y LIMPIO." -ForegroundColor Green
+Write-Host "  ✅ TERMINAL v10.0 OPTIMIZADA Y LISTA PARA EJECUCIÓN." -ForegroundColor Green
 Write-Host ""

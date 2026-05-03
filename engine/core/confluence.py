@@ -1,14 +1,12 @@
 """
-engine/core/confluence.py — El Jurado Neural de SLINGSHOT v4.0 (FULL POTENTIAL).
+engine/core/confluence.py — El Jurado Neural de SLINGSHOT v10.0 APEX SOVEREIGN.
 =============================================================================
-Evalúa cada señal contra el arsenal puramente institucional completo:
-- Estructura de Mercado & POIs
-- Liquidez & KillZones
-- Huella de Volumen (RVOL)
-- Proyección IA (Machine Learning)
-- Sentimiento Contextual (News AI)
-- Eventos Económicos (Calendario de Impacto)
-- Zonas de Liquidación (Clusters de Liquidez)
+Evalúa cada señal contra el arsenal institucional v10.0:
+- Veto Fractal (1M/1W Alignment)
+- OTE (Optimal Trade Entry) 61.8% - 78.6%
+- Estructura de Mercado & POIs (Santa Trinidad SMC)
+- Huella de Volumen & Absorción
+- Proyección Contextual (Nexus Bridge Enabled)
 """
 
 import pandas as pd
@@ -61,10 +59,11 @@ class ConfluenceManager:
         score = 0
         total_weight = 0
 
-        # 1. NARRATIVA ESTRUCTURAL (Peso 20)
-        narrative_weight = 20
+        # 1. NARRATIVA ESTRUCTURAL (Peso 15)
+        narrative_weight = 15
         total_weight += narrative_weight
         regime = str(current.get('market_regime', signal.get('regime', 'UNKNOWN'))).upper()
+        # En Sigma, permitimos operar en RANGING si la estructura interna es fuerte
         regime_ok = (is_long and regime in ('ACCUMULATION', 'MARKUP', 'RANGING')) or \
                    (not is_long and regime in ('DISTRIBUTION', 'MARKDOWN', 'RANGING'))
         if regime_ok:
@@ -73,8 +72,8 @@ class ConfluenceManager:
         else:
             checklist.append({"factor": "Narrativa SMC", "status": "DIVERGENTE", "detail": f"Régimen {regime}"})
 
-        # 2. PUNTOS DE INTERÉS OB/FVG (Mitigación RTO Institucional) (Peso 20)
-        poi_weight = 20
+        # 2. PUNTOS DE INTERÉS OB/FVG (Peso 40 - EL REY)
+        poi_weight = 40
         total_weight += poi_weight
         
         smc_map = kwargs.get('smc_map', {})
@@ -86,65 +85,41 @@ class ConfluenceManager:
         mitigating_ob = any(ob['bottom'] <= price <= ob['top'] for ob in active_obs)
         mitigating_fvg = any(fvg['bottom'] <= price <= fvg['top'] for fvg in active_fvgs)
         
-        poi_pts = (10 if mitigating_ob else 0) + (10 if mitigating_fvg else 0)
-        has_ob = mitigating_ob # Para compatibilidad de razonamiento más abajo
+        # [SIGMA v9.0] Si es creación fresca (lo que dispara el Sniper), damos 20 pts por cada uno.
+        # Esto permite que el disparo inicial sea tan válido como el re-test.
+        has_ob_creation = bool(current.get('ob_bullish' if is_long else 'ob_bearish', False))
+        has_fvg_creation = bool(current.get('fvg_bullish' if is_long else 'fvg_bearish', False))
         
-        if poi_pts > 0:
-            score += poi_pts
-            detail = []
-            if mitigating_ob: detail.append("OB")
-            if mitigating_fvg: detail.append("FVG")
-            checklist.append({"factor": "Zonas POI", "status": "CONFIRMADO", "detail": f"Mitigando {' + '.join(detail)} (RTO)"})
+        has_ob = mitigating_ob or has_ob_creation # FIX BUG-002: required for reasoning builder
+        
+        poi_pts = 0
+        if has_ob: poi_pts += 20
+        if mitigating_fvg or has_fvg_creation: poi_pts += 20
+        
+        score += poi_pts
+        if poi_pts >= 40:
+            checklist.append({"factor": "Zonas POI", "status": "CONFIRMADO", "detail": "Confluencia OB + FVG (Institucional)"})
+        elif poi_pts >= 20:
+            checklist.append({"factor": "Zonas POI", "status": "PARCIAL", "detail": "OB o FVG Detectado"})
         else:
-            # Fallback a creación reciente (por si operamos el despegue inicial)
-            has_ob_creation = bool(current.get('ob_bullish' if is_long else 'ob_bearish', False))
-            has_fvg_creation = bool(current.get('fvg_bullish' if is_long else 'fvg_bearish', False))
-            if has_ob_creation or has_fvg_creation:
-                poi_pts = (5 if has_ob_creation else 0) + (5 if has_fvg_creation else 0)
-                score += poi_pts
-                has_ob = has_ob_creation
-                checklist.append({"factor": "Zonas POI", "status": "PARCIAL", "detail": "Ruptura (momentum) sin mitigación previa"})
-            else:
-                checklist.append({"factor": "Zonas POI", "status": "NEUTRAL", "detail": "Precio flotando fuera de zonas de liquidez"})
+            checklist.append({"factor": "Zonas POI", "status": "NEUTRAL", "detail": "Sin POI claro"})
 
-        # 3. LIQUIDEZ Y KILLZONES (Peso 15 + Bonos v8.8.0)
-        liq_weight = 15
+        # 3. LIQUIDEZ Y SWEEPS (Peso 30)
+        liq_weight = 30
         total_weight += liq_weight
         current_session = session_data.get('current_session', 'OFF_HOURS')
         
-        # Killzones Expandidas
-        in_kz = current_session in (
-            'LONDON_KILLZONE', 'NY_KILLZONE', 'LONDON_NY_OVERLAP', 
-            'ASIA', 'FRANKFURT_OPEN', 'NY_SILVER_BULLET_PM'
-        )
+        # Detección de barrido (Sweep) usando la nueva lógica de memoria en smc.py
+        has_sweep = bool(current.get('recent_sweep_bull' if is_long else 'recent_sweep_bear', False))
         
-        # Detección de barrido (Sweep) en cualquier sesión
-        sessions = session_data.get('sessions', {})
-        sweep = any((is_long and s.get('swept_low')) or (not is_long and s.get('swept_high')) 
-                    for s in sessions.values())
-        
-        # 💎 BONO ELITE: Asia Session Sweep (Pilar de Slingshot)
-        asia_sweep = False
-        if current_session != 'ASIA' and 'asia' in sessions:
-            asia = sessions['asia']
-            if (is_long and asia.get('swept_low')) or (not is_long and asia.get('swept_high')):
-                asia_sweep = True
-
-        liq_pts = (7 if in_kz else 0) + (8 if sweep else 0)
-        if asia_sweep and in_kz: 
-            liq_pts += 10 # Bono extra por barrido de Asia en Killzone
-            
+        liq_pts = (10 if current_session != 'OFF_HOURS' else 0) + (20 if has_sweep else 0)
         score += liq_pts
         
-        status = "CONFIRMADO" if liq_pts >= 15 else "PARCIAL" if liq_pts > 0 else "BAJO"
-        detail = f"{current_session}"
-        if asia_sweep: detail += " + ASIA SWEEP ⚡"
-        elif sweep: detail += " + Sweep"
-        
-        checklist.append({"factor": "Liquidez/KZ", "status": status, "detail": detail})
+        status = "CONFIRMADO" if liq_pts >= 20 else "PARCIAL" if liq_pts > 0 else "BAJO"
+        checklist.append({"factor": "Liquidez", "status": status, "detail": f"Sweep: {has_sweep} | Session: {current_session}"})
 
-        # 4. HUELLA DE VOLUMEN (RVOL) (Peso 10)
-        vol_weight = 10
+        # 4. VOLUMEN INSTITUCIONAL (RVOL) (Peso 15)
+        vol_weight = 15
         total_weight += vol_weight
         rvol = float(current.get('volume', 0)) / vol_mean if vol_mean > 0 else 1.0
         if rvol >= 1.5:
@@ -326,32 +301,27 @@ class ConfluenceManager:
         if news_score >= 0.7: score += 5
         elif news_score <= 0.3: score -= 5
 
-        # 9. SMT DIVERGENCE (Bono 25) v5.7.155 Master Gold (Confirmación de Elite)
+        # 9. SMT DIVERGENCE (Bono 25) v10.0 Sovereign (Consumo Centralizado)
         smt_weight = 25
         total_weight += smt_weight
         smt_status = "NEUTRAL"
         smt_detail = "Sin activo de comparación"
         
-        if correlated_df is not None:
-            from engine.indicators.smt import detect_smt_divergence
-            smt_result = detect_smt_divergence(df, correlated_df)
+        # El SMT ahora viene pre-calculado en kwargs['smt_result']
+        smt_result = kwargs.get('smt_result', {})
+        if smt_result:
             div_type = smt_result.get('divergence', 'NONE')
             strength = smt_result.get('strength', 0)
             
             if (is_long and div_type == 'BULLISH_SMT') or (not is_long and div_type == 'BEARISH_SMT'):
-                # OTORGAMOS PUNTOS ESCALARES (Máximo 25)
                 smt_pts = int(smt_weight * strength)
                 score += smt_pts
                 smt_status = "CONFIRMADO ✅"
                 smt_detail = f"{smt_result['reason']} (Fuerza: {strength*100:.0f}%)"
             elif div_type != 'NONE':
-                # Divergencia opuesta (Pelotón de advertencia)
                 smt_status = "DIVERGENTE ⚠️"
-                smt_detail = "El activo correlacionado no acompaña el movimiento"
-            else:
-                smt_status = "NEUTRAL"
-                smt_detail = "Estructura correlacionada en armonía"
-                
+                smt_detail = "Divergencia correlacionada opuesta"
+            
         checklist.append({"factor": "SMT Divergence", "status": smt_status, "detail": smt_detail})
 
         # 🚀 9.5. NEURAL HEATMAP (Peso 20) v5.7 Platinum
@@ -391,27 +361,39 @@ class ConfluenceManager:
         else:
             checklist.append({"factor": "Neural Heatmap", "status": "CALIBRANDO", "detail": "Datos insuficientes"})
 
-        # 🚀 10. VETO DE TEMPORALIDAD SUPERIOR (HTF VETO) v5.7.155 Master Gold Titanium
+        # 🚀 10. ALINEACIÓN HTF (FRACTAL) — v10.0 Sovereign
         htf_bias = kwargs.get('htf_bias')
         multiplier = 1.0
         if htf_bias:
+            # 10.1 Veto por Desalineación Estructural (1M/1W)
+            # Ya vetamos en Gatekeeper, pero aquí penalizamos el Score si no hay armonía perfecta
+            m1 = getattr(htf_bias, 'm1_regime', 'UNKNOWN')
+            w1 = getattr(htf_bias, 'w1_regime', 'UNKNOWN')
+            
+            is_macro_aligned = (is_long and m1 == "MARKUP" and w1 == "MARKUP") or \
+                               (not is_long and m1 == "MARKDOWN" and w1 == "MARKDOWN")
+            
+            if not is_macro_aligned:
+                score -= 20
+                checklist.append({"factor": "Macro Fractal", "status": "DIVERGENTE", "detail": f"1M/1W no alineados (-20pts)"})
+            else:
+                score += 10
+                checklist.append({"factor": "Macro Fractal", "status": "CONFIRMADO", "detail": "Armonía 1M + 1W detectada (+10pts)"})
+
             htf_score = htf_bias.strength * 100
             is_contrary = (is_long and htf_bias.direction == 'BEARISH') or (not is_long and htf_bias.direction == 'BULLISH')
             
             if htf_score < 15 or is_contrary:
-                # No vetamos, solo penalizamos fierte (v6.1 "Aggressive Flow")
-                penalty = 25
+                penalty = 15
                 score -= penalty
-                veto_reason = "Tendencia Mayor opuesta o débil"
-                checklist.append({"factor": "HTF Alignment", "status": "DIVERGENTE", "detail": f"{veto_reason} (-{penalty}pts)"})
+                checklist.append({"factor": "HTF Momentum", "status": "DIVERGENTE", "detail": f"Momentum opuesto (-{penalty}pts)"})
             else:
-                score += 10
-                checklist.append({"factor": "HTF Alignment", "status": "APROBADO", "detail": f"Fuerza Macro: {htf_score:.0f}% (+10pts)"})
+                score += 5
+                checklist.append({"factor": "HTF Momentum", "status": "APROBADO", "detail": f"Fuerza: {htf_score:.0f}%"})
 
-        # 🚀 11. VETO DE VALOR (PREMIUM / DISCOUNT) — RELAJADO PARA EXPERIMENTO v6.1
-        # No aplicamos multiplier = 0.0, solo registramos en el checklist
-        from engine.indicators.fibonacci import get_current_fibonacci_levels
-        fib_data = get_current_fibonacci_levels(df)
+        # 🚀 11. VETO DE VALOR (PREMIUM / DISCOUNT) — v10.0 Sovereign (Consumo Centralizado)
+        # El Fibonacci ahora viene inyectado en kwargs['fib_data'] para evitar re-cálculo
+        fib_data = kwargs.get('fib_data')
         price = float(current.get('close', 0))
         
         if fib_data and 'levels' in fib_data:
@@ -420,7 +402,6 @@ class ConfluenceManager:
             gp_786 = fib_data['levels'].get('0.786')
             
             if fib_05:
-                # A. Veto de Valor (Premium/Discount)
                 invalid_value = (is_long and price > fib_05) or (not is_long and price < fib_05)
                 value_zone = "PREMIUM (CARO) 🔴" if is_long else "DISCOUNT (BARATO) 🔴"
                 
@@ -434,7 +415,6 @@ class ConfluenceManager:
                     checklist.append({"factor": "Zona de Valor", "status": "CONFIRMADO", "detail": f"{value_zone} (+{value_pts}pts)"})
 
             if gp_618 and gp_786:
-                # B. Confluencia Golden Pocket (SMC OTE)
                 z_top = max(gp_618, gp_786)
                 z_bottom = min(gp_618, gp_786)
                 
@@ -545,7 +525,39 @@ class ConfluenceManager:
             # Fallback seguro: No vetar por error de sistema
             if 'multiplier' not in locals(): multiplier = 1.0
 
-        # 🚀 14. ON-CHAIN SENTINEL (Peso 15) v5.7.155 Master Gold
+        # 🚀 9. SMT DIVERGENCE (Peso 15) — v4.0 Institutional
+        smt_weight = 15
+        smt_strength = 0
+        if correlated_df is not None and not correlated_df.empty:
+            total_weight += smt_weight
+            try:
+                # SMT: Divergencia entre activos correlacionados (BTC/ETH)
+                # Buscamos si el asset correlacionado NO confirmó el Swing High/Low
+                c_current = correlated_df.iloc[-1]
+                c_prev = correlated_df.iloc[-2]
+                
+                curr_c = float(current.get('close', 0))
+                prev_c = float(df['close'].iloc[-2])
+                
+                curr_corr_c = float(c_current.get('close', 0))
+                prev_corr_c = float(c_prev.get('close', 0))
+                
+                # SMT BULLISH: BTC hace Lower Low, pero ETH hace Higher Low
+                if is_long:
+                    if curr_c < prev_c and curr_corr_c > prev_corr_c:
+                        smt_strength = 1.0
+                        score += smt_weight
+                        checklist.append({"factor": "SMT Divergence", "status": "CONFIRMADO", "detail": "Acumulación SMT Detectada (+15pts)"})
+                # SMT BEARISH: BTC hace Higher High, pero ETH hace Lower High
+                else:
+                    if curr_c > prev_c and curr_corr_c < prev_corr_c:
+                        smt_strength = 1.0
+                        score += smt_weight
+                        checklist.append({"factor": "SMT Divergence", "status": "CONFIRMADO", "detail": "Distribución SMT Detectada (+15pts)"})
+            except Exception as e:
+                logger.error(f"[SMT] Error calculating divergence: {e}")
+
+        # 🚀 10. ALINEACIÓN HTF (Peso 25 — EL ANCLA) v5.7.155 Master Gold
         onchain_weight = 15
         total_weight += onchain_weight
         onchain_bias = kwargs.get('onchain_bias', 'NEUTRAL')
@@ -603,6 +615,7 @@ class ConfluenceManager:
             "checklist": checklist,
             "reasoning": self._build_reasoning(final_score, conviction, is_long, regime, has_ob, rvol, high_impact_near, event_name, cluster_hit, v_reason),
             "rvol": round(rvol, 2),
+            "smt_strength": smt_strength,
             "veto_reason": v_reason
         }
 

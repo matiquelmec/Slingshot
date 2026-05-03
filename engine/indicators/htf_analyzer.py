@@ -7,6 +7,7 @@ class HTFBias:
     direction: str   # 'BULLISH' | 'BEARISH' | 'NEUTRAL'
     strength: float  # 0.0 - 1.0
     reason: str      # e.g. "1D MARKUP + 4H MARKUP"
+    m1_regime: str
     w1_regime: str
     d1_regime: str
     h4_regime: str
@@ -24,14 +25,14 @@ class HTFAnalyzer:
     def __init__(self):
         self.regime_detector = RegimeDetector()
 
-    def analyze_bias(self, df_1w: pd.DataFrame, df_1d: pd.DataFrame, df_h4: pd.DataFrame, df_h1: pd.DataFrame) -> HTFBias:
+    def analyze_bias(self, df_1m: pd.DataFrame, df_1w: pd.DataFrame, df_1d: pd.DataFrame, df_h4: pd.DataFrame, df_h1: pd.DataFrame) -> HTFBias:
         """
-        Analiza el sesgo top-down (Semanal -> Diario -> 4H -> 1H) e identifica liquidez magnética.
+        Analiza el sesgo top-down (Mensual -> Semanal -> Diario -> 4H -> 1H) e identifica liquidez magnética.
         """
         if df_1d.empty or df_h4.empty or df_h1.empty:
             return HTFBias(
                 direction='NEUTRAL', strength=0.0, reason="Datos HTF insuficientes.",
-                w1_regime='UNKNOWN', d1_regime='UNKNOWN', h4_regime='UNKNOWN', h1_regime='UNKNOWN'
+                m1_regime='UNKNOWN', w1_regime='UNKNOWN', d1_regime='UNKNOWN', h4_regime='UNKNOWN', h1_regime='UNKNOWN'
             )
 
         # Extraer PDH / PDL (Previous Daily High / Low)
@@ -51,6 +52,11 @@ class HTFAnalyzer:
         df_h4 = self.regime_detector.detect_regime(df_h4)
         df_h1 = self.regime_detector.detect_regime(df_h1)
         
+        m1_regime = 'UNKNOWN'
+        if not df_1m.empty:
+            df_1m = self.regime_detector.detect_regime(df_1m)
+            m1_regime = df_1m['market_regime'].iloc[-1]
+
         w1_regime = 'UNKNOWN'
         if not df_1w.empty:
             df_1w = self.regime_detector.detect_regime(df_1w)
@@ -112,6 +118,7 @@ class HTFAnalyzer:
             direction=direction,
             strength=strength,
             reason=reason,
+            m1_regime=m1_regime,
             w1_regime=w1_regime,
             d1_regime=d1_regime,
             h4_regime=h4_regime,

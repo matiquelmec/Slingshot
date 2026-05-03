@@ -24,29 +24,38 @@ class RiskManager:
             entry = float(signal_data.get("price", 0))
             atr   = float(signal_data.get("atr_value", 0))
             asset = str(signal_data.get("asset", "UNKNOWN")).upper()
+            interval_mins = int(signal_data.get("interval_minutes", 15))
             
-            # Filtro de Volatilidad Relajado (0.1% para 15m)
+            # [FASE 1.1] Matriz Dinámica de Riesgo (Adaptive R:R)
+            if interval_mins < 15:     # Micro-Scalping (1m, 3m, 5m)
+                dynamic_min_rr = 3.0
+            elif interval_mins <= 60:  # Intraday (15m, 30m, 1h)
+                dynamic_min_rr = 2.0
+            else:                      # Swing/Macro (2h, 4h, 8h, 1d)
+                dynamic_min_rr = 1.5
+            
+            # [FASE 1.2] Filtro de Volatilidad Relativa (ATR Múltiplo)
+            # Ya no bloqueamos spreads estáticos de 2.5%, usamos ATR relativo
+            # (El rechazo por baja volatilidad se mantiene para evitar estancamientos)
             if atr < (entry * 0.001):
                 return {"approved": False, "rr_ratio": 0.0, "trade_quality": "LOW_VOL", "reason": f"Volatility too low: {atr:.2f}"}
 
             sig_type = str(signal_data.get("signal_type", "LONG")).upper()
             
             # Sniper Projection v6.6.16 (Precision Override)
-            # Forzamos que el SL/TP siempre use la volatilidad ATR real para optimizar R:R
-            risk_dist = atr * 2.0 # Stop ajustado de 2 ATR
+            risk_dist = atr * 2.0
             sl = entry - risk_dist if "LONG" in sig_type else entry + risk_dist
-            tp = entry + (risk_dist * 3.0) if "LONG" in sig_type else entry - (risk_dist * 3.0) # Objetivo de 3.0R
+            tp = entry + (risk_dist * 3.0) if "LONG" in sig_type else entry - (risk_dist * 3.0)
             
             risk = abs(entry - sl)
             reward = abs(tp - entry)
             
             # --- SPREAD WATCHDOG (Fricción Dinámica) ---
             tuning = self.ASSET_TUNING.get(asset, self.DEFAULT_TUNING)
-            dynamic_friction_pct = tuning.get("spread_impact", 0.0004) # Fallback 0.04%
+            dynamic_friction_pct = tuning.get("spread_impact", 0.0004)
             
             friction = entry * dynamic_friction_pct
             
-            # KILL SWITCH: Si la fricción (spread + fee) representa más del 20% del stop loss, es suicidio matemático
             if risk > 0 and friction > (risk * 0.20):
                 return {"approved": False, "rr_ratio": 0.0, "trade_quality": "HIGH_SPREAD", "reason": f"Spread Kill Switch: Fricción ({dynamic_friction_pct*100:.3f}%) muy alta para SL."}
             
@@ -54,14 +63,15 @@ class RiskManager:
                  return {"approved": False, "rr_ratio": 0.0, "trade_quality": "ERR", "reason": "Zero risk calculated"}
                  
             rr = round((reward - friction) / (risk + friction), 2)
-            # RESTAURADO v6.6.15: Disciplina Institucional
-            approved = rr >= self.min_rr
+            
+            # Aprobación basada en el R:R Dinámico
+            approved = rr >= dynamic_min_rr
             
             return {
                 "approved": approved,
                 "rr_ratio": rr,
-                "trade_quality": "S" if rr >= 2.0 else ("A" if approved else "D"),
-                "reason": f"R:R Sniper: {rr} (Net)"
+                "trade_quality": "S" if rr >= (dynamic_min_rr + 0.5) else ("A" if approved else "D"),
+                "reason": f"R:R Adaptive ({interval_mins}m): {rr} >= {dynamic_min_rr}"
             }
         except Exception as e:
             return {"approved": False, "rr_ratio": 0.0, "trade_quality": "ERROR", "reason": str(e)}
@@ -94,6 +104,7 @@ class RiskManager:
         asset: str = "UNKNOWN",
         liquidations: list = None,
         heatmap: dict = None,
+        fib_data: dict = None,
         **kwargs
     ) -> dict:
         """
@@ -164,23 +175,36 @@ class RiskManager:
                 if getattr(hb, "pdh", 0) > current_price: htf_targets.append(hb.pdh)
                 if getattr(hb, "pwh", 0) > current_price: htf_targets.append(hb.pwh)
 
-            all_targets = liq_targets + ob_targets + fvg_targets + htf_targets
+            fib_targets = []
+            if fib_data:
+                # OTE: 0.618, 0.705, 0.786
+                for lvl in ["61.8%", "78.6%"]:
+                    price = fib_data.get(lvl)
+                    if price and price > current_price:
+                        fib_targets.append(price)
+
+            all_targets = liq_targets + ob_targets + fvg_targets + htf_targets + fib_targets
             if all_targets:
                 all_targets.sort() # De más cercano a más lejano
                 
-                # TP1: Primer target que cumpla al menos 2.0R (asegurar el trade)
+                # [APEX DYNAMIC TARGETING]
+                # TP1: Primer target estructural que sea al menos 1.5R neto
                 for t in all_targets:
-                    if (t - current_price) / final_risk >= 2.0:
+                    if (t - current_price) / final_risk >= 1.5:
                         tp1 = t
                         break
                 
-                # TP2: FVG opuesto o bloque estructural medio
+                # TP2: Punto de equilibrio o FVG medio
                 mid_targets = [t for t in all_targets if t > tp1]
                 if mid_targets: tp2 = mid_targets[0]
                 else: tp2 = tp1 + (final_risk * 1.5)
                 
-                # TP3: Liquidez Externa (El target más lejano)
+                # TP3: [ULTIMATE TARGET] Liquidez HTF o Cluster más fuerte
                 tp3 = all_targets[-1]
+                # Si el target más lejano es masivo (>80% fuerza), forzamos TP3 ahí
+                strong_liq = [l["price"] for l in (liquidations or []) if l["type"] == "SHORT_LIQ" and l.get("strength", 0) > 85]
+                if strong_liq: tp3 = max(tp3, max(strong_liq))
+                
                 if tp3 <= tp2: tp3 = tp2 + (final_risk * 2.0)
 
         else: # SHORT
@@ -194,7 +218,15 @@ class RiskManager:
                 if getattr(hb, "pdl", float('inf')) < current_price and getattr(hb, "pdl", 0) > 0: htf_targets.append(hb.pdl)
                 if getattr(hb, "pwl", float('inf')) < current_price and getattr(hb, "pwl", 0) > 0: htf_targets.append(hb.pwl)
 
-            all_targets = liq_targets + ob_targets + fvg_targets + htf_targets
+            fib_targets = []
+            if fib_data:
+                # OTE: 0.618, 0.705, 0.786
+                for lvl in ["61.8%", "78.6%"]:
+                    price = fib_data.get(lvl)
+                    if price and price < current_price:
+                        fib_targets.append(price)
+
+            all_targets = liq_targets + ob_targets + fvg_targets + htf_targets + fib_targets
             if all_targets:
                 all_targets.sort(reverse=True) # De más cercano a más lejano (hacia abajo)
                 
@@ -221,6 +253,18 @@ class RiskManager:
         pos_size_nominal = risk_amount_usdt / max(0.001, sl_dist_pct)
         leverage = min(50, math.ceil(pos_size_nominal / self.account_balance))
         
+        # [SNIPER v10.0] Validación OTE (Optimal Trade Entry)
+        is_in_ote = False
+        if fib_data:
+            # OTE se define entre 61.8% y 78.6% (o niveles similares)
+            f61 = fib_data.get("61.8%", 0)
+            f78 = fib_data.get("78.6%", 0)
+            if f61 > 0 and f78 > 0:
+                high_ote = max(f61, f78)
+                low_ote = min(f61, f78)
+                # El precio debe estar en el "sweet spot"
+                is_in_ote = low_ote <= current_price <= high_ote
+
         return {
             "entry_price": round(current_price, 5),
             "stop_loss": round(sl, 5),
@@ -235,5 +279,6 @@ class RiskManager:
             "leverage": leverage,
             "entry_zone_top": round(current_price * 1.001, 5),
             "entry_zone_bottom": round(current_price * 0.999, 5),
-            "asset": asset
+            "asset": asset,
+            "fib_ote": {"is_in_ote": is_in_ote}
         }

@@ -14,6 +14,9 @@ class MemoryStore:
         # Estados actuales por activo (Radar)
         self._market_states: Dict[str, Dict[str, Any]] = {}
 
+        # Caché de Sesgo HTF Fractal (v10.0 Sovereign)
+        self._htf_biases: Dict[str, Any] = {}
+
         # Caché de Snapshots Tácticos por Intervalo (v5.9.5 MTF Master)
         self._tactical_snapshots: Dict[str, Dict[str, Any]] = {}
         
@@ -197,6 +200,16 @@ class MemoryStore:
         """Recupera el último análisis del Advisor para un activo."""
         async with self._lock:
             return self._advisor_advice.get(asset)
+
+    async def save_htf_bias(self, asset: str, bias_data: Any):
+        """Guarda el sesgo HTF centralizado."""
+        async with self._lock:
+            self._htf_biases[asset] = bias_data
+
+    async def get_htf_bias(self, asset: str) -> Optional[Any]:
+        """Recupera el sesgo HTF centralizado."""
+        async with self._lock:
+            return self._htf_biases.get(asset)
 
     async def clear_all(self):
         """Wipe total (Reseteo de sistema)."""

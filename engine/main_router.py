@@ -1,14 +1,8 @@
 """
-engine/main_router.py — v5.7.155 Master Gold
+engine/main_router.py — v10.0 APEX SOVEREIGN (The Orchestrator)
 =========================================================
 SlingshotRouter: El Orquestador Maestro.
-
-ANTES (v4.x): Arquitectura monolítica.
-AHORA  (v5.4): Arquitectura desacoplada de alto rendimiento.
-
-  MarketAnalyzer  → Capas 1-3 (S/R, Wyckoff, SMC, Fibonacci)
-  SignalGatekeeper → 4 porteros institucionales en cadena
-  build_base_result / enrich_signal → Despacho al Frontend
+Coordina el pipeline institucional: Análisis → Estrategia → Veto Fractal → Nexus.
 
 Mantiene 100% de compatibilidad con la interface pública anterior:
   router.process_market_data(df, asset, interval, ...)  → dict
@@ -118,7 +112,7 @@ class SlingshotRouter:
 
         # ── Fase 2: Detección de Oportunidades SMC ───────────────────────────
         df_analyzed   = market_map.df_analyzed
-        analyzed_df   = self._strategy.analyze(df_analyzed)
+        analyzed_df   = self._strategy.analyze(df_analyzed, interval=interval)
         opportunities = self._strategy.find_opportunities(analyzed_df, asset=asset)
 
         # Ordenar por timestamp descendente
@@ -139,7 +133,8 @@ class SlingshotRouter:
                 smc_data=market_map.smc,
                 atr_value=sig.get("atr_value", 0.0),
                 asset=asset,
-                htf_bias=htf_bias
+                htf_bias=htf_bias,
+                fib_data=market_map.fibonacci
             )
             enriched.append(enrich_signal(sig, risk_data, interval))
 
@@ -151,6 +146,7 @@ class SlingshotRouter:
             key_levels=market_map.key_levels,
             interval=interval,
             htf_bias=htf_bias,
+            fib_data=market_map.fibonacci,
             context=context if context else self._context,
             regime_details=market_map.diagnostic.get('regime_details'),
             silent=silent,

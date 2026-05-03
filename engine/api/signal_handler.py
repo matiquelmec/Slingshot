@@ -99,7 +99,8 @@ class SignalHandler:
                 macro_blocked.append(sig)
 
         for sig in final_approved:
-            asyncio.create_task(self.persist(sig, tactical, status="ACTIVE", silent=silent))
+            # [APEX NEXUS CONNECT] — Enviar al Nodo de Ejecución (Usamos realtime_data que ya tiene el riesgo calculado)
+            await self.persist(sig, tactical, status="ACTIVE", silent=silent)
 
         # ── Persistencia de Bloqueadas (Audit Mode v8.6.7) ────────────────────
         for sig in macro_blocked:
@@ -194,8 +195,8 @@ class SignalHandler:
             "timestamp":        final_ts,
             "confluence":       sig.get("confluence"),
             "risk_pct":         risk_pct,
-            "risk_usd":         risk_usd,
             "position_size":    pos_size,
+            "position_size_usdt": pos_size,
             "leverage":         lev,
             "rr_ratio":         rr_ratio,
             "entry_zone_top":   calc.get("entry_zone_top", sig.get("entry_zone_top")) if 'calc' in locals() else sig.get("entry_zone_top"),
@@ -203,10 +204,17 @@ class SignalHandler:
             "tp1":              calc.get("tp1", sig.get("tp1")) if 'calc' in locals() else sig.get("tp1"),
             "tp2":              calc.get("tp2", sig.get("tp2")) if 'calc' in locals() else sig.get("tp2"),
             "tp3":              calc.get("tp3", sig.get("tp3")) if 'calc' in locals() else sig.get("tp3"),
+            "tp1_vol_pct":      calc.get("tp1_vol_pct", 0.60) if 'calc' in locals() else 0.60,
         }
 
         # ── Persistencia en RAM ───────────────────────────────────────────────
         asyncio.create_task(store.save_signal(realtime_data))
+
+        # ── [APEX NEXUS] — Disparar Ejecución Real/Dry-Run ─────────────────────
+        if status == "ACTIVE":
+            from engine.execution.nexus import nexus
+            # Lo lanzamos como tarea para no bloquear el flujo de persistencia
+            asyncio.create_task(nexus.process_signal(realtime_data))
 
         # ── Broadcast Global al Radar (v8.6.5) ────────────────────────────────
         # [COHERENCIA TOTAL] Emitimos todos los estados (PENDING, ACTIVE, FILLED)

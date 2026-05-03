@@ -1,7 +1,10 @@
 """
-engine/router/gatekeeper.py — v5.7.155 Master Gold
-=======================================================
-El Portero Institucional — 3 capas de filtrado en secuencia.
+engine/router/gatekeeper.py — v10.0 APEX SOVEREIGN (Institutional Guardian)
+=========================================================================
+Portero Maestro de Slingshot. Ejecuta la auditoría final de seguridad:
+1. Filtro Fractal (Alineación HTF 1M/1W/1D)
+2. Filtro OTE (Value Zone Entry)
+3. Filtro de Riesgo (Kelly Criterion & Drawdown)
 
 FILTRO 1 — Direccional HTF:   ¿La señal sigue el sesgo institucional H1/H4?
 FILTRO 2 — Ratio R:R:          ¿La geometría matemática cumple R:R ≥ 2.5?
@@ -69,6 +72,7 @@ class SignalGatekeeper:
         key_levels: list,
         interval: str,
         htf_bias=None,
+        fib_data: dict | None = None,
         context: GatekeeperContext | None = None,
         regime_details: dict | None = None,
         silent: bool = False,
@@ -91,7 +95,11 @@ class SignalGatekeeper:
             df_time = df_low = df_high = now_utc = None
 
         # ── (Filtro 0 News Blackout delegado 100% al Confluence Manager v8.5.9) ──
-        now = pd.Timestamp.now(tz='UTC')
+        # [BACKTEST_FIX v8.8.6] Usamos el tiempo de la vela, no el tiempo real del sistema
+        try:
+            now = pd.to_datetime(df["timestamp"].iloc[-1], utc=True)
+        except Exception:
+            now = pd.Timestamp.now(tz='UTC')
 
         # ── Filtro 0.5: Session Veto (Ruido de Cierre) ──────────────────────
         # Institucionalmente se evita operar en los últimos minutos de velas mayores (H4/D1).
@@ -134,17 +142,22 @@ class SignalGatekeeper:
         # 🧠 [DELTA v6.1] Cerebro de Régimen (Mandatos de Supervivencia)
         regime_info = regime_details or {"regime": "UNKNOWN", "bias": "NEUTRAL", "confidence": 0}
         regime_type = str(regime_info.get("regime", "UNKNOWN")).upper()
+        # ── [DELTA v9.0] Inteligencia de Régimen ──
+        # Extraer minutos numéricos para Fase 1 adaptativa
+        try:
+            val = int("".join(filter(str.isdigit, interval)))
+            if "h" in interval.lower(): val *= 60
+            elif "d" in interval.lower(): val *= 1440
+        except:
+            val = 15
+
+        # Si estamos en Swing/Macro (>15m), CHOPPY no es un veto total, los rangos son operables
+        is_macro = val > 15
+        is_choppy = regime_type == "CHOPPY"
+        choppy_threshold = 40 if is_macro else 60
+        
         regime_bias = str(regime_info.get("bias", "NEUTRAL")).upper()
         regime_stress = regime_type == "HIGH_VOLATILITY_STRESS"
-        
-        # ── REGLA 1 (CHOPPY): Veto Total por Fricción Lateral ─────────────
-        if regime_type == "CHOPPY":
-             if not silent:
-                 logger.warning(f"[GATEKEEPER] [DELTA_BLOCK] Regimen CHOPPY detectado. Veto de seguridad activado.")
-             # Si el régimen es CHOPPY, bloqueamos todas las señales de este ciclo
-             for sig in signals:
-                 self._block(sig, "BLOCKED_BY_DELTA", "Régimen Lateral Detectado (CHOPPY)", result)
-             return result
         # --- [FORENSIC v8.2.8] Price Sanity Check --- 
         # Obtenemos el precio actual de mercado desde el DF para comparar coherencia
         market_price = float(df["close"].iloc[-1]) if not df.empty else 0.0
@@ -162,20 +175,68 @@ class SignalGatekeeper:
                     self._block(sig, "BLOCKED_BY_POLLUTION", f"Incoherencia de precio ({price_diff_pct:.1%}). Posible cruce de activos.", result)
                     continue
 
-            # ── REGLA 2 (ALIGNMENT): Veto por Desalineación Macro ────────────
+            # --- [PIPELINE START] Evaluamos Confluencia Primero (v6.5 Master) ---
+            # Para que el score esté disponible para los filtros de alineación y régimen
+            try:
+                confluence_result = confluence_manager.evaluate_signal(
+                    df=df,
+                    signal=sig,
+                    ml_projection=context.ml_projection,
+                    session_data=context.session_data,
+                    news_items=context.news_items,
+                    economic_events=context.economic_events,
+                    liquidation_clusters=context.liquidation_clusters,
+                    htf_bias=htf_bias,
+                    onchain_bias=context.onchain_bias,
+                    heatmap=context.heatmap,
+                    smc_map=smc_map,
+                    correlated_df=context.correlated_df,
+                    interval=interval # Pasar intervalo para Time-Decay
+                )
+                sig["confluence"] = confluence_result
+            except Exception as e:
+                logger.error(f"[GATEKEEPER] ConfluenceManager error: {e}")
+                sig["confluence"] = {"score": 50, "confluences": []}
+
             sig_type = str(sig.get("signal_type", sig.get("type", ""))).upper()
             is_long = "LONG" in sig_type
-            
+            conf_score = sig["confluence"].get("score", 0)
+
+            # 🧠 [SOVEREIGN v10.0] Veto Fractal Estricto
+            # Si el Mensual y el Semanal están en contra de la señal, es un suicidio técnico.
+            if htf_bias:
+                fractal_veto = False
+                m1 = htf_bias.m1_regime
+                w1 = htf_bias.w1_regime
+                
+                # Regla de Oro: No operar contra el 1M y 1W si están en tendencia fuerte (Markup/Markdown)
+                if is_long:
+                    if m1 == 'MARKDOWN' and w1 == 'MARKDOWN':
+                        fractal_veto = True
+                        reason = "Veto Fractal: 1M y 1W en MARKDOWN. Prohibido buscar Longs."
+                else:
+                    if m1 == 'MARKUP' and w1 == 'MARKUP':
+                        fractal_veto = True
+                        reason = "Veto Fractal: 1M y 1W en MARKUP. Prohibido buscar Shorts."
+                
+                if fractal_veto:
+                    if not silent:
+                        logger.warning(f"[GATEKEEPER] [FRACTAL_VETO] {asset} {sig_type} bloqueado por alineación macro negativa.")
+                    self._block(sig, "FRACTAL_VETO", reason, result)
+                    continue
+
+            # ── REGLA 2 (ALIGNMENT): Veto por Desalineación Macro ────────────
             alignment_veto = False
             if regime_bias == "BULLISH" and not is_long and "STRONG" in regime_type:
-                alignment_veto = True
+                # Si la confianza es brutal, permitimos contratendencia
+                if conf_score < 80: alignment_veto = True # Elevado a 80 en v10.0
             elif regime_bias == "BEARISH" and is_long and "STRONG" in regime_type:
-                alignment_veto = True
+                if conf_score < 80: alignment_veto = True
                 
             if alignment_veto:
                 if not silent:
-                    logger.info(f"[GATEKEEPER] [DELTA_BLOCK] Desalineacion Macroestructural ({sig_type} vs {regime_type})")
-                self._block(sig, "DELTA_VETO", f"Desalineacion Macroestructural: Operando contra {regime_type}", result)
+                    logger.info(f"[GATEKEEPER] [DELTA_BLOCK] Desalineacion Macroestructural ({sig_type} vs {regime_type}). Confianza {conf_score}% insuficiente para contratendencia.")
+                self._block(sig, "DELTA_VETO", f"Desalineacion Macroestructural: Operando contra {regime_type} con confianza baja ({conf_score}%)", result)
                 continue
             # (SMT_Strength se pasará en el contexto de riesgo si existe)
             smt_strength = sig.get('confluence', {}).get('smt_strength', 0) if sig.get('confluence') else 0
@@ -195,7 +256,8 @@ class SignalGatekeeper:
                 smt_strength=smt_strength,
                 asset=sig.get("asset", "UNKNOWN"),
                 liquidations=context.liquidation_clusters,
-                heatmap=context.heatmap
+                heatmap=context.heatmap,
+                fib_data=fib_data
             )
             
             # Si la estrategia ya definió un setup (Ej: SMC OB-Low), lo respetamos
@@ -219,29 +281,15 @@ class SignalGatekeeper:
             #         self._block(sig, "BLOCKED_BY_HTF", f"Contra sesgo HTF Bajista: {htf_bias.reason}", result)
             #         continue
 
-            # --- [PIPELINE START] Evaluamos Confluencia Primero (v6.5 Master) ---
-            try:
-                confluence_result = confluence_manager.evaluate_signal(
-                    df=df,
-                    signal=sig,
-                    ml_projection=context.ml_projection,
-                    session_data=context.session_data,
-                    news_items=context.news_items,
-                    economic_events=context.economic_events,
-                    liquidation_clusters=context.liquidation_clusters,
-                    htf_bias=htf_bias,
-                    onchain_bias=context.onchain_bias,
-                    heatmap=context.heatmap,
-                    smc_map=smc_map,
-                    correlated_df=context.correlated_df
-                )
-                sig["confluence"] = confluence_result
+            # ── [FASE 1] Veto por Régimen Lateral (CHOPPY) ──
+            # Ahora validamos el score real de confluencia contra el umbral adaptativo
+            if is_choppy and conf_score < choppy_threshold:
+                 if not silent:
+                     logger.warning(f"⚠️ [GATEKEEPER] [DELTA_BLOCK] {interval} CHOPPY veto: Score {conf_score}% < {choppy_threshold}%")
+                 self._block(sig, "BLOCKED_BY_DELTA", f"Régimen CHOPPY: Confianza {conf_score}% insuficiente", result)
+                 continue
 
-            except Exception as e:
-                logger.error(f"[GATEKEEPER] ConfluenceManager error: {e}")
-                sig["confluence"] = {"score": 50, "confluences": []}
-
-            score = sig["confluence"].get("score", 0)
+            score = conf_score
 
             # ── Filtro 1: Jerarquía de Timeframes (SIGMA v6.5 MASTER) ──
             if htf_bias:
@@ -296,22 +344,33 @@ class SignalGatekeeper:
             try:
                 # Si la volatilidad de la vela actual excede severamente el tramo normal
                 candle_spread = ((df["high"].iloc[-1] - df["low"].iloc[-1]) / df["close"].iloc[-1]) * 100
-                if candle_spread > 2.5:  # Considerado anormal (Flash Crash/Pump)
+                # Adaptativo: 2.5% para 15m, 6% para 4h, 10% para 1d
+                max_spread = 2.5 if val <= 15 else (6.0 if val <= 240 else 10.0)
+                if candle_spread > max_spread:
                     self._block(sig, "BLOCKED_BY_VOLATILITY", f"Flash Volatility detectada ({candle_spread:.2f}%). Prevención de Slippage.", result)
                     continue
             except:
                 pass
 
-            # ── Filtro 4: R:R Mínimo ──────────────────────────────────────────
+            # ── Filtro 4: R:R Mínimo y Zona de Valor OTE (v10.0) ───────────────
             rr_res = self._risk.validate_signal(sig)
             sig["rr_ratio"]     = rr_res["rr_ratio"]
             sig["trade_quality"] = rr_res["trade_quality"]
+
+            # [SNIPER v10.0] Validación de Zona de Valor
+            # Si no estamos en zona OTE (Optimal Trade Entry) o descuento/premium, el trade es ruidoso.
+            ote_data = risk_data.get("fib_ote", {})
+            if ote_data:
+                is_in_zone = ote_data.get("is_in_ote", False)
+                if not is_in_zone and conf_score < 85: # Solo permitimos fuera de OTE si el score es extremo
+                    self._block(sig, "VALUE_ZONE_VETO", "Fuera de zona OTE / Descuento Premium", result)
+                    continue
 
             # Umbral de Rentabilidad Matemática v6.7.8 (Extreme Survival)
             min_rr = self._risk.min_rr # Sniper Sync Master Gold
             if not rr_res.get("approved", False):
                 if not silent:
-                    logger.info(f"[GATEKEEPER] \U0001f534 DELTA BLOCK: R:R {sig.get('rr_ratio', 0):.2f} | Reason: {rr_res.get('reason', 'N/A')}")
+                    logger.info(f"[GATEKEEPER] 🔴 DELTA BLOCK: R:R {sig.get('rr_ratio', 0):.2f} | Reason: {rr_res.get('reason', 'N/A')}")
                 self._block(sig, "DELTA_VETO", f"R:R {sig.get('rr_ratio', 0):.2f} < {min_rr} | {rr_res.get('reason')}", result)
                 continue
 
@@ -336,25 +395,23 @@ class SignalGatekeeper:
             if not silent:
                 logger.info(f"[GATEKEEPER_AUDIT] Asset: {asset} | Score: {score}% | Required: {min_score}%")
             
-            if score < min_score:
-                reason = sig.get("confluence", {}).get("veto_reason") or f"Confianza {score}% < {min_score}%"
-                if not silent:
-                    logger.info(f"[GATEKEEPER] \U0001f507 SEÑAL DÉBIL o VETADA: {reason}")
-                
-                status = "BLOCKED_NEWS" if ("Macro" in reason or "News" in reason) else "BLOCKED_BY_CONFIDENCE"
-                self._block(sig, status, reason, result)
+            # ── Filtro 5: Confluencia (Veredicto Final) ────────────────────
+            # [v9.5] Score Adaptativo por Timeframe:
+            # En Swing (4h+), 35% es suficiente si hay estructura. En Scalping (15m), 50% es ley.
+            min_score_final = 50 if val <= 15 else 35
+            
+            if score < min_score_final:
+                reason = sig.get("confluence", {}).get("veto_reason") or f"Confianza {score}% < {min_score_final}%"
+                self._block(sig, "LOW_CONFLUENCE", reason, result)
                 continue
-
+            
             # ── Filtro 6: Path Traversal — ¿Sigue Viva? ──────────────────────
             if not self._is_alive(sig, df_time, df_low, df_high, now_utc):
-                self._block(sig, "BLOCKED_EXPIRED", "Señal expirada o tocó SL/TP", result)
+                self._block(sig, "BLOCKED_EXPIRED", "Señal expirada o tocó SL/TP en el origen", result)
                 continue
 
             # ✅ ¡SEÑAL TOTALMENTE VALIDADA! 
-            sig["status"] = "ACTIVE" # Asegurar status predeterminado
-            if not silent:
-                logger.info(f"[GATEKEEPER] \u2705 \U0001f3af SEÑAL APROBADA: {sig['asset']} {sig['type']} | R:R {sig['rr_ratio']} | Score {score}%")
-            
+            sig["status"] = "APPROVED"
             result.approved.append(sig)
 
         # ── [SIGMA v5.7.15] AGRUPACIÓN POR ZONA (0.5%) & LÍMITE OMEGA ──
