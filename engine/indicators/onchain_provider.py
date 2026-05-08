@@ -114,8 +114,8 @@ async def refresh_symbol_onchain(symbol: str, force: bool = False):
                     last_error = f"HTTP {oi_r.status_code}"
                     logger.debug(f"[ONCHAIN] Mirror {base_url} retornó {oi_r.status_code} para {symbol}")
             except Exception as e:
-                last_error = str(e)
-                logger.debug(f"[ONCHAIN] Mirror {base_url} falló (Excepción) para {symbol}: {e}")
+                last_error = f"Error en mirror {base_url}: {str(e)}"
+                logger.warning(f"[ONCHAIN] Mirror {base_url} falló para {symbol}: {e}")
                 continue
 
     # 2. Actualizar Caché Global
@@ -131,25 +131,29 @@ async def refresh_symbol_onchain(symbol: str, force: bool = False):
             if state.reference_oi is None or state.reference_oi == 0:
                 try:
                     # Intentar obtener el primer punto del historial (hace ~1h o 5min según limit)
-                    hist_r = await client.get(f"{MIRRORS[0]}/fapi/v1/openInterestHist", params={"symbol": symbol, "period": "5m", "limit": 12})
+                    hist_r = await client.get(f"{MIRRORS[0]}/futures/data/openInterestHist", params={"symbol": symbol, "period": "5m", "limit": 12})
                     if hist_r.status_code == 200:
                         hist_data = hist_r.json()
                         if isinstance(hist_data, list) and len(hist_data) > 0:
                             state.reference_oi = float(hist_data[0].get("sumOpenInterest", new_oi))
                             logger.info(f"[ONCHAIN] 📚 Referencia Histórica cargada para {symbol}: {state.reference_oi:,.0f}")
+                        else:
+                            logger.warning(f"[ONCHAIN] ⚠️ Historial vacío para {symbol}")
+                    else:
+                        logger.warning(f"[ONCHAIN] ⚠️ Error HTTP {hist_r.status_code} al cargar historial para {symbol}")
                 except Exception as e:
-                    logger.debug(f"[ONCHAIN] Fallo al cargar historial de OI para {symbol}: {e}")
+                    logger.error(f"[ONCHAIN] ❌ Error cargando historial para {symbol}: {e}")
+                    pass
                 
                 # Fallback a precio actual si el historial falla
                 if state.reference_oi is None or state.reference_oi == 0:
                     state.reference_oi = new_oi
+                    logger.debug(f"[ONCHAIN] 🔄 Fallback de referencia para {symbol} (Using current OI)")
             
             # Calcular Delta
             if state.reference_oi > 0:
                 old_delta = state.delta_session
                 state.delta_session = ((new_oi - state.reference_oi) / state.reference_oi) * 100
-                if state.delta_session != old_delta:
-                    logger.info(f"[ONCHAIN] ⚓ {symbol} | OI: {new_oi:,.0f} | Δ: {state.delta_session:+.6f}% | FR: {new_fr:.5f}%")
             
             state.oi = new_oi
             state.funding_rate = new_fr
@@ -162,7 +166,7 @@ async def refresh_symbol_onchain(symbol: str, force: bool = False):
             else: state.bias = "NEUTRAL"
         else:
             # [HARDENING v8.7.0] Solo loguear error real si no es un activo excluido
-            logger.error(f"❌ [ONCHAIN-PROVIDER] FALLO TOTAL en {symbol} ({last_error}).")
+            logger.error(f"❌ [ONCHAIN-PROVIDER] FALLO TOTAL en {symbol} | Último error: {last_error}")
 
 def get_onchain_summary(symbol: str) -> Dict:
     """Helper para obtener un dict listo para JSON alineado con el Frontend."""

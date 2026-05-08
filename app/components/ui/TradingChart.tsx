@@ -492,7 +492,7 @@ export default function TradingChart() {
         killzoneSeriesRef.current.forEach(s => { try { chart.removeSeries(s); } catch(e){} });
         killzoneSeriesRef.current = [];
 
-        if (sessionData && sessionData.sessions && isEnabled('session')) {
+        if (sessionData?.sessions && typeof sessionData.sessions === 'object' && isEnabled('session')) {
             const { sessions } = sessionData;
 
             // Valores ajustados a petición del comandante: Cajas muy opacas y marcadas (bg 0.25, kz 0.40).
@@ -598,7 +598,7 @@ export default function TradingChart() {
             });
         }
 
-        if (isEnabled('fibonacci') && tacticalDecision?.fibonacci) {
+        if (isEnabled('fibonacci') && tacticalDecision?.fibonacci?.levels) {
             const { levels, swing_high, swing_low } = tacticalDecision.fibonacci;
             const isUptrend = (swing_low ?? 0) < (swing_high ?? 0);
 

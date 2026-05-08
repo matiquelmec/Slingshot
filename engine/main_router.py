@@ -118,25 +118,28 @@ class SlingshotRouter:
         # Ordenar por timestamp descendente
         try:
             opportunities = sorted(opportunities, key=lambda x: x.get("timestamp", ""), reverse=True)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"[ROUTER] Error al ordenar oportunidades para {asset}: {e}")
 
         # ── Fase 3: Enriquecimiento de Riesgo (pre-Portero) ──────────────────
         enriched: list[dict] = []
         for sig in opportunities:
             sig["asset"] = asset  # [IDENTIDAD v6.8.1] Asegura filtrado diferenciado
-            risk_data = self._risk.calculate_position(
-                current_price=sig["price"],
-                signal_type=sig.get("signal_type", "LONG"),
-                market_regime=sig.get("regime", "RANGING"),
-                key_levels=market_map.key_levels,
-                smc_data=market_map.smc,
-                atr_value=sig.get("atr_value", 0.0),
-                asset=asset,
-                htf_bias=htf_bias,
-                fib_data=market_map.fibonacci
-            )
-            enriched.append(enrich_signal(sig, risk_data, interval))
+            try:
+                risk_data = self._risk.calculate_position(
+                    current_price=sig["price"],
+                    signal_type=sig.get("signal_type", "LONG"),
+                    market_regime=sig.get("regime", "RANGING"),
+                    key_levels=market_map.key_levels,
+                    smc_data=market_map.smc,
+                    atr_value=sig.get("atr_value", 0.0),
+                    asset=asset,
+                    htf_bias=htf_bias,
+                    fib_data=market_map.fibonacci
+                )
+                enriched.append(enrich_signal(sig, risk_data, interval))
+            except Exception as e:
+                logger.error(f"[ROUTER] Error calculando posición para {asset}: {e}")
 
         # ── Fase 4: Portero Institucional ────────────────────────────────────
         gate = self._gatekeeper.process(

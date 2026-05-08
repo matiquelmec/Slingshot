@@ -282,7 +282,7 @@ export default function OverviewPage() {
                     <div className="h-44 bg-gradient-to-br from-[#050B14] to-black backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl flex flex-col justify-between p-5 relative overflow-hidden flex-shrink-0">
                         <div className={`absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(${mlProjection.direction === 'ALCISTA' ? '0,255,65' : mlProjection.direction === 'BAJISTA' ? '255,0,60' : '100,100,100'},0.1),transparent_50%)] pointer-events-none transition-colors duration-1000`} />
                         <div className="flex justify-between items-start z-10">
-                            <p className="text-[10px] text-white/50 tracking-[0.2em] font-bold">INTELIGENCIA TÁCTICA (QWEN + XGBOOST)</p>
+                            <p className="text-[10px] text-white/50 tracking-[0.2em] font-bold">INTELIGENCIA TÁCTICA (GEMMA + XGBOOST)</p>
                             <Activity size={14} className={`${mlProjection.direction === 'ALCISTA' ? 'text-neon-green' : mlProjection.direction === 'BAJISTA' ? 'text-neon-red' : 'text-gray-400'} opacity-50`} />
                         </div>
                         <div className="z-10 mt-auto">
@@ -335,7 +335,7 @@ export default function OverviewPage() {
                                         </div>
                                     ) : (
                                         <p className="text-[9px] text-white/30 italic text-center animate-pulse">
-                                            Qwen inferiendo sobre ticks. Aguardando dictamen...
+                                            Gemma inferiendo sobre ticks. Aguardando dictamen...
                                         </p>
                                     )}
                                 </div>

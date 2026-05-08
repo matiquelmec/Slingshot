@@ -1,0 +1,157 @@
+import { TelemetryState, Timeframe } from './types';
+import { handleWsMessage } from './handlers';
+import { MAX_RETRIES } from './constants';
+
+export const createConnectionManager = (set: any, get: any) => {
+    let ws: WebSocket | null = null;
+    let retryCount = 0;
+    let retryTimeout: any = null;
+    let watchdogInterval: any = null;
+
+    const doConnect = async (symbol: string, timeframe: Timeframe, isRetry = false) => {
+        const connectionId = Math.random().toString(36).substring(7);
+
+        if (ws) {
+            ws.onclose = null;
+            ws.onerror = null;
+            ws.onmessage = null;
+            ws.close(1000);
+            ws = null;
+        }
+        if (retryTimeout) clearTimeout(retryTimeout);
+        if (watchdogInterval) clearInterval(watchdogInterval);
+
+        if (!isRetry) {
+            retryCount = 0;
+            set({
+                activeSymbol: symbol,
+                activeTimeframe: timeframe,
+                activeConnectionId: connectionId,
+                candles: [],
+                isConnected: false,
+                connectionStatus: 'CONNECTING',
+                isCalibrating: true,
+                smcData: null,
+                sessionData: null,
+                latestPrice: null,
+                liquidityHeatmap: null,
+                onchainMetrics: null,
+                mlProjection: { direction: 'NEUTRAL', probability: 50, reason: "Sincronizando..." },
+                tacticalDecision: {
+                    regime: "ANALIZANDO...",
+                    strategy: "STANDBY",
+                    reasoning: `Cargando telemetría para ${symbol}.`,
+                    current_price: null,
+                    nearest_support: null,
+                    nearest_resistance: null,
+                    signals: [],
+                    key_levels: { resistances: [], supports: [] }
+                },
+                htfBias: null,
+            });
+
+            // Rest Hydration
+            const BASE_URL = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000').replace(/\/$/, '');
+            // 🚀 [PLATINUM HYDRATION] Carga inmediata vía REST para evitar delay de WS
+            const fetchInitialData = async () => {
+                try {
+                    const clean = symbol.replace(/[\s\/]/g, '').toUpperCase();
+                    
+                    // 1. Ghost & Macro
+                    const ghostRes = await fetch(`${BASE_URL}/api/v1/ghost`);
+                    if (ghostRes.ok) {
+                        const ghostData = await ghostRes.json();
+                        if (ghostData.ghost) set({ ghostState: ghostData.ghost });
+                        if (ghostData.macro) set({ macroContext: ghostData.macro });
+                    }
+
+                    // 2. [NEW] Sessions Recovery Path
+                    const sessionRes = await fetch(`${BASE_URL}/api/v1/sessions/${clean}`);
+                    if (sessionRes.ok) {
+                        const sessionData = await sessionRes.json();
+                        if (sessionData && sessionData.data) {
+                            console.log(`[TELEMETRY] 📥 Hidratación REST exitosa para ${clean}`);
+                            set({ sessionData: sessionData.data });
+                        }
+                    }
+                } catch (err) {
+                    console.error('[TELEMETRY] ❌ Error en hidratación inicial:', err);
+                }
+            };
+
+            fetchInitialData();
+
+            if (get().news.length === 0) {
+                fetch(`${BASE_URL}/api/v1/news`)
+                    .then(res => res.json())
+                    .then(data => {
+                        if (Array.isArray(data)) set({ news: data.slice(0, 15) });
+                    }).catch(e => console.error("🌐 [TELEMETRY] News fetch failed:", e));
+            }
+
+            if (get().economicEvents.length === 0) {
+                get().fetchEconomicEvents();
+            }
+        } else {
+            set({ activeConnectionId: connectionId });
+        }
+
+        const BASE_URL = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000').replace(/\/$/, '');
+        const BASE_WS = (process.env.NEXT_PUBLIC_API_WS_URL || 'ws://localhost:8000').replace(/\/$/, '');
+        const SECURITY_KEY = process.env.NEXT_PUBLIC_SECURITY_KEY ?? 'SLINGSHOT_INTERNAL_V6';
+
+        try {
+            const tokenRes = await fetch(`${BASE_URL}/api/v1/auth/token?api_key=${SECURITY_KEY}`);
+            const tokenData = await tokenRes.json();
+            if (!tokenData.token) throw new Error("No token");
+
+            if (connectionId !== get().activeConnectionId) return;
+
+            ws = new WebSocket(`${BASE_WS}/api/v1/stream/${symbol}?interval=${timeframe}&token=${tokenData.token}`);
+            let lastMsgTimestamp = Date.now();
+            let context = { connectionId, lastMsgTimestamp, staleGuardActive: false };
+
+            ws.onopen = () => {
+                set({ isConnected: true, connectionStatus: 'CONNECTED' });
+                watchdogInterval = setInterval(() => {
+                    const gap = Date.now() - context.lastMsgTimestamp;
+                    if (gap > 15_000) set({ connectionStatus: 'DISCONNECTED' });
+                    else if (gap > 5_000) set({ connectionStatus: 'STALLED' });
+                    else set({ connectionStatus: 'CONNECTED' });
+                }, 1000);
+            };
+
+            ws.onmessage = (e) => handleWsMessage(e, set, get, context);
+
+            ws.onclose = (event) => {
+                set({ isConnected: false });
+                if (event.code !== 1000 && retryCount < MAX_RETRIES) {
+                    const delay = Math.pow(2, retryCount) * 2000;
+                    retryCount++;
+                    retryTimeout = setTimeout(() => doConnect(get().activeSymbol, get().activeTimeframe, true), delay);
+                }
+            };
+
+            ws.onerror = () => set({ isConnected: false });
+
+        } catch (error) {
+            console.error("[AUTH] WS connection failed:", error);
+            if (retryCount < MAX_RETRIES) {
+                const delay = Math.pow(2, retryCount) * 2000;
+                retryCount++;
+                retryTimeout = setTimeout(() => doConnect(get().activeSymbol, get().activeTimeframe, true), delay);
+            }
+        }
+    };
+
+    return {
+        doConnect,
+        disconnect: () => {
+            if (ws) {
+                ws.onclose = null;
+                ws.close();
+                ws = null;
+            }
+        }
+    };
+};

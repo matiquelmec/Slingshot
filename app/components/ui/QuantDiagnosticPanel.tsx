@@ -4,6 +4,7 @@ import React from 'react';
 import { motion } from 'framer-motion';
 import { Cpu, TrendingUp, TrendingDown, Minus, AlertTriangle, Target } from 'lucide-react';
 import { useTelemetryStore } from '../../store/telemetryStore';
+import { formatCurrency, formatPrice } from '@/app/utils/formatters';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -17,10 +18,7 @@ const REGIME_META: Record<string, { color: string; bg: string; glow: string; lab
     UNKNOWN: { color: 'text-white/40', bg: 'bg-white/5 border-white/10', glow: 'transparent', label: 'CALIBRANDO' },
 };
 
-function fmt(val: number | null, prefix = '$', dp = 0): string {
-    if (val == null) return '—';
-    return prefix + val.toLocaleString('en-US', { minimumFractionDigits: dp, maximumFractionDigits: dp });
-}
+// Utilizar formatCurrency/formatPrice de utils/formatters
 
 function pct(val: number | null): string {
     if (val == null) return '—';
@@ -130,7 +128,7 @@ export default function QuantDiagnosticPanel() {
                                         </span>
                                     </div>
                                     <div className="text-right">
-                                        <p className="text-[10px] font-black text-white/70 font-mono">{fmt(r.price)}</p>
+                                        <p className="text-[10px] font-black text-white/70 font-mono">{formatCurrency(r.price)}</p>
                                         {distPct && <p className="text-[8px] text-neon-red/50">+{distPct}%</p>}
                                     </div>
                                 </div>
@@ -141,7 +139,7 @@ export default function QuantDiagnosticPanel() {
                         {latestPrice && (
                             <div className="flex items-center justify-between border-y border-white/5 py-1 my-1">
                                 <span className="text-[9px] text-white/30">PRECIO ACTUAL</span>
-                                <span className="text-[10px] font-bold text-neon-cyan/70 font-mono">{fmt(latestPrice, '$', 2)}</span>
+                                <span className="text-[10px] font-bold text-neon-cyan/70 font-mono">{formatCurrency(latestPrice)}</span>
                             </div>
                         )}
 
@@ -168,7 +166,7 @@ export default function QuantDiagnosticPanel() {
                                         </span>
                                     </div>
                                     <div className="text-right">
-                                        <p className="text-[10px] font-black text-white/70 font-mono">{fmt(s.price)}</p>
+                                        <p className="text-[10px] font-black text-white/70 font-mono">{formatCurrency(s.price)}</p>
                                         {distPct && <p className="text-[8px] text-neon-green/50">-{distPct}%</p>}
                                     </div>
                                 </div>
@@ -284,7 +282,7 @@ export default function QuantDiagnosticPanel() {
                                             <span className={`text-[9px] font-bold ${labelColor}`}>
                                                 {level} {isGP ? '★GP' : ''}
                                             </span>
-                                            <span className={`text-[9px] font-mono ${isGP ? 'text-yellow-400/90' : 'text-white/60'}`}>{fmt(price, '$', 0)}</span>
+                                            <span className={`text-[9px] font-mono ${isGP ? 'text-yellow-400/90' : 'text-white/60'}`}>{formatCurrency(price)}</span>
                                         </div>
                                     );
 
@@ -302,7 +300,7 @@ export default function QuantDiagnosticPanel() {
                                                         <span className="text-[9px] font-bold text-neon-cyan">PRECIO</span>
                                                     </div>
                                                     <div className="text-right">
-                                                        <span className="text-[10px] font-mono font-black text-neon-cyan">{fmt(latestPrice, '$', 0)}</span>
+                                                        <span className="text-[10px] font-mono font-black text-neon-cyan">{formatCurrency(latestPrice)}</span>
                                                         <p className="text-[7px] text-white/30">↑{distToAbove}% · ↓{distToBelow}%</p>
                                                     </div>
                                                 </div>
@@ -319,7 +317,7 @@ export default function QuantDiagnosticPanel() {
                                                     <span className="text-neon-cyan text-[10px]">▶</span>
                                                     <span className="text-[9px] font-bold text-neon-cyan">PRECIO</span>
                                                 </div>
-                                                <span className="text-[10px] font-mono font-black text-neon-cyan">{fmt(latestPrice, '$', 0)}</span>
+                                                <span className="text-[10px] font-mono font-black text-neon-cyan">{formatCurrency(latestPrice)}</span>
                                             </div>
                                         );
                                     }
@@ -333,7 +331,7 @@ export default function QuantDiagnosticPanel() {
                                                 <span className="text-neon-cyan text-[10px]">▶</span>
                                                 <span className="text-[9px] font-bold text-neon-cyan">PRECIO</span>
                                             </div>
-                                            <span className="text-[10px] font-mono font-black text-neon-cyan">{fmt(latestPrice, '$', 0)}</span>
+                                            <span className="text-[10px] font-mono font-black text-neon-cyan">{formatCurrency(latestPrice)}</span>
                                         </div>
                                     );
                                 }
@@ -341,7 +339,7 @@ export default function QuantDiagnosticPanel() {
                                 return rows;
                             })()}
                             <div className="text-[8px] text-white/20 pt-1 border-t border-white/5 mt-1">
-                                Swing: {fmt(d.fibonacci.swing_low, '$', 0)} → {fmt(d.fibonacci.swing_high, '$', 0)}
+                                Swing: {formatCurrency(d.fibonacci.swing_low)} → {formatCurrency(d.fibonacci.swing_high)}
                             </div>
                         </div>
                     </div>

@@ -54,10 +54,18 @@ class _SecretStore:
     """
 
     def __init__(self):
-        # Base: usar JWT_SECRET si está definido, sino derivar de la API Key
-        self._base = getattr(settings, "JWT_SECRET", None) or (
-            settings.SECURITY_API_KEY + "_JWT_v6.0.1"
-        )
+        # 🛡️ v10.0 Security Fix: El secreto JWT ya NO depende de la API Key.
+        # Si no se define en .env, generamos uno aleatorio único por sesión del servidor.
+        # Esto previene que un atacante que vea la API Key en el frontend pueda firmar tokens.
+        jwt_env = getattr(settings, "JWT_SECRET", None)
+        
+        if jwt_env and jwt_env.strip():
+            self._base = jwt_env
+            logger.info("[AUTH] 🔐 Usando JWT_SECRET definido en entorno.")
+        else:
+            self._base = str(uuid.uuid4()) + "_SLINGSHOT_v10_APEX"
+            logger.warning("[AUTH] ⚠️ JWT_SECRET no definido. Generando secreto aleatorio para esta sesión.")
+            
         self._current_secret: Optional[bytes] = None
         self._current_epoch: int              = -1
 
@@ -130,7 +138,7 @@ def issue_token(subject: Optional[str] = None) -> str:
         "sub":  sub,
         "iat":  now,
         "exp":  now + TOKEN_TTL_SECONDS,
-        "iss":  "slingshot-v6",
+        "iss":  "slingshot-v10",
         "jti":  str(uuid.uuid4()),   # JWT ID único — previene replay attacks
     }
     payload_b64 = _b64_encode(json.dumps(payload, separators=(",", ":")).encode())
@@ -180,7 +188,7 @@ def validate_token(token: str) -> tuple[bool, str, Optional[dict]]:
             return False, f"Token expirado (exp: {payload.get('exp')})", None
 
         # Verificar issuer
-        if payload.get("iss") != "slingshot-v6":
+        if payload.get("iss") != "slingshot-v10":
             return False, f"Issuer inválido: {payload.get('iss')}", None
 
         return True, "", payload

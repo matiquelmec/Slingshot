@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Clock, Zap, TrendingUp, TrendingDown, Minus } from 'lucide-react';
+import { Clock, Zap, TrendingUp, TrendingDown, Minus, Activity } from 'lucide-react';
 import { useTelemetryStore } from '../../store/telemetryStore';
 import { SessionData, SessionInfo } from '../../types/signal';
 import { formatCurrency } from '../../utils/formatters';
@@ -219,12 +219,27 @@ export default function SessionClock() {
 
             {/* Tabla de sesiones */}
             <div className="px-2 pb-2 flex flex-col gap-0.5">
-                {sessionData ? (
+                {sessionData?.sessions && typeof sessionData.sessions === 'object' && Object.keys(sessionData.sessions).length > 0 ? (
                     Object.entries(sessionData.sessions).map(([id, info]) => (
-                        <SessionRow key={id} id={id} info={info as SessionInfo} />
+                        <SessionRow 
+                            key={id} 
+                            id={id} 
+                            info={info as any} 
+                            active={session === id.toUpperCase() || (id === 'ny' && session.includes('NY'))} 
+                        />
                     ))
                 ) : (
-                    <div className="text-center text-white/20 text-[10px] italic py-4">Esperando datos de sesión...</div>
+                    <div className="flex flex-col items-center justify-center py-12 opacity-40">
+                        <motion.div
+                            animate={{ rotate: 360 }}
+                            transition={{ repeat: Infinity, duration: 4, ease: "linear" }}
+                            className="mb-4"
+                        >
+                            <Activity size={20} className="text-neon-cyan/40" />
+                        </motion.div>
+                        <p className="text-[10px] font-black tracking-[0.2em] text-neon-cyan animate-pulse">SINCRONIZANDO NIVELES...</p>
+                        <p className="text-[8px] text-white/20 mt-2 uppercase">Conectando con Global Master Sync</p>
+                    </div>
                 )}
             </div>
 

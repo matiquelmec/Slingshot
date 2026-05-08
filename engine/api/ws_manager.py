@@ -1,963 +1,399 @@
 """
-ws_manager.py — SymbolBroadcaster v6.0.1 (Refactor ISS-011)
+ws_manager.py — SymbolBroadcaster v10.1.0 (Modular Refactor)
 =========================================================
 Arquitectura: "Compute Once, Fan-Out N"
-
-Un SymbolBroadcaster por símbolo activo:
-  - Mantiene UNA conexión a Binance WS
-  - Ejecuta el pipeline completo (SlingshotRouter) una sola vez
-  - Distribuye el resultado a TODOS los clientes via asyncio.Queue
-
-Módulos extraídos (v6.0.1 — Refactor ISS-011):
-  registry.py        → BroadcasterRegistry
-  signal_handler.py  → SignalHandler (filtrado, persistencia, Telegram)
-  advisor_bridge.py  → AdvisorBridge (LLM Advisor, Ghost Data, caché semántica)
+Módulos Refactorizados:
+  - broadcaster/state.py      → Gestión de estado y caché
+  - broadcaster/dispatcher.py → Distribución y sincronización
+  - broadcaster/pipeline.py   → Ejecución de Fast/Slow path
 """
 
-from engine.api.registry import registry
-from engine.core.logger import logger
 import asyncio
+import time
+import traceback
+import pandas as pd
+import websockets as ws_client
 try:
     import orjson as json
 except ImportError:
     import json
-import time
-import traceback
-import hashlib
-from collections import deque
-from datetime import datetime, timezone
-from typing import Dict, Optional
-import uuid
-
-import httpx
-import pandas as pd
-import websockets as ws_client
-from fastapi import WebSocket
 
 from engine.api.config import settings
-from engine.api.json_utils import sanitize_for_json
+from engine.core.store import store
+from engine.api.registry import registry
+from engine.core.logger import logger
+from engine.core.session_manager import SessionManager
 from engine.router.processors import StreamProcessor
 from engine.main_router import SlingshotRouter
-from engine.core.session_manager import SessionManager
+from engine.indicators.data_utils import fetch_binance_history
 from engine.indicators.structure import (
     identify_order_blocks, extract_smc_coordinates,
-    identify_support_resistance, get_key_levels, consolidate_mtf_levels,
-    mitigate_smc_state, merge_smc_states
+    identify_support_resistance, get_key_levels, consolidate_mtf_levels
 )
 from engine.indicators.liquidations import estimate_liquidation_clusters
-from engine.indicators.liquidity import detect_liquidity_clusters, analyze_neural_heatmap
-from engine.indicators.ghost_data import (
-    refresh_ghost_data, get_ghost_state, filter_signals_by_macro,
-    is_cache_fresh, compute_symbol_ghost
-)
+from engine.indicators.liquidity import analyze_neural_heatmap
 from engine.indicators.onchain_provider import get_onchain_summary, refresh_symbol_onchain
 
-from engine.ml.features import FeatureEngineer
-from engine.ml.drift_monitor import drift_monitor
-from engine.indicators.htf_analyzer import HTFAnalyzer
-from engine.indicators.data_utils import fetch_binance_history
-from engine.core.store import store
-
-# ✅ v6.0.1 — Módulos extraídos (Refactor ISS-011)
+# Componentes Modulares
+from engine.api.broadcaster.state import BroadcasterState
+from engine.api.broadcaster.dispatcher import BroadcasterDispatcher
+from engine.api.broadcaster.pipeline import BroadcasterPipeline
+from engine.api.broadcaster.rest_fallback import BitunixFallback
 from engine.api.signal_handler import SignalHandler
 from engine.api.advisor_bridge import AdvisorBridge
-
-# 🏛️ (v6.0-Audit) La gestión de concurrencia IA ha migrado a advisor.py (Priority Queue)
-# 🏛️ (v6.0-Strategy Delta) MASTER_WATCHLIST y PRIORITY_TIERS han migrado a config.py
-# ──────────────────────────────────────────────────────────────────────────────
-
-
-# ──────────────────────────────────────────────────────────────────────────────
-# Helpers compartidos
-# ──────────────────────────────────────────────────────────────────────────────
-
-# [fetch_binance_history movido a engine.indicators.data_utils para evitar duplicación v10.0]
-
-
-# ──────────────────────────────────────────────────────────────────────────────
-# SymbolBroadcaster — el corazón de la arquitectura
-# ──────────────────────────────────────────────────────────────────────────────
 
 class SymbolBroadcaster:
     """
     Mantiene UNA conexión Binance WS por símbolo+intervalo y distribuye
-    todos los mensajes a N clientes simultáneos via asyncio.Queue.
-
-    Ciclo de vida:
-      - Se crea cuando el primer cliente se conecta
-      - Se destruye cuando el último cliente desconecta
+    todos los mensajes a N clientes simultáneos.
     """
 
     def __init__(self, symbol: str, interval: str, persistent: bool = False):
-        self.symbol     = symbol.upper()
-        self.interval   = interval
+        self.symbol = symbol.upper()
+        self.interval = interval
         self.persistent = persistent
-        self._key       = f"{self.symbol}:{self.interval}"
+        self._key = f"{self.symbol}:{self.interval}"
+        self._last_tick_ts = time.time()
 
-        # Suscriptores: client_id → asyncio.Queue
-        self._subscribers: Dict[str, asyncio.Queue] = {}
-        self._lock  = asyncio.Lock()
-        self._task: Optional[asyncio.Task] = None
+        # 1. Estado y Componentes
+        self.state = BroadcasterState(self.symbol, self.interval)
+        self._subscribers: dict = {}
+        self._lock = asyncio.Lock()
+        self._task = None
 
-        # Estado interno del broadcaster (compartido entre todas las velas)
-        self._store           = store # Inyección de Élite v5.7.155 (Sigma Sync)
-        self._router         = SlingshotRouter()
+        self._router = SlingshotRouter()
         self._session_manager = SessionManager(symbol=self.symbol)
-        self._history: list  = []
-        self._macro_levels   = None
-        self._live_buffer: deque = deque(maxlen=300)
-        self._last_ml        = {"direction": "CALIBRANDO", "probability": 50, "status": "warmup"}
-        self._ema_ml_prob    = 50.0
-        self._ml_alpha       = 0.2
-        self._ml_direction   = "ANALIZANDO"
-        self._candle_closes  = 0
-        self._last_pulse_ts  = 0.0
-        self._liquidity      = {"bids": [], "asks": []}
-        self._heatmap        = {"hot_bids": [], "hot_asks": [], "imbalance": 0.0} # Neural Heatmap v5.7
         
-        # ML Tracking Buffer: guarda la predicción de la vela anterior para evaluarla en el cierre (v5.7.155 Master Gold)
-        self._last_ml_prediction = None
-
-        # HTF Top-Down Analysis (v4.0)
-        self._htf_analyzer = HTFAnalyzer()
-        self._htf_bias     = None
-        self._last_htf_ts  = 0.0        
+        self.dispatcher = BroadcasterDispatcher(self.state, self._subscribers, self._lock, self)
+        self.pipeline = BroadcasterPipeline(self.state, self._router, self)
         
-        self._last_onchain_ts = 0.0 # Forza refresh inmediato
-        self._last_whale_scan_ts = 0.0 # v5.7.15 DOM Scanner
-        self._last_onchain = None
-        self._onchain_task = None
+        self._signal_handler = SignalHandler(self.symbol, self.interval, self)
+        self._advisor_bridge = AdvisorBridge(self.symbol, self.interval, self)
+        self.fallback = BitunixFallback(self.symbol, self.interval, self)
+        self._store = store
 
-        # Caché del último estado para nuevos suscriptores
-        self._last_ghost     = None
-        self._last_smc       = None
-        self._last_tactical  = None
-        self._last_session   = None
-        self._last_advisor   = None
-        self._last_liquidations = None
+        # Propiedades de compatibilidad para evitar romper módulos externos
+        self._macro_levels = None
         self._persistent_smc = None
-        self._first_advisor_done = False
-        
-        self._processed_signals_this_candle = set()
-        self._last_advisor_ts = 0
-        self._advisor_task: Optional[asyncio.Task] = None
-        self._onchain_task: Optional[asyncio.Task] = None
-        self._live_rvol: float = 0.0  # 🔴 v5.7.155 Master Gold: RVOL en tiempo real del Fast Path
-        self._cached_live_dates = None  # ✅ ISS-012: Inicializado para evitar AttributeError en cleanup
 
-        # ✅ v6.0.1 — Módulos extraídos (Refactor ISS-011)
-        self._signal_handler  = SignalHandler(self.symbol, self.interval, self)
-        self._advisor_bridge  = AdvisorBridge(self.symbol, self.interval, self)
+        logger.info(f"[BROADCASTER] ✅ Inicializado (Modular v10.1): {self._key}")
 
-        # Alias de compatibilidad para el caché de advisor (leído por main.py)
-        self._last_advisor = self._advisor_bridge._last_advisor_obj
+    # --- Compatibilidad de Propiedades (Getters & Setters para Bridges) ---
+    @property
+    def _live_buffer(self): return self.state.live_buffer
+    @property
+    def _history(self): return self.state.history
+    
+    @property
+    def _last_ghost(self): return self.state.last_ghost
+    @_last_ghost.setter
+    def _last_ghost(self, val): self.state.last_ghost = val
 
-        logger.info(f"[BROADCASTER] ✅ Creado: {self._key}")
+    @property
+    def _last_smc(self): return self.state.last_smc
+    @_last_smc.setter
+    def _last_smc(self, val): self.state.last_smc = val
 
-    # ── Suscripción ──────────────────────────────────────────────────────────
+    @property
+    def _last_tactical(self): return self.state.last_tactical
+    @_last_tactical.setter
+    def _last_tactical(self, val): self.state.last_tactical = val
 
+    @property
+    def _last_session(self): return self.state.last_session
+    @_last_session.setter
+    def _last_session(self, val): self.state.last_session = val
+
+    @property
+    def _last_advisor(self): return self.state.last_advisor
+    @_last_advisor.setter
+    def _last_advisor(self, val): self.state.last_advisor = val
+
+    @property
+    def _last_liquidations(self): return self.state.last_liquidations
+    @_last_liquidations.setter
+    def _last_liquidations(self, val): self.state.last_liquidations = val
+
+    @property
+    def _last_onchain(self): return self.state.last_onchain
+    @_last_onchain.setter
+    def _last_onchain(self, val): self.state.last_onchain = val
+
+    @property
+    def _htf_bias(self): return self.state.htf_bias
+    @_htf_bias.setter
+    def _htf_bias(self, val): self.state.htf_bias = val
+
+    @property
+    def _live_rvol(self): return self.state.live_rvol
+    @_live_rvol.setter
+    def _live_rvol(self, val): self.state.live_rvol = val
+
+    @property
+    def _last_ml(self): return self.state.ml_projection
+    @_last_ml.setter
+    def _last_ml(self, val): self.state.ml_projection = val
+
+    @property
+    def latest_price(self): return self.state.latest_price
+
+    # --- Suscripción ---
     async def subscribe(self, client_id: str) -> asyncio.Queue:
-        """Registra un nuevo cliente. Retorna su Queue personal."""
-        queue: asyncio.Queue = asyncio.Queue(maxsize=200)
+        queue = asyncio.Queue(maxsize=200)
         async with self._lock:
             self._subscribers[client_id] = queue
-            count = len(self._subscribers)
-        logger.info(f"[BROADCASTER] {self._key} → +cliente {client_id[:6]} (total: {count})")
+        
+        logger.info(f"[BROADCASTER] {self._key} → +cliente {client_id[:6]}")
 
-        # Enviar historial actual y estado cacheado al nuevo cliente
-        history_to_send = list(self._live_buffer) if self._live_buffer else self._history
+        # Hidratación inicial
+        history_to_send = list(self.state.live_buffer) if self.state.live_buffer else self.state.history
         if history_to_send:
             await queue.put({"type": "history", "data": history_to_send})
         
-        # ✅ SYNC INSTANTÁNEO: Enviar últimas señales ACTIVAS y POSICIONES (v8.6.1 Global Sync)
-        # Sincronizamos todas las señales del mercado para alimentar el Radar Feed global
+        # Sync Radar & Signals
         all_active_signals = await store.get_signals()
         for sig in list(all_active_signals)[-30:]:
-            # Sincronizamos tanto las pendientes (PENDING/ACTIVE) como las ya ejecutadas (FILLED)
             if sig.get("status") in ["PENDING", "ACTIVE", "FILLED"]:
                 await queue.put({"type": "signal_auditor_update", "data": sig})
 
-        # ✅ SYNC INSTANTÁNEO: Radar Center (Global Context)
         if registry._last_radar_summary:
             await queue.put({"type": "radar_update", "data": registry._last_radar_summary})
 
-        # ✅ HYDRATION: Noticias (v5.9.11 Master Fix)
-        # Solo sincronizamos historial para el canal de 15m (Capitán) para evitar duplicados masivos 
-        # al cambiar de temporalidad. También aumentamos a 15 items para visión total.
-        if self.interval == "15m":
-            try:
-                latest_news = await store.get_news(limit=15)
-                for news_item in reversed(list(latest_news)):
-                    await queue.put({"type": "news_update", "data": news_item})
-            except Exception as e:
-                logger.error(f"[BROADCASTER] Hydration error: {e}")
-
-        if self._last_ghost:    await queue.put(self._last_ghost)
-        if self._last_smc:      await queue.put(self._last_smc)
-        if self._last_tactical: await queue.put(self._last_tactical)
-        if self._last_session:  await queue.put(self._last_session)
-        if self._last_advisor:  await queue.put(self._last_advisor)
-        if self._last_liquidations: await queue.put(self._last_liquidations)
-        if self._last_onchain:      await queue.put(self._last_onchain)
+        # Cache recovery
+        for state_msg in [self.state.last_ghost, self.state.last_smc, self.state.last_tactical, 
+                         self.state.last_session, self.state.last_advisor, self.state.last_liquidations, 
+                         self.state.last_onchain, self.state.last_htf_bias_msg]:
+            if state_msg: await queue.put(state_msg)
 
         return queue
 
     async def unsubscribe(self, client_id: str):
-        """Desregistra un cliente."""
         async with self._lock:
             self._subscribers.pop(client_id, None)
-            count = len(self._subscribers)
-        logger.info(f"[BROADCASTER] {self._key} → -cliente {client_id[:6]} (total: {count})")
-
-    @property
-    def latest_price(self) -> float:
-        """Retorna el último precio de cierre conocido."""
-        if self._history:
-            last = self._history[-1]
-            if "data" in last:
-                return float(last["data"].get("close", 0.0))
-        return 0.0
-
-    @property
-    def change_24h(self) -> float:
-        """
-        Calcula el cambio porcentual de las últimas 24 horas.
-        Para 15m, 24h = 96 velas.
-        """
-        if not self._history or len(self._history) < 96:
-            # Fallback: si no hay suficiente historia, calculamos con lo que haya
-            if len(self._history) < 2: return 0.0
-            first = float(self._history[0]["data"].get("open", 0.0))
-        else:
-            first = float(self._history[-96]["data"].get("open", 0.0))
-            
-        last = self.latest_price
-        if first == 0: return 0.0
-        return round(((last - first) / first) * 100, 2)
+        logger.info(f"[BROADCASTER] {self._key} → -cliente {client_id[:6]}")
 
     def subscriber_count(self) -> int:
         return len(self._subscribers)
 
-    # ── Broadcast interno ────────────────────────────────────────────────────
 
     async def _broadcast(self, message: dict):
-        """Envía un mensaje a TODOS los suscriptores activos y cachea el estado clave."""
-        clean = sanitize_for_json(message)
-        
-        msg_type = clean.get("type", "")
-        
-        # [AUDITORIA v8.6.4] Permitir leaks de Auditoría y Ejecución para el Radar Global
-        if msg_type in ["tactical_update"]:
-            payload = clean.get("data", {})
-            asset = payload.get("asset") if isinstance(payload, dict) else payload.get("symbol") if isinstance(payload, dict) else "?"
-            if asset and asset != self.symbol and asset != "?":
-                logger.error(f"🚨 [LEAK DETECTED] Broadcaster {self.symbol} emitio payload de {asset}! Bloqueando propogación.")
-                return # Veto preventivo para evitar contaminar el frontend
+        await self.dispatcher.broadcast(message)
 
-        if msg_type == "ghost_update":     
-            self._last_ghost = clean
-            await store.update_market_state(self.symbol, {
-                "macro_bias": clean["data"].get("macro_bias"),
-                "dxy_trend":  clean["data"].get("dxy_trend"),
-                "risk_appetite": clean["data"].get("risk_appetite")
-            })
-        elif msg_type == "smc_data":       
-            self._last_smc = clean
-            # Extraer métricas para el Radar
-            data = clean.get("data", {})
-            obs = data.get("order_blocks", {})
-            fvgs = data.get("fvgs", {})
-            await store.update_market_state(self.symbol, {
-                "ob_bullish_count": len(obs.get("bullish", [])),
-                "ob_bearish_count": len(obs.get("bearish", [])),
-                "fvg_bullish_active": len(fvgs.get("bullish", [])) > 0,
-                "fvg_bearish_active": len(fvgs.get("bearish", [])) > 0
-            })
-        elif msg_type == "tactical_update":
-            self._last_tactical = clean
-            # Extraer confluencia y riesgo macro
-            data = clean.get("data", {})
-            conf = data.get("confluence", {})
-            await store.update_market_state(self.symbol, {
-                "regime":        data.get("market_regime"),
-                "strategy":      data.get("active_strategy"),
-                "price":         float(data.get("current_price", 0)),
-                "in_killzone":   any(f.get("factor") == "Liquidez/KZ" and f.get("status") == "CONFIRMADO" for f in conf.get("checklist", [])),
-                "macro_risk":    any(f.get("factor") == "Macro Calendar" and f.get("status") == "PRECAUCIÓN" for f in conf.get("checklist", [])),
-                "liq_magnet":    any(f.get("factor") == "Liq Clusters" and f.get("status") == "CONFIRMADO" for f in conf.get("checklist", []))
-            })
-        elif msg_type == "session_update": 
-            self._last_session  = clean
-            await store.update_market_state(self.symbol, {"session": clean["data"].get("current_session")})
-        elif msg_type == "advisor_update":
-            self._last_advisor = clean
-        elif msg_type == "neural_pulse":
-            data = clean.get("data", {})
-            ml = data.get("ml_projection", {})
-            if ml:
-                await store.update_market_state(self.symbol, {
-                    "ml_dir": ml.get("direction"),
-                    "ml_prob": ml.get("probability")
-                })
-                
-                # 🚀 FULL POTENTIAL: Disparar primer briefing LLM inmediato al conectar
-                if not self._first_advisor_done and self._last_tactical:
-                    self._first_advisor_done = True
-                    asyncio.create_task(self._emit_advisor(self._last_tactical, self._last_session or {}))
-        elif msg_type == "liquidation_update":
-            self._last_liquidations = clean
-            await store.update_liquidation_clusters(self.symbol, clean["data"])
-        elif msg_type == "candle":
-            await store.save_candle(self.symbol, self.interval, clean)
-            await store.update_market_state(self.symbol, {"price": float(clean["data"].get("close", 0))})
-        elif msg_type == "onchain_update":
-            self._last_onchain = clean
-        
-        dead  = []
-        async with self._lock:
-            clients = dict(self._subscribers)
-        for cid, q in clients.items():
-            try:
-                q.put_nowait(clean)
-            except asyncio.QueueFull:
-                # Cliente lento: si la queue está llena, descartamos el mensaje
-                # (mejor que bloquear el broadcaster)
-                dead.append(cid)
-        if dead:
-            async with self._lock:
-                for cid in dead:
-                    self._subscribers.pop(cid, None)
-                    logger.info(f"[BROADCASTER] {self._key} → cliente {cid[:6]} eliminado (queue llena)")
-
-    async def _send_to(self, client_id: str, message: dict):
-        """Envía un mensaje SOLO a un cliente específico (ej: historial inicial)."""
-        async with self._lock:
-            q = self._subscribers.get(client_id)
-        if q:
-            try:
-                q.put_nowait(sanitize_for_json(message))
-            except asyncio.QueueFull:
-                pass
-
-    # ── Loop principal ───────────────────────────────────────────────────────
-
+    # --- Ciclo de Vida ---
     async def start(self):
-        """Inicia el loop del broadcaster en un asyncio.Task."""
-        if self._task and not self._task.done():
-            return
+        if self._task and not self._task.done(): return
         self._task = asyncio.create_task(self._run(), name=f"broadcaster-{self._key}")
-        # [v10.0 Sovereign] El sesgo HTF ahora lo gestiona el Orchestrator de forma centralizada.
-        # Los broadcasters lo consumen directamente del store.
 
     async def stop(self):
-        """Cancela el loop y libera recursos."""
         if self._task and not self._task.done():
             self._task.cancel()
-            try:
-                await self._task
-            except asyncio.CancelledError:
-                pass
+            try: await self._task
+            except asyncio.CancelledError: pass
         logger.info(f"[BROADCASTER] 🛑 Detenido: {self._key}")
 
     async def _run(self):
-        """Loop principal: Bootstrap histórico → Stream en tiempo real."""
         retry_delay = 2.0
         while True:
             try:
                 await self._bootstrap()
-                await self._stream_live()
-                retry_delay = 2.0  # reset en caso de éxito
-            except asyncio.CancelledError:
-                raise
-            except (asyncio.TimeoutError, TimeoutError):
-                logger.info(f"[BROADCASTER] 🔄 Conexión refrescada por inactividad: {self._key}")
-                await asyncio.sleep(1.0)
-            except Exception as e:
-                logger.error(f"[BROADCASTER] ⚠️ Error en {self._key}: {e}. Reintentando en {retry_delay}s...")
-                traceback.print_exc()
+                # Intentar conectar con un timeout agresivo para el handshake
+                await asyncio.wait_for(self._stream_live(), timeout=None) # El loop interno tiene sus propios timeouts
+                retry_delay = 2.0
+            except (asyncio.TimeoutError, Exception) as e:
+                logger.error(f"[BROADCASTER] Error o Timeout en {self._key}: {e}")
+                
+                # [FALLBACK] Forzamos el inicio del rescate si no logramos conectar en 10s
+                if not self.state.is_connected:
+                    logger.warning(f"⚠️ [BROADCASTER] {self._key} Sin conexión Binance. Activando Bitunix...")
+                    await self.fallback.start()
+                
                 await asyncio.sleep(retry_delay)
-                retry_delay = min(retry_delay * 2, 60.0)  # exponential backoff, máx 60s
+                retry_delay = min(retry_delay * 2, 60.0)
 
-    # ── Bootstrap (Fase 1 del stream) ────────────────────────────────────────
-
+    # --- Bootstrap ---
     async def _bootstrap(self):
-        """[OPTIMIZACIÓN v8.5.1] Carga PROGRESIVA: 15m primero, Macro después."""
         logger.info(f"[BROADCASTER] {self._key} → Iniciando Bootstrap Progresivo...")
-
-        # --- FASE 1: Prioridad Máxima (15m History para la UI) ---
         try:
             history = await fetch_binance_history(self.symbol, self.interval, limit=300)
             if history:
-                self._history = sanitize_for_json(history)
-                self._live_buffer = deque(self._history[-300:], maxlen=300)
-                # Emitir historial inmediatamente para que el usuario vea el gráfico
-                await self._broadcast({"type": "history", "data": self._history})
-                logger.info(f"[BROADCASTER] {self._key} → 🟢 UI Hydrated (15m).")
-
-                # --- SMC LIGHTNING-START (Fase Ultra Rápida) ---
+                self.state.history = history
+                self.state.live_buffer.extend(history[-300:])
+                await self._broadcast({"type": "history", "data": history})
+                
+                # 4. Bootstrap de Indicadores Estructurales
+                self._session_manager.bootstrap(history)
+                
+                # Lightning SMC & Initial Liquidations
                 try:
-                    df_fast = pd.DataFrame([i["data"] for i in self._history[-60:]]) # 60 velas para asegurar promedios
+                    df_fast = pd.DataFrame([i["data"] for i in history[-100:]]) # Use last 100 for pivots
                     df_fast["timestamp"] = pd.to_datetime(df_fast["timestamp"], unit="s")
-                    df_fast_ob = identify_order_blocks(df_fast)
-                    fast_smc = extract_smc_coordinates(df_fast_ob)
+                    
+                    # SMC
+                    fast_smc = extract_smc_coordinates(identify_order_blocks(df_fast))
                     await self._broadcast({"type": "smc_data", "data": fast_smc})
-                    logger.info(f"[BROADCASTER] {self._key} → ⚡ SMC Lightning-Start completado.")
-                except Exception as e:
-                    logger.warning(f"[BROADCASTER] {self._key} → Lightning SMC fallido: {e}")
+                    
+                    # Initial Liquidations
+                    latest_price = float(history[-1]["data"]["close"])
+                    initial_liqs = estimate_liquidation_clusters(df_fast, latest_price)
+                    if initial_liqs:
+                        await store.update_liquidation_clusters(self.symbol, initial_liqs)
+                        liq_msg = {"type": "liquidation_update", "data": initial_liqs}
+                        await self._broadcast(liq_msg)
+                        self.state.last_liquidations = liq_msg # Cache full message for new subs
+                except Exception as smc_e:
+                    logger.debug(f"[BOOTSTRAP] Error en Initial Analysis ({self.symbol}): {smc_e}")
         except Exception as e:
-            logger.error(f"[BROADCASTER] {self._key} → Error en carga crítica 15m: {e}")
-            history = []
+            logger.error(f"[BOOTSTRAP] Error en carga crítica: {e}")
 
-        # La función _load_background_data original estaba duplicada aquí. Se eliminó para mantener solo la versión completa inferior que incluye Liquidaciones, SMC y Drift Monitor.
-
-        # --- FASE 2: Carga y Cálculos Pesados en Segundo Plano ---
-        async def _load_background_data():
-            try:
-                # 0. Staggering inicial (Thundering Herd Prevention)
-                import random
-                await asyncio.sleep(random.uniform(0.5, 3.0))
-                
-                # 1. Peticiones Macro
-                tasks = [
-                    fetch_binance_history(self.symbol, "1w", limit=100),
-                    fetch_binance_history(self.symbol, "1d", limit=150),
-                    fetch_binance_history(self.symbol, "4h", limit=250),
-                    fetch_binance_history(self.symbol, "1h", limit=250),
-                    self._advisor_bridge.refresh_ghost()
-                ]
-                results = await asyncio.gather(*tasks, return_exceptions=True)
-                
-                # Desempaquetado silencioso para el pre-calentamiento (Se refrescará en _refresh_htf_bias de todas formas)
-                w1_raw = results[0] if not isinstance(results[0], Exception) else []
-                d1_raw = results[1] if not isinstance(results[1], Exception) else []
-                h4_raw = results[2] if not isinstance(results[2], Exception) else []
-                h1_raw = results[3] if not isinstance(results[3], Exception) else []
-
-                # 2. Cálculos de Indicadores (SMC, Liquidaciones, etc.)
-                if history:
-                    df_init = pd.DataFrame([i["data"] for i in history])
-                    df_init["timestamp"] = pd.to_datetime(df_init["timestamp"], unit="s")
-                    
-                    # Precio de referencia para cálculos iniciales
-                    ref_price = self.latest_price if self.latest_price > 0 else df_init["close"].iloc[-1]
-
-                    # Liquidaciones y SMC (Pesados)
-                    liq_clusters = estimate_liquidation_clusters(df_init, ref_price)
-                    await self._broadcast({"type": "liquidation_update", "data": liq_clusters})
-
-                    df_ob = identify_order_blocks(df_init)
-                    smc_new = extract_smc_coordinates(df_ob)
-                    self._persistent_smc = smc_new
-                    await self._broadcast({"type": "smc_data", "data": self._persistent_smc})
-
-                    # Drift Monitor
-                    try:
-                        from engine.ml.drift_monitor import drift_monitor
-                        from engine.ml.feature_engineer import FeatureEngineer
-                        fe = FeatureEngineer()
-                        drift_monitor.set_reference(fe.generate_features(df_init.copy()))
-                    except: pass
-
-                    # On-Chain
-                    # On-Chain (v8.5.9 Sigma Sync)
-                    try:
-                        onchain_summary = get_onchain_summary(self.symbol)
-                        self._last_onchain = onchain_summary
-                        await self._broadcast({"type": "onchain_update", "data": onchain_summary})
-                        logger.info(f"[ONCHAIN] {self.symbol} → ⚓ Hydration complete.")
-                    except Exception as oe:
-                        logger.warning(f"[ONCHAIN] {self.symbol} → Error in bootstrap: {oe}")
-
-                # 3. Macro Niveles y HTF Bias
-                if h1_raw and h4_raw:
-                    def _get_levels(raw, tf):
-                        df = pd.DataFrame([i["data"] for i in raw])
-                        df["timestamp"] = pd.to_datetime(df["timestamp"], unit="s")
-                        df = identify_support_resistance(df, interval=tf)
-                        return get_key_levels(df)
-
-                    self._macro_levels = consolidate_mtf_levels(
-                        _get_levels(h1_raw, "1h"), _get_levels(h4_raw, "4h"), timeframe_weight=3
-                    )
-                    
-                    # Notificar actualización táctica final (el bias lo maneja el worker)
-                    if history:
-                        await self._reprocess_initial_tactical(history)
-
-            except Exception as bg_e:
-                logger.error(f"[BROADCASTER] {self._key} → Error en cálculos de segundo plano: {bg_e}")
-
-        # Disparamos todo el procesamiento pesado de forma asíncrona
-        asyncio.create_task(_load_background_data())
+        # 🚀 [HYDRATION v10.2] Sincronización Inicial de Telemetría
+        asyncio.create_task(self._sync_initial_telemetry())
         
-        # 4. Inicialización mínima para el Stream Live (Sesiones)
-        if history:
-            try:
-                self._session_manager.bootstrap([i["data"] for i in history])
-                await self._broadcast(self._session_manager.get_current_state())
-            except: pass
+        asyncio.create_task(self._load_background_data())
 
-    async def _reprocess_initial_tactical(self, history):
-        """Re-procesa el pipeline táctico una vez que los niveles macro están listos."""
+    async def _sync_initial_telemetry(self):
+        """Asegura que el cliente reciba datos macro y de sesión inmediatamente."""
         try:
-            df = pd.DataFrame([i["data"] for i in history])
-            df["timestamp"] = pd.to_datetime(df["timestamp"], unit="s")
+            # 1. Sincronizar Sesión
+            session_payload = self._session_manager.get_current_state()
+            self.state.last_session = session_payload
+            await self._broadcast(session_payload)
             
-            self._router.set_context(session_data=self._session_manager.get_current_state().get("data", {}))
-            tactical = self._router.process_market_data(
-                df, asset=self.symbol, interval=self.interval,
-                macro_levels=self._macro_levels,
-                htf_bias=self._htf_bias
-            )
-            
-            # Hidratación con caché si existe
-            cached = await self._store.get_advisor_advice(self.symbol)
-            if cached:
-                tactical["advisor_log"] = cached
+            # 2. Sincronizar Ghost & On-Chain (vía Bridge)
+            await self._advisor_bridge.refresh_ghost()
 
-            await self._broadcast({"type": "tactical_update", "data": tactical})
-            logger.info(f"[BROADCASTER] {self._key} → 🔄 Pipeline táctico actualizado con niveles Macro.")
+            # 3. Análisis Táctico Inicial (One-Shot)
+            if self.state.history:
+                last_candle = self.state.history[-1]
+                await self.pipeline.execute_fast_path(last_candle, {"data": {"E": int(time.time()*1000)}}, force=True)
+            
+            logger.info(f"[BROADCASTER] 🚀 {self._key} Telemetría inicial sincronizada.")
         except Exception as e:
-            logger.error(f"[BROADCASTER] {self._key} → Error re-procesando táctico: {e}")
+            logger.error(f"[BROADCASTER] ⚠️ Error en telemetría inicial {self._key}: {e}")
 
-    # ── Stream en tiempo real (Fase 2 del stream) ────────────────────────────
+    async def _load_background_data(self):
+        try:
+            await asyncio.sleep(1.0)
+            # Carga Macro & Indicadores Pesados
+            h4_raw = await fetch_binance_history(self.symbol, "4h", limit=250)
+            h1_raw = await fetch_binance_history(self.symbol, "1h", limit=250)
+            
+            if h1_raw and h4_raw:
+                def _get_levels(raw, tf):
+                    df = pd.DataFrame([i["data"] for i in raw])
+                    df["timestamp"] = pd.to_datetime(df["timestamp"], unit="s")
+                    return get_key_levels(identify_support_resistance(df, interval=tf))
 
+                self._macro_levels = consolidate_mtf_levels(_get_levels(h1_raw, "1h"), _get_levels(h4_raw, "4h"), 3)
+            
+            # Refrescar bias inicial y enviar a clientes conectados
+            bias = await store.get_htf_bias(self.symbol)
+            if bias:
+                self.state.htf_bias = bias
+                bias_dict = bias.to_dict() if hasattr(bias, 'to_dict') else (bias if isinstance(bias, dict) else {})
+                bias_dict["symbol"] = self.symbol
+                htf_msg = {"type": "htf_bias_update", "data": bias_dict}
+                self.state.last_htf_bias_msg = htf_msg
+                await self._broadcast(htf_msg)
+                logger.info(f"[BROADCASTER] {self.symbol} → HTF Bias hidratado y propagado: {bias_dict.get('direction', 'N/A')}")
+            logger.info(f"[BROADCASTER] {self.symbol} → Background data hydrated.")
+        except Exception as e:
+            logger.error(f"[BG-DATA] Error: {e}")
+
+    # --- Stream En Vivo ---
     async def _stream_live(self):
-        """Conexión al stream multiplexado de Binance (Capa de Red Pura)."""
-        # 1. Source Check: Futures Mark Price (Optimizado v8.5.6)
-        try:
-            # Skip check para activos sin futuros
-            if self.symbol in ["PAXGUSDT", "EURUSDT", "USDCUSDT"]:
-                raise ValueError("Skip Futures Check: Spot Asset")
-
-            futures_stream_url = f"wss://fstream.binance.com/ws/{self.symbol.lower()}@markPrice"
-            async with ws_client.connect(futures_stream_url, open_timeout=3) as fws:
-                await fws.recv() 
-                logger.info(f"[SOURCE_CHECK] fapi.binance.com (Futures) OK.")
-        except Exception as e:
-            logger.debug(f"[SOURCE_CHECK] Futures check skipped for {self.symbol}: {e}")
-
         kline_stream = f"{self.symbol.lower()}@kline_{self.interval}"
         depth_stream = f"{self.symbol.lower()}@depth20@100ms"
-        
-        # v8.8.3 FIX: Dynamic Stream Routing
         is_spot_only = self.symbol in ["EURUSDT", "USDCUSDT"]
         base_ws_url = "wss://stream.binance.com:9443" if is_spot_only else "wss://fstream.binance.com"
-        binance_url  = f"{base_ws_url}/stream?streams={kline_stream}/{depth_stream}"
+        binance_url = f"{base_ws_url}/stream?streams={kline_stream}/{depth_stream}"
 
-        # 🛡️ PROTECCIÓN DE HANDSHAKE (Thundering Herd Prevention)
-        import random
-        await asyncio.sleep(random.uniform(0.1, 2.0))
+        logger.info(f"[BROADCASTER] {self._key} → Conectando a: {binance_url}")
         
-        logger.info(f"[BROADCASTER] {self._key} → Conectando a Binance WS: {binance_url}")
+        try:
+            # Correcto: await wait_for devuelve el context manager, luego entramos con async with
+            async with await asyncio.wait_for(ws_client.connect(binance_url, ping_interval=30), timeout=15.0) as binance_ws:
+                self.state.is_connected = True
+                logger.info(f"[BROADCASTER] {self._key} → Stream Conectado 🟢")
+                
+                # Si el fallback estaba corriendo, lo detenemos
+                await self.fallback.stop()
+                self._last_tick_ts = time.time()
 
-        async with ws_client.connect(
-            binance_url, 
-            ping_interval=30, 
-            ping_timeout=60,
-            open_timeout=30, 
-            close_timeout=10
-        ) as binance_ws:
-            logger.info(f"[BROADCASTER] {self._key} → Stream EN VIVO 🟢")
-            
-            # EL BUCLE PRINCIPAL AHORA TIENE COMPLEJIDAD CICLOMÁTICA DE 3.
-            while True:
-                raw = await asyncio.wait_for(binance_ws.recv(), timeout=60.0)
-                data = json.loads(raw)
-                stream_type = data.get("stream", "")
-                payload_data = data.get("data", {})
+                while self.state.is_connected:
+                    try:
+                        raw = await asyncio.wait_for(binance_ws.recv(), timeout=15.0)
+                        self._last_tick_ts = time.time()
+                        data = json.loads(raw)
+                        stream_type = data.get("stream", "")
+                        payload = data.get("data", {})
+                        
+                        if "depth" in stream_type:
+                            await self._process_depth_stream(payload)
+                        elif "kline" in stream_type:
+                            await self._process_kline_stream(payload, data)
+                    except asyncio.TimeoutError:
+                        logger.warning(f"[BROADCASTER] Timeout de datos en {self._key}. Reintentando...")
+                        break
+        except Exception as e:
+            logger.error(f"[BROADCASTER] Fallo crítico de conexión en {self._key}: {e}")
+            raise
 
-                # Dispatcher de Capa 1
-                if stream_type == depth_stream:
-                    await self._process_depth_stream(payload_data)
-                elif stream_type.startswith(self.symbol.lower()):
-                    await self._process_kline_stream(payload_data, data)
-                else:
-                    logger.warning(f"⚠️ [SYSTEM] Cross-stream leak detected! {stream_type} discarded.")
-
-    # ---------------------------------------------------------------------
-    # DELEGADOS DE EJECUCIÓN (AISLAMIENTO DE COMPLEJIDAD)
-    # ---------------------------------------------------------------------
-
-    async def _process_depth_stream(self, payload_data: dict):
-        """Procesa exclusivamente el Neural Heatmap (Fast Path visual)."""
-        price = getattr(self, "latest_price", None) or 1.0
-        
-        # v8.5.8 FIX: Soporte dual para Spot (bids/asks) y Futuros (b/a)
-        raw_bids = payload_data.get("bids") or payload_data.get("b", [])
-        raw_asks = payload_data.get("asks") or payload_data.get("a", [])
-        
-        self._heatmap = analyze_neural_heatmap(
-            bids=raw_bids,
-            asks=raw_asks,
+    async def _process_depth_stream(self, payload: dict):
+        price = self.latest_price or 1.0
+        self.state.heatmap = analyze_neural_heatmap(
+            bids=payload.get("bids") or payload.get("b", []),
+            asks=payload.get("asks") or payload.get("a", []),
             current_price=price
         )
-        self._liquidity = {
-            "bids": [{"price": b["price"], "volume": b["volume"]} for b in self._heatmap.get("hot_bids", [])],
-            "asks": [{"price": a["price"], "volume": a["volume"]} for a in self._heatmap.get("hot_asks", [])]
+        self.state.liquidity = {
+            "bids": [{"price": b["price"], "volume": b["volume"]} for b in self.state.heatmap.get("hot_bids", [])],
+            "asks": [{"price": a["price"], "volume": a["volume"]} for a in self.state.heatmap.get("hot_asks", [])]
         }
-
-        # v8.5.9 FIX: Desacoplar broadcast del kline stream (1 seg throttling)
+        
         now = time.time()
-        if now - getattr(self, '_last_heatmap_broadcast_ts', 0) > 1.0:
-            self._last_heatmap_broadcast_ts = now
+        if now - getattr(self, '_last_heatmap_ts', 0) > 1.0:
+            self._last_heatmap_ts = now
             await self._broadcast({
                 "type": "neural_pulse",
                 "data": {
-                    "ml_projection": self._last_ml, 
-                    "liquidity_heatmap": self._heatmap, 
-                    "latency_ms": 0, 
-                    "rvol_live": getattr(self, '_live_rvol', 0)
+                    "ml_projection": self.state.ml_projection, 
+                    "liquidity_heatmap": self.state.heatmap,
+                    "rvol_live": self.state.live_rvol
                 }
             })
 
-    async def _process_kline_stream(self, payload_data: dict, raw_data: dict):
-        """Enrutador de velas: Separa el Fast Path (Tick) del Slow Path (Close)."""
-        kline = payload_data.get("k")
-        if not kline:
-            return
+    async def _process_kline_stream(self, payload: dict, raw_data: dict):
+        kline = payload.get("k")
+        if not kline: return
+        
+        # 🟢 Sync Latest Price for Heatmap
+        self.latest_price = float(kline["c"])
 
-        candle_payload = {
+        candle = {
             "type": "candle",
             "data": {
-                "timestamp": kline["t"] / 1000,
-                "open":  float(kline["o"]),
-                "high":  float(kline["h"]),
-                "low":   float(kline["l"]),
-                "close": float(kline["c"]),
-                "volume": float(kline["v"]),
+                "timestamp": kline["t"] / 1000, "open": float(kline["o"]),
+                "high": float(kline["h"]), "low": float(kline["l"]),
+                "close": float(kline["c"]), "volume": float(kline["v"]),
             }
         }
-        await self._broadcast(candle_payload)
+        await self._broadcast(candle)
 
-        # OMEGA CENTINEL
+        # 🚀 [ULTRA-LOW LATENCY] Procesamiento en segundo plano para no bloquear el siguiente TICK
         from engine.execution.omega_listener import omega_centinel
-        await omega_centinel.check_live_price(self.symbol, float(kline["c"]), self)
+        asyncio.create_task(omega_centinel.check_live_price(self.symbol, float(kline["c"]), self))
+        asyncio.create_task(self.pipeline.execute_fast_path(candle, raw_data))
 
-        # SESIONES (v8.8.3 Stability Guard)
-        try:
-            self._session_manager.update(candle_payload["data"])
-            await self._broadcast(self._session_manager.get_current_state())
-        except Exception as se:
-            logger.error(f"[SESSION-ERROR] {self.symbol} → Error actualizando sesiones: {se}")
+        if kline.get("x", False):
+            # El Slow Path SÍ se espera porque es crítico para el cambio de vela
+            await self.pipeline.execute_slow_path(candle)
 
-        # ENRUTAMIENTO BIFURCADO
-        try:
-            await self._execute_fast_path(candle_payload, raw_data)
-            
-            if kline.get("x", False):
-                await self._execute_slow_path(candle_payload)
-        except Exception as pe:
-            logger.error(f"[PIPELINE-ERROR] {self.symbol} → Error en ruta crítica: {pe}")
-
-    async def _execute_fast_path(self, candle_payload: dict, raw_data: dict):
-        """Lógica de inter-vela (Tiered Priority)."""
-        now = time.time()
-        pulse_interval = settings.PRIORITY_TIERS.get(self.symbol, settings.DEFAULT_PULSE_INTERVAL)
-        
-        regime = self._last_tactical.get("data", {}).get("market_regime", "UNKNOWN") if self._last_tactical else "UNKNOWN"
-        if regime in ["CHOPPY", "ACCUMULATION", "DISTRIBUTION"]:
-            pulse_interval = max(pulse_interval, 3.0) 
-        
-        if now - self._last_pulse_ts < pulse_interval:
-            return  # Rate Limiter Institucional Activo
-            
-        self._last_pulse_ts = now
-        current_buffer = [i["data"] for i in self._live_buffer] + [candle_payload["data"]]
-        df_live = pd.DataFrame(current_buffer)
-        
-        delta_fast = await StreamProcessor.process_fast_path(
-            symbol=self.symbol, interval=self.interval,
-            candle_payload=candle_payload, ws_data=raw_data,
-            context={"df_live": df_live, "avg_volume": getattr(store, 'get_avg_volume', lambda x: 0)(self.symbol)}
-        )
-
-        from engine.api.registry import registry
-        registry.record_latency(delta_fast.get("latency_ms", 0))
-
-        if delta_fast.get("latency_dirty"):
-            await self._broadcast({"type": "neural_log", "data": {"type": "SYSTEM", "message": f"⚠️ LATENCY_DIRTY: {delta_fast['latency_ms']}ms"}})
-            
-        if delta_fast.get("event") == "ABSORPTION_ALERT":
-            logger.warning(f"[DELTA] 🚨 ABSORCIÓN detectada en {self.symbol}")
-            await self._broadcast({"type": "absorption_alert", "data": {"rvol": delta_fast['rvol']}})
-            asyncio.create_task(self._emit_advisor(self._last_tactical or {}, SessionManager.get_global_session_status(), is_absorption_alert=True))
-
-        ml_data = delta_fast.get("ml_prediction", {})
-        if ml_data:
-            self._last_ml = ml_data
-            prob_raw = ml_data.get("probability", 50)
-            prob_bull = prob_raw if ml_data.get("direction") == "ALCISTA" else 100 - prob_raw
-            self._ema_ml_prob = (prob_bull * self._ml_alpha) + (self._ema_ml_prob * (1 - self._ml_alpha))
-
-        try:
-            live_tactical = await asyncio.to_thread(
-                self._router.process_market_data, df_live, asset=self.symbol, interval=self.interval,
-                macro_levels=self._macro_levels, htf_bias=self._htf_bias, heatmap=self._heatmap, silent=True,
-                event_time_ms=raw_data.get("data", {}).get("E")
-            )
-            self._last_tactical = {"data": live_tactical}
-            self._live_rvol = float((live_tactical.get('diagnostic') or {}).get('rvol', 0))
-            
-            for sig in live_tactical.get("signals", []):
-                await self._broadcast({"type": "signal_auditor_update", "data": sig})
-                logger.info(f"🚀 [WS_PUSH] Señal APROBADA: {sig['asset']}")
-
-            for sig in live_tactical.get("blocked_signals", []):
-                await self._broadcast({"type": "signal_auditor_update", "data": sig})
-
-            await self._broadcast({"type": "tactical_update", "data": live_tactical})
-        except Exception as e:
-            logger.error(f"[FAST-PATH] Pipeline tactical error: {e}")
-
-        await self._broadcast({
-            "type": "neural_pulse",
-            "data": {"ml_projection": self._last_ml, "liquidity_heatmap": self._heatmap, "latency_ms": delta_fast.get("latency_ms", 0), "rvol_live": self._live_rvol}
-        })
-
-        # --- [ON-CHAIN REFRESH] Sincronización con el Caché Global (v8.6.1) ---
-        now = time.time()
-        if now - self._last_onchain_ts > 180: # Cada 3 minutos (180s)
-            self._last_onchain_ts = now
-            try:
-                onchain_summary = get_onchain_summary(self.symbol)
-                if onchain_summary:
-                    self._last_onchain = onchain_summary
-                    await self._broadcast({"type": "onchain_update", "data": onchain_summary})
-            except: pass
-
-    async def _execute_slow_path(self, candle_payload: dict):
-        """Lógica de cierre de vela (Strategy Delta Δ)."""
-        self._processed_signals_this_candle.clear()
-        self._live_buffer.append(candle_payload)
-        self._candle_closes += 1
-        
-        delta_slow = await StreamProcessor.process_slow_path(
-            symbol=self.symbol, candle_payload=candle_payload,
-            live_buffer=list(self._live_buffer), persistent_smc=self._persistent_smc,
-            context={"candle_closes": self._candle_closes, "ml_direction": self._ml_direction}
-        )
-
-        if delta_slow.get("smc_data"):
-            self._persistent_smc = delta_slow["smc_data"]
-            await self._broadcast({"type": "smc_data", "data": self._persistent_smc})
-
-        if delta_slow.get("liquidation_clusters"):
-            await self._broadcast({"type": "liquidation_update", "data": delta_slow["liquidation_clusters"]})
-
-        try:
-            df_slow = pd.DataFrame([i["data"] for i in self._live_buffer])
-            df_slow["timestamp"] = pd.to_datetime(df_slow["timestamp"], unit="s")
-
-            news_items   = await self._store.get_news()
-            econ_events  = await self._store.get_economic_events(limit=5)
-            
-            # --- [SMT Divergence] Sincronización del Activo Espejo ---
-            correlated_df = None
-            mirror_asset = "ETHUSDT" if self.symbol in ["BTCUSDT", "SOLUSDT"] else "BTCUSDT"
-            from engine.api.registry import registry
-            mirror_broadcaster = registry.get_broadcaster(mirror_asset, self.interval)
-            
-            if mirror_broadcaster and len(mirror_broadcaster._live_buffer) > 0:
-                try:
-                    correlated_df = pd.DataFrame([i["data"] for i in mirror_broadcaster._live_buffer])
-                    correlated_df["timestamp"] = pd.to_datetime(correlated_df["timestamp"], unit="s")
-                except Exception as e:
-                    logger.error(f"[WS_MANAGER] Error cargando espejo SMT para {self.symbol}: {e}")
-            # ---------------------------------------------------------
-            
-            await self._update_local_htf_bias()
-            
-            self._router.set_context(
-                ml_projection=self._last_ml, session_data=(self._last_session or {}).get("data", {}),
-                news_items=news_items, economic_events=econ_events, liquidation_clusters=delta_slow.get("liquidation_clusters", []),
-                correlated_df=correlated_df, ghost_data=self._last_ghost
-            )
-            
-            final_tactical = await asyncio.to_thread(
-                self._router.process_market_data, df_slow, asset=self.symbol, interval=self.interval,
-                macro_levels=self._macro_levels, htf_bias=self._htf_bias, silent=False
-            )
-            await self._broadcast({"type": "tactical_update", "data": final_tactical})
-            await self._handle_signals(final_tactical, silent=False)
-
-            current_candle_ts = str(candle_payload["data"]["timestamp"])
-            if current_candle_ts != str(self._last_advisor_ts):
-                self._last_advisor_ts = current_candle_ts
-                asyncio.create_task(self._emit_advisor(final_tactical, SessionManager.get_global_session_status()))
-
-        except Exception as e:
-            logger.error(f"[SLOW-PATH] tactical error: {e}")
-
-    async def _update_local_htf_bias(self):
-        """[v10.0] Recupera el sesgo fresco del almacén central fractal."""
-        bias = await self._store.get_htf_bias(self.symbol)
-        if bias:
-            self._htf_bias = bias
-            self._last_htf_ts = time.time()
-
-
-# [_htf_bias_worker eliminado v10.0 - Centralizado en Orchestrator]
-
-
-
-    # ── Handlers auxiliares ───────────────────────────────────────────────────
-
-    async def check_ollama(self) -> bool:
-        """Prueba rápida asincrónica para ver si Ollama responde en localhost:11434."""
-        import httpx
-        try:
-            async with httpx.AsyncClient(timeout=4.0) as client:
-                r = await client.get("http://localhost:11434/api/tags")
-                return r.status_code == 200
-        except:
-            return False
-
+    # --- Handlers Auxiliares (Wrappers para compatibilidad) ---
     async def _handle_signals(self, tactical: dict, silent: bool = False):
-        """Delega al SignalHandler extraído (v6.0.1 — Refactor ISS-011)."""
         await self._signal_handler.handle(tactical, silent=silent)
 
-    async def _check_drift(self, df_live: pd.DataFrame):
-        """
-        Analiza si el mercado ha divergido de los datos de entrenamiento (Population Stability Index).
-        Si detecta drift severo, emite una alerta institucional a Telegram.
-        """
-        try:
-            logger.info(f"[BROADCASTER] 🔍 Ejecutando Drift Monitor para {self.symbol}...")
-            
-            # --- 0. Generar features para el análisis de distribución ---
-            # El monitor espera features procesadas (RSI, MACD, etc), no Ohlcv crudo.
-            fe = FeatureEngineer()
-            df_features = fe.generate_features(df_live.copy())
+    async def _emit_advisor(self, tactical: dict, session: dict, is_absorption_alert: bool = False):
+        await self._advisor_bridge.emit(tactical, session, is_absorption_alert=is_absorption_alert)
 
-            # --- 1. Evaluar Drift via PSI ---
-            # El monitor ya tiene el historial de accuracy actualizado del Slow Path.
-            report = drift_monitor.check(df_features)
-            
-            if not report:
-                return
-
-            # --- 3. Si hay alerta disparada, notificar vía Telegram ---
-            if report.alert_triggered:
-                from engine.notifications.telegram import send_drift_alert_async
-                
-                drift_payload = {
-                    "asset": self._symbol,  # [FORCED v8.3.0] Prohibir asset leakage
-                    "affected_features": ", ".join(report.features_in_drift) if report.features_in_drift else "Generales",
-                    "rolling_accuracy": f"{report.rolling_accuracy * 100:.1f}",
-                    "psi_max": f"{report.psi_max:.3f}",
-                    "level": report.drift_level,
-                    "recommendation": report.recommendation
-                }
-                
-                await send_drift_alert_async(drift_payload)
-                
-                # Log en la consola institucional (Frontend)
-                await self._broadcast({
-                    "type": "neural_log", 
-                    "data": {
-                        "type": "WARNING",
-                        "message": f"🚨 {self.symbol} DRIFT MONITOR: {report.recommendation}"
-                    }
-                })
-            else:
-                logger.info(f"[BROADCASTER] ✅ Drift Monitor ({self.symbol}): Modelo estable (PSI Max: {report.psi_max:.3f})")
-
-        except Exception as e:
-            import traceback
-            logger.error(f"[BROADCASTER] ❌ Error en Drift Monitor ({self.symbol}): {e}")
-            traceback.print_exc()
-
-
-
-    async def _persist_signal(self, sig: dict, tactical: dict, status: str = "ACTIVE", rejection_reason: str = None, silent: bool = False):
-        """Delega al SignalHandler extraído (v6.0.1 — Refactor ISS-011)."""
-        await self._signal_handler.persist(sig, tactical, status=status, rejection_reason=rejection_reason, silent=silent)
-
-    def _get_tactical_hash(self, tactical: dict) -> str:
-        """Delega al AdvisorBridge extraído (v6.0.1 — Refactor ISS-011)."""
-        return self._advisor_bridge.get_tactical_hash(tactical)
-
-    async def _emit_advisor(self, tactical: dict, session_state: dict, is_absorption_alert: bool = False):
-        """Delega al AdvisorBridge extraído (v6.0.1 — Refactor ISS-011)."""
-        await self._advisor_bridge.emit(tactical, session_state, is_absorption_alert=is_absorption_alert)
-
-    async def _refresh_ghost(self, global_ghost=None):
-        """Refresca Ghost Data (Funding específico + Global context) y broadcast."""
-        try:
-            # 1. Obtener contexto global (F&G, Dominancia)
-            if not global_ghost:
-                global_ghost = get_ghost_state()
-            
-            # 2. Obtener Funding específico de este símbolo en tiempo real (Centralizado v8.7.0)
-            await refresh_symbol_onchain(self.symbol)
-            onchain = get_onchain_summary(self.symbol)
-            local_funding = onchain.get("funding_rate", 0.0)
-            
-            # 3. Calcular Bias híbrido
-            ghost = compute_symbol_ghost(global_ghost, self.symbol, local_funding)
-            
-            # 4. 🔴 SESGO UNIFICADO v5.7.155 Master Gold (Conflict Resolution)
-            # Reconcilia Macro (Ghost) + Estructura (SMC/Wyckoff) + ML en un veredicto único.
-            # Si hay contradicción → STAND_BY. Evita que el frontend muestre señales conflictivas.
-            ml_dir = (self._last_ml or {}).get("direction", "NEUTRAL")
-            ml_dir_normalized = "BULLISH" if ml_dir == "ALCISTA" else ("BEARISH" if ml_dir == "BAJISTA" else "NEUTRAL")
-            
-            macro_dir = ghost.macro_bias  # BULLISH / BEARISH / BLOCK_LONGS / BLOCK_SHORTS / NEUTRAL
-            macro_bullish = macro_dir in ("BULLISH", "BLOCK_SHORTS")
-            macro_bearish = macro_dir in ("BEARISH", "BLOCK_LONGS")
-            
-            ml_bullish = ml_dir_normalized == "BULLISH"
-            ml_bearish = ml_dir_normalized == "BEARISH"
-            
-            if macro_bullish and ml_bullish:
-                system_verdict = "BULLISH"
-            elif macro_bearish and ml_bearish:
-                system_verdict = "BEARISH"
-            elif (macro_bullish and ml_bearish) or (macro_bearish and ml_bullish):
-                system_verdict = "STAND_BY"
-            else:
-                system_verdict = "NEUTRAL"
-            
-            # 5. Broadcast
-            await self._broadcast({"type": "ghost_update", "data": {
-                "symbol":           self.symbol,
-                "fear_greed_value": ghost.fear_greed_value,
-                "fear_greed_label": ghost.fear_greed_label,
-                "btc_dominance":    ghost.btc_dominance,
-                "funding_rate":     ghost.funding_rate,
-                "funding_symbol":   ghost.funding_symbol,
-                "macro_bias":       ghost.macro_bias,
-                "block_longs":      ghost.block_longs,
-                "block_shorts":     ghost.block_shorts,
-                "reason":           ghost.reason,
-                "last_updated":     ghost.last_updated,
-                "dxy_trend":        ghost.dxy_trend,
-                "dxy_price":        ghost.dxy_price,
-                "nasdaq_trend":     ghost.nasdaq_trend,
-                "nasdaq_change_pct":ghost.nasdaq_change_pct,
-                "risk_appetite":    ghost.risk_appetite,
-                "system_verdict":   system_verdict,
-            }})
-        except Exception as e:
-            logger.error(f"[BROADCASTER] {self._key} → Ghost specific refresh error: {e}")
-
-    async def _check_drift(self, df: pd.DataFrame):
-        """Ejecuta el drift monitor y broadcast alerta si hay drift."""
-        try:
-            fe = FeatureEngineer()
-            # Asincronía: Offload CPU-heavy pipeline out of main event loop
-            df_features = await asyncio.to_thread(fe.generate_features, df)
-            report = await asyncio.to_thread(drift_monitor.check, df_features)
-            if report and report.alert_triggered:
-                await self._broadcast({"type": "drift_alert", "data": report.to_dict()})
-        except Exception as e:
-            logger.error(f"[BROADCASTER] {self._key} → Drift check error: {e}")
-
-
-# ──────────────────────────────────────────────────────────────────────────────
-
-
-# ──────────────────────────────────────────────────────────────────────────────
-# (v6.0) BroadcasterRegistry ha migrado a engine/api/registry.py (Strategy Delta)
-# ──────────────────────────────────────────────────────────────────────────────
+    async def _persist_signal(self, sig: dict, tactical: dict, **kwargs):
+        await self._signal_handler.persist(sig, tactical, **kwargs)

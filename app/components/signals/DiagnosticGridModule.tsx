@@ -123,15 +123,15 @@ const DiagnosticGridModule: React.FC<DiagnosticGridProps> = ({
                 <div className="flex flex-col gap-1">
                     <div className="flex items-center justify-between mb-1">
                         <span className={`text-[11px] font-black tracking-tighter ${
-                            tacticalDecision?.htf_bias?.direction === 'BULLISH' ? 'text-neon-green' : 
-                            tacticalDecision?.htf_bias?.direction === 'BEARISH' ? 'text-neon-red' : 'text-white/40'
+                            (tacticalDecision?.htf_bias?.direction || tacticalDecision?.htfBias?.direction) === 'BULLISH' ? 'text-neon-green' : 
+                            (tacticalDecision?.htf_bias?.direction || tacticalDecision?.htfBias?.direction) === 'BEARISH' ? 'text-neon-red' : 'text-white/40'
                         }`}>
-                            {tacticalDecision?.htf_bias?.direction || 'ANALIZANDO...'}
+                            {tacticalDecision?.htf_bias?.direction || tacticalDecision?.htfBias?.direction || 'ANALIZANDO...'}
                         </span>
                         <span className="text-[9px] font-mono text-white/30">H4+H1</span>
                     </div>
                     <div className="text-[8px] leading-tight text-white/50 italic opacity-80 line-clamp-2">
-                         {tacticalDecision?.htf_bias?.reason || "Esperando confirmación de temporalidades mayores..."}
+                         {tacticalDecision?.htf_bias?.reason || tacticalDecision?.htfBias?.reason || "Esperando confirmación de temporalidades mayores..."}
                     </div>
                 </div>
             </div>

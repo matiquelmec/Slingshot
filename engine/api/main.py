@@ -1,5 +1,5 @@
 """
-main.py — API Gateway Slingshot v3.2 (Local Master)
+main.py — API Gateway Slingshot v10.0.0 (Apex Sovereign)
 =========================================================
 Responsabilidad: Orquestación del motor local y endpoints REST/WS.
 Arquitectura Zero-Redis: Todo el estado vive en engine.core.store.
@@ -10,7 +10,10 @@ from pathlib import Path
 from typing import Optional, List
 import httpx
 import pandas as pd
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Query
+import asyncio
+from contextlib import asynccontextmanager
+
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Query, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
 from engine.api.config import settings
@@ -20,12 +23,15 @@ from engine.api.ws_manager import fetch_binance_history
 from engine.main_router import SlingshotRouter
 from engine.core.store import store
 from engine.workers.orchestrator import SlingshotOrchestrator
-from engine.api.advisor import check_ollama_status
+from engine.api.advisor import check_ollama_status, start_ai_worker
 from engine.api.auth import issue_token, validate_token
-from fastapi import HTTPException
-import asyncio
+
+# ── Global Instances ─────────────────────────────────────────────────────────
 
 global_orchestrator = SlingshotOrchestrator()
+_one_shot_router = SlingshotRouter()
+
+# ── Patches ──────────────────────────────────────────────────────────────────
 
 # Parchar WebSocket.send_json para usar el encoder robusto globalmente
 _original_send_json = WebSocket.send_json
@@ -34,12 +40,66 @@ async def _safe_send_json(self, data, mode="text"):
     await _original_send_json(self, clean, mode=mode)
 WebSocket.send_json = _safe_send_json  # type: ignore[method-assign]
 
+# ── Lifespan Pattern (Modern FastAPI) ────────────────────────────────────────
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Gestión del ciclo de vida del motor Slingshot v10.0."""
+    logger.info(f"🚀 [INIT] Slingshot v{settings.VERSION} — Iniciando...")
+    
+    # 1. Limpieza inicial del almacén de datos
+    await store.clear_all()
+    
+    # 2. Inicializar Ollama (Advisor Táctico) con reintentos
+    ollama_ready = False
+    for attempt in range(1, 4):
+        if await check_ollama_status(force_recheck=True):
+            ollama_ready = True
+            logger.info(f"🧠 [INIT] Ollama confirmado ONLINE (intento {attempt}/3). IA activa.")
+            break
+        else:
+            logger.warning(f"[INIT] Ollama no disponible (intento {attempt}/3)...")
+        if attempt < 3:
+            await asyncio.sleep(3)
+    
+    if not ollama_ready:
+        logger.error("🚨 [INIT] Ollama NO disponible tras 3 intentos. El sistema funcionará sin Advisor IA.")
+    else:
+        start_ai_worker()
+
+    # 3. Activar el Orquestador (News, Calendar, Whale Alert)
+    try:
+        await global_orchestrator.start()
+        logger.info("✅ [INIT] Orquestador de datos activado.")
+    except Exception as e:
+        logger.error(f"❌ [INIT] Error al iniciar el orquestador: {e}")
+
+    # 4. Activar Radar Center (Health Monitor)
+    logger.info(f"📡 [RADAR] Activando Radar Center para {len(settings.MASTER_WATCHLIST)} activos...")
+    await registry.start_global_pulse()
+    await registry.start_simulation_monitor()
+
+    logger.info(f"🏎️  [SYSTEM] Slingshot v{settings.VERSION} listo para el despliegue.")
+
+    yield
+    
+    # 🛑 Shutdown Logic
+    logger.info("🛑 [SHUTDOWN] Slingshot cerrando procesos...")
+    try:
+        await global_orchestrator.stop()
+        logger.info("✅ [SHUTDOWN] Orquestador detenido.")
+    except Exception as e:
+        logger.error(f"❌ [SHUTDOWN] Error al cerrar orquestador: {e}")
+
 # ── FastAPI app ───────────────────────────────────────────────────────────────
 
 app = FastAPI(
     title=settings.PROJECT_NAME,
-    description="Slingshot v3.2 — Motor Local Maestro (Local-First, Zero-Latency)",
+    description="Slingshot v10.0.0 Apex Sovereign (Institutional-Grade Trading Engine)",
     version=settings.VERSION,
+    lifespan=lifespan,
+    docs_url="/docs",
+    redoc_url="/redoc"
 )
 
 app.add_middleware(
@@ -50,65 +110,24 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ── Lifespan / Startup ───────────────────────────────────────────────────────
-
-@app.on_event("startup")
-async def startup_event():
-    """Inicialización del motor y limpieza del almacén de datos."""
-    await store.clear_all() # Reset del estado efímero al arrancar
-    
-    # v5.9-Fix: Verificar Ollama ANTES de arrancar workers (con reintentos)
-    import engine.api.advisor as advisor_module
-    from engine.api.advisor import start_ai_worker
-    
-    # Chequeo con reintentos: Ollama puede tardar en cargar modelos en frío
-    ollama_ready = False
-    for attempt in range(1, 4):
-        if await advisor_module.check_ollama_status(force_recheck=True):
-            ollama_ready = True
-            logger.info(f"🧠 [STARTUP] Ollama confirmado ONLINE (intento {attempt}/3). IA activa.")
-            break
-        else:
-            logger.warning(f"[STARTUP] Ollama no disponible (intento {attempt}/3).")
-        
-        if attempt < 3:
-            await asyncio.sleep(3)  # Esperar entre reintentos
-    
-    if not ollama_ready:
-        logger.error("🚨 [STARTUP] Ollama NO disponible tras 3 intentos. Noticias sin análisis IA.")
-    
-    start_ai_worker()
-    
-    asyncio.create_task(global_orchestrator.start())
-
-    # 🏁 Startup: Activar Radar Center para activos de la Watchlist (Simulation)
-    logger.info(f"[RADAR] 📡 Activando Radar Center para {len(settings.MASTER_WATCHLIST)} activos (Multi-TF)...")
-    
-    # Iniciar Monitor de Salud Institucional (30s Report)
-    await registry.start_simulation_monitor()
-    
-    logger.info("[SIMULATION] 🏎️ Motores listos para el despliegue.")
-
-@app.on_event("shutdown")
-async def shutdown_event():
-    """Apagado ordenado de workers."""
-    global_orchestrator.stop()
-    logger.info("[API] Motor Slingshot desactivado.")
-
-# Router one-shot para análisis REST (no WebSocket)
-_one_shot_router = SlingshotRouter()
-
-
-# ── Health & Status ───────────────────────────────────────────────────────────
+# ── Health & Status Endpoints ─────────────────────────────────────────────────
 
 @app.get("/")
 async def root():
     return {
         "status": "online",
-        "engine": "Slingshot v3.2 — Local Master Edition",
+        "engine": "Slingshot v10.0.0 Apex Sovereign",
         "version": settings.VERSION,
     }
 
+@app.get("/api/v1/health")
+async def health_check():
+    """Endpoint para monitoreo de salud (Docker/K8s)."""
+    return {
+        "status": "healthy",
+        "version": settings.VERSION,
+        "ollama_active": await check_ollama_status()
+    }
 
 @app.get("/api/v1/status")
 async def get_status():
@@ -151,25 +170,29 @@ async def get_liquidations(asset: str):
     """Retorna las zonas de liquidación estimadas para un activo."""
     return await store.get_liquidation_clusters(asset)
 
+@app.get("/api/v1/sessions/{asset}")
+async def get_session_state(asset: str):
+    """Retorna el estado de sesiones actual para un activo (Recovery Path)."""
+    broadcaster, _ = await registry.get_or_create(asset, "15m")
+    if not broadcaster:
+        return {"error": "Asset not found"}
+    return sanitize_for_json(broadcaster._session_manager.get_current_state())
+
 @app.get("/api/v1/signals")
 async def get_signals(
     asset: Optional[str] = Query(None),
     status: Optional[str] = Query("ALL")
 ):
     """Retorna el historial de señales activas o bloqueadas (Auditoría)."""
-    # Si el frontend pide "ALL", pasamos None al store para no filtrar por status.
     _status_filter = None if status == "ALL" else status
     return await store.get_signals(asset=asset, status=_status_filter)
 
 
-# ── REST One-Shot ─────────────────────────────────────────────────────────────
+# ── REST One-Shot Analysis ────────────────────────────────────────────────────
 
 @app.get("/api/v1/analyze/{symbol}")
 async def analyze_symbol(symbol: str, timeframe: str = "15m"):
-    """
-    Análisis instantáneo de un activo sin WebSocket.
-    Cold-start: descarga desde Binance REST si no hay datos locales.
-    """
+    """Análisis instantáneo de un activo sin WebSocket."""
     try:
         file_path = Path(__file__).parent.parent.parent / "data" / f"{symbol.lower()}_{timeframe}.parquet"
 
@@ -211,12 +234,7 @@ async def websocket_stream_endpoint(
     interval: str = Query(default="15m"),
     token: Optional[str] = Query(None)
 ):
-    """
-    Stream WebSocket multi-usuario para un símbolo dado.
-
-    🔒 JWT Security v6.0.1: Validación de token rotatorio
-    Arquitectura Delta v6.0: Utiliza el BroadcasterRegistry modularizado.
-    """
+    """Stream WebSocket multi-usuario para un símbolo dado."""
     await websocket.accept()
 
     if not token:
@@ -232,19 +250,16 @@ async def websocket_stream_endpoint(
         await websocket.close(code=4001)
         return
 
-    registry.record_auth(success=True) # 📊 Registro Sigma
+    registry.record_auth(success=True)
     broadcaster, client_id = await registry.get_or_create(symbol, interval)
     queue = await broadcaster.subscribe(client_id)
 
-    logger.info(f"[GATEWAY] ✅ Acceso validado. Cliente {client_id[:6]} conectado → {symbol.upper()}:{interval} "
-          f"({broadcaster.subscriber_count()} suscriptores totales)")
+    logger.info(f"[GATEWAY] ✅ Acceso validado. Cliente {client_id[:6]} conectado → {symbol.upper()}:{interval}")
 
     try:
         while True:
-            # Espera el siguiente mensaje del broadcaster (fan-out)
             msg = await queue.get()
             await websocket.send_json(msg)
-
     except WebSocketDisconnect:
         logger.info(f"[GATEWAY] Cliente {client_id[:6]} desconectado → {symbol.upper()}:{interval}")
     except Exception as e:
@@ -257,5 +272,5 @@ async def websocket_stream_endpoint(
 
 if __name__ == "__main__":
     import uvicorn
-    logger.info("[SLINGSHOT v3.2] Iniciando en http://0.0.0.0:8000")
+    logger.info(f"[SLINGSHOT v{settings.VERSION}] Iniciando en http://0.0.0.0:8000")
     uvicorn.run(app, host="0.0.0.0", port=8000)

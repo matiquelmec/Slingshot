@@ -126,12 +126,14 @@ class SessionManager:
             cached_day, cached_state = _BOOTSTRAP_MEMO[self._symbol]
             if cached_day == today_str:
                 logger.info(f"[SessionManager:{self._symbol}] ♻️  Reutilizando Bootstrap Global (Sincronización v5.7.156)")
-                # Solo tomamos los campos que no son específicos de la instancia (levels)
-                # No sobreescribimos self._state totalmente para preservar trades_today
+                
+                # Verificación de integridad: asegurar que el asset en el estado coincide
                 for k, v in cached_state.items():
                     if k != "trades_today":
                         self._state[k] = v
+                
                 self._state["trading_day"] = today_str
+                # Asegurar que el asset en el payload sea el correcto
                 return
 
         now_utc = datetime.now(timezone.utc)
@@ -167,7 +169,11 @@ class SessionManager:
                 "london": {"high": None, "low": None},
                 "ny":     {"high": None, "low": None}}
 
-        for candle in history:
+        for item in history:
+            candle = item.get("data", item) if isinstance(item, dict) else item
+            if not isinstance(candle, dict) or "timestamp" not in candle:
+                continue
+
             ts    = datetime.fromtimestamp(candle["timestamp"], tz=timezone.utc)
             day   = ts.date()
             high  = float(candle["high"])
@@ -246,10 +252,13 @@ class SessionManager:
             candle: dict con {"timestamp": float, "high": float, "low": float, ...}
             is_closed: True si la vela ya cerró (para guardar en disco solo entonces)
         """
-        ts      = datetime.fromtimestamp(candle["timestamp"], tz=timezone.utc)
+        # Robustez: soporta {"type": "candle", "data": {...}} o el dict plano
+        data = candle.get("data", candle) if isinstance(candle, dict) else candle
+        
+        ts      = datetime.fromtimestamp(data["timestamp"], tz=timezone.utc)
         today   = ts.date()
-        high    = float(candle["high"])
-        low     = float(candle["low"])
+        high    = float(data["high"])
+        low     = float(data["low"])
 
         # ── Rotación de Día ──────────────────────────────────────────────
         if str(today) != self._state.get("trading_day"):
@@ -360,25 +369,34 @@ class SessionManager:
 
         sessions_info = {
             "asia": {
-                **self._state["asia"],
-                "start_utc":   asia_start_utc,
-                "end_utc":     asia_end_utc,
+                "high":        float(self._state["asia"]["high"]) if self._state["asia"]["high"] is not None else None,
+                "low":         float(self._state["asia"]["low"]) if self._state["asia"]["low"] is not None else None,
+                "prev_high":   float(self._state["asia"]["prev_high"]) if self._state["asia"]["prev_high"] is not None else None,
+                "prev_low":    float(self._state["asia"]["prev_low"]) if self._state["asia"]["prev_low"] is not None else None,
+                "start_utc":   int(asia_start_utc),
+                "end_utc":     int(asia_end_utc),
                 "open_chile":  _to_chile_str(asia_start_utc),
                 "close_chile": _to_chile_str(asia_end_utc),
                 "status":      "ACTIVE" if 9 <= tokyo_hour < 15 else ("PENDING" if tokyo_hour < 9 else "CLOSED"),
             },
             "london": {
-                **self._state["london"],
-                "start_utc":   lon_start_utc,
-                "end_utc":     lon_end_utc,
+                "high":        float(self._state["london"]["high"]) if self._state["london"]["high"] is not None else None,
+                "low":         float(self._state["london"]["low"]) if self._state["london"]["low"] is not None else None,
+                "prev_high":   float(self._state["london"]["prev_high"]) if self._state["london"]["prev_high"] is not None else None,
+                "prev_low":    float(self._state["london"]["prev_low"]) if self._state["london"]["prev_low"] is not None else None,
+                "start_utc":   int(lon_start_utc),
+                "end_utc":     int(lon_end_utc),
                 "open_chile":  _to_chile_str(lon_start_utc),
                 "close_chile": _to_chile_str(lon_end_utc),
                 "status":      "ACTIVE" if 8 <= lon_hour < 16 else ("PENDING" if lon_hour < 8 else "CLOSED"),
             },
             "ny": {
-                **self._state["ny"],
-                "start_utc":   ny_start_utc,
-                "end_utc":     ny_end_utc,
+                "high":        float(self._state["ny"]["high"]) if self._state["ny"]["high"] is not None else None,
+                "low":         float(self._state["ny"]["low"]) if self._state["ny"]["low"] is not None else None,
+                "prev_high":   float(self._state["ny"]["prev_high"]) if self._state["ny"]["prev_high"] is not None else None,
+                "prev_low":    float(self._state["ny"]["prev_low"]) if self._state["ny"]["prev_low"] is not None else None,
+                "start_utc":   int(ny_start_utc),
+                "end_utc":     int(ny_end_utc),
                 "open_chile":  _to_chile_str(ny_start_utc),
                 "close_chile": _to_chile_str(ny_end_utc),
                 "status":      "ACTIVE" if 8 <= ny_hour < 16 else ("PENDING" if ny_hour < 8 else "CLOSED"),
@@ -426,20 +444,21 @@ class SessionManager:
         return {
             "type": "session_update",
             "data": {
-                "current_session":     session_name,
+                "asset":               str(self._symbol),
+                "current_session":     str(session_name),
                 "current_session_utc": now_utc.strftime("%H:%M UTC"),
                 "local_time":          now_chile.strftime("%H:%M Chile"),
                 "local_time_ny":       now_ny.strftime("%H:%M"),
                 "local_time_lon":      now_lon.strftime("%H:%M"),
-                "is_killzone":         is_killzone,
-                "is_silver_bullet":    is_silver_bullet,
-                "is_overlap":          is_overlap,
+                "is_killzone":         bool(is_killzone),
+                "is_silver_bullet":    bool(is_silver_bullet),
+                "is_overlap":          bool(is_overlap),
                 "sessions":            sessions_info,
-                "pdh":       self._state.get("pdh"),
-                "pdl":       self._state.get("pdl"),
-                "pdh_swept": self._state.get("pdh_swept", False),
-                "pdl_swept": self._state.get("pdl_swept", False),
-                "trading_day": self._state.get("trading_day"),
+                "pdh":       float(self._state.get("pdh")) if self._state.get("pdh") is not None else None,
+                "pdl":       float(self._state.get("pdl")) if self._state.get("pdl") is not None else None,
+                "pdh_swept": bool(self._state.get("pdh_swept", False)),
+                "pdl_swept": bool(self._state.get("pdl_swept", False)),
+                "trading_day": str(self._state.get("trading_day")),
             }
         }
 

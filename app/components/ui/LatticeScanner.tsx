@@ -20,7 +20,7 @@ export default function LatticeScanner() {
 
     // Construir lista de pares reales desde el marketSummary del backend
     const pairs = useMemo(() => {
-        const entries = { ...marketSummary };
+        const entries = marketSummary ? { ...marketSummary } : {};
         
         // 🛡️ OMEGA STABILITY: Asegurar que los Master siempre existan en el mapa visual
         MASTER_WATCHLIST.forEach(symbol => {
@@ -95,10 +95,12 @@ export default function LatticeScanner() {
 
             {/* List Header */}
             <div className="grid grid-cols-12 px-4 py-1.5 border-b border-white/5 text-[7px] font-black text-white/15 tracking-wider uppercase">
-                <div className="col-span-4">SÍMBOLO</div>
-                <div className="col-span-3 text-center">RÉGIMEN</div>
+                <div className="col-span-3">SÍMBOLO</div>
+                <div className="col-span-2 text-center">RÉGIMEN</div>
                 <div className="col-span-2 text-center">SESGO</div>
-                <div className="col-span-3 text-right">PRECIO</div>
+                <div className="col-span-2 text-center">FUNDING</div>
+                <div className="col-span-1 text-center">OI Δ</div>
+                <div className="col-span-2 text-right">PRECIO</div>
             </div>
 
             {/* Virtualized Container */}
@@ -143,7 +145,7 @@ export default function LatticeScanner() {
                                     }}
                                 >
                                     {/* Symbol */}
-                                    <div className="col-span-4 flex items-center gap-1.5">
+                                    <div className="col-span-3 flex items-center gap-1.5">
                                         <span className={`text-[10px] font-black font-mono ${isActive ? 'text-neon-cyan' : 'text-white/60'}`}>
                                             {pair.asset.replace('USDT', '')}
                                         </span>
@@ -151,7 +153,7 @@ export default function LatticeScanner() {
                                     </div>
 
                                     {/* Regime */}
-                                    <div className="col-span-3 flex items-center justify-center">
+                                    <div className="col-span-2 flex items-center justify-center">
                                         <span className={`text-[8px] font-bold tracking-wider ${regimeColor}`}>
                                             {pair.regime || '—'}
                                         </span>
@@ -165,10 +167,24 @@ export default function LatticeScanner() {
                                         </span>
                                     </div>
 
+                                    {/* Funding */}
+                                    <div className="col-span-2 flex items-center justify-center">
+                                        <span className={`text-[9px] font-mono font-bold ${pair.funding > 0 ? 'text-neon-red' : pair.funding < 0 ? 'text-neon-green' : 'text-white/20'}`}>
+                                            {pair.funding ? `${pair.funding.toFixed(4)}%` : '0.0000%'}
+                                        </span>
+                                    </div>
+
+                                    {/* OI Delta */}
+                                    <div className="col-span-1 flex items-center justify-center">
+                                        <span className={`text-[9px] font-mono font-bold ${pair.oi > 0 ? 'text-neon-green' : pair.oi < 0 ? 'text-neon-red' : 'text-white/20'}`}>
+                                            {pair.oi ? `${pair.oi > 0 ? '+' : ''}${pair.oi.toFixed(2)}%` : '0.00%'}
+                                        </span>
+                                    </div>
+
                                     {/* Price */}
-                                    <div className="col-span-3 text-right">
+                                    <div className="col-span-2 text-right">
                                         <span className="text-[10px] font-black font-mono text-white/70">
-                                            {formatCurrency(pair.price)}
+                                            {formatCurrency(pair.price || 0)}
                                         </span>
                                     </div>
                                 </div>

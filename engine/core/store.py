@@ -43,14 +43,14 @@ class MemoryStore:
         self._lock = asyncio.Lock()
 
     async def update_market_state(self, asset: str, data: Dict[str, Any]):
-        """Actualiza el radar en tiempo real."""
-        async with self._lock:
-            if asset not in self._market_states:
-                self._market_states[asset] = {}
+        """Actualiza el radar en tiempo real (Optimizado v10.2)."""
+        if asset not in self._market_states:
+            async with self._lock:
+                if asset not in self._market_states:
+                    self._market_states[asset] = {}
             
-            self._market_states[asset].update(data)
-            self._market_states[asset]["last_updated"] = datetime.now(timezone.utc).isoformat()
-            self._market_states[asset]["asset"] = asset
+        self._market_states[asset].update(data)
+        self._market_states[asset]["asset"] = asset
 
     async def save_tactical_snapshot(self, asset: str, interval: str, data: Dict[str, Any]):
         """Persiste el estado técnico de un intervalo específico para análisis MTF."""
@@ -70,12 +70,13 @@ class MemoryStore:
             return context
 
     async def save_candle(self, asset: str, interval: str, candle_data: Dict[str, Any]):
-        """Guarda la vela en un buffer circular específico para el activo."""
+        """Guarda la vela en un buffer circular (Thread-safe append)."""
         key = f"{asset}:{interval}"
-        async with self._lock:
-            if key not in self._candle_history:
-                self._candle_history[key] = deque(maxlen=self._max_history)
-            self._candle_history[key].append(candle_data)
+        if key not in self._candle_history:
+            async with self._lock: # Solo lock para crear la entrada
+                if key not in self._candle_history:
+                    self._candle_history[key] = deque(maxlen=self._max_history)
+        self._candle_history[key].append(candle_data)
 
     async def get_history(self, asset: str, interval: str) -> List[Dict[str, Any]]:
         """Recupera el historial circular para sincronización inicial."""

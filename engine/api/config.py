@@ -8,7 +8,7 @@ _ENV_FILE = str(Path(__file__).parent.parent.parent / ".env")
 class Settings(BaseSettings):
     # API Configuration
     PROJECT_NAME: str = "Slingshot Engine"
-    VERSION: str = "6.0.0"
+    VERSION: str = "10.0.0"
     API_V1_STR: str = "/api/v1"
 
     # Binance
@@ -28,11 +28,11 @@ class Settings(BaseSettings):
     SECURITY_API_KEY: str = "SLINGSHOT_INTERNAL_V6"
 
     # Ollama LLM (Advisor Táctico)
-    OLLAMA_MODEL: str = "gemma3:4b"        # gemma3:4b = producción | gemma3:4b = VRAM reducida
+    OLLAMA_MODEL: str = "gemma3:4b"        # gemma3:4b = producción | gemma4:latest = alta precisión
     OLLAMA_URL: str = "http://localhost:11434"
 
     # Strategy Delta Δ: Tiered Priority (v6.0 Trident Audit)
-    RADAR_ASSETS: str = "BTCUSDT,ETHUSDT,SOLUSDT,PAXGUSDT"
+    RADAR_ASSETS: str = "BTCUSDT,ETHUSDT,SOLUSDT,PAXGUSDT,XAGUSDT"
     
     @property
     def MASTER_WATCHLIST(self) -> list[str]:

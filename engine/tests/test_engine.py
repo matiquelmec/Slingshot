@@ -1,9 +1,10 @@
-import asyncio
+import pytest
 import time
 import pandas as pd
 from engine.core.confluence import ConfluenceManager
 from engine.api.advisor import generate_tactical_advice
 
+@pytest.mark.asyncio
 async def test_confluence_assertions():
     print("--- INICIANDO SUITE DE PRUEBAS ON-CHAIN (v5.7.155 Master Gold) ---\n")
     confluence = ConfluenceManager()
@@ -12,16 +13,18 @@ async def test_confluence_assertions():
     df = pd.DataFrame([{
         'timestamp': pd.Timestamp.utcnow(), 
         'close': 50000, 
-        'volume': 100, 
+        'volume': 200, # 2x respecto al promedio implícito
         'market_regime': 'RANGING',
         'ob_bullish': True,
-        'fvg_bullish': True
+        'fvg_bullish': True,
+        'recent_sweep_bull': True # Inyectamos barrido de liquidez
     }])
 
     signal_base = {
         'timestamp': df['timestamp'].iloc[-1],
         'type': 'LONG',
-        'pair': 'BTC/USDT'
+        'pair': 'BTC/USDT',
+        'price': 50000
     }
 
     print("Escenario A: Breakout con Volumen Whale (Bullish + Whale Inflow)")
@@ -64,6 +67,7 @@ async def test_confluence_assertions():
     else:
         print("PASS: El sistema mitigó correctamente el Long a causa de manipulación On-Chain.\n")
 
+@pytest.mark.asyncio
 async def test_semantic_cache_latency():
     print("--- BENCHMARK DE LATENCIA Y SEMANTIC CACHING ---")
     tactical_data = {
@@ -79,7 +83,7 @@ async def test_semantic_cache_latency():
     print("Llamada Inicial a LLM (Sin Caché)...")
     t0 = time.time()
     await generate_tactical_advice(
-        asset="BTCUSDT",
+        symbol="BTCUSDT",
         tactical_data=tactical_data,
         current_session="NEW_YORK",
         onchain_data=onchain_data
@@ -91,7 +95,7 @@ async def test_semantic_cache_latency():
     print("Llamada Secundaria a LLM (Con Caché Semántico)...")
     t0 = time.time()
     advice = await generate_tactical_advice(
-        asset="BTCUSDT",
+        symbol="BTCUSDT",
         tactical_data=tactical_data,
         current_session="NEW_YORK",
         onchain_data=onchain_data
@@ -105,11 +109,3 @@ async def test_semantic_cache_latency():
         print("⚠️ ADVERTENCIA DE RENDIMIENTO: El Advisor superó los 7s de respuesta. El 'Semantic Cache' o Ollama están lentos.")
     else:
         print(f"PASS: Semantic Caching funcional y óptimo ({call_2_time:.2f}s)!\n")
-
-async def main():
-    await test_confluence_assertions()
-    await test_semantic_cache_latency()
-    print(">>> TODOS LOS TESTS DE MOTOR ON-CHAIN Y CONFLUENCIA FUERON EXITOSOS. <<<")
-
-if __name__ == "__main__":
-    asyncio.run(main())

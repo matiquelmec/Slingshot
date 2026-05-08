@@ -1,19 +1,12 @@
 """
-engine/router/dispatcher.py — v5.7.155 Master Gold
+engine/router/dispatcher.py — v10.2.0 (Modularized)
 =======================================================
 Capa de Despacho y Enriquecimiento de Señales.
-Responsabilidad: tomar una oportunidad bruta del Strategy y enriquecerla
-con los datos matemáticos de riesgo, timestamps de expiración y metadatos
-necesarios para que sea consumible por el ConfluenceManager y la UI.
 """
 from __future__ import annotations
 
 import pandas as pd
 from typing import Any
-from engine.execution.ftmo_bridge import prepare_ftmo_order_package
-from engine.execution.bitunix_bridge import prepare_bitunix_order
-
-
 
 # Mapa de timeframe → minutos
 _INTERVAL_MINUTES: dict[str, int] = {
@@ -21,13 +14,11 @@ _INTERVAL_MINUTES: dict[str, int] = {
     "1h": 60, "2h": 120, "4h": 240, "8h": 480, "1d": 1440,
 }
 
-
 def build_base_result(market_map) -> dict:
     """
     Ensambla el dict de resultado base a partir de un MarketMap.
-    Esto es lo que el Router devolverá al Gateway.
     """
-    from engine.router.analyzer import MarketMap  # import local para evitar circular
+    from engine.router.analyzer import MarketMap
     mm: MarketMap = market_map
 
     return {
@@ -40,19 +31,16 @@ def build_base_result(market_map) -> dict:
         "nearest_resistance": mm.nearest_resistance,
         "expansion_ratio": mm.expansion_ratio,
         "range_pos_pct": mm.range_pos_pct,
-        "bb_width_mean": None,   # Reservado para futuras ampliaciones
-        "dist_to_sma200": None,  # Reservado para futuras ampliaciones
-        "active_strategy": "SMC v5.7.155 Master Gold (Liquidity & OBs)",
+        "active_strategy": "SMC v10.2.0 APEX",
         "key_levels": mm.key_levels,
         "smc": mm.smc,
         "fibonacci": mm.fibonacci,
         "htf_bias": mm.htf_bias,
         "diagnostic": mm.diagnostic,
-        "atr_value": mm.atr_value, # [AUDITORIA v6.6.14]
+        "atr_value": mm.atr_value,
         "signals": [],
         "blocked_signals": [],
     }
-
 
 def enrich_signal(signal: dict, risk_data: dict, interval: str) -> dict:
     """
@@ -80,26 +68,13 @@ def enrich_signal(signal: dict, risk_data: dict, interval: str) -> dict:
         "tp1":               risk_data["tp1"],
         "tp2":               risk_data["tp2"],
         "tp3":               risk_data["tp3"],
-        "take_profit_3r":    risk_data["tp2"], # Legacy: vinculamos 1.8R como TP principal
+        "take_profit_3r":    risk_data["tp3"], # [FIX v10.2.0] Vinculado a TP3
         "entry_zone_top":    risk_data.get("entry_zone_top", signal.get("price")),
         "entry_zone_bottom": risk_data.get("entry_zone_bottom", signal.get("price")),
         "expiry_candles":    risk_data.get("expiry_candles", 3),
         "expiry_timestamp":  expiry_timestamp_str,
-        "tp1_vol":           risk_data.get("tp1_vol_pct", 0.60), # Sintonía SIGMA (v7.5.0)
+        "tp1_vol_pct":       risk_data.get("tp1_vol_pct", 0.60),
         "interval_minutes":  interval_minutes,
     })
     
-    # ── FTMO BRIDGE (Titanium v5.7.155 Master Gold) ───────────────────────────────────────
-    try:
-        # Preparamos el paquete de órdenes fragmentadas (60/20/20) para MT5
-        signal["ftmo_order_package"] = prepare_ftmo_order_package(signal)
-    except Exception:
-        signal["ftmo_order"] = None
-
-    # ── BITUNIX BRIDGE (Titanium v5.7.155 Master Gold) ────────────────────────────────────
-    try:
-        signal["bitunix_order"] = prepare_bitunix_order(signal)
-    except Exception:
-        signal["bitunix_order"] = None
-
     return signal

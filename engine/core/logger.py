@@ -6,7 +6,7 @@ def setup_logger():
     # Only setup once
     logger = logging.getLogger("slingshot")
     if not logger.handlers:
-        logger.setLevel(logging.INFO)
+        logger.setLevel(logging.DEBUG)
         
         # Ensure log directory exists within tmp/ to keep root clean
         log_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "tmp", "logs")

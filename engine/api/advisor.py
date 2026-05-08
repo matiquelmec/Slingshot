@@ -321,7 +321,9 @@ Estructura:
                 if isinstance(results, dict) and len(results) > 0:
                     results = [results] # Convertir un solo objeto en lista
                 else:
-                    raise ValueError(f"LLM response is not a JSON list or valid object. Content: {clean_content[:100]}...")
+                    # Si es {} o algo vacío, no lanzamos error, usamos fallback silenciosamente
+                    logger.warning(f"[ADVISOR] ⚠️ News Batch vacío o malformado ({clean_content[:20]}). Usando fallback.")
+                    return fallback_list
                 
             for i, res in enumerate(results):
                 if "sentiment" not in res: res["sentiment"] = "NEUTRAL"
@@ -337,7 +339,8 @@ Estructura:
             return fallback_list
             
     except Exception as e:
-        logger.error(f"[ADVISOR] ❌ News Batch Error: {e}")
+        logger.error(f"[ADVISOR] ❌ News Batch Fatal Error: {e}")
+        return fallback_list
         return fallback_list
 
 

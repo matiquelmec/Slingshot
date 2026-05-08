@@ -23,10 +23,70 @@ class NexusNode:
         self.executor = BinanceExecutor(dry_run=dry_run)
         self._active_positions = {}
         logger.info(f"🛡️ [NEXUS] Nodo de Ejecución inicializado (Dry Run: {dry_run})")
+        
+        # Iniciar Centinelas de Riesgo
+        self.start_centinels()
 
-    def start_dashboard(self):
-        """Inicia el monitor de ejecución en segundo plano."""
-        asyncio.create_task(self._dashboard_loop())
+    def start_centinels(self):
+        """Inicia los procesos de monitoreo y gestión de riesgo."""
+        loop = asyncio.get_event_loop()
+        loop.create_task(self._dashboard_loop())
+        loop.create_task(self._omega_centinel_loop())
+
+    async def _omega_centinel_loop(self):
+        """
+        [OMEGA CENTINEL v10.2.0]
+        Monitorea el precio en vivo y gestiona el Smart Trailing.
+        """
+        logger.info("👁️ [OMEGA] Centinela de Riesgo activado.")
+        while True:
+            await asyncio.sleep(5) # Ciclo de auditoría cada 5 segundos
+            
+            assets_to_remove = []
+            for asset, pos in list(self._active_positions.items()):
+                try:
+                    # 1. Obtener precio actual (simplificado vía ticker)
+                    ticker = await asyncio.to_thread(self.executor.client.fetch_ticker, asset.replace('/', ''))
+                    current_price = ticker['last']
+                    
+                    sig = pos['signal']
+                    entry = sig['price']
+                    tp1 = sig['tp1']
+                    sl = sig['stop_loss']
+                    is_long = sig['type'] == "LONG"
+                    
+                    # 2. Verificar si se ha alcanzado el TP1 para mover a BE
+                    be_active = pos.get("smart_trailing", {}).get("be_active", False)
+                    
+                    if not be_active:
+                        target_hit = (current_price >= tp1) if is_long else (current_price <= tp1)
+                        if target_hit:
+                            logger.info(f"🎯 [OMEGA] {asset} alcanzó TP1. Activando SMART TRAILING (Mover a BE)...")
+                            # Mover SL a Entry + Pequeño buffer para comisiones
+                            new_sl = entry * 1.0005 if is_long else entry * 0.9995
+                            
+                            # Cancelar SL antiguo y poner nuevo (Simulado en Nexus por ahora)
+                            # En producción, llamaríamos a self.executor.update_stop_loss(asset, new_sl)
+                            pos["signal"]["stop_loss"] = new_sl
+                            pos["smart_trailing"] = {"be_active": True, "trailing_active": True}
+                            logger.info(f"🛡️ [OMEGA] SL de {asset} movido a BE: ${new_sl:.2f}")
+
+                    # 3. Verificar si la posición se ha cerrado (SL o TP3 final hit)
+                    # Esto es una simplificación; un sistema real monitorearía WebSockets de órdenes
+                    is_closed = (current_price <= sl) if is_long else (current_price >= sl)
+                    if not is_closed:
+                        tp3 = sig.get('tp3', tp1 * 1.1)
+                        is_closed = (current_price >= tp3) if is_long else (current_price <= tp3)
+                        
+                    if is_closed:
+                        logger.info(f"🏁 [OMEGA] Posición en {asset} cerrada por mercado. Limpiando nodo.")
+                        assets_to_remove.append(asset)
+
+                except Exception as e:
+                    logger.error(f"⚠️ [OMEGA] Error auditando {asset}: {e}")
+
+            for asset in assets_to_remove:
+                del self._active_positions[asset]
 
     async def _dashboard_loop(self):
         """Monitor simple para ver posiciones en tiempo real."""
@@ -74,10 +134,9 @@ class NexusNode:
         # 1. Fragmentación Apex (Delta 60/20/20)
         fragments = DeltaOrchestrator.fragment_order(signal)
         
-        # 2. Ejecución (Por ahora simplificada a una orden principal + órdenes de protección)
-        # TODO: En el futuro, enviar las 3 órdenes TP separadas si el exchange lo permite eficientemente
+        # 2. Ejecución de la Grilla
         try:
-            result = await self.executor.execute_signal(signal)
+            result = await self.executor.execute_signal(signal, fragments=fragments)
             
             if result.get("status") == "success":
                 logger.info(f"✅ [NEXUS] Posición abierta en {asset}. ID: {result.get('main_order_id')}")

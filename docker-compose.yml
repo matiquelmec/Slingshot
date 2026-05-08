@@ -1,5 +1,5 @@
 # ═══════════════════════════════════════════════════════════════
-# Slingshot Trading Engine v4.3.5 Titanium — Docker Compose
+# Slingshot Trading Engine v10.0.0 Apex Sovereign — Docker Compose
 # Despliegue para VPS (Londres/Hetzner/DigitalOcean)
 # ═══════════════════════════════════════════════════════════════
 
@@ -83,7 +83,7 @@ services:
     entrypoint: >
       sh -c "ollama serve &
              sleep 5 &&
-             ollama pull gemma3:4b &&
+             ollama pull qwen3:8b &&
              wait"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:11434/api/tags"]

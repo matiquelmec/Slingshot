@@ -17,6 +17,10 @@ class HTFBias:
     pwh: float = 0.0 # Previous Weekly High
     pwl: float = 0.0 # Previous Weekly Low
 
+    def to_dict(self):
+        from dataclasses import asdict
+        return asdict(self)
+
 class HTFAnalyzer:
     """
     Analizador de Timeframes Superiores (4H + 1H).

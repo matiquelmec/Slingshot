@@ -52,19 +52,30 @@ class SlingshotOrchestrator:
         # Iniciar Worker de Calendario Económico
         asyncio.create_task(self.calendar_worker.start())
         
-        # 🚀 [APEX] Iniciar Dashboard de Ejecución Nexus
-        nexus.start_dashboard()
+        # 🚀 [APEX] Iniciar Dashboard de Ejecución Nexus (v10.0 - Auto-start en __init__)
+        # nexus.start_dashboard() # Removido: Redundante y causa crash
         
-        # Si la DB está vacía, podemos poner BTC por defecto para que el motor no esté ocioso
         if not self.radar_assets:
             logger.info("ℹ️ [ORCHESTRATOR] Watchlist vacía. Usando BTCUSDT como activo de guardia.")
             for interval in self.intervals:
                 await self.spawn_persistent_broadcaster("BTCUSDT", interval)
+                await asyncio.sleep(0.5) # Pequeño delay entre temporalidades
             self.radar_assets.add("BTCUSDT")
+        else:
+            # Si ya hay activos (desde sync_watchlists), asegurar delay en el primer barrido
+            logger.info(f"✨ [ORCHESTRATOR] Inicializando malla para: {self.radar_assets}")
+            for sym in list(self.radar_assets):
+                for interval in self.intervals:
+                    asyncio.create_task(self.spawn_persistent_broadcaster(sym, interval))
+                    await asyncio.sleep(0.5) # Staggering para evitar handshake timeouts
 
         logger.info(f"✅ [ORCHESTRATOR] Malla de vigilancia activa para: {self.radar_assets} en {self.intervals}")
         
-        # Loop de auditoría y mantenimiento
+        # Iniciar loop de mantenimiento en segundo plano para no bloquear el arranque
+        asyncio.create_task(self._maintenance_loop())
+
+    async def _maintenance_loop(self):
+        """Loop de auditoría y mantenimiento (Background Task)."""
         while not self._stop_event.is_set():
             try:
                 await self.sync_watchlists()
@@ -104,6 +115,7 @@ class SlingshotOrchestrator:
             for sym in new_assets:
                 for interval in self.intervals:
                     asyncio.create_task(self.spawn_persistent_broadcaster(sym, interval))
+                    await asyncio.sleep(0.5) # Evitar ráfagas de conexión
                 self.radar_assets.add(sym)
 
     async def audit_health(self):
@@ -217,6 +229,25 @@ class SlingshotOrchestrator:
                         "h1_regime": bias.h1_regime
                     })
                     
+                    # 🚀 [PROPAGATION v10.0] Notificar a los broadcasters activos
+                    for key, broadcaster in registry._broadcasters.items():
+                        if key.startswith(f"{symbol.upper()}:"):
+                            broadcaster.state.htf_bias = bias
+                            if hasattr(broadcaster, '_broadcast'):
+                                # Inyectar símbolo para que el frontend pueda validarlo
+                                payload = bias.to_dict() if hasattr(bias, 'to_dict') else bias
+                                payload["symbol"] = symbol.upper()
+                                
+                                htf_msg = {
+                                    "type": "htf_bias_update",
+                                    "data": payload
+                                }
+                                # Cachear para rehidratación de nuevos suscriptores
+                                broadcaster.state.last_htf_bias_msg = htf_msg
+                                await broadcaster._broadcast(htf_msg)
+                    
+                    logger.info(f"🏛️ [ORCHESTRATOR] Sesgo HTF propagado para {symbol}: {bias.direction}")
+                    
                     # Pequeño delay entre activos para no saturar
                     await asyncio.sleep(0.5)
                     
@@ -277,13 +308,30 @@ class SlingshotOrchestrator:
                     # 1. Refrescar caché global
                     await refresh_all_onchain(list(self.radar_assets))
                     
-                    # 2. Propagar a los broadcasters activos para refresco visual (v8.8.1)
+                    # 2. Hidratar Store con métricas institucionales (v10.2)
+                    from engine.indicators.onchain_provider import get_onchain_summary
+                    for symbol in self.radar_assets:
+                        summary = get_onchain_summary(symbol)
+                        await store.update_market_state(symbol, {
+                            "funding":      summary.get("funding_rate", 0),
+                            "oi":           summary.get("oi_delta_pct", 0),
+                            "funding_rate": summary.get("funding_rate", 0),
+                            "oi_delta_pct": summary.get("oi_delta_pct", 0),
+                            "oi_long_short": summary.get("oi_long_short", 1.0),
+                            "vol_buy_sell": summary.get("vol_buy_sell", 1.0),
+                            "macro_bias":   summary.get("onchain_bias", "NEUTRAL")
+                        })
+                        logger.debug(f"💎 [ORCHESTRATOR] Store Hydrated for {symbol}: FR={summary.get('funding_rate', 0)}% | OI={summary.get('oi_delta_pct', 0)}%")
+                    logger.debug(f"[ORCHESTRATOR] 💧 Hidratación OnChain completada para: {list(self.radar_assets)}")
+
+                    # 3. Propagar a los broadcasters activos para refresco visual (v8.8.1)
                     for broadcaster in registry._broadcasters.values():
                         try:
                             # Forzar un ghost refresh que incluya la nueva data onchain
-                            if hasattr(broadcaster, '_refresh_ghost'):
-                                asyncio.create_task(broadcaster._refresh_ghost())
-                        except: pass
+                            if hasattr(broadcaster, '_advisor_bridge'):
+                                asyncio.create_task(broadcaster._advisor_bridge.refresh_ghost())
+                        except Exception as e:
+                            logger.debug(f"[ORCHESTRATOR] Error refrescando ghost para un broadcaster: {e}")
                         
                 logger.debug("[ORCHESTRATOR] 📡 OnChain Sentinel sincronizado.")
             except Exception as e:

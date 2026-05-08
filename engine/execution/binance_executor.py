@@ -3,7 +3,7 @@ import asyncio
 import logging
 import ccxt  # [FIX v6.6.17] Sync version for Windows stability
 from decimal import Decimal, ROUND_DOWN
-from typing import Dict, Any, Optional
+from typing import Dict, Any, List, Optional
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -61,7 +61,7 @@ class BinanceExecutor:
                 logger.error(f"❌ Error cargando mercados: {e}")
                 raise
 
-    async def execute_signal(self, signal: Dict[str, Any]) -> Dict[str, Any]:
+    async def execute_signal(self, signal: Dict[str, Any], fragments: List[Dict[str, Any]] = None) -> Dict[str, Any]:
         """
         Ejecuta una señal aprobada usando asyncio.to_thread para cada llamada a la API.
         """
@@ -107,12 +107,11 @@ class BinanceExecutor:
                 amount=amount
             )
             
-            # 4. Órdenes de Protección
+            # 4. Órdenes de Protección (Soporte Multi-TP Delta 60/20/20)
             sl_price = signal.get('stop_loss')
-            tp1_price = signal.get('tp1')
-            
             protection_orders = []
             
+            # 4.1. Stop Loss (Único para toda la posición)
             if sl_price:
                 sl_side = 'sell' if side == 'buy' else 'buy'
                 sl_order = await asyncio.to_thread(
@@ -129,27 +128,46 @@ class BinanceExecutor:
                 protection_orders.append(sl_order['id'])
                 logger.info(f"🛡️ Stop Loss colocado en {sl_price}")
 
-            if tp1_price:
-                tp_side = 'sell' if side == 'buy' else 'buy'
-                tp_order = await asyncio.to_thread(
-                    self.client.create_order,
-                    symbol=symbol,
-                    type='TAKE_PROFIT_MARKET',
-                    side=tp_side,
-                    amount=amount,
-                    params={
-                        'stopPrice': self.client.price_to_precision(symbol, tp1_price),
-                        'reduceOnly': True
-                    }
-                )
-                protection_orders.append(tp_order['id'])
-                logger.info(f"🎯 Take Profit colocado en {tp1_price}")
+            # 4.2. Take Profits Fragmentados (v10.2.0 Apex)
+            if not fragments:
+                from engine.execution.delta_executor import DeltaOrchestrator
+                fragments = DeltaOrchestrator.fragment_order(signal)
+            
+            tp_side = 'sell' if side == 'buy' else 'buy'
+            for frag in fragments:
+                tp_price = frag.get("tp_price")
+                if not tp_price: continue
+                
+                # Calcular cantidad del tramo
+                raw_frag_amount = (frag["volume_usdt"] * leverage) / current_price
+                frag_amount = float((Decimal(str(raw_frag_amount)) / Decimal(str(min_amount))).quantize(Decimal('1'), rounding=ROUND_DOWN) * Decimal(str(min_amount)))
+                
+                if frag_amount <= 0: continue
+
+                try:
+                    tp_order = await asyncio.to_thread(
+                        self.client.create_order,
+                        symbol=symbol,
+                        type='TAKE_PROFIT_MARKET',
+                        side=tp_side,
+                        amount=frag_amount,
+                        params={
+                            'stopPrice': self.client.price_to_precision(symbol, tp_price),
+                            'reduceOnly': True
+                        }
+                    )
+                    protection_orders.append(tp_order['id'])
+                    logger.info(f"🎯 TP Fragmentado ({frag['id']}) colocado en {tp_price} | Vol: {frag_amount}")
+                except Exception as tp_err:
+                    logger.error(f"⚠️ Error colocando TP {frag['id']}: {tp_err}")
 
             return {
                 "status": "success",
-                "exchange": "binance_testnet",
+                "exchange": "binance_futures",
                 "main_order_id": main_order['id'],
                 "protection_orders": protection_orders,
+                "amount": amount,
+                "entry_price": current_price,
                 "asset": symbol
             }
 

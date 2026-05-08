@@ -60,11 +60,15 @@ class BroadcasterRegistry:
                         "liq_magnet":  s.get("liq_magnet", False),
                         "ml_dir":      s.get("ml_dir", "NEUTRAL"),
                         "ml_prob":     s.get("ml_prob", 50),
-                        "sentiment":   s.get("risk_appetite", "NEUTRAL")
+                        "sentiment":   s.get("risk_appetite", "NEUTRAL"),
+                        "funding":      s.get("funding_rate", 0.0),
+                        "oi":           s.get("oi_delta_pct", 0.0),
+                        "funding_rate": s.get("funding_rate", 0.0),
+                        "oi_delta_pct": s.get("oi_delta_pct", 0.0)
                     })
 
                 self._last_radar_summary = summary
-
+                
                 async with self._lock:
                     for b in self._broadcasters.values():
                         # Usamos _broadcast que debe estar implementado en el SymbolBroadcaster
@@ -160,7 +164,7 @@ class BroadcasterRegistry:
         if success: self._metrics["auth_ok"] += 1
         else: self._metrics["auth_fail"] += 1
 
-    def record_latency(self, ms: float):
+    def record_latency(self, symbol: str, ms: float):
         if ms <= 0: return
         self._metrics["latency_sum"] += ms
         self._metrics["latency_count"] += 1
@@ -178,26 +182,30 @@ class BroadcasterRegistry:
 
     async def _simulation_loop(self):
         while True:
-            await asyncio.sleep(30)
-            avg_lat = self._metrics["latency_sum"] / self._metrics["latency_count"] if self._metrics["latency_count"] > 0 else 0
-            
-            report = f"\n{'─'*60}\n"
-            report += f"📊 REPORT DE SIMULACIÓN (Radar Center v6.0)\n"
-            report += f"1. Latencia Promedio (Magallanes Line): {avg_lat:.2f}ms\n"
-            report += f"2. Sigma X-API-KEY: Authorized={self._metrics['auth_ok']} | Rejected={self._metrics['auth_fail']}\n"
-            report += f"3. Trazabilidad de Veto (Últimos 5):\n"
-            
-            recent_vetos = self._metrics["vetoes"][-5:]
-            if not recent_vetos: 
-                report += "   - Ningún veto registrado.\n"
-            for sym, res in recent_vetos:
-                report += f"   - [{sym}] Veto: {res}\n"
-            report += f"{'─'*60}\n"
-            
-            logger.info(report)
-            
-            # Resetear promedios de latencia para la siguiente ventana
-            self._metrics["latency_sum"] = 0
-            self._metrics["latency_count"] = 0
+            try:
+                await asyncio.sleep(30)
+                avg_lat = self._metrics["latency_sum"] / self._metrics["latency_count"] if self._metrics["latency_count"] > 0 else 0
+                
+                report = f"\n{'='*60}\n"
+                report += f"📊 REPORT DE SIMULACIÓN (Radar Center v6.0)\n"
+                report += f"1. Latencia Promedio (Magallanes Line): {avg_lat:.2f}ms\n"
+                report += f"2. Sigma X-API-KEY: Authorized={self._metrics['auth_ok']} | Rejected={self._metrics['auth_fail']}\n"
+                report += f"3. Trazabilidad de Veto (Últimos 5):\n"
+                
+                recent_vetos = self._metrics["vetoes"][-5:]
+                if not recent_vetos: 
+                    report += "   - Ningún veto registrado.\n"
+                for sym, res in recent_vetos:
+                    report += f"   - [{sym}] Veto: {res}\n"
+                report += f"{'='*60}\n"
+                
+                logger.info(report)
+                
+                # Resetear promedios de latencia para la siguiente ventana
+                self._metrics["latency_sum"] = 0
+                self._metrics["latency_count"] = 0
+            except Exception as e:
+                logger.error(f"🚨 [REGISTRY] Simulation loop error: {e}")
+                await asyncio.sleep(5)
 
 registry = BroadcasterRegistry()

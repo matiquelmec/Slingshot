@@ -1,5 +1,5 @@
 """
-engine/execution/delta_executor.py — v6.7.5 (DELTA Orchestrator)
+engine/execution/delta_executor.py — v10.2.0 (DELTA Orchestrator)
 ============================================================
 Módulo encargado de la fragmentación de órdenes (60/20/20) y envío coordinado.
 """
@@ -13,54 +13,49 @@ class DeltaOrchestrator:
     """
     
     @staticmethod
-    def fragment_order(risk_data: Dict[str, Any]) -> List[Dict[str, Any]]:
+    def fragment_order(signal: Dict[str, Any]) -> List[Dict[str, Any]]:
         """
-        Divide la posición total en 3 tramos institucionales.
+        Divide la posición total en 3 tramos institucionales basándose en la data de riesgo.
         """
-        total_size = risk_data["position_size_usdt"]
-        tp1_vol_pct = risk_data.get("tp1_vol_pct", 0.60) # SIGMA Injected
+        total_size = signal.get("position_size_usdt", signal.get("position_size", 0))
+        tp1_vol_pct = signal.get("tp1_vol_pct", 0.60)
         
-        # Fragmentación 60/20/20 (o según SIGMA)
+        # Fragmentación Estándar 60/20/20 (o personalizada por SIGMA)
+        # Tramo 1: 60% (Peaje / BE Trigger)
+        # Tramo 2: 20% (Lock Profit)
+        # Tramo 3: 20% (Moonbag / Home Run)
+        
         vol_tp1 = total_size * tp1_vol_pct
-        vol_tp2 = total_size * 0.20
-        vol_tp3 = total_size - vol_tp1 - vol_tp2 # El resto
+        remaining = total_size - vol_tp1
+        vol_tp2 = remaining * 0.50 # 50% de lo que queda (20% del total si tp1=60%)
+        vol_tp3 = remaining - vol_tp2 # El resto
         
         fragments = [
             {
                 "id": "TP1_PEAJE",
                 "volume_usdt": round(vol_tp1, 2),
-                "tp": risk_data["tp1"],
-                "sl": risk_data["stop_loss"],
-                "is_entry_risk": True # Determina si Omega debe mover a BE tras este fill
+                "tp_price": signal.get("tp1"),
+                "sl_price": signal.get("stop_loss"),
+                "is_entry_risk": True,
+                "label": f"Tramo 1 ({int(tp1_vol_pct*100)}%)"
             },
             {
                 "id": "TP2_LOCK",
                 "volume_usdt": round(vol_tp2, 2),
-                "tp": risk_data["tp2"],
-                "sl": risk_data["stop_loss"]
+                "tp_price": signal.get("tp2"),
+                "sl_price": signal.get("stop_loss"),
+                "is_entry_risk": False,
+                "label": "Tramo 2 (20%)"
             },
             {
                 "id": "TP3_HOME_RUN",
                 "volume_usdt": round(vol_tp3, 2),
-                "tp": risk_data["tp3"],
-                "sl": risk_data["stop_loss"]
+                "tp_price": signal.get("tp3"),
+                "sl_price": signal.get("stop_loss"),
+                "is_entry_risk": False,
+                "label": "Tramo 3 (20%)"
             }
         ]
         
-        logger.info(f"📐 [DELTA] Grilla Fragmentada: TP1({int(tp1_vol_pct*100)}%) | TP2(20%) | TP3(20%)")
+        logger.info(f"📐 [DELTA] Grilla {signal.get('asset')} calculada: {fragments[0]['label']} -> {fragments[2]['label']}")
         return fragments
-
-    def execute_grid(self, asset: str, side: str, fragments: List[Dict[str, Any]], bridge_fn: callable):
-        """
-        Ejecuta las órdenes a través del puente seleccionado.
-        """
-        logger.info(f"🚀 [DELTA] Lanzando Grilla Asimétrica para {asset} ({side})...")
-        
-        for frag in fragments:
-            try:
-                # Aquí se llamaría a la función del bridge (FTMO/Bitunix) para cada fragmento
-                # Nota: En sistemas reales, se puede enviar como órdenes separadas o una sola con cierres parciales
-                logger.info(f"📦 [DELTA] Enviando Tramo {frag['id']}: ${frag['volume_usdt']} @ TP: {frag['tp']}")
-                # result = bridge_fn(frag) 
-            except Exception as e:
-                logger.error(f"❌ [DELTA] Error ejecutando fragmento {frag['id']}: {e}")

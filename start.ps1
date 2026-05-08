@@ -29,7 +29,7 @@ if (-Not (Test-Path "$PSScriptRoot\node_modules")) {
 }
 
 # --- Chequeo de Cerebro Local (Ollama) ---
-Write-Host "  [0/2] Verificando servidor Ollama (Qwen)..." -ForegroundColor Yellow
+Write-Host "  [0/2] Verificando servidor Ollama (Gemma)..." -ForegroundColor Yellow
 try {
     $ollama = Invoke-RestMethod -Uri "http://localhost:11434/api/tags" -Method Get -ErrorAction Stop
     Write-Host "        OK - Conectado a Ollama Local." -ForegroundColor Green

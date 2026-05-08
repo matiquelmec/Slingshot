@@ -235,7 +235,8 @@ async def refresh_ghost_data(symbol: str = "BTCUSDT", macro_ctx: Optional[MacroS
 
                 _cache.news_sentiment = n_sent
                 _cache.active_event = active_event_name
-            except: pass
+            except Exception as e:
+                logger.debug(f"[GHOST] Error extrayendo narrativa de noticias/eventos: {e}")
 
             _cache.last_updated = time.time()
             _cache.is_stale = False
