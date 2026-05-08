@@ -68,7 +68,7 @@ def enrich_signal(signal: dict, risk_data: dict, interval: str) -> dict:
         "tp1":               risk_data["tp1"],
         "tp2":               risk_data["tp2"],
         "tp3":               risk_data["tp3"],
-        "take_profit_3r":    risk_data["tp3"], # [FIX v10.2.0] Vinculado a TP3
+        "take_profit_3r":    risk_data.get("take_profit_3r", risk_data["tp3"]), # [FIX v11.1] Flexible
         "entry_zone_top":    risk_data.get("entry_zone_top", signal.get("price")),
         "entry_zone_bottom": risk_data.get("entry_zone_bottom", signal.get("price")),
         "expiry_candles":    risk_data.get("expiry_candles", 3),

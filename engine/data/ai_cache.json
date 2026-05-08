@@ -22,5 +22,9 @@
   "60b430bc0c4d6ccb73b4c4a58a82c93b": {
     "price": 0.0,
     "advice": "{\"verdict\": \"SIDEWAYS\", \"threat\": \"LOW\", \"logic\": \"Neutral SMC, low RVOL\"}"
+  },
+  "9acc11451d6db4b0754f405a85ffdee5": {
+    "price": 185.0,
+    "advice": "{\"verdict\": \"AVOID\", \"threat\": \"HIGH\", \"logic\": \"N/A SMC, High RVOL\"}"
   }
 }

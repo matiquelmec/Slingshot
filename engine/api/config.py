@@ -52,6 +52,7 @@ class Settings(BaseSettings):
     ACCOUNT_BALANCE: float = 1000.0
     MAX_RISK_PCT: float = 0.02
     MIN_RR: float = 2.5
+    INSTITUTIONAL_VOL_THRESHOLD: float = 1.3
 
     # Telegram Bot
     TELEGRAM_BOT_TOKEN: str = ""

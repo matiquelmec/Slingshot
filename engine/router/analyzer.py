@@ -14,7 +14,7 @@ import numpy as np
 from dataclasses import dataclass, field
 from typing import Optional, Any
 
-from engine.indicators.regime import RegimeDetector
+from engine.api.config import settings
 from engine.indicators.market_analyzer import market_analyzer
 from engine.indicators.structure import (
     identify_support_resistance,
@@ -58,6 +58,7 @@ class MarketAnalyzer:
     """
 
     def __init__(self, cache_size: int = 100):
+        from engine.indicators.regime import RegimeDetector
         self._regime_detector = RegimeDetector()
         self._cache = {} # LRU Cache: (asset, interval, ts) -> MarketMap
         self._cache_size = cache_size
@@ -119,7 +120,7 @@ class MarketAnalyzer:
                 live_absorption = round((1 / (1 + np.exp(-(apex_factor - 1.0) * 1.5))) * 100, 2)
                 
                 # 🔴 [MODO EXPERIMENTO] Umbral de Élite (> 80)
-                live_elite = (live_absorption > 80.0) and (live_rvol > 1.2)
+                live_elite = (live_absorption > 80.0) and (live_rvol > settings.INSTITUTIONAL_VOL_THRESHOLD)
                 
                 # 3. Inyección atómica al diagnóstico
                 cached.diagnostic["volume"] = current_vol
@@ -127,8 +128,8 @@ class MarketAnalyzer:
                 cached.diagnostic["absorption_score"] = live_absorption
                 cached.diagnostic["is_absorption_elite"] = live_elite
                 # 🔴 [MODO EXPERIMENTO] Umbral relajado de 1.5x a 1.1x
-                cached.diagnostic["displacement_active"] = live_rvol >= 1.1
-                cached.displacement_valid = live_rvol >= 1.1
+                cached.diagnostic["displacement_active"] = live_rvol >= settings.INSTITUTIONAL_VOL_THRESHOLD
+                cached.displacement_valid = live_rvol >= settings.INSTITUTIONAL_VOL_THRESHOLD
             # [AUDITORIA HTF] Inyectar HTF Bias recién calculado incluso si es un Cache Hit
             if htf_bias:
                 cached.htf_bias = {
@@ -170,7 +171,7 @@ class MarketAnalyzer:
         df = identify_support_resistance(df, interval=interval)
         saved_attrs = df.attrs.copy()
 
-        # ── Paso 2: Régimen de Wyckoff (Legacy) + Compuesto (v6.1) ──────────
+        # ── Paso 2: Régimen Compuesto (v6.1+) ───────────────────────────
         df = self._regime_detector.detect_regime(df)
         df.attrs.update(saved_attrs)
         
@@ -229,7 +230,7 @@ class MarketAnalyzer:
             
             apex_factor = rel_vol / (rel_spread + 0.1)
             absorption_score = (1 / (1 + np.exp(-(apex_factor - 1.0) * 1.5))) * 100
-            is_high_absorption = (absorption_score > 80.0) and (rvol > 1.2)
+            is_high_absorption = (absorption_score > 80.0) and (rvol > settings.INSTITUTIONAL_VOL_THRESHOLD)
             
             # Dummy inject for diagnostic extraction later
             if 'absorption_raw' not in df.columns:
@@ -280,7 +281,7 @@ class MarketAnalyzer:
             "is_absorption_elite": is_high_absorption,
             "macro_bias": macro.global_bias,
             "htf_align": htf_align,
-            "displacement_active": rvol >= 1.5,
+            "displacement_active": rvol >= settings.INSTITUTIONAL_VOL_THRESHOLD,
             "imbalance_neural": (heatmap or {}).get("imbalance", 0.0),
             "regime_details": compound_regime # Inyectamos detalles para el Portero
         }
@@ -313,7 +314,7 @@ class MarketAnalyzer:
             htf_bias=htf_payload,
             diagnostic=diagnostic,
             htf_alignment=htf_align,
-            displacement_valid=rvol >= 1.5,
+            displacement_valid=rvol >= settings.INSTITUTIONAL_VOL_THRESHOLD,
             atr_value=float(df["atr"].iloc[-1]) if "atr" in df.columns else 0.0,
             df_analyzed=df,
         )

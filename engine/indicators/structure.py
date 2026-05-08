@@ -23,7 +23,7 @@ WINDOW_BY_INTERVAL: dict[str, int] = {
     '1w':  4,
 }
 
-def identify_order_blocks(df: pd.DataFrame, threshold: float = 1.5, lookback_structure: int = 21) -> pd.DataFrame:
+def identify_order_blocks(df: pd.DataFrame, threshold: float = 1.3, lookback_structure: int = 21) -> pd.DataFrame:
     """
     SMC Nivel 3 (God Mode Refined): Detecta Order Blocks e Imbalances.
     v6.0.5: Re-activada la lógica de BOS para mayor frecuencia profesional.

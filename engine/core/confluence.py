@@ -12,6 +12,7 @@ Evalúa cada señal contra el arsenal institucional v10.0:
 import pandas as pd
 import numpy as np
 from datetime import datetime, timezone
+from engine.api.config import settings
 from typing import Dict, Any, Optional
 from engine.core.logger import logger
 
@@ -58,6 +59,7 @@ class ConfluenceManager:
         checklist = []
         score = 0
         total_weight = 0
+        smt_strength = 0 # Inicialización para evitar NameError [FIX v11.1]
 
         # 1. NARRATIVA ESTRUCTURAL (Peso 15)
         narrative_weight = 15
@@ -122,7 +124,7 @@ class ConfluenceManager:
         vol_weight = 15
         total_weight += vol_weight
         rvol = float(current.get('volume', 0)) / vol_mean if vol_mean > 0 else 1.0
-        if rvol >= 1.5:
+        if rvol >= settings.INSTITUTIONAL_VOL_THRESHOLD:
             score += vol_weight
             checklist.append({"factor": "Huella RVOL", "status": "CONFIRMADO", "detail": f"Inyección {rvol:.1f}x"})
         else:
@@ -337,6 +339,26 @@ class ConfluenceManager:
             checklist.append({"factor": "Neural Heatmap", "status": "CONFIRMADO" if h_score > 0 else "PELIGRO" if h_score < 0 else "NEUTRAL", "detail": h_detail})
         else:
             checklist.append({"factor": "Neural Heatmap", "status": "CALIBRANDO", "detail": "Datos insuficientes"})
+
+        # 🚀 9.6. SMT DIVERGENCE (Peso 15) v11.1 Restoration
+        if correlated_df is not None and len(correlated_df) >= 2:
+            try:
+                total_weight += 15
+                c1_asset, c2_asset = df['close'].iloc[-1], df['close'].iloc[-2]
+                c1_corr, c2_corr = correlated_df['close'].iloc[-1], correlated_df['close'].iloc[-2]
+                
+                # SMT Divergence: Un activo hace un Higher High y el otro un Lower High
+                asset_trending_up = c1_asset > c2_asset
+                corr_trending_up = c1_corr > c2_corr
+                
+                if asset_trending_up != corr_trending_up:
+                    smt_strength = 0.85
+                    score += 15
+                    checklist.append({"factor": "SMT Divergence", "status": "CONFIRMADO", "detail": "Divergencia institucional (Smart Money Tool)"})
+                else:
+                    checklist.append({"factor": "SMT Divergence", "status": "NEUTRAL", "detail": "Correlación en sintonía"})
+            except Exception as e:
+                logger.warning(f"[CONFLUENCE] Error en SMT: {e}")
 
         # 🚀 10. ALINEACIÓN HTF (FRACTAL) — v10.0 Sovereign
         htf_bias = kwargs.get('htf_bias')
