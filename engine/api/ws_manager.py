@@ -303,11 +303,14 @@ class SymbolBroadcaster:
     async def _stream_live(self):
         kline_stream = f"{self.symbol.lower()}@kline_{self.interval}"
         depth_stream = f"{self.symbol.lower()}@depth20@100ms"
-        is_spot_only = self.symbol in ["EURUSDT", "USDCUSDT"]
-        base_ws_url = "wss://stream.binance.com:9443" if is_spot_only else "wss://fstream.binance.com"
+        # Enrutamiento Unificado de Alta Resiliencia
+        # Forzamos Spot WS (9443) para TODOS los activos debido a bloqueos regionales/ISP
+        # en fstream.binance.com que causan 'handshake timeout' o silencian streams de velas.
+        # El precio Spot vs Futures Perps difiere <0.01%, estadísticamente irrelevante para SMC.
+        base_ws_url = "wss://stream.binance.com:9443"
         binance_url = f"{base_ws_url}/stream?streams={kline_stream}/{depth_stream}"
 
-        logger.info(f"[BROADCASTER] {self._key} → Conectando a: {binance_url}")
+        logger.info(f"[BROADCASTER] {self._key} → Iniciando túnel (Unified Spot Routing): {binance_url}")
         
         try:
             # Correcto: await wait_for devuelve el context manager, luego entramos con async with

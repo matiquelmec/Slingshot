@@ -2,11 +2,23 @@ import httpx
 import asyncio
 import random
 from engine.core.logger import logger
+from engine.api.config import settings
+
+# Activos que solo existen en Binance SPOT (no en futuros perpetuos)
+_SPOT_ONLY = settings.SPOT_ONLY_ASSETS
 
 async def fetch_binance_history(symbol: str, interval: str = "15m", limit: int = 300) -> list:
     """Descarga velas históricas desde Binance REST. Retorna lista de dicts estandarizados."""
-    url = "https://fapi.binance.com/fapi/v1/klines"
-    params = {"symbol": symbol.upper(), "interval": interval, "limit": limit}
+    sym = symbol.upper()
+    # Selección dinámica de endpoint: SPOT vs FUTUROS
+    if sym in _SPOT_ONLY:
+        url = "https://api.binance.com/api/v3/klines"
+        mirror_url = "https://api1.binance.com/api/v3/klines"
+    else:
+        url = "https://fapi.binance.com/fapi/v1/klines"
+        mirror_url = "https://fapi1.binance.com/fapi/v1/klines"
+
+    params = {"symbol": sym, "interval": interval, "limit": limit}
     
     max_retries = 3
     for attempt in range(max_retries):
@@ -17,12 +29,11 @@ async def fetch_binance_history(symbol: str, interval: str = "15m", limit: int =
                 response = await client.get(url, params=params)
                 if response.status_code == 429:
                     wait_time = int(response.headers.get("Retry-After", 2))
-                    logger.warning(f"[HISTORY] Rate Limited (429) for {symbol}. Esperando {wait_time}s...")
+                    logger.warning(f"[HISTORY] Rate Limited (429) for {sym}. Esperando {wait_time}s...")
                     await asyncio.sleep(wait_time)
                     continue
                 
                 if response.status_code != 200:
-                    mirror_url = "https://fapi1.binance.com/fapi/v1/klines"
                     response = await client.get(mirror_url, params=params)
                 
                 response.raise_for_status()
@@ -38,7 +49,7 @@ async def fetch_binance_history(symbol: str, interval: str = "15m", limit: int =
                 ]
         except Exception as e:
             if attempt == max_retries - 1:
-                logger.error(f"[HISTORY] Error final descargando {symbol}:{interval} tras {max_retries} intentos: {e}")
+                logger.error(f"[HISTORY] Error final descargando {sym}:{interval} tras {max_retries} intentos: {e}")
                 return []
             await asyncio.sleep(1.0 * (attempt + 1))
     return []

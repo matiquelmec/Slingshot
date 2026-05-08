@@ -32,7 +32,7 @@ class Settings(BaseSettings):
     OLLAMA_URL: str = "http://localhost:11434"
 
     # Strategy Delta Δ: Tiered Priority (v6.0 Trident Audit)
-    RADAR_ASSETS: str = "BTCUSDT,ETHUSDT,SOLUSDT,PAXGUSDT,XAGUSDT"
+    RADAR_ASSETS: str = "BTCUSDT,ETHUSDT,SOLUSDT,PAXGUSDT,XRPUSDT"
     
     @property
     def MASTER_WATCHLIST(self) -> list[str]:
@@ -47,6 +47,10 @@ class Settings(BaseSettings):
         "PAXGUSDT": 5.0,  # Tier 3: Commodities tokenizados (5.0s)
     }
     DEFAULT_PULSE_INTERVAL: float = 2.0
+
+    # Activos SPOT-only: no existen en Binance Futures (fstream).
+    # Usar wss://stream.binance.com:9443 para estos símbolos.
+    SPOT_ONLY_ASSETS: set = {"PAXGUSDT", "EURUSDT", "USDCUSDT"}
 
     # Risk Management (leídos desde .env — ya no hardcodeados en el router)
     ACCOUNT_BALANCE: float = 1000.0
