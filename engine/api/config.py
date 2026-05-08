@@ -32,7 +32,7 @@ class Settings(BaseSettings):
     OLLAMA_URL: str = "http://localhost:11434"
 
     # Strategy Delta Δ: Tiered Priority (v6.0 Trident Audit)
-    RADAR_ASSETS: str = "BTCUSDT,ETHUSDT,SOLUSDT,PAXGUSDT,XRPUSDT"
+    RADAR_ASSETS: str = "BTCUSDT,ETHUSDT,SOLUSDT,PAXGUSDT,XRPUSDT,XAGUSDT"
     
     @property
     def MASTER_WATCHLIST(self) -> list[str]:

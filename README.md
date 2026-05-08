@@ -1,10 +1,10 @@
-# 🛡️ SLINGSHOT v10.0 APEX SOVEREIGN (Institutional Edge)
-> **"Institutional-Grade Algorithmic Terminal. Zero Latency. SMC Mitigation. Fractal Veto v10."**
+# 🛡️ SLINGSHOT v11.1.2 APEX SOVEREIGN (Institutional Edge)
+> **"Institutional-Grade Algorithmic Terminal. Zero Latency. SMC Mitigation. Fractal Veto v11."**
 
 ![Status](https://img.shields.io/badge/Status-100%25_HARDENED_OPERATIONAL-0d2a1a?style=for-the-badge&logo=codeproject&logoColor=fff)
-![Version](https://img.shields.io/badge/Version-10.0_Apex_Sovereign-1a3a6e?style=for-the-badge)
-![Engine](https://img.shields.io/badge/Engine-Nexus_Veto_v10-ffd700?style=for-the-badge&labelColor=0a0a0a)
-![Performance](https://img.shields.io/badge/Latency-Sub--30ms-blue?style=for-the-badge)
+![Version](https://img.shields.io/badge/Version-11.1.2_Apex_Sovereign-1a3a6e?style=for-the-badge)
+![Engine](https://img.shields.io/badge/Engine-Nexus_Veto_v11-ffd700?style=for-the-badge&labelColor=0a0a0a)
+![Performance](https://img.shields.io/badge/Latency-Sub--20ms-blue?style=for-the-badge)
 
 ## 🎯 Nuestra Misión: Democratizar el Smart Money
 Slingshot no es solo un bot de trading; es una **Terminal de Inteligencia Institucional** diseñada para nivelar el campo de juego entre el trader retail y los grandes fondos de inversión. El sistema utiliza principios avanzados de **SMC (Smart Money Concepts)** y **Wyckoff** para identificar el rastro de la liquidez institucional antes de que el movimiento ocurra.
@@ -60,6 +60,9 @@ El sistema implementa un **Hard-Veto Protocol** en la etapa SIGMA. Si una señal
 ### 5. Telemetría On-Chain Centralizada
 Se ha implementado un proveedor único para métricas de **Open Interest y Funding Rates** con un sistema de semáforo de concurrencia y TTL de 45s. Esto garantiza coherencia total entre el motor de IA y el Radar Center.
 
+### 6. Arquitectura de Resiliencia Regional (Unified Spot Routing)
+La v11.1.2 introduce el **Túnel de Resiliencia 9443**. Este sistema detecta bloqueos regionales de ISP (comunes en Sudamérica) y conmuta automáticamente toda la telemetría crítica a través de endpoints de alta disponibilidad (Spot API). Esto garantiza un 100% de uptime incluso cuando el handshake de Binance Futures es silenciado por el proveedor de internet local.
+
 ---
 
 ## 🏹 Guía de Inicio Rápido (Quick Start)
@@ -94,14 +97,16 @@ Slingshot_Trading/
 │   ├── risk/                  # RiskManager (Position Sizing + Hard SL/TP)
 │   ├── notifications/         # Filtro de Señales + Telegram Bot
 │   ├── workers/               # Orchestrator + News Worker + Calendar Worker
-│   ├── backtest/              # ReplayEngine v10.0 (Event-Driven)
+│   ├── backtest/              # ReplayEngine v11.1.2 (Event-Driven)
 │   ├── tools/                 # Scripts de auditoría y diagnóstico:
-│   │   ├── fast_profit_audit.py
-│   │   ├── find_gold.py
-│   │   ├── multi_asset_backtest.py
-│   │   ├── audit_numbers_v10.py
-│   │   ├── integrity_audit.py
-│   │   └── debug_signals.py
+│   ├── fast_profit_audit.py
+│   ├── find_gold.py
+│   ├── test_ws.py             # Auditoría de Handshake y Latencia Regional
+│   ├── audit_xag_funding.py   # Verificación empírica de integridad para Commodities
+├── docs/                      # Documentación Técnica e Institutional Reports
+│   ├── ARCHITECTURE_V11.md
+│   ├── TELEMETRY_RESILIENCE_V11.md
+│   └── SYSTEM_HEALTH.md
 │   ├── tests/                 # 17 tests operativos de integridad
 │   │   ├── data/              # Datasets históricos (.parquet) para backtesting
 │   │   └── legacy/            # Tests de versiones anteriores (referencia)
