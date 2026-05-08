@@ -97,9 +97,15 @@ export default function TradingChart() {
         }
 
         // ─ Sanitización defensiva: Ordenar por tiempo y eliminar duplicados (última línea de defensa) ─
+        // ─ Sanitización defensiva: Ordenar por tiempo y eliminar duplicados (Escudo v11.1.3) ─
         const sortedCandles = [...candles]
             .sort((a, b) => Number(a.time) - Number(b.time))
             .filter((c, i, arr) => i === 0 || c.time !== arr[i - 1].time);
+
+        if (sortedCandles.length === 0) {
+            candleSeriesRef.current.setData([]);
+            return;
+        }
 
         candleSeriesRef.current.setData(sortedCandles as any);
 
@@ -122,9 +128,9 @@ export default function TradingChart() {
         // ─ Volume ─
         if (volumeRef.current) {
             volumeRef.current.applyOptions({ visible: on('volume') });
-            if (on('volume') && candles?.length > 0) {
+            if (on('volume') && sortedCandles.length > 0) {
                 try {
-                    volumeRef.current.setData(candles.map(c => ({
+                    volumeRef.current.setData(sortedCandles.map(c => ({
                         time: c.time, value: c.volume,
                         color: c.close >= c.open ? 'rgba(0,255,65,0.4)' : 'rgba(255,0,60,0.4)',
                     })) as any);
@@ -192,9 +198,11 @@ export default function TradingChart() {
         });
     }, [latestPrice]);
 
-    // Array de tiempos para alinear la serie a través de todo el gráfico horizontal
-    // (useMemo evita recrear innecesariamente)
-    const times = React.useMemo(() => (candles || []).map(c => c.time), [candles?.length]);
+    // Array de tiempos único y ordenado para alinear la serie a través de todo el gráfico
+    const times = React.useMemo(() => {
+        const rawTimes = (candles || []).map(c => Number(c.time));
+        return Array.from(new Set(rawTimes)).sort((a, b) => a - b);
+    }, [candles]);
     const candleCount = candles.length;
 
     // ── SMC & FVG visualization (Creative Transparent Zones) ──

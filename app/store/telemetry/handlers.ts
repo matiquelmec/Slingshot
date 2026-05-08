@@ -60,7 +60,8 @@ export const handleWsMessage = (
                     volume: Number(item.data.volume),
                     bullish_div: item.data.bullish_div,
                     bearish_div: item.data.bearish_div
-                })).sort((a: any, b: any) => a.time - b.time);
+                })).sort((a: any, b: any) => a.time - b.time)
+                   .filter((c: any, i: number, arr: any[]) => i === 0 || c.time !== arr[i - 1].time);
 
                 const lastPrice = sortedCandles.length > 0 ? Number(sortedCandles[sortedCandles.length - 1].close) : null;
                 set((state) => ({
@@ -72,7 +73,7 @@ export const handleWsMessage = (
 
             case 'candle':
                 const newCandle: CandleData = {
-                    time: data.data.timestamp,
+                    time: Number(data.data.timestamp),
                     open: data.data.open,
                     high: data.data.high,
                     low: data.data.low,

@@ -161,9 +161,9 @@ export default function LatticeScanner() {
 
                                     {/* Bias */}
                                     <div className="col-span-2 flex items-center justify-center gap-1">
-                                        <span className={`w-1 h-1 rounded-full ${pair.bias === 'BULLISH' ? 'bg-neon-green' : pair.bias === 'BEARISH' ? 'bg-neon-red' : 'bg-white/20'}`} />
-                                        <span className={`text-[8px] font-bold ${biasColor}`}>
-                                            {pair.bias?.slice(0, 4) || '—'}
+                                        <span className={`w-1 h-1 rounded-full ${pair.bias?.includes('BULLISH') ? 'bg-neon-green' : pair.bias?.includes('BEARISH') ? 'bg-neon-red' : 'bg-white/20'}`} />
+                                        <span className={`text-[8px] font-bold ${pair.bias?.includes('BULLISH') ? 'text-neon-green' : pair.bias?.includes('BEARISH') ? 'text-neon-red' : 'text-white/40'}`}>
+                                            {pair.bias?.split('_')[0] || '—'}
                                         </span>
                                     </div>
 

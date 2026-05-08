@@ -86,14 +86,14 @@ export default function QuantDiagnosticPanel() {
                     </div>
 
                     <div className={`border rounded-xl p-2.5 flex flex-col justify-between transition-colors ${d.diagnostic?.is_absorption_elite ? 'bg-yellow-400/10 border-yellow-400/40 shadow-[0_0_15px_rgba(250,204,21,0.1)]' : 'bg-white/[0.03] border-white/10'}`}>
-                        <span className="text-[7px] font-black text-white/20 tracking-[0.2em] block mb-1 uppercase text-center">ABSORCIÓN (Z)</span>
+                        <span className="text-[7px] font-black text-white/20 tracking-[0.2em] block mb-1 uppercase text-center">ABSORCIÓN (SCORE)</span>
                         <div className="flex flex-col items-center">
                              <span className={`text-[12px] font-black font-mono tracking-widest ${d.diagnostic?.is_absorption_elite ? 'text-yellow-400' : 'text-white/60'}`}>
-                                {d.diagnostic?.absorption_score?.toFixed(2) || '0.00'}σ
+                                {d.diagnostic?.absorption_score?.toFixed(2) || '0.00'}
                             </span>
                             <div className="w-full h-1 bg-white/5 rounded-full overflow-hidden mt-1.5 flex gap-0.5">
-                                <div className={`h-full ${d.diagnostic?.absorption_score && d.diagnostic.absorption_score >= 1.0 ? (d.diagnostic.is_absorption_elite ? 'bg-yellow-400' : 'bg-neon-cyan/60') : 'bg-white/10'}`} style={{ width: '50%' }} />
-                                <div className={`h-full ${d.diagnostic?.is_absorption_elite ? 'bg-yellow-400 shadow-[0_0_8px_rgba(250,204,21,0.4)]' : 'bg-white/10'}`} style={{ width: '50%' }} />
+                                <div className={`h-full ${d.diagnostic?.absorption_score && d.diagnostic.absorption_score >= 1.0 ? (d.diagnostic.is_absorption_elite ? 'bg-yellow-400' : 'bg-neon-cyan/60') : 'bg-white/10'}`} 
+                                     style={{ width: `${Math.min(d.diagnostic?.absorption_score || 0, 100)}%` }} />
                             </div>
                         </div>
                     </div>
