@@ -136,7 +136,7 @@ class SignalGatekeeper:
                 if not silent:
                     logger.warning(f"[GATEKEEPER] [SESSION_VETO] Bloqueo por ruido de cierre H4/D1 ({now.strftime('%H:%M')} UTC).")
                 for sig in signals:
-                    self._block(sig, "BLOCKED_BY_SESSION", "Session Veto: Alta volatilidad por cierre de vela mayor", result)
+                    self._block(sig, "BLOCKED_BY_SESSION", "Peligro: Cierre de vela H4/D1 inminente (Ruido de cierre institucional)", result)
                 return result
 
         # 🧠 [DELTA v6.1] Cerebro de Régimen (Mandatos de Supervivencia)
@@ -213,11 +213,11 @@ class SignalGatekeeper:
                 if is_long:
                     if m1 == 'MARKDOWN' and w1 == 'MARKDOWN':
                         fractal_veto = True
-                        reason = "Veto Fractal: 1M y 1W en MARKDOWN. Prohibido buscar Longs."
+                        reason = "Veto Fractal: Tendencia Mensual y Semanal bajistas (Markdown). Prohibido buscar Longs."
                 else:
                     if m1 == 'MARKUP' and w1 == 'MARKUP':
                         fractal_veto = True
-                        reason = "Veto Fractal: 1M y 1W en MARKUP. Prohibido buscar Shorts."
+                        reason = "Veto Fractal: Tendencia Mensual y Semanal alcistas (Markup). Prohibido buscar Shorts."
                 
                 if fractal_veto:
                     if not silent:
@@ -236,7 +236,7 @@ class SignalGatekeeper:
             if alignment_veto:
                 if not silent:
                     logger.info(f"[GATEKEEPER] [DELTA_BLOCK] Desalineacion Macroestructural ({sig_type} vs {regime_type}). Confianza {conf_score}% insuficiente para contratendencia.")
-                self._block(sig, "DELTA_VETO", f"Desalineacion Macroestructural: Operando contra {regime_type} con confianza baja ({conf_score}%)", result)
+                self._block(sig, "DELTA_VETO", f"Conflicto de Tendencia: Intentando operar contra {regime_type} con confianza insuficiente ({conf_score}%)", result)
                 continue
             # (SMT_Strength se pasará en el contexto de riesgo si existe)
             smt_strength = sig.get('confluence', {}).get('smt_strength', 0) if sig.get('confluence') else 0
@@ -286,7 +286,7 @@ class SignalGatekeeper:
             if is_choppy and conf_score < choppy_threshold:
                  if not silent:
                      logger.warning(f"⚠️ [GATEKEEPER] [DELTA_BLOCK] {interval} CHOPPY veto: Score {conf_score}% < {choppy_threshold}%")
-                 self._block(sig, "BLOCKED_BY_DELTA", f"Régimen CHOPPY: Confianza {conf_score}% insuficiente", result)
+                 self._block(sig, "BLOCKED_BY_DELTA", f"Mercado Picadora (Choppy): Se requiere al menos {choppy_threshold}% de confianza (Actual: {conf_score}%)", result)
                  continue
 
             score = conf_score
@@ -299,7 +299,7 @@ class SignalGatekeeper:
                 if score < 65 and htf_bias.direction != "NEUTRAL":
                     if (htf_bias.direction == "BULLISH" and not is_long) or \
                        (htf_bias.direction == "BEARISH" and is_long):
-                        self._block(sig, "SIGMA_VETO", f"Conflicto de Tendencia (Score {score}% < 65%)", result)
+                        self._block(sig, "SIGMA_VETO", f"Veto de Tendencia: La dirección HTF es opuesta y la confianza es baja ({score}%)", result)
                         continue
 
 
@@ -322,7 +322,7 @@ class SignalGatekeeper:
             # v8.2.1 Tuning: 5 contradicciones en 1m/5m para no asfixiar el radar
             max_contradictory = 5 if interval in ["1m", "5m"] else 3
             if contradictory_count >= max_contradictory:
-                self._block(sig, "BLOCKED_CHOPPY", f"[OMEGA] Bloqueo por Choppy: >{max_contradictory} flips.", result)
+                self._block(sig, "BLOCKED_CHOPPY", f"Filtro Anti-Spam: Demasiados cambios de dirección rápidos (Flips) en este activo.", result)
                 continue
             
             # Registrar éxito parcial (luego de pasar filtros estructurales base)
@@ -347,7 +347,7 @@ class SignalGatekeeper:
                 # Adaptativo: 2.5% para 15m, 6% para 4h, 10% para 1d
                 max_spread = 2.5 if val <= 15 else (6.0 if val <= 240 else 10.0)
                 if candle_spread > max_spread:
-                    self._block(sig, "BLOCKED_BY_VOLATILITY", f"Flash Volatility detectada ({candle_spread:.2f}%). Prevención de Slippage.", result)
+                    self._block(sig, "BLOCKED_BY_VOLATILITY", f"Volatilidad Extrema: Movimiento de {candle_spread:.2f}% en una sola vela. Prevención de Slippage.", result)
                     continue
             except:
                 pass
@@ -363,7 +363,7 @@ class SignalGatekeeper:
             if ote_data:
                 is_in_zone = ote_data.get("is_in_ote", False)
                 if not is_in_zone and conf_score < 85: # Solo permitimos fuera de OTE si el score es extremo
-                    self._block(sig, "VALUE_ZONE_VETO", "Fuera de zona OTE / Descuento Premium", result)
+                    self._block(sig, "VALUE_ZONE_VETO", "Entrada Ineficiente: El precio no está en zona OTE (Optimal Trade Entry) o Descuento/Premium.", result)
                     continue
 
             # Umbral de Rentabilidad Matemática v6.7.8 (Extreme Survival)
@@ -371,7 +371,7 @@ class SignalGatekeeper:
             if not rr_res.get("approved", False):
                 if not silent:
                     logger.info(f"[GATEKEEPER] 🔴 DELTA BLOCK: R:R {sig.get('rr_ratio', 0):.2f} | Reason: {rr_res.get('reason', 'N/A')}")
-                self._block(sig, "DELTA_VETO", f"R:R {sig.get('rr_ratio', 0):.2f} < {min_rr} | {rr_res.get('reason')}", result)
+                self._block(sig, "DELTA_VETO", f"Matemática desfavorable: Ratio R:R de {sig.get('rr_ratio', 0):.2f} es inferior al mínimo institucional ({min_rr})", result)
                 continue
 
             # ── Filtro 5: Score de Confluencia Mínimo ──

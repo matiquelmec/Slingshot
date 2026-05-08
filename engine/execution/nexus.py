@@ -1,5 +1,5 @@
 """
-engine/execution/nexus.py — v8.0.0 Apex Core
+engine/execution/nexus.py — v11.1 APEX SOVEREIGN (Audited)
 =============================================
 EL NODO DE EJECUCIÓN SOBERANO.
 

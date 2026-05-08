@@ -3,7 +3,7 @@ title Slingshot Master Launcher (Delta / Omega / Sigma)
 color 0A
 
 echo ===========================================================
-echo       SLINGSHOT GEN 1 v6.1.0 - MASTER GOLD TITANIUM          
+echo       SLINGSHOT v11.1 APEX SOVEREIGN - AUDITED & STABLE          
 echo ===========================================================
 echo.
 

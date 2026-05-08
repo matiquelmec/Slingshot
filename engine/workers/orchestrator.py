@@ -18,7 +18,7 @@ import time
 
 class SlingshotOrchestrator:
     """
-    EL DIRECTOR DE ORQUESTA (v3.2 - Local Master Edition).
+    EL DIRECTOR DE ORQUESTA (v11.1 APEX SOVEREIGN - AUDITED).
     Mantiene vivos los broadcasters de los activos VIP en segundo plano.
     Asegura que el MemoryStore esté siempre alimentado para el Radar.
     """

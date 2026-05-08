@@ -7,7 +7,7 @@ import math
 
 class RiskManager:
     """
-    v6.6.4 Sniper Master Edition.
+    v11.1 APEX SOVEREIGN (Audited).
     """
 
     def __init__(self, account_balance: float = settings.ACCOUNT_BALANCE, base_risk_pct: float = settings.MAX_RISK_PCT, min_rr: float = settings.MIN_RR):

@@ -10,7 +10,7 @@
 
 Write-Host ""
 Write-Host "  ============================================" -ForegroundColor Cyan
-Write-Host "       SLINGSHOT GEN 1 - LAUNCHER            " -ForegroundColor Cyan
+Write-Host "       SLINGSHOT v11.1 APEX SOVEREIGN        " -ForegroundColor Cyan
 Write-Host "  ============================================" -ForegroundColor Cyan
 Write-Host ""
 
@@ -59,7 +59,7 @@ Start-Process powershell -ArgumentList `
     "-NoExit", `
     "-Command", "Set-Location -LiteralPath '$PSScriptRoot'; node .\node_modules\next\dist\bin\next dev"
 
-# --- Optimización de Latencia Institucional (v6.1.0) ---
+# --- Optimización de Latencia Institucional (v11.1.0) ---
 Write-Host "  [3/3] Optimizando prioridad del S.O. para trading..." -ForegroundColor Yellow
 Start-Sleep -Seconds 5
 if (Test-Path "$PSScriptRoot\scripts\optimize_os.ps1") {
