@@ -366,8 +366,8 @@ class SymbolBroadcaster:
         kline = payload.get("k")
         if not kline: return
         
-        # 🟢 Sync Latest Price for Heatmap
-        self.latest_price = float(kline["c"])
+        # 🟢 Sync Latest Price — escribir en el STATE, no en el broadcaster
+        self.state.latest_price = float(kline["c"])
 
         candle = {
             "type": "candle",
