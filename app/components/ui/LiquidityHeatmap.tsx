@@ -9,7 +9,11 @@ import { formatCurrency } from '../../utils/formatters';
 export default function LiquidityHeatmap() {
     const { liquidityHeatmap, latestPrice } = useTelemetryStore();
 
-    if (!liquidityHeatmap || (!liquidityHeatmap.bids.length && !liquidityHeatmap.asks.length)) {
+    // [ROBUSTEZ v11.1.5] Verificación defensiva de la estructura de liquidez
+    const bids = liquidityHeatmap?.bids || [];
+    const asks = liquidityHeatmap?.asks || [];
+
+    if (!liquidityHeatmap || (!bids.length && !asks.length)) {
         return (
             <div className="bg-[#050B14]/60 backdrop-blur-xl border border-white/5 rounded-2xl p-4 flex flex-col items-center justify-center min-h-[150px]">
                 <Layers size={20} className="text-white/10 mb-2" />
@@ -19,12 +23,12 @@ export default function LiquidityHeatmap() {
     }
 
     // Calcular volúmenes máximos para hacer las barras relativas
-    const maxBidVol = Math.max(...liquidityHeatmap.bids.map(b => b.volume), 0.0001);
-    const maxAskVol = Math.max(...liquidityHeatmap.asks.map(a => a.volume), 0.0001);
+    const maxBidVol = Math.max(...bids.map(b => b.volume), 0.0001);
+    const maxAskVol = Math.max(...asks.map(a => a.volume), 0.0001);
 
     // AI summary logic
-    const totalBidVol = liquidityHeatmap.bids.reduce((acc, b) => acc + b.volume, 0);
-    const totalAskVol = liquidityHeatmap.asks.reduce((acc, a) => acc + a.volume, 0);
+    const totalBidVol = bids.reduce((acc, b) => acc + b.volume, 0);
+    const totalAskVol = asks.reduce((acc, a) => acc + a.volume, 0);
     const totalVol = totalBidVol + totalAskVol;
 
     let summaryTitle = "Balance Neutro";
@@ -99,7 +103,7 @@ export default function LiquidityHeatmap() {
                         <ArrowDown size={10} className="text-neon-red/60" />
                         <span className="text-[8px] font-bold text-neon-red/50 tracking-wider">PRESIÓN VENDEDORA</span>
                     </div>
-                    {[...liquidityHeatmap.asks].sort((a, b) => b.price - a.price).map((ask, idx) => {
+                    {[...asks].sort((a, b) => b.price - a.price).map((ask, idx) => {
                         const widthPct = Math.min((ask.volume / maxAskVol) * 100, 100);
                         const distPct = latestPrice ? ((ask.price - latestPrice) / latestPrice * 100).toFixed(2) : null;
 
@@ -134,7 +138,7 @@ export default function LiquidityHeatmap() {
                         <span className="text-[8px] font-bold text-neon-green/50 tracking-wider">SOPORTE COMPRADOR</span>
                         <ArrowUp size={10} className="text-neon-green/60" />
                     </div>
-                    {[...liquidityHeatmap.bids].sort((a, b) => b.price - a.price).map((bid, idx) => {
+                    {[...bids].sort((a, b) => b.price - a.price).map((bid, idx) => {
                         const widthPct = Math.min((bid.volume / maxBidVol) * 100, 100);
                         const distPct = latestPrice ? ((latestPrice - bid.price) / latestPrice * 100).toFixed(2) : null;
 
