@@ -303,11 +303,11 @@ class SymbolBroadcaster:
     async def _stream_live(self):
         kline_stream = f"{self.symbol.lower()}@kline_{self.interval}"
         depth_stream = f"{self.symbol.lower()}@depth20@100ms"
-        # Enrutamiento Unificado de Alta Resiliencia
-        # Forzamos Spot WS (9443) para TODOS los activos debido a bloqueos regionales/ISP
-        # en fstream.binance.com que causan 'handshake timeout' o silencian streams de velas.
-        # El precio Spot vs Futures Perps difiere <0.01%, estadísticamente irrelevante para SMC.
-        base_ws_url = "wss://stream.binance.com:9443"
+        # Enrutamiento Inteligente (v10.1.5)
+        # XAGUSDT solo existe en FUTUROS. Otros activos usan SPOT por resiliencia de ISP.
+        is_futures_only = self.symbol in ["XAGUSDT"]
+        base_ws_url = "wss://fstream.binance.com" if is_futures_only else "wss://stream.binance.com:9443"
+        
         binance_url = f"{base_ws_url}/stream?streams={kline_stream}/{depth_stream}"
 
         logger.info(f"[BROADCASTER] {self._key} → Iniciando túnel (Unified Spot Routing): {binance_url}")
