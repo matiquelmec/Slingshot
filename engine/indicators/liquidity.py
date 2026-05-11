@@ -31,30 +31,41 @@ def analyze_neural_heatmap(bids: list, asks: list, current_price: float) -> dict
         imbalance = (total_bids_vol - total_asks_vol) / (total_bids_vol + total_asks_vol) if (total_bids_vol + total_asks_vol) > 0 else 0.0
 
         # 3. Identificación de Niveles "Elite" (Muros Institucionales)
-        # Filtramos niveles que tengan al menos 2 desvíos estándar más que la media del book
+        # Filtramos niveles que tengan al menos 0.5 desvíos estándar más que la media del book
+        # v5.8: Reducido de 1.5 a 0.5 para garantizar visibilidad constante en el Radar
         mean_vol = (np.mean(b_vols) + np.mean(a_vols)) / 2
         std_vol  = (np.std(b_vols) + np.std(a_vols)) / 2
-        threshold = mean_vol + (std_vol * 1.5)
+        threshold = mean_vol + (std_vol * 0.5)
 
         def _get_hot_levels(prices, vols, is_bid: bool) -> List[Dict[str, Any]]:
             levels = []
-            for p, v in zip(prices, vols):
-                if v >= threshold:
-                    # Cálculo de Calor (0-100)
-                    # Basado en Volumen relativo y Proximidad (a mayor cercanía, más 'calor')
-                    rel_vol = v / np.max(vols) if np.max(vols) > 0 else 1.0
-                    dist_pct = abs(p - current_price) / current_price
-                    # Inversamente proporcional a la distancia (max 2%)
-                    proximity = max(0, 1 - (dist_pct / 0.02)) 
-                    
-                    heat_score = int(((rel_vol * 0.7) + (proximity * 0.3)) * 100)
-                    
-                    levels.append({
-                        "price": round(p, 2 if current_price > 10 else 4),
-                        "volume": round(v, 4),
-                        "heat": min(100, heat_score),
-                        "type": "SUPPORT" if is_bid else "RESISTANCE"
-                    })
+            # [ADAPTATIVO v5.8.1] Si no hay muros, bajamos el listón para XAG y otros activos
+            active_threshold = threshold
+            candidates = [(p, v) for p, v in zip(prices, vols) if v >= active_threshold]
+            
+            if not candidates:
+                active_threshold = mean_vol # Segundo intento: Usar el promedio simple
+                candidates = [(p, v) for p, v in zip(prices, vols) if v >= active_threshold]
+            
+            if not candidates:
+                # Tercer intento: Si el mercado es ultra-plano, mostrar los TOP 5 más grandes
+                idx = np.argsort(vols)[-5:]
+                candidates = [(prices[i], vols[i]) for i in idx]
+
+            for p, v in candidates:
+                # Cálculo de Calor (0-100)
+                rel_vol = v / np.max(vols) if np.max(vols) > 0 else 1.0
+                dist_pct = abs(p - current_price) / (current_price + 1e-9)
+                proximity = max(0, 1 - (dist_pct / 0.02)) 
+                
+                heat_score = int(((rel_vol * 0.7) + (proximity * 0.3)) * 100)
+                
+                levels.append({
+                    "price": round(p, 2 if current_price > 10 else 4),
+                    "volume": round(v, 4),
+                    "heat": min(100, heat_score),
+                    "type": "SUPPORT" if is_bid else "RESISTANCE"
+                })
             return sorted(levels, key=lambda x: x["heat"], reverse=True)[:5]
 
         hot_bids = _get_hot_levels(b_prices, b_vols, True)
