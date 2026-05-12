@@ -53,6 +53,13 @@ class SMCInstitutionalStrategy:
         df['recent_ob_bull'] = df['ob_bullish'].rolling(window=ob_memory_window).max().astype(bool)
         df['recent_ob_bear'] = df['ob_bearish'].rolling(window=ob_memory_window).max().astype(bool)
 
+        # [REFACTOR v12.0] Tracking de Niveles de OB para Retesteo
+        # Guardamos el techo y fondo del OB más reciente para validar entradas tácticas
+        df['ob_bull_top'] = df['high'].where(df['ob_bullish']).ffill()
+        df['ob_bull_bottom'] = df['low'].where(df['ob_bullish']).ffill()
+        df['ob_bear_top'] = df['high'].where(df['ob_bearish']).ffill()
+        df['ob_bear_bottom'] = df['low'].where(df['ob_bearish']).ffill()
+
         # [RELAJACIÓN v9.2] FVG Memory para Swing Trading
         fvg_window = 3 if val > 15 else 1
         df['recent_fvg_bull'] = df['fvg_bullish'].rolling(window=fvg_window).max().astype(bool)
@@ -64,9 +71,15 @@ class SMCInstitutionalStrategy:
     def find_opportunities(self, df: pd.DataFrame, asset: str = "UNKNOWN", htf_bias: str = "NEUTRAL") -> list[dict]:
         if df.empty or len(df) < 64: return []
         
-        # La Santa Trinidad Sincronizada: Bloque Reciente + Sweep + Confirmación FVG
-        long_mask = (df['recent_ob_bull'] & df['recent_sweep_bull'] & df['recent_fvg_bull'])
-        short_mask = (df['recent_ob_bear'] & df['recent_sweep_bear'] & df['recent_fvg_bear'])
+        # [REFACTOR v12.0] Lógica de Confluencia Adaptativa (Sovereign Apex)
+        # Un setup es válido si hay OB + (Sweep O Retest) + FVG
+        
+        # Un retest es válido si el precio actual está dentro del rango del OB más reciente
+        is_retesting_bull = (df['low'] <= df['ob_bull_top']) & (df['close'] >= df['ob_bull_bottom'])
+        is_retesting_bear = (df['high'] >= df['ob_bear_bottom']) & (df['close'] <= df['ob_bear_top'])
+
+        long_mask = df['recent_ob_bull'] & (df['recent_sweep_bull'] | is_retesting_bull) & df['recent_fvg_bull']
+        short_mask = df['recent_ob_bear'] & (df['recent_sweep_bear'] | is_retesting_bear) & df['recent_fvg_bear']
 
         opportunities = []
         indices = np.where(long_mask | short_mask)[0]

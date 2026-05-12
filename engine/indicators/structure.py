@@ -394,6 +394,7 @@ def extract_smc_coordinates(df: pd.DataFrame) -> dict:
     timestamps = df_slice['timestamp'].values
     lows = df_slice['low'].values
     highs = df_slice['high'].values
+    closes = df_slice['close'].values
     
     ob_bull = df_slice.get('ob_bullish', pd.Series([False]*len(df_slice))).values
     ob_bear = df_slice.get('ob_bearish', pd.Series([False]*len(df_slice))).values
@@ -415,11 +416,11 @@ def extract_smc_coordinates(df: pd.DataFrame) -> dict:
         # Mitigación FVG Bajista (Resistencia): Destruído si el precio sube por encima del 50%
         active_bearish_fvgs = [fvg for fvg in active_bearish_fvgs if current_high < (fvg['bottom'] + (fvg['top'] - fvg['bottom']) * 0.5)]
         
-        # Mitigación OB Alcista: Limpieza de gráfico al 50%
-        active_bullish_obs = [ob for ob in active_bullish_obs if current_low > (ob['bottom'] + (ob['top'] - ob['bottom']) * 0.5)]
+        # [REFACTOR v12.0] Mitigación OB Alcista: Solo se invalida si CIERRA por debajo del fondo del bloque
+        active_bullish_obs = [ob for ob in active_bullish_obs if float(closes[loc]) >= ob['bottom']]
         
-        # Mitigación OB Bajista: Limpieza al 50%
-        active_bearish_obs = [ob for ob in active_bearish_obs if current_high < (ob['bottom'] + (ob['top'] - ob['bottom']) * 0.5)]
+        # [REFACTOR v12.0] Mitigación OB Bajista: Solo se invalida si CIERRA por encima del techo del bloque
+        active_bearish_obs = [ob for ob in active_bearish_obs if float(closes[loc]) <= ob['top']]
         
         # --- 2. REGISTRAR NUEVAS ZONAS ---
         # (A) Nuevos Order Blocks
@@ -482,8 +483,9 @@ def mitigate_smc_state(smc_state: dict, current_low: float, current_high: float)
     Titanium v5.7.155 Master Gold Long-Term Memory: Mitiga un objeto SMC persistente.
     Destruye aquellas zonas pasadas que el precio actual invalida (cruce del 50%).
     """
-    obs_bull = [ob for ob in smc_state.get("order_blocks", {}).get("bullish", []) if current_low > (ob['bottom'] + (ob['top'] - ob['bottom']) * 0.5)]
-    obs_bear = [ob for ob in smc_state.get("order_blocks", {}).get("bearish", []) if current_high < (ob['bottom'] + (ob['top'] - ob['bottom']) * 0.5)]
+    # [REFACTOR v12.0] Invalidez Profesional: Basada en Cierre (No en mechas/50%)
+    obs_bull = [ob for ob in smc_state.get("order_blocks", {}).get("bullish", []) if current_high >= ob['bottom']] # Usamos current_high como proxy de close si no hay DF
+    obs_bear = [ob for ob in smc_state.get("order_blocks", {}).get("bearish", []) if current_low <= ob['top']]
     
     fvgs_bull = [fvg for fvg in smc_state.get("fvgs", {}).get("bullish", []) if current_low > (fvg['bottom'] + (fvg['top'] - fvg['bottom']) * 0.5)]
     fvgs_bear = [fvg for fvg in smc_state.get("fvgs", {}).get("bearish", []) if current_high < (fvg['bottom'] + (fvg['top'] - fvg['bottom']) * 0.5)]

@@ -220,18 +220,30 @@ class SignalGatekeeper:
                         reason = "Veto Fractal: Tendencia Mensual y Semanal alcistas (Markup). Prohibido buscar Shorts."
                 
                 if fractal_veto:
-                    if not silent:
-                        logger.warning(f"[GATEKEEPER] [FRACTAL_VETO] {asset} {sig_type} bloqueado por alineación macro negativa.")
-                    self._block(sig, "FRACTAL_VETO", reason, result)
-                    continue
+                    # [REFACTOR v12.0] Sovereign Bypass: Si el score es >= 95%, ignoramos el veto fractal.
+                    # Es una señal de "Reversión Institucional" con convicción extrema.
+                    if conf_score >= 95:
+                        if not silent:
+                            logger.info(f"🚀 [GATEKEEPER] [SOVEREIGN_BYPASS] {asset} ignorando Veto Fractal por Score Extremo ({conf_score}%).")
+                        fractal_veto = False
+                    else:
+                        if not silent:
+                            logger.warning(f"[GATEKEEPER] [FRACTAL_VETO] {asset} {sig_type} bloqueado por alineación macro negativa.")
+                        self._block(sig, "FRACTAL_VETO", reason, result)
+                        continue
 
-            # ── REGLA 2 (ALIGNMENT): Veto por Desalineación Macro ────────────
             alignment_veto = False
             if regime_bias == "BULLISH" and not is_long and "STRONG" in regime_type:
                 # Si la confianza es brutal, permitimos contratendencia
                 if conf_score < 80: alignment_veto = True # Elevado a 80 en v10.0
             elif regime_bias == "BEARISH" and is_long and "STRONG" in regime_type:
                 if conf_score < 80: alignment_veto = True
+                
+            # [REFACTOR v12.0] Apex Override: Si el score es >= 90%, bajamos el rigor de la contratendencia
+            if alignment_veto and conf_score >= 90:
+                if not silent:
+                    logger.info(f"⚡ [GATEKEEPER] [APEX_OVERRIDE] {asset} permitiendo contratendencia por alta absorción ({conf_score}%).")
+                alignment_veto = False
                 
             if alignment_veto:
                 if not silent:

@@ -142,6 +142,23 @@ class ConfluenceManager:
         else:
             checklist.append({"factor": "Predicción IA", "status": "NEUTRAL", "detail": "IA Observando"})
 
+        # [REFACTOR v12.0] APEX OVERRIDE (Bono de Convicción Extrema)
+        # Si el motor de absorción detecta actividad institucional masiva, el score recibe un boost.
+        absorption_score = float(current.get('absorption_score', 0))
+        if absorption_score >= 90:
+            score += 20
+            checklist.append({"factor": "Apex Override", "status": "ELITE", "detail": f"Absorción {absorption_score}% (Institucional)"})
+        elif absorption_score >= 80:
+            score += 10
+            checklist.append({"factor": "Apex Boost", "status": "ACTIVO", "detail": f"Absorción {absorption_score}%"})
+        
+        # [REFACTOR v12.0] Multiplicador de Contexto por Noticias
+        # Si hay eventos económicos de alto impacto, el volumen es más importante
+        high_impact_news = any(e.get('impact') == 'HIGH' for e in econ_events)
+        if high_impact_news and rvol >= 1.5:
+            score += 10 # Bono por volumen en noticia
+            checklist.append({"factor": "Contexto Macro", "status": "VOLÁTIL", "detail": "Volumen validado por Noticia de Alto Impacto"})
+
         # 6. CALENDARIO ECONÓMICO Y NARRATIVA RECIENTE (Peso 20) v5.7.155 Master Gold
         econ_weight = 20
         total_weight += econ_weight
