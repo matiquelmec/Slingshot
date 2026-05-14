@@ -15,7 +15,7 @@ Slingshot_Trading/
 │   │   ├── main.py                  # FastAPI entry point + lifespan
 │   │   ├── config.py                # Settings centralizadas (.env)
 │   │   ├── ws_manager.py            # WebSocket broadcaster al frontend
-│   │   ├── advisor.py               # Motor IA (Ollama/Qwen-3)
+│   │   ├── advisor.py               # Motor IA (Ollama/Qwen-3) + Fallback Determinístico v13.1
 │   │   ├── advisor_bridge.py        # Puente HTTP para inferencia IA
 │   │   ├── auth.py                  # Autenticación JWT
 │   │   ├── signal_handler.py        # Handler de señales HTTP/WS
@@ -23,7 +23,7 @@ Slingshot_Trading/
 │   │   ├── json_utils.py            # Sanitización JSON (numpy → python)
 │   │   └── broadcaster/             # Pipeline de broadcast asíncrono
 │   ├── core/                        # Núcleo del motor
-│   │   ├── confluence.py            # ConfluenceManager v13.1 — Jurado Neural (13 factores + Yosh Order Flow)
+│   │   ├── confluence.py            # ConfluenceManager v13.1 — GP Fix + Scoring dinámico (10-25 pts)
 │   │   ├── store.py                 # MemoryStore — Estado persistente por activo
 │   │   ├── session_manager.py       # Gestión de sesiones (Asia/London/NY)
 │   │   └── logger.py                # Logger institucional
@@ -33,10 +33,10 @@ Slingshot_Trading/
 │   │   ├── dispatcher.py            # Despacho de señales aprobadas
 │   │   └── processors.py            # Procesadores + Slow Path (Volume Profile, Trap Detection v13.1)
 │   ├── strategies/                  # Lógica táctica
-│   │   └── smc.py                   # SMCInstitutionalStrategy v12.0 (OB+Sweep/Retest+FVG)
+│   │   └── smc.py                   # SMCInstitutionalStrategy v13.1 (Tiers A/B con Convicción Diferenciada)
 │   ├── indicators/                  # Análisis técnico e institucional
 │   │   ├── structure.py             # Order Blocks, FVGs, S/R + Trap Detection LAF/LBF (v13.1)
-│   │   ├── fibonacci.py             # Retrocesos, Golden Pocket, OTE
+│   │   ├── fibonacci.py             # Retrocesos, Golden Pocket (Evaluación Always-On v13.1)
 │   │   ├── volume.py                # RVOL, Absorción + Volume Profile POC/VAH/VAL (v13.1)
 │   │   ├── liquidity.py             # Muros de Liquidez (Orderbook)
 │   │   ├── liquidations.py          # Clusters de Liquidación proyectados
@@ -48,7 +48,7 @@ Slingshot_Trading/
 │   │   ├── market_analyzer.py       # Análisis de mercado auxiliar
 │   │   └── data_utils.py            # Utilidades de datos
 │   ├── risk/                        # Gestión de riesgo
-│   │   └── risk_manager.py          # RiskManager v13.1 — SIGMA Tuning + SL/TP + take_profit_3r
+│   │   └── risk_manager.py          # RiskManager v13.1 — Debounce v2 (Score Bucketing) + Adaptive Scaling
 │   ├── execution/                   # Ejecución de órdenes
 │   │   ├── nexus.py                 # Nexus Bridge v13.1 — Exchanges + Averaging Up Yosh
 │   │   ├── binance_executor.py      # Executor Binance Futures

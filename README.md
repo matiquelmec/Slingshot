@@ -43,8 +43,10 @@ graph TB
 
 ## 🧠 Metodología Educativa & Algorítmica
 
-### 1. Sistema de Mitigación RTO (Return To Origin)
-El motor no opera en la formación de la huella, opera en la **Mitigación Institucional**. Extrae el mapa vivo de liquidez (`smc_map`) y cruza el precio actual con los Order Blocks y FVGs históricos vivos.
+### 1. SMC Tiered Confluence (v13.1 Apex)
+El motor SMC ahora opera con un sistema de **Tiers de Convención**:
+- **TIER A (Premium)**: Setup completo (OB + Sweep/Retest + FVG). Convicción base: **0.90**.
+- **TIER B (Táctico)**: Setups parciales de alta probabilidad (Sweep + FVG o OB + Sweep). Convicción base: **0.65**. El Gatekeeper aplica filtros más estrictos a este tier para filtrar ruido.
 
 ### 2. Sovereign Bypass v12.0
 El sistema permite que señales de convicción extrema (≥95%) ignoren el Veto Fractal macro. Esto captura reversiones institucionales que un bot conservador descartaría.
@@ -52,37 +54,23 @@ El sistema permite que señales de convicción extrema (≥95%) ignoren el Veto 
 ### 3. Apex Override v12.0
 Cuando la absorción institucional supera el 90%, el Confluence Score recibe un bonus de +20 puntos, priorizando la huella de capital real sobre las reglas heurísticas.
 
-### 4. Inferencia IA Local (AI Validator v13)
-Utilizamos un modelo **gemma3:4b** (vía Ollama) corriendo localmente. El **Validator Agent** actúa como un "Segundo Analista" para señales en la zona gris (60-80%), realizando una auditoría narrativa del contexto estructural antes de permitir la ejecución.
+### 4. Inferencia IA Local & Fallback (v13.1)
+Utilizamos un modelo **gemma3:4b** (vía Ollama). Si el servidor local falla, el **Mini-Advisor Determinístico** entra en acción, generando un veredicto basado en reglas técnicas fijas (Regime, Signal, RVOL) para garantizar que la UI nunca reciba datos corruptos.
 
 ### 5. Black Box: Módulo de Memoria de Errores (v13)
-Slingshot ahora tiene memoria. El módulo **Black Box** graba la "huella digital" de cada trade perdedor (regimen, volumen, sesgo). Si se detecta un patrón similar (>85% coincidencia) en el futuro, el sistema emite un **VETO_BY_MEMORY** preventivo.
+Slingshot ahora tiene memoria. El módulo **Black Box** graba la "huella digital" de cada trade perdedor. Si se detecta un patrón similar (>85% coincidencia), se emite un **VETO_BY_MEMORY**.
 
 ### 6. Adaptive Risk Management (v13)
-El riesgo ya no es estático. El sistema escala la posición dinámicamente basándose en el **Confluence Score**:
-- **SCORE < 60%**: Bloqueo preventivo.
-- **SCORE 60-75%**: Riesgo Conservador (0.25% - 0.5%).
-- **SCORE 75-90%**: Riesgo Estándar (1.0%).
-- **SCORE > 90%**: Riesgo Institucional (Apex) (Hasta 2.0%).
+El riesgo se escala dinámicamente según el Confluence Score (0.25% - 2.0%).
 
-### 7. Rekt Radar v2.0: Volume-Weighted Liquidity Mapping
-El sistema **pondera los clusters de liquidación por volumen real institucional** detectado en los pivotes de mercado.
+### 7. Radar Resilience v2 (Visibility Re-hydration)
+El **RadarFeed** ya no requiere polling. Utiliza el evento `visibilitychange` para re-hidratar automáticamente el feed global cuando el usuario vuelve a la pestaña, asegurando sincronización total con el WebSocket Maestro.
 
-### 8. Arquitectura de Resiliencia Regional (Unified Spot Routing)
-El **Túnel de Resiliencia 9443** detecta bloqueos regionales de ISP y conmuta automáticamente la telemetría a endpoints de alta disponibilidad.
-
-### 9. 🏦 Yosh Order Flow — Value Area Intelligence (v13.1)
-Integración de la metodología institucional de **Yosh** ($2M+ en payouts de prop firms). El sistema ahora opera con inteligencia de **Order Flow puro**:
-- **Volume Profile (POC/VAH/VAL)**: Calculado en el Slow Path cada 60 segundos. Identifica dónde se concentra el valor real del mercado.
-- **Look Above and Fail (LAF/LBF)**: Detección automática de trampas institucionales de liquidez. Cuando el precio rompe un nivel clave y falla, el sistema lo marca como señal de alta probabilidad de reversión.
-- **Scoring de Confluencia Yosh**: El Jurado Neural bonifica señales dentro del Value Area (+10), en rechazo de VAH/VAL (+15) y con trampa confirmada (+25).
-
-### 10. 📈 Averaging Up — Escalado Institucional en Ganancia (v13.1)
-El motor de ejecución **Nexus** ahora soporta escalado inteligente de posiciones ganadoras:
-- Solo se activa cuando el SL ya está en **Breakeven** (riesgo cero).
-- Detecta retesteos del **POC** como zona de acumulación de valor.
-- Añade un 50% del tamaño original a la posición, maximizando R:R en trades de alta convicción.
-- Protección total: nunca promedia posiciones perdedoras (anti-averaging-down).
+### 8. 🏦 Yosh Order Flow — Value Area Intelligence (v13.1)
+Integración de la metodología institucional de **Yosh**. El sistema ahora opera con inteligencia de **Order Flow puro**:
+- **Volume Profile (POC/VAH/VAL)**: Calculado cada 60 segundos.
+- **Look Above and Fail (LAF/LBF)**: Detección de trampas institucionales.
+- **Scoring de Confluencia Yosh**: Bonus por OTE dinámico (10-25 pts) independiente de la ventana horaria.
 
 ---
 
@@ -109,10 +97,10 @@ Slingshot_Trading/
 ├── engine/                        # SIGMA: Cerebro Algorítmico (FastAPI + SMC)
 │   ├── main_router.py             # Pipeline principal (Async Support v13)
 │   ├── api/                       # FastAPI + WebSocket + Advisor + Auth
-│   ├── core/                      # Confluence + BlackBox (Memory) + AI Validator + Store
+│   ├── core/                      # Confluence (GP Fix v13.1) + BlackBox + AI Validator
 │   ├── router/                    # Gatekeeper v13 + Analyzer + Dispatcher
 │   ├── execution/                 # Nexus Bridge (Binance) + Omega Listener
-│   ├── strategies/                # SMCInstitutionalStrategy (v12 Apex)
+│   ├── strategies/                # SMC Tiers A/B (v13.1 Apex)
 │   ├── indicators/                # Structure, Fibonacci, Volume, Liquidity, On-Chain, Regime
 │   ├── inference/                 # Volume Pattern Scheduler
 │   ├── ml/                        # XGBoost Inference + Drift Monitor
@@ -122,62 +110,39 @@ Slingshot_Trading/
 │   ├── backtest/                  # ReplayEngine v11.1.2 (Event-Driven)
 │   ├── tools/                     # Scripts de auditoría y diagnóstico
 │   ├── tests/                     # 17 tests de integridad
-│   │   ├── data/                  # Datasets históricos (.parquet)
-│   │   └── legacy/                # Tests de versiones anteriores
 │   └── data/                      # Estado de sesión por activo + caché IA
 ├── app/                           # DELTA: Terminal UI (Next.js 15 + Zustand 5)
-│   ├── (dashboard)/               # Páginas del dashboard
-│   ├── components/                # Componentes React (Charts, Radar)
-│   ├── store/                     # TelemetryStore (Zustand)
-│   ├── types/                     # TypeScript interfaces
-│   └── utils/                     # Utilidades del frontend
-├── data/                          # Dataset maestro (btcusdt_15m_1YEAR.parquet)
-├── docs/                          # Documentación técnica
-│   ├── ESTRUCTURA_PROYECTO.md     # Mapa completo del proyecto
-│   ├── SLINGSHOT_BIBLE_V10.md     # Especificación técnica (Fuente de Verdad)
-│   ├── AUDIT_PLAN_V11.md          # Plan de auditoría vigente
-│   ├── TELEMETRY_RESILIENCE_V11.md
-│   ├── knowledge/                 # Base de conocimientos SMC/Wyckoff
-│   └── archive/                   # Documentos de versiones anteriores
-├── scripts/                       # DevOps y herramientas de sistema
-│   ├── deploy/                    # Dockerfile + systemd service
-│   ├── debug_connection.py        # Diagnóstico de red completo
-│   ├── doctor.py                  # Diagnóstico del sistema
-│   ├── historical_fetcher.py      # Descarga de datos históricos
-│   ├── latency_benchmark.py       # Benchmark de latencia
-│   ├── latency_breakdown.py       # Desglose por componente
-│   ├── optimize_os.ps1            # Optimizaciones de Windows
-│   └── vault_cleanup.ps1          # Limpieza de caché
-├── scratch/                       # Diagnósticos puntuales (gitignored)
-└── tmp/                           # Logs y caché temporal (gitignored)
+│   ├── store/                     # TelemetryStore + IndicatorsStore
+│   ├── components/                # TradingChart + Radar (Visibility Sync v13.1)
+│   └── ...
+└── ...
 ```
 
 ---
 
 ## 📖 Documentación Profunda
-- **[docs/SLINGSHOT_BIBLE_V10.md](docs/SLINGSHOT_BIBLE_V10.md)**: La especificación técnica Apex (Fuente de Verdad).
-- **[docs/ESTRUCTURA_PROYECTO.md](docs/ESTRUCTURA_PROYECTO.md)**: Mapa completo del proyecto con cada archivo documentado.
+- **[docs/SLINGSHOT_BIBLE_V10.md](docs/SLINGSHOT_BIBLE_V10.md)**: La especificación técnica Apex.
+- **[docs/ESTRUCTURA_PROYECTO.md](docs/ESTRUCTURA_PROYECTO.md)**: Mapa completo del proyecto.
 - **[docs/AUDIT_PLAN_V11.md](docs/AUDIT_PLAN_V11.md)**: Plan de auditoría vigente.
-- **[docs/knowledge/](docs/knowledge/)**: Base de conocimientos sobre Régimen de Mercado y Teoría SMC.
 
 ---
 
-## 🔬 Changelog v13.1 (Yosh Order Flow Edition)
-### 🏦 Order Flow Intelligence (NUEVO)
-- **Volume Profile Engine**: Cálculo de POC, VAH, VAL y LVNs en tiempo real (`volume.py`). Integrado en el Slow Path del `StreamProcessor`.
-- **Trap Detection (LAF/LBF)**: Detección de trampas institucionales en `structure.py`. Barridos de liquidez + fallo de estructura = señal de reversión.
-- **Yosh Confluence Scoring**: Nuevo bloque de scoring en `confluence.py` con bonificaciones de +10 a +25 puntos por alineación con el Value Area.
-- **Averaging Up (Nexus)**: Escalado inteligente de posiciones ganadoras en `nexus.py`. Se activa al retestear el POC con SL en Breakeven.
+## 🔬 Changelog v13.1 (Stabilization & Apex Tiers)
+### 🏹 Estrategia SMC Evolucionada
+- **Tiered Signal System**: Implementado Tier A (Premium) y Tier B (Táctico) con convicción diferenciada (0.9 vs 0.65).
+- **Golden Pocket Scoring**: Fix de indentación. GP ahora es independiente de la Yosh Window y tiene scoring dinámico (10-25 pts) según confluencia con Whale Legs.
 
-### 📊 Frontend Yosh (Visualización)
-- **Value Area Overlay**: Zona sombreada dorada VAH→VAL en el gráfico principal (`TradingChart.tsx`).
-- **POC Line**: Línea horizontal dorada permanente marcando el Point of Control.
-- **Trap Markers 🪤**: Iconos de trampa (LAF/LBF) directamente sobre las velas en el gráfico.
-- **Indicator Toggles**: Nuevos interruptores `Yosh Value Area` y `Market Traps` en el panel de indicadores (`indicatorsStore.ts`).
+### 🛡️ Resiliencia & Backend
+- **Deterministic Advisor Fallback**: Mini-advisor basado en reglas para caídas de Ollama.
+- **Signal Debounce v2**: Score bucketing (S/A/B) para evitar duplicados por micro-variaciones de datos.
+
+### 📊 Frontend & Radar
+- **Visibility Sync**: Re-hidratación automática del Radar al cambiar de pestaña.
+- **TradingChart v5.1**: Refactorización completa a Lightweight Charts v5.1 API.
 
 ### 🔧 Correcciones Críticas
-- **Absorción Determinista**: `absorption_score` sanitizado con `np.clip` y `np.nan_to_num` para garantizar rango [0, 100].
-- **Risk Manager Payload**: Añadido alias `take_profit_3r` al diccionario de retorno para resolver `KeyError` en el dispatcher.
+- **Golden Pocket Bypass**: Corregido bug que impedía la evaluación de OTE fuera de horario.
+- **Absorción Determinista**: `absorption_score` sanitizado para garantizar rango [0, 100].
 
 ## 🔬 Changelog v13.0 (Sovereign Intelligence)
 ### Evolución de Inteligencia
