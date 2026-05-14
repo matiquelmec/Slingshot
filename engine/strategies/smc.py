@@ -71,25 +71,43 @@ class SMCInstitutionalStrategy:
     def find_opportunities(self, df: pd.DataFrame, asset: str = "UNKNOWN", htf_bias: str = "NEUTRAL") -> list[dict]:
         if df.empty or len(df) < 64: return []
         
-        # [REFACTOR v12.0] Lógica de Confluencia Adaptativa (Sovereign Apex)
-        # Un setup es válido si hay OB + (Sweep O Retest) + FVG
+        # [REFACTOR v13.1] Sistema de Tiers con Conviction Diferenciada
+        # TIER A: Setup completo (OB + Trigger + FVG)
+        # TIER B: Setup parcial (Sweep + FVG o OB + Sweep)
         
-        # Un retest es válido si el precio actual está dentro del rango del OB más reciente
         is_retesting_bull = (df['low'] <= df['ob_bull_top']) & (df['close'] >= df['ob_bull_bottom'])
         is_retesting_bear = (df['high'] >= df['ob_bear_bottom']) & (df['close'] <= df['ob_bear_top'])
 
-        long_mask = df['recent_ob_bull'] & (df['recent_sweep_bull'] | is_retesting_bull) & df['recent_fvg_bull']
-        short_mask = df['recent_ob_bear'] & (df['recent_sweep_bear'] | is_retesting_bear) & df['recent_fvg_bear']
+        # TIER A: Setup Premium (0.90 Conviction)
+        long_A = df['recent_ob_bull'] & (df['recent_sweep_bull'] | is_retesting_bull) & df['recent_fvg_bull']
+        short_A = df['recent_ob_bear'] & (df['recent_sweep_bear'] | is_retesting_bear) & df['recent_fvg_bear']
+
+        # TIER B: Setup Táctico (0.65 Conviction) - Solo si no hay Tier A
+        long_B = (
+            (df['recent_ob_bull'] & df['recent_sweep_bull']) |   # OB + Sweep (sin FVG)
+            (df['recent_sweep_bull'] & df['recent_fvg_bull'])    # Sweep + FVG (sin OB)
+        ) & ~long_A
+        
+        short_B = (
+            (df['recent_ob_bear'] & df['recent_sweep_bear']) |
+            (df['recent_sweep_bear'] & df['recent_fvg_bear'])
+        ) & ~short_A
 
         opportunities = []
-        indices = np.where(long_mask | short_mask)[0]
-        
-        # Solo la vela actual (v8.9.0 Sniper Focus)
         last_idx = len(df) - 1
         
-        if last_idx in indices:
-            sig_type = "LONG" if long_mask[last_idx] else "SHORT"
-            opportunities.append(self._format_signal(last_idx, sig_type, df.iloc[last_idx], asset))
+        if last_idx in np.where(long_A | short_A)[0]:
+            sig_type = "LONG" if long_A[last_idx] else "SHORT"
+            sig = self._format_signal(last_idx, sig_type, df.iloc[last_idx], asset)
+            sig["conviction"] = 0.90
+            sig["tier"] = "A"
+            opportunities.append(sig)
+        elif last_idx in np.where(long_B | short_B)[0]:
+            sig_type = "LONG" if long_B[last_idx] else "SHORT"
+            sig = self._format_signal(last_idx, sig_type, df.iloc[last_idx], asset)
+            sig["conviction"] = 0.65
+            sig["tier"] = "B"
+            opportunities.append(sig)
 
         return opportunities
 

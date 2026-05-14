@@ -233,7 +233,8 @@ class SignalHandler:
     def _debounce(self, signals: list, min_score: int = 0) -> list:
         """
         Filtra señales duplicadas dentro del mismo ciclo de vela.
-        Genera un ID estable por (symbol, type, timestamp, score).
+        Genera un ID estable por (symbol, type, timestamp, score_band).
+        v13.1: Score bucketing para evitar duplicados por micro-variación.
         """
         unique = []
         for s in signals:
@@ -241,7 +242,8 @@ class SignalHandler:
             if score < min_score:
                 continue
             ts  = s.get("timestamp") or s.get("time") or 0
-            sid = f"{self._symbol}:{s.get('type', 'LONG')}:{ts}:{score}"
+            band = "S" if score >= 70 else "A" if score >= 50 else "B" if score >= 25 else "R"
+            sid = f"{self._symbol}:{s.get('type', 'LONG')}:{ts}:{band}"
             if sid not in self._processed_signals_this_candle:
                 unique.append(s)
                 self._processed_signals_this_candle.add(sid)

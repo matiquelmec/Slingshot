@@ -63,6 +63,44 @@ async def check_ollama_status(force_recheck=False) -> bool:
         return False
 
 
+def _deterministic_verdict(symbol: str, tactical_data: dict, session: str = "UNKNOWN") -> str:
+    """
+    v13.1: Mini-advisor determinístico para cuando Ollama está offline.
+    Genera un veredicto JSON válido basado en las mismas reglas del prompt LLM.
+    """
+    regime = tactical_data.get("regime", tactical_data.get("market_regime", "IDLE"))
+    signal = tactical_data.get("signal", "NEUTRAL")
+    rvol = (tactical_data.get("diagnostic") or {}).get("rvol", 0)
+
+    # Evaluación de amenaza basada en RVOL y régimen
+    if regime in ("CHOPPY", "DISTRIBUTION") and rvol > 2.0:
+        threat = "HIGH"
+    elif regime in ("RANGING", "IDLE") or session == "OFF_HOURS":
+        threat = "MEDIUM"
+    else:
+        threat = "LOW"
+
+    # Veredicto basado en señal y amenaza
+    if threat == "HIGH":
+        verdict = "AVOID"
+    elif signal != "NEUTRAL":
+        verdict = "GO"
+    else:
+        verdict = "SIDEWAYS"
+
+    logic_map = {
+        "MARKUP": "Tendencia alcista activa",
+        "MARKDOWN": "Presión bajista activa",
+        "ACCUMULATION": "Acumulación institucional",
+        "DISTRIBUTION": "Distribución detectada",
+        "RANGING": "Mercado en rango",
+        "CHOPPY": "Alta volatilidad sin dirección",
+    }
+    logic = logic_map.get(regime, f"Régimen {regime}")
+
+    return json.dumps({"verdict": verdict, "threat": threat, "logic": logic})
+
+
 def extract_json_from_llm(content: str):
     """Limpia la respuesta de la IA para extraer JSON puro y repara errores comunes de multilínea."""
     # 1. Limpieza básica de Markdown
@@ -126,7 +164,7 @@ async def generate_tactical_advice(symbol: str,
             return cached["advice"]
 
     if not await check_ollama_status():
-        return "ADVISOR: OLLAMA_OFFLINE. Operando bajo parámetros técnicos puros."
+        return _deterministic_verdict(symbol, tactical_data, current_session)
 
     # 2. SISTEMA DE UMBRAL POR VOLATILIDAD (0.1% Delta Logic v8.5.3)
     if symbol in _strategic_memo:
@@ -138,7 +176,7 @@ async def generate_tactical_advice(symbol: str,
             return _strategic_memo[symbol]["advice"]
 
     if not await check_ollama_status():
-        return json.dumps({"verdict": "SIDEWAYS", "logic": "OLLAMA_OFFLINE", "threat": "LOW"})
+        return _deterministic_verdict(symbol, tactical_data, current_session)
 
     # 3. Construcción de Contexto Multi-Timeframe y SMC (Variables en Vivo)
     mtf_summary = ""

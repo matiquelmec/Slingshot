@@ -480,25 +480,28 @@ class ConfluenceManager:
             checklist.append({"factor": "Yosh: Trampa LAF", "status": "INSTITUCIONAL", "detail": f"Trampa detectada en {lvl_hit} (+25pts)"})
 
         # D. Yosh Golden Window (10:00 - 11:30 AM EST)
-        if session_data and session_data.get("yosh_window"):
+        in_yosh_window = bool(session_data and session_data.get("yosh_window"))
+        if in_yosh_window:
             score += 15
             checklist.append({"factor": "Yosh: Golden Window", "status": "ALINEADO", "detail": "Operando en ventana institucional de alta probabilidad (+15pts)"})
 
-
-            if gp_618 and gp_786:
-                z_top = max(gp_618, gp_786)
-                z_bottom = min(gp_618, gp_786)
-                
-                if z_bottom <= price <= z_top:
-                    is_whale = fib_data.get("is_whale_leg", False)
-                    gp_pts = 20 if is_whale else 10
-                    score += gp_pts
-                    whale_txt = " (WHALE LEG 🐋)" if is_whale else ""
-                    checklist.append({
-                        "factor": "Golden Pocket", 
-                        "status": "CONFIRMADO", 
-                        "detail": f"Inversión en OTE {gp_pts}pts{whale_txt}"
-                    })
+        # E. Golden Pocket — SIEMPRE se evalúa (independiente de ventana horaria)
+        if gp_618 and gp_786:
+            z_top = max(gp_618, gp_786)
+            z_bottom = min(gp_618, gp_786)
+            
+            if z_bottom <= price <= z_top:
+                is_whale = fib_data.get("is_whale_leg", False)
+                # Scoring compuesto: GP + Whale + Yosh = máximo puntaje
+                gp_pts = 25 if (is_whale and in_yosh_window) else 20 if is_whale else 15 if in_yosh_window else 10
+                score += gp_pts
+                whale_txt = " (WHALE LEG 🐋)" if is_whale else ""
+                yosh_txt = " + YOSH WINDOW" if in_yosh_window else ""
+                checklist.append({
+                    "factor": "Golden Pocket", 
+                    "status": "CONFIRMADO", 
+                    "detail": f"Inversión en OTE {gp_pts}pts{whale_txt}{yosh_txt}"
+                })
 
 
         # 🚀 11.5. GHOST SENTINEL MACRO BIAS (v8.6.0 Institutional)
