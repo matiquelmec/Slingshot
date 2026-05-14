@@ -59,6 +59,8 @@ def _empty_state(trading_day: str = "") -> dict:
         "pdl": None,
         "pdh_swept": False,
         "pdl_swept": False,
+        "onh": None, # Overnight High (Yosh)
+        "onl": None, # Overnight Low (Yosh)
     }
 
 
@@ -159,6 +161,8 @@ class SessionManager:
             self._state[key]["low"]  = None
             self._state[key]["swept_high"] = False
             self._state[key]["swept_low"]  = False
+        self._state["onh"] = None
+        self._state["onl"] = None
         self._state["trading_day"] = str(today)
 
         pdh_candidates = []
@@ -196,16 +200,24 @@ class SessionManager:
                     p = prev["london"]
                     p["high"] = max(p["high"], high) if p["high"] is not None else high
                     p["low"]  = min(p["low"],  low)  if p["low"]  is not None else low
-                if 8 <= ny_hour < 16:
+                if 9 <= ny_hour < 16: # NY RTH (Yosh Standard)
                     p = prev["ny"]
                     p["high"] = max(p["high"], high) if p["high"] is not None else high
                     p["low"]  = min(p["low"],  low)  if p["low"]  is not None else low
+
+                # 🌙 YOSH OVERNIGHT (Velas de ayer 21:00 - 23:59)
+                if ny_hour >= 21:
+                    oh = self._state.get("onh")
+                    ol = self._state.get("onl")
+                    self._state["onh"] = max(oh, high) if oh is not None else high
+                    self._state["onl"] = min(ol, low)  if ol is not None else low
 
             # Velas de HOY → sesión actual
             if day != today:
                 continue
 
-            if 0 <= utc_hour < 6:
+            tok_hour = ts.astimezone(_TOKYO_TZ).hour
+            if 9 <= tok_hour < 15: # ASIA (Tokyo Standard)
                 s = self._state["asia"]
                 s["high"] = max(s["high"], high) if s["high"] is not None else high
                 s["low"]  = min(s["low"],  low)  if s["low"]  is not None else low
@@ -215,10 +227,23 @@ class SessionManager:
                 s["high"] = max(s["high"], high) if s["high"] is not None else high
                 s["low"]  = min(s["low"],  low)  if s["low"]  is not None else low
 
-            if 8 <= ny_hour < 16:
+            if 9 <= ny_hour < 16: # NY RTH (Yosh Standard)
                 s = self._state["ny"]
                 s["high"] = max(s["high"], high) if s["high"] is not None else high
                 s["low"]  = min(s["low"],  low)  if s["low"]  is not None else low
+
+            # ── 🌙 YOSH OVERNIGHT RANGE (HOY 00:00 - 09:29 EST) ──
+            is_overnight = False
+            if ny_hour < 9:
+                is_overnight = True
+            elif ny_hour == 9 and ts.astimezone(_NY_TZ).minute < 30:
+                is_overnight = True
+
+            if is_overnight:
+                oh = self._state.get("onh")
+                ol = self._state.get("onl")
+                self._state["onh"] = max(oh, high) if oh is not None else high
+                self._state["onl"] = min(ol, low)  if ol is not None else low
 
         # Aplicar PDH/PDL
         if pdh_candidates:
@@ -287,7 +312,8 @@ class SessionManager:
         # ── Actualizar niveles de la sesión activa ────────────────────────
         ny_hour  = ts.astimezone(_NY_TZ).hour
         lon_hour = ts.astimezone(_LONDON_TZ).hour
-        utc_hour = ts.hour
+        tok_hour = ts.astimezone(_TOKYO_TZ).hour
+        fra_hour = ts.astimezone(_FRA_TZ).hour
 
         def _update_session(key: str, is_active: bool):
             if not is_active:
@@ -298,9 +324,19 @@ class SessionManager:
             s["high"] = max(h, high) if h is not None else high
             s["low"]  = min(l, low)  if l is not None else low
 
-        _update_session("asia",   0 <= utc_hour < 6)
+        _update_session("asia",   9 <= tok_hour < 15)
         _update_session("london", 8 <= lon_hour < 16)
-        _update_session("ny",     8 <= ny_hour < 16)
+        _update_session("ny",     9 <= ny_hour < 16) # NY RTH (Yosh Standard)
+
+        # ── 🌙 YOSH OVERNIGHT RANGE UPDATE ──
+        ny_time = ts.astimezone(_NY_TZ)
+        is_overnight = (ny_time.hour >= 21) or (ny_time.hour < 9) or (ny_time.hour == 9 and ny_time.minute < 30)
+
+        if is_overnight:
+            oh = self._state.get("onh")
+            ol = self._state.get("onl")
+            self._state["onh"] = max(oh, high) if oh is not None else high
+            self._state["onl"] = min(ol, low)  if ol is not None else low
 
         # ── Detección de Sweeps ───────────────────────────────────────────
         pdh = self._state.get("pdh")
@@ -436,10 +472,20 @@ class SessionManager:
             is_silver_bullet = True
             if ny_hour >= 14: session_name = "NY_SILVER_BULLET_PM"
 
-        # Frankfurt Pre-Open
-        if 7 <= lon_hour < 8:
+        # Frankfurt Pre-Open (Berlin TZ Accuracy)
+        fra_hour = now_utc.astimezone(_FRA_TZ).hour
+        if 7 <= fra_hour < 8:
             session_name = "FRANKFURT_OPEN"
             is_killzone = True
+
+        # ── 🎯 YOSH EXECUTION WINDOW (10:00 - 11:30 AM EST) ──
+        # Ventana de máxima probabilidad tras los primeros 30 min de "price discovery"
+        yosh_window = False
+        if 10 <= ny_hour <= 11:
+            if ny_hour == 10:
+                yosh_window = True
+            elif ny_hour == 11 and now_ny.minute <= 30:
+                yosh_window = True
 
         return {
             "type": "session_update",
@@ -458,6 +504,9 @@ class SessionManager:
                 "pdl":       float(self._state.get("pdl")) if self._state.get("pdl") is not None else None,
                 "pdh_swept": bool(self._state.get("pdh_swept", False)),
                 "pdl_swept": bool(self._state.get("pdl_swept", False)),
+                "onh":       float(self._state.get("onh")) if self._state.get("onh") is not None else None,
+                "onl":       float(self._state.get("onl")) if self._state.get("onl") is not None else None,
+                "yosh_window": bool(yosh_window),
                 "trading_day": str(self._state.get("trading_day")),
             }
         }

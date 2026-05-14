@@ -52,6 +52,18 @@ class MemoryStore:
         self._market_states[asset].update(data)
         self._market_states[asset]["asset"] = asset
 
+    async def save_session_state(self, asset: str, session_data: Dict[str, Any]):
+        """Persiste el estado de sesión (PDH/PDL/Killzones) para un activo."""
+        async with self._lock:
+            if asset not in self._market_states:
+                self._market_states[asset] = {}
+            self._market_states[asset]["session_state"] = session_data
+
+    def get_session_state(self, asset: str) -> Dict[str, Any]:
+        """Recupera el estado de sesión para un activo (Sincrónico para el Slow Path)."""
+        state = self._market_states.get(asset, {})
+        return state.get("session_state", {})
+
     async def save_tactical_snapshot(self, asset: str, interval: str, data: Dict[str, Any]):
         """Persiste el estado técnico de un intervalo específico para análisis MTF."""
         key = f"{asset}:{interval}"

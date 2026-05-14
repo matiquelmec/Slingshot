@@ -91,17 +91,18 @@ def identify_order_blocks(df: pd.DataFrame, threshold: float = 1.3, lookback_str
 
 def identify_look_and_fail(df: pd.DataFrame, session_data: dict = None) -> pd.DataFrame:
     """
-    Look Above/Below and Fail (LAF/LBF) v1.0.
-    Identifica trampas institucionales cuando el precio perfora un nivel clave
-    pero cierra DENTRO del rango, indicando rechazo masivo.
+    Look Above/Below and Fail (LAF/LBF) v13.1 — Yosh Edition.
+    Identifica trampas institucionales cuando el precio perfora niveles clave
+    (PDH/PDL o ONH/ONL) pero cierra DENTRO del rango.
     """
     df = df.copy()
     if len(df) < 2: return df
     
-    # 1. Definir Niveles de Referencia (Máximos/Mínimos Estructurales Recientes)
-    # Si tenemos session_data (PDH/PDL), los usamos. Si no, usamos pivotes.
+    # 1. Definir Niveles de Referencia
     pdh = session_data.get("pdh") if session_data else None
     pdl = session_data.get("pdl") if session_data else None
+    onh = session_data.get("onh") if session_data else None
+    onl = session_data.get("onl") if session_data else None
     
     # Fallback a pivotes si no hay session_data
     struct_h = df["high"].rolling(window=20).max().shift(1)
@@ -110,20 +111,19 @@ def identify_look_and_fail(df: pd.DataFrame, session_data: dict = None) -> pd.Da
     ref_h = pdh if pdh else struct_h
     ref_l = pdl if pdl else struct_l
     
-    # 2. "Look Above and Fail" (Trampa para Short)
-    # El precio fue arriba del nivel, pero cerró abajo y la vela es bajista.
+    # 2. "Look Above and Fail" (Trampa Bearish)
+    # Check PDH first, then ONH
     df["laf_bear"] = (
-        (df["high"] > ref_h) & 
-        (df["close"] < ref_h) & 
-        (df["close"] < df["open"])
-    )
+        ((df["high"] > ref_h) & (df["close"] < ref_h)) |
+        ((onh is not None) & (df["high"] > onh) & (df["close"] < onh))
+    ) & (df["close"] < df["open"])
     
-    # 3. "Look Below and Fail" (Trampa para Long)
+    # 3. "Look Below and Fail" (Trampa Bullish)
+    # Check PDL first, then ONL
     df["laf_bull"] = (
-        (df["low"] < ref_l) & 
-        (df["close"] > ref_l) & 
-        (df["close"] > df["open"])
-    )
+        ((df["low"] < ref_l) & (df["close"] > ref_l)) |
+        ((onl is not None) & (df["low"] < onl) & (df["close"] > onl))
+    ) & (df["close"] > df["open"])
     
     return df
 

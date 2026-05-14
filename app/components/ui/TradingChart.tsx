@@ -448,14 +448,14 @@ export default function TradingChart() {
             vaSeries.setData(data as any);
             valueAreaSeriesRef.current = vaSeries;
 
-            // 2. Point of Control (POC) - Línea horizontal dorada
+            // 2. Point of Control (POC) - Línea horizontal dorada institucional (3px)
             pocLineRef.current = candleSeriesRef.current.createPriceLine({
                 price: vp.poc,
                 color: '#FFD700',
-                lineWidth: 2,
+                lineWidth: 3,
                 lineStyle: LineStyle.Solid,
                 axisLabelVisible: true,
-                title: 'POC (VALUE)',
+                title: '🏦 YOSH POC (VALUE)',
             });
         }
     }, [smcData, indicators, times]);
@@ -533,12 +533,12 @@ export default function TradingChart() {
             const getLevelColor = (lvl: { type: string; origin: string }, alpha: string): string => {
                 if (lvl.type === 'RESISTANCE') {
                     return lvl.origin === 'ROLE_REVERSAL'
-                        ? `rgba(251,146,60,${alpha})`   // naranja
-                        : `rgba(255,0,60,${alpha})`;    // rojo
+                        ? `rgba(251,146,60,${alpha})`   // naranja role reversal
+                        : `rgba(255,0,60,${alpha})`;    // rojo eléctrico
                 } else {
                     return lvl.origin === 'ROLE_REVERSAL'
-                        ? `rgba(250,204,21,${alpha})`   // amarillo
-                        : `rgba(0,255,65,${alpha})`;    // verde
+                        ? `rgba(250,204,21,${alpha})`   // amarillo role reversal
+                        : `rgba(0,255,65,${alpha})`;    // verde eléctrico
                 }
             };
 
@@ -609,10 +609,27 @@ export default function TradingChart() {
                 .sort((a, b) => Number(a.time) - Number(b.time))
                 .filter((c, i, arr) => i === 0 || c.time !== arr[i - 1].time);
 
-            // 1. PDH / PDL (Maestras del día actual)
-            const { pdh, pdl } = sessionData;
-            addLine(pdh, 'rgba(0, 255, 255, 0.3)', 'PDH', LineStyle.Dashed, 1);
-            addLine(pdl, 'rgba(0, 255, 255, 0.3)', 'PDL', LineStyle.Dashed, 1);
+            // 1. PDH / PDL (Maestras del día actual - Naranja y Verde Neón 3px)
+            const { pdh, pdl, onh, onl, yosh_window } = sessionData;
+            
+            addLine(pdh, '#FF9F00', '🏦 PDH (DAILY HIGH)', LineStyle.Solid, 3);
+            addLine(pdl, '#00FF00', '🏦 PDL (DAILY LOW)', LineStyle.Solid, 3);
+
+            // 🌙 YOSH OVERNIGHT LEVELS (Magenta Neón 2px Dashed)
+            if (onh) addLine(onh, '#FF00FF', '🌙 ONH (OVERNIGHT HIGH)', LineStyle.Dashed, 2);
+            if (onl) addLine(onl, '#FF00FF', '🌙 ONL (OVERNIGHT LOW)', LineStyle.Dashed, 2);
+
+            // 📊 YOSH LVNs (Nodos de Bajo Volumen - Gris Tenue 1px Dotted)
+            const lvns = sessionData?.volume_profile?.lvns || [];
+            lvns.forEach((lvn: number, i: number) => {
+                addLine(lvn, 'rgba(200, 200, 200, 0.5)', `📉 LVN ${i+1}`, LineStyle.Dotted, 1);
+            });
+
+            // 🎯 YOSH WINDOW STATUS (Etiqueta visual)
+            if (yosh_window) {
+                // Podríamos usar un Watermark o simplemente saber que el Gatekeeper dará bonus
+                // Por ahora lo dejamos como niveles para que el usuario tome acción manual
+            }
 
             if (sorted.length === 0) return;
 

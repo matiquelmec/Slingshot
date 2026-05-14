@@ -411,6 +411,7 @@ class ConfluenceManager:
         # El Fibonacci ahora viene inyectado en kwargs['fib_data'] para evitar re-cálculo
         fib_data = kwargs.get('fib_data')
         price = float(current.get('close', 0))
+        fib_05 = gp_618 = gp_786 = None
         
         if fib_data and 'levels' in fib_data:
             fib_05 = fib_data['levels'].get('0.5')
@@ -453,11 +454,35 @@ class ConfluenceManager:
                 score += 15
                 checklist.append({"factor": "Yosh: Extremo VA", "status": "ELITE", "detail": "Rechazo en extremo de área de valor (+15pts)"})
 
+            # D. Defensa en LVN (Low Volume Node)
+            lvns = vp.get("lvns", [])
+            absorption = vp.get("absorption_score", 0)
+            
+            near_lvn = any(abs(price - lvn) / price < 0.0015 for lvn in lvns)
+            if near_lvn:
+                lvn_pts = 10
+                if absorption > 60: # Alta absorción en LVN = Defensa Institucional
+                    lvn_pts += 15
+                    detail = f"Defensa Institucional en LVN con Alta Absorción ({absorption}) (+25pts)"
+                    status = "INSTITUCIONAL"
+                else:
+                    detail = "Precio reaccionando en Nodo de Bajo Volumen (+10pts)"
+                    status = "ALINEADO"
+                
+                score += lvn_pts
+                checklist.append({"factor": "Yosh: Defensa LVN", "status": status, "detail": detail})
+
         # C. Bono por Trampa (Look Above and Fail)
         laf_active = traps.get("laf_bull" if is_long else "laf_bear", False)
         if laf_active:
+            lvl_hit = traps.get("level_hit", "Key Level")
             score += 25
-            checklist.append({"factor": "Yosh: Trampa LAF", "status": "INSTITUCIONAL", "detail": "Trampa detectada (Look Above/Below and Fail) (+25pts)"})
+            checklist.append({"factor": "Yosh: Trampa LAF", "status": "INSTITUCIONAL", "detail": f"Trampa detectada en {lvl_hit} (+25pts)"})
+
+        # D. Yosh Golden Window (10:00 - 11:30 AM EST)
+        if session_data and session_data.get("yosh_window"):
+            score += 15
+            checklist.append({"factor": "Yosh: Golden Window", "status": "ALINEADO", "detail": "Operando en ventana institucional de alta probabilidad (+15pts)"})
 
 
             if gp_618 and gp_786:

@@ -95,6 +95,11 @@ class SymbolBroadcaster:
     def _last_smc(self, val): self.state.last_smc = val
 
     @property
+    def latest_price(self): return self.state.latest_price
+    @latest_price.setter
+    def latest_price(self, val): self.state.latest_price = val
+
+    @property
     def _last_tactical(self): return self.state.last_tactical
     @_last_tactical.setter
     def _last_tactical(self, val): self.state.last_tactical = val
@@ -247,8 +252,15 @@ class SymbolBroadcaster:
 
         # 🚀 [HYDRATION v10.2] Sincronización Inicial de Telemetría
         asyncio.create_task(self._sync_initial_telemetry())
-        
         asyncio.create_task(self._load_background_data())
+        
+        # 🟢 [LOOP PRINCIPAL] — Conexión y Re-conexión Automática
+        while True:
+            try:
+                await self._stream_live()
+            except Exception as e:
+                logger.warning(f"[RECONNECT] Reiniciando túnel para {self._key} en 5s: {e}")
+                await asyncio.sleep(5.0)
 
     async def _sync_initial_telemetry(self):
         """Asegura que el cliente reciba datos macro y de sesión inmediatamente."""
@@ -302,52 +314,127 @@ class SymbolBroadcaster:
     # --- Stream En Vivo ---
     async def _stream_live(self):
         kline_stream = f"{self.symbol.lower()}@kline_{self.interval}"
-        depth_stream = f"{self.symbol.lower()}@depth20@100ms"
-        # Enrutamiento Inteligente (v10.1.5)
-        # XAGUSDT solo existe en FUTUROS. Otros activos usan SPOT por resiliencia de ISP.
-        is_futures_only = self.symbol in ["XAGUSDT"]
-        base_ws_url = "wss://fstream.binance.com" if is_futures_only else "wss://stream.binance.com:9443"
+        depth_stream = f"{self.symbol.lower()}@depth20@500ms"
+        ticker_stream = f"{self.symbol.lower()}@miniTicker"
         
-        binance_url = f"{base_ws_url}/stream?streams={kline_stream}/{depth_stream}"
+        # Enrutamiento Inteligente (v10.1.12 APEX Ultra-Robust)
+        is_futures = self.symbol not in settings.SPOT_ONLY_ASSETS
+        is_testnet = "testnet" in (settings.BINANCE_API_KEY or "").lower() or getattr(settings, 'USE_TESTNET', False)
+        
+        # Ajuste de velocidad de depth: Spot no soporta 500ms, solo 100ms o 1000ms.
+        depth_speed = "@500ms" if is_futures else ""
+        depth_stream = f"{self.symbol.lower()}@depth20{depth_speed}"
+        
+        if is_futures:
+            base_ws_url = "wss://stream.binancefuture.com" if is_testnet else "wss://fstream.binance.com"
+            # 💎 [FUTURES-COMBO] Para todos los activos de futuros usamos el set completo de telemetría
+            mark_stream = f"{self.symbol.lower()}@markPrice"
+            binance_url = f"{base_ws_url}/stream?streams={kline_stream}/{depth_stream}/{ticker_stream}/{mark_stream}"
+            logger.info(f"⚡ [FUTURES-COMBO] {self.symbol} (Price+Ticker+Heatmap+Mark): {binance_url}")
+        else:
+            base_ws_url = "wss://testnet.binance.vision" if is_testnet else "wss://stream.binance.com:9443"
+            binance_url = f"{base_ws_url}/stream?streams={kline_stream}/{depth_stream}"
+            logger.info(f"🛒 [SPOT] {self.symbol} -> {binance_url}")
 
-        logger.info(f"[BROADCASTER] {self._key} → Iniciando túnel (Unified Spot Routing): {binance_url}")
+        logger.info(f"[BROADCASTER] {self._key} → Iniciando túnel en vivo...")
         
+        # 🚨 [REDUNDANCIA UNIVERSAL] Activando Fallback en paralelo para todos los activos de Futuros
+        if is_futures:
+            logger.info(f"🛡️ [FUTURES-GUARD] Activando redundancia Bitunix para {self.symbol} (v10.2).")
+            await self.fallback.start()
+
         try:
-            # Correcto: await wait_for devuelve el context manager, luego entramos con async with
             async with await asyncio.wait_for(ws_client.connect(binance_url, ping_interval=30), timeout=15.0) as binance_ws:
                 self.state.is_connected = True
                 logger.info(f"[BROADCASTER] {self._key} → Stream Conectado 🟢")
-                
-                # Si el fallback estaba corriendo, lo detenemos
-                await self.fallback.stop()
+                # Mantenemos el fallback encendido para todos los activos de Futuros (Redundancia v10.2)
+                # Si es SPOT, lo apagamos para ahorrar recursos
+                if not is_futures:
+                    await self.fallback.stop()
                 self._last_tick_ts = time.time()
 
                 while self.state.is_connected:
                     try:
-                        raw = await asyncio.wait_for(binance_ws.recv(), timeout=15.0)
+                        raw = await asyncio.wait_for(binance_ws.recv(), timeout=20.0)
                         self._last_tick_ts = time.time()
                         data = json.loads(raw)
-                        stream_type = data.get("stream", "")
-                        payload = data.get("data", {})
                         
-                        if "depth" in stream_type:
-                            await self._process_depth_stream(payload)
-                        elif "kline" in stream_type:
-                            await self._process_kline_stream(payload, data)
+                        # Extracción segura de metadatos
+                        s_type = data.get("stream", "").lower() if isinstance(data, dict) else ""
+                        p_load = data.get("data", data) if isinstance(data, dict) else data
+                        
+                        if not s_type and isinstance(p_load, dict) and "e" in p_load:
+                            s_type = p_load["e"].lower()
+
+                        # Olfateador de datos para XAG (DEBUG CRÍTICO)
+                        if self.symbol == "XAGUSDT" and "depth" not in s_type:
+                            logger.info(f"🔍 [XAG-INBOUND] Stream: {s_type} | Event: {p_load.get('e') if isinstance(p_load, dict) else 'N/A'}")
+
+                        # PRIORIDAD 1: VELAS (PRECIO)
+                        if "kline" in s_type:
+                            await self._process_kline_stream(p_load, data)
+                        
+                        # PRIORIDAD 1.5: TICKER / MARK PRICE (PRECIO RÁPIDO)
+                        elif any(x in s_type for x in ["ticker", "markprice"]):
+                            await self._process_ticker_stream(p_load)
+
+                        # PRIORIDAD 2: DEPTH (HEATMAP) - En segundo plano
+                        elif "depth" in s_type:
+                            asyncio.create_task(self._process_depth_stream(p_load))
+                            
                     except asyncio.TimeoutError:
                         logger.warning(f"[BROADCASTER] Timeout de datos en {self._key}. Reintentando...")
                         break
+                    except Exception as loop_e:
+                        logger.error(f"[BROADCASTER-LOOP] Error procesando mensaje en {self._key}: {loop_e}")
+                        continue
         except Exception as e:
             logger.error(f"[BROADCASTER] Fallo crítico de conexión en {self._key}: {e}")
             raise
 
+    async def _process_ticker_stream(self, payload: dict):
+        """Procesa miniTicker, 24hrTicker o markPriceUpdate para updates ultra-rápidos."""
+        # 'c' en tickers, 'p' en markPrice
+        price_str = payload.get("c") or payload.get("p")
+        if not price_str: return
+        
+        new_price = float(price_str)
+        
+        # Solo actualizamos si el precio cambió significativamente o pasó tiempo
+        if new_price != self.state.latest_price:
+            self.state.latest_price = new_price
+            
+            if self.symbol == "XAGUSDT":
+                now = time.time()
+                if now - getattr(self, '_last_ticker_log', 0) > 1.0:
+                    logger.info(f"⚡ [XAG-LIVE-PRICE] {new_price} (vía {payload.get('e', 'unknown')})")
+                    self._last_ticker_log = now
+            
+            # Emitir pulso de precio
+            await self._broadcast({
+                "type": "price_update",
+                "data": {
+                    "symbol": self.symbol,
+                    "price": new_price,
+                    "ts": time.time(),
+                    "source": payload.get("e")
+                }
+            })
+
     async def _process_depth_stream(self, payload: dict):
-        price = self.latest_price or 1.0
-        self.state.heatmap = analyze_neural_heatmap(
-            bids=payload.get("bids") or payload.get("b", []),
-            asks=payload.get("asks") or payload.get("a", []),
-            current_price=price
-        )
+        # Evitar acumulación de tareas si el procesador está saturado
+        if getattr(self, '_depth_busy', False): return
+        self._depth_busy = True
+        
+        try:
+            price = self.latest_price or 1.0
+            self.state.heatmap = analyze_neural_heatmap(
+                bids=payload.get("bids") or payload.get("b", []),
+                asks=payload.get("asks") or payload.get("a", []),
+                current_price=price
+            )
+        finally:
+            self._depth_busy = False
         self.state.liquidity = {
             "bids": [{"price": b["price"], "volume": b["volume"]} for b in self.state.heatmap.get("hot_bids", [])],
             "asks": [{"price": a["price"], "volume": a["volume"]} for a in self.state.heatmap.get("hot_asks", [])]
@@ -369,8 +456,11 @@ class SymbolBroadcaster:
         kline = payload.get("k")
         if not kline: return
         
-        # 🟢 Sync Latest Price — escribir en el STATE, no en el broadcaster
+        # 🟢 Sync Latest Price
         self.state.latest_price = float(kline["c"])
+        if self.symbol == "XAGUSDT":
+            # Log más detallado para debuggear por qué dicen que no se mueve
+            logger.info(f"📊 [XAG-KLINE] Close: {kline['c']} | IsFinal: {kline.get('x')}")
 
         candle = {
             "type": "candle",
@@ -381,6 +471,11 @@ class SymbolBroadcaster:
             }
         }
         await self._broadcast(candle)
+        
+        # 🟢 [SESSION SYNC v10.2] Actualizar niveles institucionales (PDH/PDL/Killzones)
+        session_payload = self._session_manager.update(candle, is_closed=kline.get("x", False))
+        await store.save_session_state(self.symbol, session_payload["data"])
+        await self._broadcast(session_payload)
 
         # 🚀 [ULTRA-LOW LATENCY] Procesamiento en segundo plano para no bloquear el siguiente TICK
         from engine.execution.omega_listener import omega_centinel
@@ -388,8 +483,9 @@ class SymbolBroadcaster:
         asyncio.create_task(self.pipeline.execute_fast_path(candle, raw_data))
 
         if kline.get("x", False):
-            # El Slow Path SÍ se espera porque es crítico para el cambio de vela
-            await self.pipeline.execute_slow_path(candle)
+            # 🕒 [SLOW PATH] - No bloqueamos el loop principal, se ejecuta en paralelo
+            # El pipeline interno ya maneja su propia persistencia y broadcast
+            asyncio.create_task(self.pipeline.execute_slow_path(candle))
 
     # --- Handlers Auxiliares (Wrappers para compatibilidad) ---
     async def _handle_signals(self, tactical: dict, silent: bool = False):

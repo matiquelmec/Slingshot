@@ -148,13 +148,20 @@ def calculate_volume_profile(df: pd.DataFrame, bins: int = 50) -> dict:
     vol_at_price = np.zeros(bins)
     
     for _, row in df.iterrows():
-        # Distribuir el volumen de la vela proporcionalmente entre los bins que cubre
+        # Lógica de Intersección: una vela alimenta todos los bins que toca
+        # Aseguramos que al menos un bin sea capturado (el que contiene el close)
         candle_bins = np.where(
-            (price_bins[:-1] >= row["low"]) & (price_bins[1:] <= row["high"])
+            (price_bins[1:] >= row["low"]) & (price_bins[:-1] <= row["high"])
         )[0]
+        
         if len(candle_bins) > 0:
-            vol_per_bin = row["volume"] / max(len(candle_bins), 1)
+            vol_per_bin = row["volume"] / len(candle_bins)
             vol_at_price[candle_bins] += vol_per_bin
+        else:
+            # Fallback: asignar al bin que contiene el close si la vela es muy pequeña
+            idx = np.searchsorted(price_bins, row["close"]) - 1
+            idx = max(0, min(idx, bins - 1))
+            vol_at_price[idx] += row["volume"]
     
     # 2. POC (Point of Control): Precio con mayor volumen
     poc_idx = np.argmax(vol_at_price)
@@ -182,27 +189,32 @@ def calculate_volume_profile(df: pd.DataFrame, bins: int = 50) -> dict:
     vah = float(price_bins[hi + 1])
     val = float(price_bins[lo])
     
-    # 4. Low Volume Nodes (LVN): Zonas de rechazo
-    avg_vol_per_bin = total_vol / bins
-    lvn_threshold = avg_vol_per_bin * 0.30
+    # 4. Low Volume Nodes (LVN): Zonas de rechazo (Mínimos Locales)
     lvns = []
-    for i, v in enumerate(vol_at_price):
-        if v < lvn_threshold:
-            lvns.append(float((price_bins[i] + price_bins[i + 1]) / 2))
+    for i in range(1, bins - 1):
+        # Un LVN es un mínimo local: menor que sus vecinos y menor que el promedio
+        if vol_at_price[i] < vol_at_price[i-1] and vol_at_price[i] < vol_at_price[i+1]:
+            if vol_at_price[i] < (total_vol / bins) * 0.5:
+                lvns.append(float((price_bins[i] + price_bins[i + 1]) / 2))
     
-    # 5. High Volume Nodes (HVN): Zonas de soporte/resistencia
-    hvn_threshold = avg_vol_per_bin * 1.5
-    hvns = []
-    for i, v in enumerate(vol_at_price):
-        if v > hvn_threshold:
-            hvns.append(float((price_bins[i] + price_bins[i + 1]) / 2))
+    # 5. Absorption Score (Esfuerzo vs Resultado)
+    # Si el volumen es alto pero el rango de la vela es pequeño = Absorción
+    last_candles = df.tail(5)
+    vol_mean = last_candles["volume"].mean()
+    range_mean = (last_candles["high"] - last_candles["low"]).mean()
     
+    # Ponderación institucional: Alta si vol > avg y range < avg
+    absorption_score = 0
+    if vol_mean > 0 and range_mean > 0:
+        absorption_score = (vol_mean / range_mean) * 0.001 # Normalizado
+        absorption_score = min(float(absorption_score), 100.0) # Cap at 100
+
     return {
         "poc":  round(poc, 5),
         "vah":  round(vah, 5),
         "val":  round(val, 5),
-        "lvns": [round(x, 5) for x in lvns[:10]],
-        "hvns": [round(x, 5) for x in hvns[:5]],
+        "lvns": [round(x, 5) for x in sorted(lvns, key=lambda p: vol_at_price[np.argmin(np.abs(price_bins - p))])[:3]],
+        "absorption_score": round(absorption_score, 2)
     }
 
 
