@@ -156,7 +156,8 @@ class SignalHandler:
                     market_regime=tactical.get("market_regime", "UNKNOWN"),
                     smc_data=tactical.get("smc"),
                     atr_value=sig.get("atr", 0),
-                    asset=self._symbol
+                    asset=self._symbol,
+                    confluence_score=float(sig.get("confluence", {}).get("score", 50))
                 )
                 risk_pct = calc.get("risk_pct")
                 risk_usd = calc.get("risk_amount_usdt")

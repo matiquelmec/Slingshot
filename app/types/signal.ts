@@ -1,5 +1,12 @@
 // app/types/signal.ts
 
+export interface AIAudit {
+    approved: boolean;
+    ai_reasoning: string;
+    confidence: number;
+    verdict: string;
+}
+
 export interface ConfluenceChecklist {
     factor: string;
     status: 'CONFIRMADO' | 'PARCIAL' | 'BAJO' | 'NEUTRAL' | 'PRECAUCIÓN' | 'DIVERGENTE';
@@ -38,6 +45,8 @@ export interface Signal {
     risk_usd?: number | string;
     leverage?: number;
     position_size?: number | string;
+    position_size_usdt?: number;
+    risk_amount_usdt?: number;
     expiry_candles?: number;
     expiry_timestamp?: string;
     interval_minutes?: number;
@@ -48,6 +57,7 @@ export interface Signal {
     profit_locked?: boolean;
     rejection_reason?: string;
     blocked_reason?: string;
+    risk_scale?: number;
     rr_ratio?: number;
     trigger?: string;
     confluence?: ConfluenceData;
@@ -66,6 +76,7 @@ export interface Signal {
         comment: string;
         magic: number;
     };
+    ai_audit?: AIAudit;
     bitunix_order?: {
         symbol: string;
         side: string;

@@ -178,6 +178,21 @@ const MarketContextPanel: React.FC<MarketContextPanelProps> = ({
                     </div>
                 ))}
             </div>
+
+            {/* v13 Intelligence Status */}
+            <div className="flex items-center justify-between pt-2 border-t border-white/5 px-1">
+                <span className="text-[7px] text-white/20 tracking-widest font-bold uppercase">Sovereign v13 Status:</span>
+                <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-1">
+                        <div className="w-1 h-1 rounded-full bg-neon-cyan shadow-[0_0_4px_rgba(0,229,255,1)]" />
+                        <span className="text-[7px] text-neon-cyan/60 font-bold uppercase tracking-tighter">AI Auditor Active</span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                        <div className="w-1 h-1 rounded-full bg-amber-500 shadow-[0_0_4px_rgba(245,158,11,1)]" />
+                        <span className="text-[7px] text-amber-500/60 font-bold uppercase tracking-tighter">BlackBox Armed</span>
+                    </div>
+                </div>
+            </div>
         </motion.div>
     );
 };

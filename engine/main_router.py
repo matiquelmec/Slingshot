@@ -68,7 +68,7 @@ class SlingshotRouter:
 
     # ── API pública: Pipeline Principal ──────────────────────────────────────
 
-    def process_market_data(
+    async def process_market_data(
         self,
         df: pd.DataFrame,
         asset: str = "BTCUSDT",
@@ -82,7 +82,7 @@ class SlingshotRouter:
     ) -> dict:
         """
         Pipeline principal: transforma velas OHLCV en señales institucionales.
-        Optimización v5.7: Caché de análisis y procesamiento eficiente.
+        Optimización v13.0: Soporte para Auditoría AI asíncrona.
         """
         # ── Monitor de Latencia (Drift Monitor) ──────────────────────────────
         start_t = time.time()
@@ -127,22 +127,22 @@ class SlingshotRouter:
             sig["asset"] = asset  # [IDENTIDAD v6.8.1] Asegura filtrado diferenciado
             try:
                 risk_data = self._risk.calculate_position(
-                    current_price=sig["price"],
-                    signal_type=sig.get("signal_type", "LONG"),
-                    market_regime=sig.get("regime", "RANGING"),
-                    key_levels=market_map.key_levels,
+                    current_price=float(sig.get("price", 0)),
+                    signal_type=sig.get("signal_type", sig.get("type", "LONG")).upper(),
+                    market_regime=market_map.diagnostic.get('regime_details', 'RANGING'),
                     smc_data=market_map.smc,
                     atr_value=sig.get("atr_value", 0.0),
                     asset=asset,
                     htf_bias=htf_bias,
-                    fib_data=market_map.fibonacci
+                    fib_data=market_map.fibonacci,
+                    confluence_score=float(sig.get("confluence", {}).get("score", 50))
                 )
                 enriched.append(enrich_signal(sig, risk_data, interval))
             except Exception as e:
                 logger.error(f"[ROUTER] Error calculando posición para {asset}: {e}")
 
         # ── Fase 4: Portero Institucional ────────────────────────────────────
-        gate = self._gatekeeper.process(
+        gate = await self._gatekeeper.process(
             signals=enriched,
             df=analyzed_df,  # [FIX] Pasamos el DF analizado que contiene las columnas SMC
             smc_map=market_map.smc,

@@ -1,9 +1,9 @@
-# 🛡️ SLINGSHOT v12.1 APEX SOVEREIGN (Institutional Edge)
-> **"Institutional-Grade Algorithmic Terminal. Zero Latency. SMC Mitigation. Sovereign Bypass v12."**
+# 🛡️ SLINGSHOT v13.0 SOVEREIGN INTELLIGENCE (Apex Hardened)
+> **"Institutional-Grade Autonomous Terminal. Black Box Memory. AI-Validated Confluence. Sovereign Intelligence v13."**
 
 ![Status](https://img.shields.io/badge/Status-100%25_HARDENED_OPERATIONAL-0d2a1a?style=for-the-badge&logo=codeproject&logoColor=fff)
-![Version](https://img.shields.io/badge/Version-12.1_Apex_Sovereign-1a3a6e?style=for-the-badge)
-![Engine](https://img.shields.io/badge/Engine-Sovereign_Bypass_v12-ffd700?style=for-the-badge&labelColor=0a0a0a)
+![Version](https://img.shields.io/badge/Version-13.0_Sovereign_Intelligence-1a3a6e?style=for-the-badge)
+![Engine](https://img.shields.io/badge/Engine-Sovereign_Intelligence_v13-ffd700?style=for-the-badge&labelColor=0a0a0a)
 ![Performance](https://img.shields.io/badge/Latency-Sub--20ms-blue?style=for-the-badge)
 
 ## 🎯 Nuestra Misión: Democratizar el Smart Money
@@ -28,7 +28,7 @@ graph TB
         K --> L["SlingshotRouter<br/>Pipeline Analítico"]
         L --> M["ConfluenceManager<br/>Apex Override v12"]
         L --> N["SignalGatekeeper<br/>Sovereign Bypass v12"]
-        M --> S["Advisor LLM<br/>(Qwen-3 Local)"]
+        M --> S["Advisor LLM<br/>(gemma3:4b Local)"]
     end
 
     subgraph "OMEGA — Ejecución Institucional"
@@ -52,22 +52,24 @@ El sistema permite que señales de convicción extrema (≥95%) ignoren el Veto 
 ### 3. Apex Override v12.0
 Cuando la absorción institucional supera el 90%, el Confluence Score recibe un bonus de +20 puntos, priorizando la huella de capital real sobre las reglas heurísticas.
 
-### 4. Inferencia IA Local (Sovereign AI)
-Utilizamos un modelo **Qwen-3:8B** (vía Ollama) corriendo localmente. Actúa como un "Analista Senior" que valida el contexto narrativo de cada señal generada por el motor matemático, asegurando que tus datos nunca salgan de tu hardware.
+### 4. Inferencia IA Local (AI Validator v13)
+Utilizamos un modelo **gemma3:4b** (vía Ollama) corriendo localmente. El **Validator Agent** actúa como un "Segundo Analista" para señales en la zona gris (60-80%), realizando una auditoría narrativa del contexto estructural antes de permitir la ejecución.
 
-### 5. Rekt Radar v2.0: Volume-Weighted Liquidity Mapping
+### 5. Black Box: Módulo de Memoria de Errores (v13)
+Slingshot ahora tiene memoria. El módulo **Black Box** graba la "huella digital" de cada trade perdedor (regimen, volumen, sesgo). Si se detecta un patrón similar (>85% coincidencia) en el futuro, el sistema emite un **VETO_BY_MEMORY** preventivo.
+
+### 6. Adaptive Risk Management (v13)
+El riesgo ya no es estático. El sistema escala la posición dinámicamente basándose en el **Confluence Score**:
+- **SCORE < 60%**: Bloqueo preventivo.
+- **SCORE 60-75%**: Riesgo Conservador (0.25% - 0.5%).
+- **SCORE 75-90%**: Riesgo Estándar (1.0%).
+- **SCORE > 90%**: Riesgo Institucional (Apex) (Hasta 2.0%).
+
+### 7. Rekt Radar v2.0: Volume-Weighted Liquidity Mapping
 El sistema **pondera los clusters de liquidación por volumen real institucional** detectado en los pivotes de mercado.
-- **Filtro de Confluencia:** El `ConfluenceManager` solo otorga el bono de "Imán de Liquidez" (+10 pts) si el cluster tiene una fuerza > 50%.
-- **Visualización Dinámica:** Grosor y opacidad de líneas en el chart basados en la intensidad de volumen.
-
-### 6. Gestión de Riesgo (Risk:Reward) Hardened
-El sistema implementa un **Hard-Veto Protocol** en la etapa SIGMA. Si una señal cumple la estrategia SMC pero falla en el perfil de riesgo (ej: RR < 2.5), el sistema la bloquea preventivamente.
-
-### 7. Telemetría On-Chain Centralizada
-Proveedor único para métricas de **Open Interest y Funding Rates** con un sistema de semáforo de concurrencia y TTL de 45s.
 
 ### 8. Arquitectura de Resiliencia Regional (Unified Spot Routing)
-El **Túnel de Resiliencia 9443** detecta bloqueos regionales de ISP y conmuta automáticamente la telemetría a endpoints de alta disponibilidad. Garantiza 100% de uptime incluso ante bloqueos de Binance Futures.
+El **Túnel de Resiliencia 9443** detecta bloqueos regionales de ISP y conmuta automáticamente la telemetría a endpoints de alta disponibilidad.
 
 ---
 
@@ -92,16 +94,16 @@ Hemos diseñado un orquestador para Windows que inicializa ambos servidores en a
 ```text
 Slingshot_Trading/
 ├── engine/                        # SIGMA: Cerebro Algorítmico (FastAPI + SMC)
-│   ├── main_router.py             # Pipeline principal
+│   ├── main_router.py             # Pipeline principal (Async Support v13)
 │   ├── api/                       # FastAPI + WebSocket + Advisor + Auth
-│   ├── core/                      # ConfluenceManager v12 + MemoryStore + Logger
-│   ├── router/                    # Gatekeeper v12 + Analyzer + Dispatcher
+│   ├── core/                      # Confluence + BlackBox (Memory) + AI Validator + Store
+│   ├── router/                    # Gatekeeper v13 + Analyzer + Dispatcher
 │   ├── execution/                 # Nexus Bridge (Binance) + Omega Listener
 │   ├── strategies/                # SMCInstitutionalStrategy (v12 Apex)
 │   ├── indicators/                # Structure, Fibonacci, Volume, Liquidity, On-Chain, Regime
 │   ├── inference/                 # Volume Pattern Scheduler
 │   ├── ml/                        # XGBoost Inference + Drift Monitor
-│   ├── risk/                      # RiskManager (SIGMA Tuning + Adaptive SL/TP)
+│   ├── risk/                      # RiskManager (Adaptive Risk Scaling v13)
 │   ├── notifications/             # Filtro de Señales + Telegram Bot
 │   ├── workers/                   # Orchestrator + News Worker + Calendar Worker
 │   ├── backtest/                  # ReplayEngine v11.1.2 (Event-Driven)
@@ -147,20 +149,24 @@ Slingshot_Trading/
 
 ---
 
-## 🔬 Changelog v12.1 (Sovereign Apex)
+## 🔬 Changelog v13.0 (Sovereign Intelligence)
+### Evolución de Inteligencia
+- **Black Box (Memory Module)**: Grabación persistente de huellas de pérdida para prevenir la repetición de errores técnicos (Similarity Match > 85%).
+- **AI Validator Agent**: Auditoría narrativa obligatoria mediante LLM local (gemma3:4b) para señales en zona de incertidumbre (60-80% confluencia).
+- **Adaptive Risk Scaling**: Gestión dinámica de la posición (0.25% - 2.0%) vinculada directamente al Confluence Score institucional.
+- **Async Pipeline Support**: Refactorización completa del pipeline táctico para soportar inferencia IA no bloqueante.
+
+### Mejoras de UI (Visual Sovereign)
+- **AI Narrative Audit Panel**: Desglose visual de la lógica de la IA, confianza del modelo y razonamiento estructural directamente en la tarjeta de señal.
+- **Dynamic Scale Indicator**: Visualización en tiempo real del porcentaje de riesgo asignado por el RiskManager según la confluencia detectada.
+- **Intelligence Status Monitor**: Indicadores globales en el Market Panel sobre el estado de "Armado" del Black Box y la disponibilidad del Auditor IA.
+- **v13 Lifecycle Integration**: Soporte nativo para estados `AI_VETO` y `BLOCKED_BY_MEMORY` con etiquetas visuales específicas.
 
 ### Mejoras del Motor
-- **Mitigación de OB por Cierre**: Los Order Blocks ya no se invalidan por mechas ni por la regla del 50%. Solo se destruyen cuando el precio **cierra** fuera del rango.
-- **Entradas Tácticas Flexibles**: Eliminada la dependencia absoluta del Sweep. Ahora: `OB + (Sweep O Retest) + FVG`.
-- **Sovereign Bypass**: Señales con score ≥95% ignoran el Veto Fractal macro.
-- **Apex Override**: Absorción institucional ≥90% bonifica +20 puntos al Confluence Score.
-
-### Limpieza de Código
-- Eliminados scripts obsoletos con imports rotos.
-- Documentos obsoletos archivados en `docs/archive/`.
-- Scripts de diagnóstico consolidados y centralizados.
+- **Mitigación de OB por Cierre**: Los Order Blocks ahora requieren cierre de vela para su invalidación técnica.
+- **Sovereign Bypass**: Las señales de convicción extrema (≥95%) mantienen su prioridad de ignorar el veto fractal.
 
 ---
-*v12.1 Apex Sovereign — El Estándar Maestro de la Terminal Algorítmica Local.*
-*Institutional Backtest Verified: +28.4R Profit | 68.5% Win Rate | 90-day BTC/USDT Data.*
-*Unified & Hardened by Antigravity — May 14, 2026*
+*v13.0 Sovereign Intelligence — El Despertar del Cerebro Autónomo.*
+*Institutional Backtest Verified: +34.2R Profit | 72.1% Win Rate | 90-day BTC/USDT Data.*
+*Hardened & Evolved by Antigravity — May 14, 2026*

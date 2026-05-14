@@ -16,6 +16,7 @@ from engine.core.logger import logger
 from engine.execution.delta_executor import DeltaOrchestrator
 from engine.execution.binance_executor import BinanceExecutor
 from engine.api.config import settings
+from engine.core.memory import blackbox
 
 class NexusNode:
     def __init__(self, dry_run: bool = True):
@@ -73,13 +74,20 @@ class NexusNode:
 
                     # 3. Verificar si la posición se ha cerrado (SL o TP3 final hit)
                     # Esto es una simplificación; un sistema real monitorearía WebSockets de órdenes
-                    is_closed = (current_price <= sl) if is_long else (current_price >= sl)
-                    if not is_closed:
+                    # 3. Verificar si la posición se ha cerrado (SL o TP3 final hit)
+                    is_sl = (current_price <= sl) if is_long else (current_price >= sl)
+                    is_tp = False
+                    if not is_sl:
                         tp3 = sig.get('tp3', tp1 * 1.1)
-                        is_closed = (current_price >= tp3) if is_long else (current_price <= tp3)
+                        is_tp = (current_price >= tp3) if is_long else (current_price <= tp3)
                         
-                    if is_closed:
-                        logger.info(f"🏁 [OMEGA] Posición en {asset} cerrada por mercado. Limpiando nodo.")
+                    if is_sl or is_tp:
+                        result_str = "STOP_LOSS" if is_sl else "TAKE_PROFIT"
+                        logger.info(f"🏁 [OMEGA] {asset} cerrado por {result_str}. Grabando en Black Box.")
+                        
+                        # Grabar en la caja negra para aprendizaje institucional
+                        blackbox.record_trade(sig, result_str)
+                        
                         assets_to_remove.append(asset)
 
                 except Exception as e:

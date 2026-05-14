@@ -129,6 +129,28 @@ const SignalCardItem: React.FC<SignalCardItemProps> = ({ signal, currentPrice })
                 </div>
             )}
 
+            {/* ── SECCIÓN SOVEREIGN AI AUDIT (v13.0) ── */}
+            {signal.ai_audit && (
+                <div className={`mb-2 px-2 py-1.5 rounded border ${signal.ai_audit.approved ? 'bg-neon-cyan/5 border-neon-cyan/20' : 'bg-red-500/5 border-red-500/20'} text-[8px] font-mono`}>
+                    <div className="flex items-center justify-between mb-1">
+                        <span className={`${signal.ai_audit.approved ? 'text-neon-cyan' : 'text-red-400'} font-bold tracking-widest uppercase`}>
+                            🤖 SOVEREIGN AI NARRATIVE AUDIT
+                        </span>
+                        <span className={`px-1 rounded ${signal.ai_audit.approved ? 'bg-neon-cyan/20 text-neon-cyan' : 'bg-red-500/20 text-red-400'} font-black`}>
+                            {signal.ai_audit.verdict}
+                        </span>
+                    </div>
+                    <p className="text-white/60 italic leading-relaxed">
+                        "{signal.ai_audit.ai_reasoning}"
+                    </p>
+                    <div className="mt-1 flex items-center gap-2 text-[7px] text-white/30">
+                        <span>Confidence: {(signal.ai_audit.confidence * 100).toFixed(0)}%</span>
+                        <span className="w-1 h-1 bg-white/20 rounded-full" />
+                        <span>Model: Local gemma3</span>
+                    </div>
+                </div>
+            )}
+
             {/* ── Fila 3: Zonas y Target ── */}
             <div className="grid grid-cols-4 gap-2 text-[9px] font-mono mb-2">
                 <div className="flex flex-col gap-0.5 bg-white/[0.02] rounded px-2 py-1 border border-white/5">
@@ -162,14 +184,17 @@ const SignalCardItem: React.FC<SignalCardItemProps> = ({ signal, currentPrice })
 
             {/* ── Fila 4: Matemáticas de Riesgo ── */}
             <div className="flex items-center flex-wrap gap-1 mb-2">
-                <span className="px-1.5 py-0.5 text-[8px] font-bold tracking-wider text-neon-cyan/80 bg-neon-cyan/10 border border-neon-cyan/20 rounded">
-                    RISK: {signal.risk_pct ? `${signal.risk_pct}%` : 'N/A'} ({signal.risk_usd || 'N/A'})
+                <span className="px-1.5 py-0.5 text-[8px] font-bold tracking-wider text-neon-cyan/80 bg-neon-cyan/10 border border-neon-cyan/20 rounded flex items-center gap-1">
+                    RISK: {signal.risk_pct ? `${signal.risk_pct}%` : 'N/A'} {signal.risk_amount_usdt || signal.risk_usd ? `($${signal.risk_amount_usdt || signal.risk_usd})` : ''}
+                    {signal.risk_pct && signal.risk_pct !== 1.0 && (
+                        <span className="text-[7px] opacity-60 ml-1 border-l border-neon-cyan/20 pl-1 uppercase">Dynamic Scale</span>
+                    )}
                 </span>
                 <span className="px-1.5 py-0.5 text-[8px] font-bold tracking-wider text-[#d4af37] bg-[#d4af37]/10 border border-[#d4af37]/20 rounded">
                     {signal.leverage ? `${signal.leverage}x` : '1x'} LEV
                 </span>
                 <span className="px-1.5 py-0.5 text-[8px] font-bold tracking-wider text-white/70 bg-white/10 border border-white/20 rounded">
-                    SIZE: ${signal.position_size || '---'}
+                    SIZE: {signal.position_size_usdt || signal.position_size ? `$${signal.position_size_usdt || signal.position_size}` : '---'}
                 </span>
                 {signal.expiry_candles && (
                     <span className="px-1.5 py-0.5 text-[8px] font-bold tracking-wider text-white/30 bg-white/5 border border-white/10 rounded">

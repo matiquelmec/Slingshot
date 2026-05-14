@@ -93,6 +93,22 @@ class RiskManager:
     }
     DEFAULT_TUNING = {"atr_mult": 1.8, "tp1_ratio": 1.5, "tp1_vol": 0.50, "spread_impact": 0.0010} # Default 0.1%
 
+    def _adaptive_risk(self, confluence_score: int) -> float:
+        """
+        Escala el riesgo base según la calidad de la señal (Confluence Score).
+        v13.0 SOVEREIGN Adaptive Risk.
+        - Score < 50: 0.25% (Supervivencia)
+        - Score 50-65: 0.5% (Especulativo)
+        - Score 66-79: 1.0% (Sólido)
+        - Score 80-89: 1.5% (Alta Convicción)
+        - Score 90-100: 2.0% (Institucional Apex)
+        """
+        if confluence_score < 50: return 0.0025
+        if confluence_score < 66: return 0.0050
+        if confluence_score < 80: return 0.0100
+        if confluence_score < 90: return 0.0150
+        return 0.0200
+
     def calculate_position(
         self,
         current_price: float,
@@ -105,21 +121,17 @@ class RiskManager:
         liquidations: list = None,
         heatmap: dict = None,
         fib_data: dict = None,
+        confluence_score: int = 50,
         **kwargs
     ) -> dict:
         """
-        Cálculo de posición v6.7.5 (SIGMA Enabled).
-        Ajusta dinámicamente el riesgo y los targets según el activo.
+        Cálculo de posición v13.0 (Adaptive Risk Enabled).
+        Ajusta dinámicamente el riesgo y los targets según el activo y la confluencia.
         """
         tuning = self.ASSET_TUNING.get(asset.upper(), self.DEFAULT_TUNING)
         
-        # [SIGMA TELEMETRY v8.2.0] — Silenciado para producción, activo en DEBUG
-        import logging
-        logging.getLogger("slingshot.risk").debug(
-            f"[SIGMA] {asset} | ATR_MULT: {tuning['atr_mult']} | TP_RATIO: {tuning['tp1_ratio']} | TP1_VOL: {tuning['tp1_vol']}"
-        )
-        
-        actual_risk_pct = self.base_risk_pct
+        # [ADAPTIVE RISK v13.0]
+        actual_risk_pct = self._adaptive_risk(confluence_score)
         risk_amount_usdt = self.account_balance * actual_risk_pct
         
         # 1. Aplicación de Pulmones (SIGMA ATR Mult)
@@ -277,6 +289,7 @@ class RiskManager:
             "risk_pct": round(actual_risk_pct * 100, 2),
             "position_size_usdt": round(pos_size_nominal, 2),
             "leverage": leverage,
+            "rr_ratio": round(final_reward / final_risk, 2) if final_risk > 0 else 0,
             "entry_zone_top": round(current_price * 1.001, 5),
             "entry_zone_bottom": round(current_price * 0.999, 5),
             "asset": asset,

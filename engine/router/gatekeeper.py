@@ -23,6 +23,8 @@ from typing import Any
 import pandas as pd
 
 from engine.core.confluence import confluence_manager
+from engine.core.memory import blackbox
+from engine.core.validator import validator_agent
 from engine.risk.risk_manager import RiskManager
 from collections import deque
 import time
@@ -64,17 +66,17 @@ class SignalGatekeeper:
     def __init__(self, risk_manager: RiskManager):
         self._risk = risk_manager
 
-    def process(
+    async def process(
         self,
         signals: list[dict],
         df: pd.DataFrame,
         smc_map: dict,
         key_levels: list,
         interval: str,
-        htf_bias=None,
-        fib_data: dict | None = None,
-        context: GatekeeperContext | None = None,
-        regime_details: dict | None = None,
+        htf_bias: Optional[dict] = None,
+        fib_data: Optional[dict] = None,
+        context: Optional[GatekeeperContext] = None,
+        regime_details: Optional[str] = None,
         silent: bool = False,
     ) -> GatekeeperResult:
         """
@@ -202,6 +204,30 @@ class SignalGatekeeper:
             is_long = "LONG" in sig_type
             conf_score = sig["confluence"].get("score", 0)
 
+            # --- [DELTA v13.0] Pre-calculate Risk for all potential signals (UI Enrichment) ---
+            # Preservamos el setup original de la estrategia si existe
+            orig_sl = sig.get('stop_loss')
+            orig_tp = sig.get('take_profit_3r')
+
+            risk_data = self._risk.calculate_position(
+                current_price=sig.get("price", 0),
+                signal_type=sig.get("type", "LONG"),
+                market_regime=regime_details or "RANGING",
+                smc_data=smc_map,
+                atr_value=sig.get("atr_value", 0.0),
+                asset=sig.get("asset", "UNKNOWN"),
+                htf_bias=htf_bias,
+                fib_data=fib_data,
+                confluence_score=conf_score
+            )
+            # Si la estrategia ya definió un setup (Ej: SMC OB-Low), lo respetamos
+            if orig_sl and orig_tp:
+                risk_data['stop_loss'] = orig_sl
+                risk_data['tp1'] = orig_tp
+                risk_data['take_profit_3r'] = orig_tp
+                
+            sig.update(risk_data)
+
             # 🧠 [SOVEREIGN v10.0] Veto Fractal Estricto
             # Si el Mensual y el Semanal están en contra de la señal, es un suicidio técnico.
             if htf_bias:
@@ -256,29 +282,30 @@ class SignalGatekeeper:
             # --- [DELTA v6.1] PROTECCIÓN DE GEOMETRÍA INSTITUCIONAL ---
             # Preservamos el setup original de la estrategia si existe
             orig_sl = sig.get('stop_loss')
-            orig_tp = sig.get('tp1') or sig.get('take_profit_3r')
+            orig_tp = sig.get('take_profit_3r')
 
-            risk_data = self._risk.calculate_position(
-                current_price=sig["price"],
-                signal_type=sig.get("signal_type", "LONG"),
-                market_regime=sig.get("regime", "RANGING"),
-                key_levels=key_levels,
-                smc_data=smc_map,
-                atr_value=sig.get("atr_value", 0.0),
-                smt_strength=smt_strength,
-                asset=sig.get("asset", "UNKNOWN"),
-                liquidations=context.liquidation_clusters,
-                heatmap=context.heatmap,
-                fib_data=fib_data
-            )
+            # --- Filtro 5.5: Black Box (Memory Veto) ---
+            is_error_pattern, similarity = blackbox.check_similarity(sig)
+            if is_error_pattern:
+                if not silent:
+                    logger.warning(f"🛡️ [BLACKBOX] {asset} vetoed por similitud con pérdida previa ({similarity*100:.1f}%)")
+                self._block(sig, "BLOCKED_BY_MEMORY", f"Similitud crítica con patrón de pérdida previo ({similarity*100:.0f}%)", result)
+                continue
+
+            # --- Filtro 5.6: Adaptive Risk Management (Scaling) ---
+            # [MOVED UP in v13.0 for UI Enrichment]
             
-            # Si la estrategia ya definió un setup (Ej: SMC OB-Low), lo respetamos
-            if orig_sl and orig_tp:
-                risk_data['stop_loss'] = orig_sl
-                risk_data['tp1'] = orig_tp
-                risk_data['take_profit_3r'] = orig_tp
-                
-            sig.update(risk_data)
+            # --- Filtro 5.7: AI Validator Agent (Zona Gris 60-80%) ---
+            ai_audit = await validator_agent.validate(sig)
+            if not ai_audit.get("approved", True):
+                sig["blocked_reason"] = f"AI_VETO: {ai_audit.get('ai_reasoning')}"
+                if not silent:
+                    logger.warning(f"🤖 [VALIDATOR] {sig.get('asset')} Vetoed: {ai_audit.get('ai_reasoning')}")
+                # Usamos _block para mantener coherencia con el resto del Portero
+                self._block(sig, "AI_VETO", ai_audit.get("ai_reasoning"), result)
+                continue
+            
+            sig["ai_audit"] = ai_audit
 
             # ── Filtro 2: Direccional HTF (AHORA DELEGADO AL CONFLUENCE MANAGER v5.7.155 Master Gold) ──
             # Se comenta para permitir que el Score registre el Veto de forma oficial
@@ -417,6 +444,15 @@ class SignalGatekeeper:
                 self._block(sig, "LOW_CONFLUENCE", reason, result)
                 continue
             
+            # ── Filtro 5.5: Black Box (Memoria de Errores) ───────────────
+            bb_check = blackbox.check_setup(sig)
+            sig["blackbox"] = bb_check
+            if bb_check["match"]:
+                if not silent:
+                    logger.warning(f"🧠 [GATEKEEPER] [BLACKBOX_VETO] {asset}: {bb_check['reason']}")
+                self._block(sig, "BLACKBOX_VETO", bb_check["reason"], result)
+                continue
+
             # ── Filtro 6: Path Traversal — ¿Sigue Viva? ──────────────────────
             if not self._is_alive(sig, df_time, df_low, df_high, now_utc):
                 self._block(sig, "BLOCKED_EXPIRED", "Señal expirada o tocó SL/TP en el origen", result)
@@ -478,6 +514,7 @@ class SignalGatekeeper:
     def _block(sig: dict, status: str, reason: str, result: GatekeeperResult):
         sig["status"] = status
         sig["blocked_reason"] = reason
+        sig["rejection_reason"] = reason
         result.blocked.append(sig)
 
     @staticmethod

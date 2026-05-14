@@ -75,6 +75,7 @@ def enrich_signal(signal: dict, risk_data: dict, interval: str) -> dict:
         "expiry_timestamp":  expiry_timestamp_str,
         "tp1_vol_pct":       risk_data.get("tp1_vol_pct", 0.60),
         "interval_minutes":  interval_minutes,
+        "rr_ratio":          risk_data.get("rr_ratio", 0),
     })
     
     return signal

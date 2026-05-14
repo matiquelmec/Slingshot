@@ -72,8 +72,8 @@ class BroadcasterPipeline:
                 return
 
             try:
-                live_tactical = await asyncio.to_thread(
-                    self.router.process_market_data, df_live, asset=self.state.symbol, interval=self.state.interval,
+                live_tactical = await self.router.process_market_data(
+                    df_live, asset=self.state.symbol, interval=self.state.interval,
                     macro_levels=getattr(self.bc, '_macro_levels', None), htf_bias=self.state.htf_bias, 
                     heatmap=self.state.heatmap, silent=True,
                     event_time_ms=raw_data.get("data", {}).get("E")
@@ -167,8 +167,8 @@ class BroadcasterPipeline:
                 correlated_df=correlated_df, ghost_data=self.state.last_ghost
             )
             
-            final_tactical = await asyncio.to_thread(
-                self.router.process_market_data, df_slow, asset=self.state.symbol, interval=self.state.interval,
+            final_tactical = await self.router.process_market_data(
+                df_slow, asset=self.state.symbol, interval=self.state.interval,
                 macro_levels=getattr(self.bc, '_macro_levels', None), htf_bias=self.state.htf_bias, silent=False
             )
             await self.bc._broadcast({"type": "tactical_update", "data": final_tactical})
