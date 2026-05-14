@@ -10,8 +10,10 @@ from engine.ml.drift_monitor import drift_monitor
 from engine.ml.features import FeatureEngineer
 from engine.indicators.structure import (
     identify_order_blocks, extract_smc_coordinates, 
-    merge_smc_states, mitigate_smc_state
+    merge_smc_states, mitigate_smc_state,
+    identify_look_and_fail
 )
+from engine.indicators.volume import calculate_volume_profile
 from engine.indicators.liquidations import estimate_liquidation_clusters
 from engine.indicators.ghost_data import get_ghost_state
 from engine.core.session_manager import SessionManager
@@ -115,6 +117,20 @@ class StreamProcessor:
                 updated_smc = merge_smc_states(mitigated, smc_new)
             else:
                 updated_smc = smc_new
+
+            # 1.1 📊 VOLUME PROFILE (POC, VAH, VAL) — Yosh Integration
+            volume_profile = await asyncio.to_thread(calculate_volume_profile, df_live)
+            updated_smc["volume_profile"] = volume_profile
+
+            # 1.2 🪤 TRAP DETECTION (Look Above and Fail)
+            # Obtenemos estado de sesión para PDH/PDL si está disponible en el store
+            session_state = store.get_session_state(symbol)
+            df_trap = await asyncio.to_thread(identify_look_and_fail, df_ob, session_state)
+            
+            # Si se detecta trampa en la última vela, lo inyectamos en el estado SMC
+            last_trap_bull = bool(df_trap["laf_bull"].iloc[-1])
+            last_trap_bear = bool(df_trap["laf_bear"].iloc[-1])
+            updated_smc["traps"] = {"laf_bull": last_trap_bull, "laf_bear": last_trap_bear}
 
             # 2. 📈 LIQUIDACIONES (Trapped Money)
             latest_price = float(candle_payload["data"]["close"])

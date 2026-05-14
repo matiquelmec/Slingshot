@@ -79,6 +79,7 @@ class SlingshotRouter:
         event_time_ms: int | None = None,
         heatmap: dict | None = None,
         context: GatekeeperContext | None = None,
+        smc_data: dict | None = None,
     ) -> dict:
         """
         Pipeline principal: transforma velas OHLCV en señales institucionales.
@@ -105,6 +106,7 @@ class SlingshotRouter:
             macro_levels=macro_levels,
             htf_bias=htf_bias,
             heatmap=heatmap,
+            smc_data=smc_data,
             silent=silent
         )
 

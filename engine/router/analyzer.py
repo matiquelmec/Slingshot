@@ -81,6 +81,7 @@ class MarketAnalyzer:
         macro_levels=None,
         htf_bias=None,
         heatmap: dict | None = None,
+        smc_data: dict | None = None,
         silent: bool = False,
     ) -> MarketMap:
         """Pipeline de análisis completo v5.4 con soporte de Caché LRU."""
@@ -184,7 +185,15 @@ class MarketAnalyzer:
              logger.info(f"[REGIME_DELTA] {asset} | {current_regime} (Confianza: {compound_regime['confidence']}%)")
 
         # ── Paso 3: SMC — Estructura Fractal ───────────────────────
-        smc_data = self._extract_smc(df)
+        fresh_smc = self._extract_smc(df)
+        
+        # [YOSH v13.1] Fusión de datos persistentes (Volume Profile, Traps)
+        if smc_data:
+            # Mantener coordenadas frescas pero inyectar perfiles y trampas de Yosh
+            fresh_smc["volume_profile"] = smc_data.get("volume_profile", {})
+            fresh_smc["traps"] = smc_data.get("traps", {"laf_bull": False, "laf_bear": False})
+        
+        smc_data = fresh_smc
         df.attrs.update(saved_attrs)
         key_levels = get_key_levels(df) 
 

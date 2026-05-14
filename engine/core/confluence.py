@@ -428,7 +428,37 @@ class ConfluenceManager:
                     value_pts = 10
                     score += value_pts
                     value_zone = "DISCOUNT ✅" if is_long else "PREMIUM ✅"
-                    checklist.append({"factor": "Zona de Valor", "status": "CONFIRMADO", "detail": f"{value_zone} (+{value_pts}pts)"})
+                    checklist.append({"factor": "Zona de Valor", "status": "CONFIRMADO", "detail": f"Operando en {value_zone} (+10pts)"})
+
+        # 🚀 12. METODOLOGÍA YOSH (ORDER FLOW) — v13.1
+        # Inyectamos el Perfil de Volumen y Detección de Trampas
+        vp = current.get("volume_profile")
+        traps = current.get("traps", {})
+        
+        if vp and vp.get("vah") and vp.get("val"):
+            vah, val, poc = vp["vah"], vp["val"], vp["poc"]
+            price = float(current.get("close", 0))
+            
+            # A. Valor Aceptado
+            in_value = val <= price <= vah
+            if in_value:
+                score += 10
+                checklist.append({"factor": "Yosh: Value Area", "status": "CONFIRMADO", "detail": "Precio en zona de valor aceptado (+10pts)"})
+            
+            # B. Rechazo en Extremos (VAL para Long, VAH para Short)
+            proximity_vah = abs(price - vah) / price < 0.002
+            proximity_val = abs(price - val) / price < 0.002
+            
+            if (is_long and proximity_val) or (not is_long and proximity_vah):
+                score += 15
+                checklist.append({"factor": "Yosh: Extremo VA", "status": "ELITE", "detail": "Rechazo en extremo de área de valor (+15pts)"})
+
+        # C. Bono por Trampa (Look Above and Fail)
+        laf_active = traps.get("laf_bull" if is_long else "laf_bear", False)
+        if laf_active:
+            score += 25
+            checklist.append({"factor": "Yosh: Trampa LAF", "status": "INSTITUCIONAL", "detail": "Trampa detectada (Look Above/Below and Fail) (+25pts)"})
+
 
             if gp_618 and gp_786:
                 z_top = max(gp_618, gp_786)

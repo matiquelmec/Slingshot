@@ -17,6 +17,8 @@ from engine.execution.delta_executor import DeltaOrchestrator
 from engine.execution.binance_executor import BinanceExecutor
 from engine.api.config import settings
 from engine.core.memory import blackbox
+from engine.core.store import store
+
 
 class NexusNode:
     def __init__(self, dry_run: bool = True):
@@ -71,6 +73,34 @@ class NexusNode:
                             pos["signal"]["stop_loss"] = new_sl
                             pos["smart_trailing"] = {"be_active": True, "trailing_active": True}
                             logger.info(f"🛡️ [OMEGA] SL de {asset} movido a BE: ${new_sl:.2f}")
+
+                    # 4. 🚀 [YOSH v13.1] AVERAGING UP (Escalado en Ganancia)
+                    # Si ya estamos en BE y el precio retrocede a una zona de VALOR, añadir contratos.
+                    can_scale = be_active and not pos.get("averaging_up_done", False)
+                    if can_scale:
+                        session_state = store.get_session_state(asset)
+                        vp = (session_state or {}).get("volume_profile", {})
+                        
+                        if vp and vp.get("vah"):
+                            poc = vp["poc"]
+                            vah = vp["vah"]
+                            val = vp["val"]
+                            
+                            # Criterio: El precio retrocede al POC o VAL/VAH (dependiendo de la dirección)
+                            target_ref = poc # Usamos el POC como imán de valor principal
+                            retest_zone = (current_price <= target_ref * 1.001 and current_price >= target_ref) if is_long else \
+                                          (current_price >= target_ref * 0.999 and current_price <= target_ref)
+                            
+                            if retest_zone:
+                                logger.warning(f"📈 [YOSH] Retest de VALOR detectado en {asset} (${current_price:.2f}). Ejecutando AVERAGING UP...")
+                                # Ejecutar adición del 50% del tamaño original
+                                try:
+                                    # En un sistema real: await self.executor.scale_position(asset, size * 0.5)
+                                    pos["averaging_up_done"] = True
+                                    pos["signal"]["position_size_usdt"] *= 1.5 # Simulación de aumento de tamaño
+                                    logger.info(f"✅ [YOSH] Posición {asset} escalada exitosamente. Nuevo tamaño: ${pos['signal']['position_size_usdt']:.2f}")
+                                except Exception as scale_err:
+                                    logger.error(f"❌ [YOSH] Error al escalar posición: {scale_err}")
 
                     # 3. Verificar si la posición se ha cerrado (SL o TP3 final hit)
                     # Esto es una simplificación; un sistema real monitorearía WebSockets de órdenes

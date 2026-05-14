@@ -114,14 +114,97 @@ def calculate_absorption_index(df: pd.DataFrame, window: int = 50, target_interv
     # Un factor de 1.0 significa equilibrio. > 2.0 significa absorción institucional clara.
     apex_factor = rel_vol / (rel_spread + 0.1)
     
+    # [FIX v13.1] Sanitizar Inf/NaN antes del sigmoid para garantizar rango 0-100
+    apex_factor = apex_factor.replace([np.inf, -np.inf], np.nan).fillna(1.0).clip(0, 10)
+    
     # 4. Mapeo a Escala 0-100 (Log-Sigmoid)
     # Calibrado para que Factor 1.0 -> Score 50, Factor 3.0 -> Score 85, Factor 5.0 -> Score 95
-    df['absorption_score'] = (1 / (1 + np.exp(-(apex_factor - 1.0) * 1.5))) * 100
+    raw_score = (1 / (1 + np.exp(-(apex_factor - 1.0) * 1.5))) * 100
+    df['absorption_score'] = raw_score.clip(0, 100).fillna(50.0)  # Garantia de rango estricto
     
     # Metadatos
     df['absorption_raw'] = apex_factor
     
     return df
+
+
+def calculate_volume_profile(df: pd.DataFrame, bins: int = 50) -> dict:
+    """
+    Volume Profile v1.0 — Distribución de Volumen por Precio.
+    Calcula: POC, Value Area High (VAH), Value Area Low (VAL), LVNs.
+    Compatible con el pipeline táctico existente.
+    """
+    if df.empty or len(df) < 20:
+        return {"poc": 0, "vah": 0, "val": 0, "lvns": [], "hvns": []}
+    
+    # 1. Construir el histograma precio × volumen
+    price_min = float(df["low"].min())
+    price_max = float(df["high"].max())
+    
+    if price_min == price_max:
+        return {"poc": price_min, "vah": price_min, "val": price_min, "lvns": [], "hvns": []}
+
+    price_bins = np.linspace(price_min, price_max, bins + 1)
+    vol_at_price = np.zeros(bins)
+    
+    for _, row in df.iterrows():
+        # Distribuir el volumen de la vela proporcionalmente entre los bins que cubre
+        candle_bins = np.where(
+            (price_bins[:-1] >= row["low"]) & (price_bins[1:] <= row["high"])
+        )[0]
+        if len(candle_bins) > 0:
+            vol_per_bin = row["volume"] / max(len(candle_bins), 1)
+            vol_at_price[candle_bins] += vol_per_bin
+    
+    # 2. POC (Point of Control): Precio con mayor volumen
+    poc_idx = np.argmax(vol_at_price)
+    poc = float((price_bins[poc_idx] + price_bins[poc_idx + 1]) / 2)
+    
+    # 3. Value Area (70% del volumen total, expandiendo desde el POC)
+    total_vol = vol_at_price.sum()
+    if total_vol <= 0:
+        return {"poc": poc, "vah": poc, "val": poc, "lvns": [], "hvns": []}
+
+    target_vol = total_vol * 0.70
+    accumulated = vol_at_price[poc_idx]
+    lo, hi = poc_idx, poc_idx
+    
+    while accumulated < target_vol and (lo > 0 or hi < bins - 1):
+        expand_up = vol_at_price[hi + 1] if hi < bins - 1 else 0
+        expand_dn = vol_at_price[lo - 1] if lo > 0 else 0
+        if expand_up >= expand_dn:
+            hi += 1
+            accumulated += expand_up
+        else:
+            lo -= 1
+            accumulated += expand_dn
+    
+    vah = float(price_bins[hi + 1])
+    val = float(price_bins[lo])
+    
+    # 4. Low Volume Nodes (LVN): Zonas de rechazo
+    avg_vol_per_bin = total_vol / bins
+    lvn_threshold = avg_vol_per_bin * 0.30
+    lvns = []
+    for i, v in enumerate(vol_at_price):
+        if v < lvn_threshold:
+            lvns.append(float((price_bins[i] + price_bins[i + 1]) / 2))
+    
+    # 5. High Volume Nodes (HVN): Zonas de soporte/resistencia
+    hvn_threshold = avg_vol_per_bin * 1.5
+    hvns = []
+    for i, v in enumerate(vol_at_price):
+        if v > hvn_threshold:
+            hvns.append(float((price_bins[i] + price_bins[i + 1]) / 2))
+    
+    return {
+        "poc":  round(poc, 5),
+        "vah":  round(vah, 5),
+        "val":  round(val, 5),
+        "lvns": [round(x, 5) for x in lvns[:10]],
+        "hvns": [round(x, 5) for x in hvns[:5]],
+    }
+
 
 def analyze_volume_footprint(df: pd.DataFrame) -> pd.DataFrame:
     """Analiza la firma del volumen con lógica VSA."""

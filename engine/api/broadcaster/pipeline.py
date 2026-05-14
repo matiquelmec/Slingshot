@@ -76,7 +76,8 @@ class BroadcasterPipeline:
                     df_live, asset=self.state.symbol, interval=self.state.interval,
                     macro_levels=getattr(self.bc, '_macro_levels', None), htf_bias=self.state.htf_bias, 
                     heatmap=self.state.heatmap, silent=True,
-                    event_time_ms=raw_data.get("data", {}).get("E")
+                    event_time_ms=raw_data.get("data", {}).get("E"),
+                    smc_data=getattr(self.bc, '_persistent_smc', None)
                 )
                 self.state.last_tactical = {"data": live_tactical}
                 self.state.live_rvol = float((live_tactical.get('diagnostic') or {}).get('rvol', 0))

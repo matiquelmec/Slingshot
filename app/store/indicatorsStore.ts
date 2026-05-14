@@ -23,6 +23,8 @@ export const INDICATOR_DEFAULTS: Indicator[] = [
     { id: 'fibonacci', label: 'Autofib', sublabel: 'Zonas de Descuento (Premium/Discount)', enabled: false, color: '#FF7043' },
     { id: 'volume', label: 'Volumen', sublabel: 'Flujo de Transacciones', enabled: true, color: '#00FF41' },
     { id: 'heatmap', label: 'Heatmap Neural', sublabel: 'Muros de Liquidez (Order Book)', enabled: true, color: '#BF00FF' },
+    { id: 'value_area', label: 'Yosh Value Area', sublabel: 'VAH/VAL/POC (Perfil de Volumen)', enabled: true, color: '#FFD700' },
+    { id: 'traps', label: 'Market Traps', sublabel: 'Look Above/Below and Fail', enabled: true, color: '#FF00FF' },
 ];
 
 export const useIndicatorsStore = create<IndicatorsState>((set) => ({

@@ -36,6 +36,8 @@ export default function TradingChart() {
 
     const markersSeriesRef = useRef<any>(null);
     const priceLineRef = useRef<any>(null);
+    const valueAreaSeriesRef = useRef<ISeriesApi<'Baseline'> | null>(null);
+    const pocLineRef = useRef<any>(null);
 
     const { candles, isConnected, smcData, liquidityHeatmap, tacticalDecision, sessionData, liquidations, latestPrice } = useTelemetryStore();
     const { indicators } = useIndicatorsStore();
@@ -399,12 +401,104 @@ export default function TradingChart() {
                     lineWidth: Math.max(1, Math.floor(liq.strength / 20)) as any,
                     lineStyle: LineStyle.Dashed,
                     axisLabelVisible: true,
-                    title: `REKT ${liq.leverage}x ${isAbove ? '▲' : '▼'}`,
+                    title: `REKT: ${liq.strength}%`,
                 });
                 if (line) liquidationLinesRef.current.push(line);
             });
         }
     }, [liquidations, indicators]);
+
+    // ── 📊 YOSH VALUE AREA (VAH / VAL / POC) ──
+    useEffect(() => {
+        if (!chartRef.current || !smcData || !candleSeriesRef.current || times.length === 0) return;
+
+        const chart = chartRef.current;
+        const vp = smcData.volume_profile;
+
+        // Limpiar líneas anteriores
+        if (valueAreaSeriesRef.current) {
+            try { chart.removeSeries(valueAreaSeriesRef.current); } catch (e) { }
+            valueAreaSeriesRef.current = null;
+        }
+        if (pocLineRef.current) {
+            try { candleSeriesRef.current.removePriceLine(pocLineRef.current); } catch (e) { }
+            pocLineRef.current = null;
+        }
+
+        if (isEnabled('value_area') && vp && vp.vah && vp.val) {
+            // 1. Área de Valor Sombreada (VAH -> VAL)
+            const vaSeries = chart.addSeries(BaselineSeries, {
+                baseValue: { type: 'price', price: vp.val },
+                topFillColor1: 'rgba(255, 215, 0, 0.15)',
+                topFillColor2: 'rgba(255, 215, 0, 0.05)',
+                topLineColor: 'rgba(255, 215, 0, 0.8)',
+                bottomFillColor1: 'transparent',
+                bottomFillColor2: 'transparent',
+                bottomLineColor: 'transparent',
+                lineWidth: 1,
+                lineStyle: LineStyle.Solid,
+                priceLineVisible: false,
+                lastValueVisible: false,
+                crosshairMarkerVisible: false,
+            });
+
+            // Dibujar el área a lo largo de las últimas 50 velas (o todas si son menos)
+            const lookback = Math.min(times.length, 50);
+            const data = times.slice(-lookback).map(time => ({ time, value: vp.vah }));
+            vaSeries.setData(data as any);
+            valueAreaSeriesRef.current = vaSeries;
+
+            // 2. Point of Control (POC) - Línea horizontal dorada
+            pocLineRef.current = candleSeriesRef.current.createPriceLine({
+                price: vp.poc,
+                color: '#FFD700',
+                lineWidth: 2,
+                lineStyle: LineStyle.Solid,
+                axisLabelVisible: true,
+                title: 'POC (VALUE)',
+            });
+        }
+    }, [smcData, indicators, times]);
+
+    // ── 🪤 MARKET TRAPS (Look Above and Fail) Markers ──
+    useEffect(() => {
+        if (!candleSeriesRef.current || !smcData || !smcData.traps) return;
+        
+        if (isEnabled('traps')) {
+            const currentMarkers = (candleSeriesRef.current as any)._markers || [];
+            const newMarkers = [...currentMarkers];
+            const lastCandle = candles[candles.length - 1];
+            
+            if (lastCandle) {
+                if (smcData.traps.laf_bull) {
+                    newMarkers.push({
+                        time: lastCandle.time,
+                        position: 'belowBar',
+                        color: '#FF00FF',
+                        shape: 'arrowUp',
+                        text: 'LBF TRAP 🪤',
+                    });
+                }
+                if (smcData.traps.laf_bear) {
+                    newMarkers.push({
+                        time: lastCandle.time,
+                        position: 'aboveBar',
+                        color: '#FF00FF',
+                        shape: 'arrowDown',
+                        text: 'LAF TRAP 🪤',
+                    });
+                }
+            }
+            
+            // Filtro de duplicados por tiempo y tipo (simple)
+            const uniqueMarkers = newMarkers.filter((v, i, a) => 
+                a.findIndex(t => t.time === v.time && t.text === v.text) === i
+            );
+            
+            candleSeriesRef.current.setMarkers(uniqueMarkers.slice(-50)); // Mantener solo las últimas 50 trampas
+        }
+    }, [smcData, indicators]);
+
 
     // ── S/R High-Touch + Niveles de Sesión ───────────────────────────────────
     const srLinesRef = useRef<{ line: any; series: any }[]>([]);

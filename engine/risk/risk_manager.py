@@ -283,6 +283,7 @@ class RiskManager:
             "tp1": round(tp1, 5),
             "tp2": round(tp2, 5),
             "tp3": round(tp3, 5),
+            "take_profit_3r": round(tp1, 5),  # [FIX v13.1] Alias requerido por gatekeeper.py y signalLogic.ts
             "tp1_vol_pct": tuning["tp1_vol"],
             "risk_amount_usdt": round(risk_amount_usdt, 2), # Compatibility fix
             "risk_usd": round(risk_amount_usdt, 2),
