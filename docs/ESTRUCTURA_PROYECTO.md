@@ -1,4 +1,4 @@
-# 🏗️ Estructura del Proyecto Slingshot v12.1 Apex Sovereign
+# 🏗️ Estructura del Proyecto Slingshot v13.1 Yosh Order Flow Edition
 
 > Guía de referencia oficial para la arquitectura, mantenimiento y evolución del sistema.
 > **Última actualización**: Mayo 14, 2026
@@ -23,7 +23,7 @@ Slingshot_Trading/
 │   │   ├── json_utils.py            # Sanitización JSON (numpy → python)
 │   │   └── broadcaster/             # Pipeline de broadcast asíncrono
 │   ├── core/                        # Núcleo del motor
-│   │   ├── confluence.py            # ConfluenceManager v12.0 — Jurado Neural (13 factores)
+│   │   ├── confluence.py            # ConfluenceManager v13.1 — Jurado Neural (13 factores + Yosh Order Flow)
 │   │   ├── store.py                 # MemoryStore — Estado persistente por activo
 │   │   ├── session_manager.py       # Gestión de sesiones (Asia/London/NY)
 │   │   └── logger.py                # Logger institucional
@@ -31,13 +31,13 @@ Slingshot_Trading/
 │   │   ├── analyzer.py              # MarketAnalyzer — Procesamiento de indicadores
 │   │   ├── gatekeeper.py            # SignalGatekeeper v12.0 — 8 filtros + Sovereign Bypass
 │   │   ├── dispatcher.py            # Despacho de señales aprobadas
-│   │   └── processors.py            # Procesadores auxiliares de datos
+│   │   └── processors.py            # Procesadores + Slow Path (Volume Profile, Trap Detection v13.1)
 │   ├── strategies/                  # Lógica táctica
 │   │   └── smc.py                   # SMCInstitutionalStrategy v12.0 (OB+Sweep/Retest+FVG)
 │   ├── indicators/                  # Análisis técnico e institucional
-│   │   ├── structure.py             # Order Blocks, FVGs, Soporte/Resistencia (v12.1)
+│   │   ├── structure.py             # Order Blocks, FVGs, S/R + Trap Detection LAF/LBF (v13.1)
 │   │   ├── fibonacci.py             # Retrocesos, Golden Pocket, OTE
-│   │   ├── volume.py                # RVOL, Absorción, Huella Institucional
+│   │   ├── volume.py                # RVOL, Absorción + Volume Profile POC/VAH/VAL (v13.1)
 │   │   ├── liquidity.py             # Muros de Liquidez (Orderbook)
 │   │   ├── liquidations.py          # Clusters de Liquidación proyectados
 │   │   ├── regime.py                # Detector de Régimen de Mercado
@@ -48,9 +48,9 @@ Slingshot_Trading/
 │   │   ├── market_analyzer.py       # Análisis de mercado auxiliar
 │   │   └── data_utils.py            # Utilidades de datos
 │   ├── risk/                        # Gestión de riesgo
-│   │   └── risk_manager.py          # RiskManager v11.1 — SIGMA Tuning + SL/TP Estructural
+│   │   └── risk_manager.py          # RiskManager v13.1 — SIGMA Tuning + SL/TP + take_profit_3r
 │   ├── execution/                   # Ejecución de órdenes
-│   │   ├── nexus.py                 # Nexus Bridge — Puente a exchanges
+│   │   ├── nexus.py                 # Nexus Bridge v13.1 — Exchanges + Averaging Up Yosh
 │   │   ├── binance_executor.py      # Executor Binance Futures
 │   │   ├── delta_executor.py        # Executor genérico
 │   │   └── omega_listener.py        # Listener de posiciones abiertas
@@ -108,8 +108,8 @@ Slingshot_Trading/
 │   ├── layout.tsx                   # Layout principal
 │   ├── globals.css                  # Estilos globales
 │   ├── (dashboard)/                 # Páginas del dashboard
-│   ├── components/                  # Componentes React (Charts, Radar)
-│   ├── store/                       # TelemetryStore (Zustand 5)
+│   ├── components/                  # Componentes React (Charts, Radar, Value Area Overlay)
+│   ├── store/                       # TelemetryStore + IndicatorsStore (Zustand 5)
 │   ├── types/                       # TypeScript interfaces
 │   └── utils/                       # Utilidades del frontend
 │
@@ -167,10 +167,21 @@ Slingshot_Trading/
 - El **Sovereign Bypass** permite ignorar el Veto Fractal si `confluence_score >= 95%`
 - El **Apex Override** bonifica señales con `absorption_score >= 90%` (+20 puntos)
 
-### 3. Logging
+### 3. Reglas de Order Flow Yosh (v13.1)
+- El **Volume Profile** se recalcula cada 60 segundos en el Slow Path del `StreamProcessor`.
+- El **POC** es el nivel de mayor volumen transado y actúa como imán de precio.
+- **VAH** (Value Area High) y **VAL** (Value Area Low) definen la zona donde se concentra el 70% del volumen.
+- **Look Above and Fail (LAF)**: Se detecta cuando el precio supera el PDH/Overnight High y cierra debajo. Señal bajista de alta probabilidad.
+- **Look Below and Fail (LBF)**: Inversa del LAF. Señal alcista de alta probabilidad.
+- **Averaging Up**: Solo se permite escalar cuando el SL ya está en Breakeven. Nunca se promedian posiciones perdedoras.
+- **Confluence Yosh**: Value Area (+10), Rechazo VAH/VAL (+15), Trampa confirmada (+25).
+
+### 4. Logging
 Formato institucional obligatorio: `[MODULO] Mensaje`
 ```
 [GATEKEEPER] [FRACTAL_VETO] BTCUSDT SHORT bloqueado
 [CONFLUENCE] Asset: XAGUSDT | Score: 82% (Multiplier: 1.0)
 [NEXUS] Orden ejecutada: LONG BTCUSDT @ 107,250
+[🏦 YOSH] Value Area BTCUSDT: POC=70,500 | VAH=71,200 | VAL=69,800
+[🪤 YOSH] Retest de VALOR detectado en BTCUSDT. Ejecutando AVERAGING UP...
 ```

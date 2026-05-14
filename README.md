@@ -1,9 +1,9 @@
-# 🛡️ SLINGSHOT v13.0 SOVEREIGN INTELLIGENCE (Apex Hardened)
-> **"Institutional-Grade Autonomous Terminal. Black Box Memory. AI-Validated Confluence. Sovereign Intelligence v13."**
+# 🛡️ SLINGSHOT v13.1 SOVEREIGN INTELLIGENCE — Yosh Order Flow Edition
+> **"Institutional-Grade Autonomous Terminal. Order Flow Intelligence. Value Area Execution. Sovereign Intelligence v13.1."**
 
-![Status](https://img.shields.io/badge/Status-100%25_HARDENED_OPERATIONAL-0d2a1a?style=for-the-badge&logo=codeproject&logoColor=fff)
-![Version](https://img.shields.io/badge/Version-13.0_Sovereign_Intelligence-1a3a6e?style=for-the-badge)
-![Engine](https://img.shields.io/badge/Engine-Sovereign_Intelligence_v13-ffd700?style=for-the-badge&labelColor=0a0a0a)
+![Status](https://img.shields.io/badge/Status-100%25_YOSH--READY-0d2a1a?style=for-the-badge&logo=codeproject&logoColor=fff)
+![Version](https://img.shields.io/badge/Version-13.1_Yosh_Order_Flow-1a3a6e?style=for-the-badge)
+![Engine](https://img.shields.io/badge/Engine-Order_Flow_Intelligence_v13.1-ffd700?style=for-the-badge&labelColor=0a0a0a)
 ![Performance](https://img.shields.io/badge/Latency-Sub--20ms-blue?style=for-the-badge)
 
 ## 🎯 Nuestra Misión: Democratizar el Smart Money
@@ -70,6 +70,19 @@ El sistema **pondera los clusters de liquidación por volumen real institucional
 
 ### 8. Arquitectura de Resiliencia Regional (Unified Spot Routing)
 El **Túnel de Resiliencia 9443** detecta bloqueos regionales de ISP y conmuta automáticamente la telemetría a endpoints de alta disponibilidad.
+
+### 9. 🏦 Yosh Order Flow — Value Area Intelligence (v13.1)
+Integración de la metodología institucional de **Yosh** ($2M+ en payouts de prop firms). El sistema ahora opera con inteligencia de **Order Flow puro**:
+- **Volume Profile (POC/VAH/VAL)**: Calculado en el Slow Path cada 60 segundos. Identifica dónde se concentra el valor real del mercado.
+- **Look Above and Fail (LAF/LBF)**: Detección automática de trampas institucionales de liquidez. Cuando el precio rompe un nivel clave y falla, el sistema lo marca como señal de alta probabilidad de reversión.
+- **Scoring de Confluencia Yosh**: El Jurado Neural bonifica señales dentro del Value Area (+10), en rechazo de VAH/VAL (+15) y con trampa confirmada (+25).
+
+### 10. 📈 Averaging Up — Escalado Institucional en Ganancia (v13.1)
+El motor de ejecución **Nexus** ahora soporta escalado inteligente de posiciones ganadoras:
+- Solo se activa cuando el SL ya está en **Breakeven** (riesgo cero).
+- Detecta retesteos del **POC** como zona de acumulación de valor.
+- Añade un 50% del tamaño original a la posición, maximizando R:R en trades de alta convicción.
+- Protección total: nunca promedia posiciones perdedoras (anti-averaging-down).
 
 ---
 
@@ -149,6 +162,23 @@ Slingshot_Trading/
 
 ---
 
+## 🔬 Changelog v13.1 (Yosh Order Flow Edition)
+### 🏦 Order Flow Intelligence (NUEVO)
+- **Volume Profile Engine**: Cálculo de POC, VAH, VAL y LVNs en tiempo real (`volume.py`). Integrado en el Slow Path del `StreamProcessor`.
+- **Trap Detection (LAF/LBF)**: Detección de trampas institucionales en `structure.py`. Barridos de liquidez + fallo de estructura = señal de reversión.
+- **Yosh Confluence Scoring**: Nuevo bloque de scoring en `confluence.py` con bonificaciones de +10 a +25 puntos por alineación con el Value Area.
+- **Averaging Up (Nexus)**: Escalado inteligente de posiciones ganadoras en `nexus.py`. Se activa al retestear el POC con SL en Breakeven.
+
+### 📊 Frontend Yosh (Visualización)
+- **Value Area Overlay**: Zona sombreada dorada VAH→VAL en el gráfico principal (`TradingChart.tsx`).
+- **POC Line**: Línea horizontal dorada permanente marcando el Point of Control.
+- **Trap Markers 🪤**: Iconos de trampa (LAF/LBF) directamente sobre las velas en el gráfico.
+- **Indicator Toggles**: Nuevos interruptores `Yosh Value Area` y `Market Traps` en el panel de indicadores (`indicatorsStore.ts`).
+
+### 🔧 Correcciones Críticas
+- **Absorción Determinista**: `absorption_score` sanitizado con `np.clip` y `np.nan_to_num` para garantizar rango [0, 100].
+- **Risk Manager Payload**: Añadido alias `take_profit_3r` al diccionario de retorno para resolver `KeyError` en el dispatcher.
+
 ## 🔬 Changelog v13.0 (Sovereign Intelligence)
 ### Evolución de Inteligencia
 - **Black Box (Memory Module)**: Grabación persistente de huellas de pérdida para prevenir la repetición de errores técnicos (Similarity Match > 85%).
@@ -167,6 +197,5 @@ Slingshot_Trading/
 - **Sovereign Bypass**: Las señales de convicción extrema (≥95%) mantienen su prioridad de ignorar el veto fractal.
 
 ---
-*v13.0 Sovereign Intelligence — El Despertar del Cerebro Autónomo.*
-*Institutional Backtest Verified: +34.2R Profit | 72.1% Win Rate | 90-day BTC/USDT Data.*
+*v13.1 Yosh Order Flow Edition — Institutional Order Flow Intelligence.*
 *Hardened & Evolved by Antigravity — May 14, 2026*
