@@ -98,7 +98,9 @@ export default function TradingChart() {
     // ── Precision & Live Price ──
     useEffect(() => {
         const s = candleSeriesRef.current;
-        if (!s || !latestPrice || latestPrice <= 0) return;
+        if (!s || !latestPrice || latestPrice <= 0 || candles.length === 0) return;
+        
+        // 1. Dynamic Precision
         let precision = 2, minMove = 0.01;
         if (latestPrice < 0.001) { precision = 8; minMove = 0.00000001; }
         else if (latestPrice < 0.1) { precision = 6; minMove = 0.000001; }
@@ -106,16 +108,34 @@ export default function TradingChart() {
         else if (latestPrice < 100) { precision = 3; minMove = 0.001; }
         try { s.applyOptions({ priceFormat: { type: 'price', precision, minMove } }); } catch(e){}
 
+        // 2. Real-time Candle Body (Lattice Scanner Style)
+        const last = candles[candles.length - 1];
+        if (last && last.time) {
+            try {
+                s.update({
+                    ...last,
+                    time: Math.floor(Number(last.time)) as any,
+                    close: latestPrice,
+                    high: Math.max(last.high, latestPrice),
+                    low: Math.min(last.low, latestPrice),
+                } as any);
+            } catch (e) {}
+        }
+
+        // 3. Price Line
         if (priceLineRef.current) { try { s.removePriceLine(priceLineRef.current); } catch(e){} priceLineRef.current = null; }
-        const last = candles.length > 0 ? candles[candles.length - 1] : null;
         const isUp = last ? latestPrice >= last.open : true;
         try {
             priceLineRef.current = s.createPriceLine({
-                price: latestPrice, color: isUp ? 'rgba(0,255,65,0.9)' : 'rgba(255,0,60,0.9)',
-                lineWidth: 1, lineStyle: LineStyle.Dotted, axisLabelVisible: true, title: '',
+                price: latestPrice, 
+                color: isUp ? 'rgba(0,255,65,0.9)' : 'rgba(255,0,60,0.9)',
+                lineWidth: 1, 
+                lineStyle: LineStyle.Dotted, 
+                axisLabelVisible: true, 
+                title: '',
             });
         } catch(e){}
-    }, [latestPrice]);
+    }, [latestPrice, candles]);
 
     // ── SMC & FVG ──
     useEffect(() => {

@@ -50,40 +50,71 @@ export const handleWsMessage = (
         }
 
         switch (data.type) {
-            case 'history':
-                const sortedCandles = data.data.map((item: any) => ({
-                    time: Number(item.data.timestamp),
-                    open: Number(item.data.open),
-                    high: Number(item.data.high),
-                    low: Number(item.data.low),
-                    close: Number(item.data.close),
-                    volume: Number(item.data.volume),
-                    bullish_div: item.data.bullish_div,
-                    bearish_div: item.data.bearish_div
-                })).sort((a: any, b: any) => a.time - b.time)
-                   .filter((c: any, i: number, arr: any[]) => i === 0 || c.time !== arr[i - 1].time);
+            case 'history': {
+                const hData = data.data;
+                if (!Array.isArray(hData)) break;
 
-                const lastPrice = sortedCandles.length > 0 ? Number(sortedCandles[sortedCandles.length - 1].close) : null;
+                const historyAsset = data.asset || (hData.length > 0 ? hData[0].asset : null);
+                const activeSym = get().activeSymbol;
+                
+                // 🛡️ [ISOLATION GUARD] Avoid history pollution from previous symbols
+                if (historyAsset && !isSameSymbol(historyAsset, activeSym)) {
+                    break;
+                }
+
+                const sortedCandles = hData.map((item: any) => {
+                    const d = item.data || item;
+                    const rawTs = Number(d.timestamp);
+                    // Normalize to seconds if ms detected
+                    const ts = rawTs > 10000000000 ? Math.floor(rawTs / 1000) : Math.floor(rawTs);
+                    
+                    return {
+                        time: ts,
+                        open: Number(d.open),
+                        high: Number(d.high),
+                        low: Number(d.low),
+                        close: Number(d.close),
+                        volume: Number(d.volume || 0),
+                        bullish_div: d.bullish_div,
+                        bearish_div: d.bearish_div
+                    };
+                }).sort((a: any, b: any) => a.time - b.time)
+                  .filter((c: any, i: number, arr: any[]) => i === 0 || c.time !== arr[i - 1].time);
+
+                if (sortedCandles.length === 0) break;
+
+                const lastPrice = Number(sortedCandles[sortedCandles.length - 1].close);
                 set((state) => ({
                     candles: sortedCandles,
                     latestPrice: lastPrice,
-                    latestPrices: { ...state.latestPrices, [state.activeSymbol]: lastPrice }
+                    latestPrices: { ...state.latestPrices, [activeSym]: lastPrice }
                 }));
                 break;
+            }
 
-            case 'candle':
+            case 'candle': {
+                const d = data.data;
+                const rawTs = Number(d.timestamp);
+                const ts = rawTs > 10000000000 ? Math.floor(rawTs / 1000) : Math.floor(rawTs);
+
                 const newCandle: CandleData = {
-                    time: Number(data.data.timestamp),
-                    open: data.data.open,
-                    high: data.data.high,
-                    low: data.data.low,
-                    close: data.data.close,
-                    volume: data.data.volume,
-                    bullish_div: data.data.bullish_div,
-                    bearish_div: data.data.bearish_div
+                    time: ts,
+                    open: Number(d.open),
+                    high: Number(d.high),
+                    low: Number(d.low),
+                    close: Number(d.close),
+                    volume: Number(d.volume || 0),
+                    bullish_div: d.bullish_div,
+                    bearish_div: d.bearish_div
                 };
 
+                const candleAsset = data.asset || get().activeSymbol;
+
                 set((state) => {
+                    if (!isSameSymbol(candleAsset, state.activeSymbol)) {
+                        return { latestPrices: { ...state.latestPrices, [candleAsset]: Number(newCandle.close) } };
+                    }
+
                     const currentCandles = [...state.candles];
                     const lastIdx = currentCandles.length - 1;
                     if (lastIdx >= 0) {
@@ -100,15 +131,17 @@ export const handleWsMessage = (
                         currentCandles.push(newCandle);
                     }
 
+                    const priceVal = Number(newCandle.close);
                     return {
                         candles: currentCandles,
-                        latestPrice: Number(newCandle.close),
-                        latestPrices: { ...state.latestPrices, [state.activeSymbol]: Number(newCandle.close) }
+                        latestPrice: priceVal,
+                        latestPrices: { ...state.latestPrices, [candleAsset]: priceVal }
                     };
                 });
                 break;
+            }
 
-            case 'neural_pulse':
+            case 'neural_pulse': {
                 set((state) => {
                     const pulseData = data.data || {};
                     const logObj = pulseData.log || {};
@@ -125,8 +158,9 @@ export const handleWsMessage = (
                     };
                 });
                 break;
+            }
 
-            case 'tactical_update':
+            case 'tactical_update': {
                 const d = data.data;
                 if (!d) break;
                 set((state) => {
@@ -160,10 +194,11 @@ export const handleWsMessage = (
                     };
                 });
                 break;
+            }
 
-            case 'signal_auditor_update':
+            case 'signal_auditor_update': {
                 const sig = data.data as Signal;
-                if (!sig.asset || !sig.price || sig.price <= 0) return;
+                if (!sig.asset || !sig.price || sig.price <= 0) break;
                 const id = sig.id || `${sig.timestamp}-${sig.asset}`;
                 set((state) => {
                     const status = sig.status || '';
@@ -181,8 +216,9 @@ export const handleWsMessage = (
                     return { auditedSignals: newAuditedData, auditedIds: newAuditedIds, signalHistory: newHistory.data, signalIds: newHistory.ids };
                 });
                 break;
+            }
 
-            case 'advisor_update':
+            case 'advisor_update': {
                 const advice = data.data;
                 if (!advice) break;
                 set((state) => {
@@ -192,8 +228,9 @@ export const handleWsMessage = (
                     };
                 });
                 break;
+            }
 
-            case 'execution_update':
+            case 'execution_update': {
                 const execSig = data.data as Signal;
                 set((state) => {
                     const currentPrice = state.latestPrices[execSig.asset] || state.latestPrice;
@@ -203,8 +240,9 @@ export const handleWsMessage = (
                     return { signalHistory: nHistory, signalIds: nIds };
                 });
                 break;
+            }
 
-            case 'radar_update':
+            case 'radar_update': {
                 const summary = data.data as any[];
                 set((state) => {
                     const newSummary = { ...state.marketSummary };
@@ -228,8 +266,9 @@ export const handleWsMessage = (
                     };
                 });
                 break;
+            }
 
-            case 'session_update':
+            case 'session_update': {
                 set((state) => {
                     // 🛡️ [STRUCTURE GUARD] El mensaje puede venir envuelto en .data (WS) o directo (REST/Fallback)
                     const payload = data.data?.sessions ? data.data : (data.sessions ? data : null);
@@ -256,8 +295,9 @@ export const handleWsMessage = (
                     };
                 });
                 break;
+            }
 
-            case 'smc_data':
+            case 'smc_data': {
                 set((state) => {
                     const dataAsset = data.data.asset;
                     if (dataAsset && !isSameSymbol(dataAsset, state.activeSymbol)) return state;
@@ -274,8 +314,9 @@ export const handleWsMessage = (
                     return { neuralLogs: [newLog, ...state.neuralLogs].slice(0, 3) };
                 });
                 break;
+            }
 
-            case 'ghost_update':
+            case 'ghost_update': {
                 const g = data.data || {};
                 set((state) => {
                     const activeSym = state.activeSymbol;
@@ -306,8 +347,9 @@ export const handleWsMessage = (
                     return newState;
                 });
                 break;
+            }
 
-            case 'news_update':
+            case 'news_update': {
                 const newsItem = data.data as NewsItem;
                 set((state) => {
                     const idx = state.news.findIndex(n => n.id === newsItem.id);
@@ -319,44 +361,35 @@ export const handleWsMessage = (
                     return { news: [newsItem, ...state.news].slice(0, 15) };
                 });
                 break;
+            }
 
-            case 'liquidation_update':
+            case 'liquidation_update': {
                 set({ liquidations: data.data as LiquidationCluster[] } as any);
                 break;
+            }
 
-            case 'onchain_update':
+            case 'onchain_update': {
                 const metrics = data.data as OnChainMetrics;
                 if (metrics && metrics.symbol === get().activeSymbol) {
                     set({ onchainMetrics: metrics } as any);
                 }
                 break;
+            }
             
-            case 'htf_bias_update':
+            case 'htf_bias_update': {
                 const incomingSymbol = data.data?.symbol?.toUpperCase();
                 const currentSymbol = get().activeSymbol?.toUpperCase();
-                
-                console.log(`🌐 [TELEMETRY] HTF Update received for ${incomingSymbol}. Active: ${currentSymbol}`);
-
                 if (data.data && incomingSymbol === currentSymbol) {
                     set((state) => {
-                        const updatedBias = {
-                            ...(state.htfBias || {}),
-                            ...data.data,
-                            is_analyzing: false
-                        };
-                        
+                        const updatedBias = { ...(state.htfBias || {}), ...data.data, is_analyzing: false };
                         return {
                             htfBias: updatedBias,
-                            // Sincronizar en todos los formatos posibles para compatibilidad
-                            tacticalDecision: {
-                                ...state.tacticalDecision,
-                                htf_bias: updatedBias,
-                                htfBias: updatedBias
-                            }
+                            tacticalDecision: { ...state.tacticalDecision, htf_bias: updatedBias, htfBias: updatedBias }
                         };
                     });
                 }
                 break;
+            }
         }
     } catch (err) {
         console.error("❌ [WS-HANDLER] Critical error:", err);

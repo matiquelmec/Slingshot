@@ -219,11 +219,15 @@ class SymbolBroadcaster:
     async def _bootstrap(self):
         logger.info(f"[BROADCASTER] {self._key} → Iniciando Bootstrap Progresivo...")
         try:
-            history = await fetch_binance_history(self.symbol, self.interval, limit=300)
+            history = await fetch_binance_history(self.symbol, self.interval, limit=500)
             if history:
                 self.state.history = history
-                self.state.live_buffer.extend(history[-300:])
-                await self._broadcast({"type": "history", "data": history})
+                self.state.live_buffer.extend(history[-500:])
+                await self._broadcast({
+                    "type": "history", 
+                    "asset": self.symbol,
+                    "data": history
+                })
                 
                 # 4. Bootstrap de Indicadores Estructurales
                 self._session_manager.bootstrap(history)
