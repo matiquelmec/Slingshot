@@ -338,9 +338,10 @@ class SymbolBroadcaster:
 
         logger.info(f"[BROADCASTER] {self._key} → Iniciando túnel en vivo...")
         
-        # 🚨 [REDUNDANCIA UNIVERSAL] Activando Fallback en paralelo para todos los activos de Futuros
-        if is_futures:
-            logger.info(f"🛡️ [FUTURES-GUARD] Activando redundancia Bitunix para {self.symbol} (v10.2).")
+        # 🚨 [REDUNDANCIA v10.2.2] Solo el sensor de 1m gestiona el fallback paralelo
+        # Esto evita triplicar las peticiones a Bitunix (el precio es el mismo)
+        if is_futures and self.interval == "1m":
+            logger.info(f"🛡️ [FUTURES-GUARD] Activando redundancia Bitunix para {self.symbol} (v10.2.2).")
             await self.fallback.start()
 
         try:

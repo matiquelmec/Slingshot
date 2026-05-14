@@ -14,7 +14,7 @@ class BitunixFallback:
         self.interval = interval
         self.bc = broadcaster
         self.is_running = False
-        self.poll_interval = 1.5  # Segundos entre peticiones
+        self.poll_interval = 2.5  # [v10.2.2] Incrementado para reducir carga REST
         self.last_kline = None    # Cache para inyectar precio live desde el depth
         
         # Mapeo de intervalos Slingshot -> Bitunix
@@ -60,8 +60,9 @@ class BitunixFallback:
                     "limit": 1
                 }
                 
+                # [OPTIMIZACIÓN v10.2.2] Timeout extendido para evitar ruido en logs
                 response = await asyncio.to_thread(
-                    requests.get, url, params=params, timeout=5
+                    requests.get, url, params=params, timeout=10
                 )
                 
                 if response.status_code == 200:
@@ -73,7 +74,7 @@ class BitunixFallback:
                 # Polling de Profundidad (Orderbook) para el Heatmap
                 depth_url = "https://fapi.bitunix.com/api/v1/futures/market/depth"
                 depth_resp = await asyncio.to_thread(
-                    requests.get, depth_url, params={"symbol": self.symbol}, timeout=5
+                    requests.get, depth_url, params={"symbol": self.symbol}, timeout=10
                 )
                 if depth_resp.status_code == 200:
                     depth_data = depth_resp.json()
@@ -83,8 +84,11 @@ class BitunixFallback:
                 else:
                     logger.warning(f"[FALLBACK] Bitunix error: {response.status_code}")
                 
+            except requests.exceptions.Timeout:
+                # Silencioso, es un fallback. No queremos asustar al usuario.
+                logger.debug(f"[FALLBACK] Bitunix timeout (10s) en {self.symbol} - Reintentando...")
             except Exception as e:
-                logger.error(f"[FALLBACK] Error en loop de Bitunix: {e}")
+                logger.error(f"[FALLBACK] Error crítico en loop de Bitunix ({self.symbol}): {e}")
             
             await asyncio.sleep(self.poll_interval)
 
