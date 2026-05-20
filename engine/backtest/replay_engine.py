@@ -14,7 +14,7 @@ from engine.indicators.htf_analyzer import HTFAnalyzer
 from engine.core.logger import logger
 
 # Configuración de logs para auditoría (WARNING para velocidad)
-logger.setLevel("INFO")
+logger.setLevel("WARNING")
 
 class EventDrivenReplayEngine:
     """
@@ -62,7 +62,7 @@ class EventDrivenReplayEngine:
         
         return df
 
-    def run(self):
+    async def run(self):
         """Ejecuta la simulación histórica."""
         df = self.load_data()
         total_candles = len(df)
@@ -71,7 +71,7 @@ class EventDrivenReplayEngine:
         print(f"[{datetime.now().strftime('%H:%M:%S')}] [RUN] Iniciando Replay Engine Tick-by-Tick...")
         
         start_idx = WINDOW_SIZE
-        with patch('engine.api.advisor.check_ollama_status', return_value=asyncio.sleep(0, result=False)):
+        with patch('engine.api.advisor.check_ollama_status', new=lambda: False):
             for i in range(start_idx, total_candles):
                 # 1. Obtener Ventana Deslizante (15m)
                 start_w = max(0, i - self.window_size)
@@ -102,11 +102,11 @@ class EventDrivenReplayEngine:
                 
                 self.router.set_context(
                     liquidation_clusters=live_liquidations,
-                    ghost_data={"macro_bias": htf_bias.direction if htf_bias else "NEUTRAL"}
+                    ghost_data={"data": {"macro_bias": htf_bias.direction if htf_bias else "NEUTRAL"}}
                 )
                 
-                # 4. Procesar Señal
-                result = self.router.process_market_data(
+                # 4. Procesar Señal (ASYNC — v13.4 Fix)
+                result = await self.router.process_market_data(
                     df=window,
                     asset=self.symbol,
                     interval=self.interval,
@@ -307,10 +307,13 @@ class EventDrivenReplayEngine:
         print("="*50)
         print("NOTA: Este es un análisis de generación de señales. La ejecución (fills/slippage) requiere simulación de tick.")
         
-        # [AUDITORIA v10.0] Guardar resultados en el archivo que el usuario tiene abierto
+        # [AUDITORIA v13.4] Guardar resultados en directorio centralizado
         import json
-        audit_file = "backtest_audit.json"
-        report_file = "tmp/backtest_report_BTCUSDT.json"
+        reports_dir = os.path.join(os.path.dirname(__file__), "reports")
+        os.makedirs(reports_dir, exist_ok=True)
+        
+        timestamp_str = datetime.now().strftime('%Y%m%d_%H%M%S')
+        report_file = os.path.join(reports_dir, f"backtest_{self.symbol}_{timestamp_str}.json")
         
         # Estructura compatible con el frontend y el reporte del usuario
         summary = {
@@ -322,25 +325,25 @@ class EventDrivenReplayEngine:
             "total_trades": len(all_trades),
             "total_r": total_r,
             "avg_score": avg_score,
+            "audit_date": timestamp_str,
             "trade_log": all_trades
         }
-        
-        with open(audit_file, "w") as f:
-            json.dump(all_trades, f, indent=4, default=str)
             
         with open(report_file, "w") as f:
             json.dump(summary, f, indent=4, default=str)
             
-        print(f"\n[OK] Auditoria guardada en: {audit_file}")
-        print(f"[OK] Reporte actualizado en: {report_file}")
+        print(f"\n[OK] Reporte guardado en: {report_file}")
 
 if __name__ == "__main__":
     # Asegurar que existe data histórica (usar el fetcher si no existe)
-    data_file = os.path.join(os.path.dirname(__file__), "../tests/data/BTCUSDT_15m_90d.parquet")
+    data_file = os.path.join(os.path.dirname(__file__), "data/BTCUSDT_15m_90d.parquet")
+    # Fallback a la ruta legacy
+    if not os.path.exists(data_file):
+        data_file = os.path.join(os.path.dirname(__file__), "../tests/data/BTCUSDT_15m_90d.parquet")
     
     if not os.path.exists(data_file):
         print(f"⚠️ Faltan datos históricos en: {data_file}")
         print("Por favor, ejecuta primero: python scripts/historical_fetcher.py")
     else:
         engine = EventDrivenReplayEngine(data_path=data_file, interval="15m")
-        engine.run()
+        asyncio.run(engine.run())

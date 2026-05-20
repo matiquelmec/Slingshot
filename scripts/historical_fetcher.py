@@ -9,7 +9,7 @@ from datetime import datetime, timedelta
 TARGET_ASSETS = ["BTCUSDT", "ETHUSDT", "SOLUSDT", "BNBUSDT", "XRPUSDT", "LINKUSDT"]
 INTERVAL = "4h"
 DAYS_TO_FETCH = 90
-DATA_DIR = os.path.join(os.path.dirname(__file__), "../engine/tests/data")
+DATA_DIR = os.path.join(os.path.dirname(__file__), "../engine/backtest/data")
 
 async def fetch_binance_klines(symbol: str, start_ts: int, end_ts: int, limit: int = 1000):
     """Extrae velas históricas de Binance vía REST API."""

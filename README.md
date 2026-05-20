@@ -1,9 +1,9 @@
-# 🛡️ SLINGSHOT v13.3 SOVEREIGN INTELLIGENCE — Latency & Live Execution Edition
-> **"Institutional-Grade Autonomous Terminal. Order Flow Intelligence. Value Area Execution. Sovereign Intelligence v13.3."**
+# 🛡️ SLINGSHOT v13.4 SOVEREIGN INTELLIGENCE — Institutional Backtesting & Fidelity Edition
+> **"Institutional-Grade Autonomous Terminal. Order Flow Intelligence. Value Area Execution. Sovereign Intelligence v13.4."**
 
 ![Status](https://img.shields.io/badge/Status-100%25_YOSH--READY-0d2a1a?style=for-the-badge&logo=codeproject&logoColor=fff)
-![Version](https://img.shields.io/badge/Version-13.3_Latency_Opt-1a3a6e?style=for-the-badge)
-![Engine](https://img.shields.io/badge/Engine-Order_Flow_Intelligence_v13.3-ffd700?style=for-the-badge&labelColor=0a0a0a)
+![Version](https://img.shields.io/badge/Version-13.4_Backtest_Fidelity-1a3a6e?style=for-the-badge)
+![Engine](https://img.shields.io/badge/Engine-Order_Flow_Intelligence_v13.4-ffd700?style=for-the-badge&labelColor=0a0a0a)
 ![Performance](https://img.shields.io/badge/Latency-Sub--5ms-blue?style=for-the-badge)
 
 ## 🎯 Nuestra Misión: Democratizar el Smart Money
@@ -137,8 +137,15 @@ Slingshot_Trading/
 │   ├── risk/                      # RiskManager (Adaptive Risk Scaling v13)
 │   ├── notifications/             # Filtro de Señales + Telegram Bot
 │   ├── workers/                   # Orchestrator + News Worker + Calendar Worker
-│   ├── backtest/                  # ReplayEngine v11.1.2 (Event-Driven)
-│   ├── tools/                     # Scripts de auditoría y diagnóstico
+│   ├── backtest/                  # ReplayEngine v13.4 (Event-Driven) & Ecosistema de Backtesting
+│   │   ├── data/                  # Datos históricos unificados (.parquet)
+│   │   ├── reports/               # Reportes de auditoría en JSON
+│   │   ├── replay_engine.py       # Motor de backtesting principal (Async/Await)
+│   │   ├── fast_audit.py          # Auditoría rápida con ATR real (True Range EWM 14)
+│   │   ├── multi_asset.py         # Simulación de portafolio multi-activo
+│   │   ├── stress_audit.py        # Evaluación de precisión del Gatekeeper
+│   │   └── find_signals.py        # Buscador de señales Gold (SMC)
+│   ├── tools/                     # Scripts auxiliares y herramientas de desarrollo
 │   ├── tests/                     # 17 tests de integridad
 │   └── data/                      # Estado de sesión por activo + caché IA
 ├── app/                           # DELTA: Terminal UI (Next.js 15 + Zustand 5)
@@ -157,6 +164,14 @@ Slingshot_Trading/
 - **[docs/AUDIT_PLAN_V11.md](docs/AUDIT_PLAN_V11.md)**: Plan de auditoría vigente.
 
 ---
+
+## 🔬 Changelog v13.4 (Institutional Backtesting & Fidelity Edition)
+### 📈 Reconstrucción de Fidelidad en Backtesting
+- **Fidelidad de Canal Asíncrono**: Se convirtió el `replay_engine.py` para procesar señales usando `await self.router.process_market_data(...)`. Anteriormente, el pipeline asíncrono descartaba silenciosamente los coroutines de señales en modo offline, haciendo que el backtest no procesara señales en absoluto. Ahora el flujo de backtest es 100% fiel al WebSocket de producción.
+- **Centralización Física de Componentes**: Se agrupó el ecosistema de backtesting bajo `engine/backtest/`, creando carpetas dedicadas para datos históricos (`engine/backtest/data/`) y reportes automatizados (`engine/backtest/reports/`).
+- **Corrección de Firma y Métricas en Fast Audit**: Se corrigió el error en la firma de llamada a `evaluate_signal()` en `fast_audit.py`, eliminando parámetros inexistentes que invalidaban la confluencia. Además, se reemplazó la desviación estándar simple por el Average True Range (ATR) real calculado mediante True Range de suavizado exponencial (EWM 14) para SL/TP de precisión.
+- **Integración Asíncrona en Scripts de Diagnóstico**: Se refactorizaron `stress_audit.py` y `multi_asset.py` para que sus ejecuciones e integraciones con `SignalGatekeeper` y `EventDrivenReplayEngine` sean completamente asíncronas utilizando `asyncio.run` y `await`, erradicando bloqueos y corrutinas muertas.
+- **Estadísticas de Backtest Robustas**: El motor ahora guarda reportes detallados en formato JSON con timestamps en `engine/backtest/reports/` para facilitar su auditoría y carga desde el frontend.
 
 ## 🔬 Changelog v13.3 (Latency Optimization & Live Validation)
 ### ⚡ Optimizaciones en UI

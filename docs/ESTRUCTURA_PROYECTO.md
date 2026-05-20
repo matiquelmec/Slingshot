@@ -1,7 +1,7 @@
-# 🏗️ Estructura del Proyecto Slingshot v13.1 Yosh Order Flow Edition
+# 🏗️ Estructura del Proyecto Slingshot v13.4 Fidelity Backtesting Edition
 
 > Guía de referencia oficial para la arquitectura, mantenimiento y evolución del sistema.
-> **Última actualización**: Mayo 14, 2026
+> **Última actualización**: Mayo 20, 2026
 
 ---
 
@@ -70,8 +70,14 @@ Slingshot_Trading/
 │   ├── notifications/               # Sistema de alertas
 │   │   ├── filter.py                # Filtro anti-spam de notificaciones
 │   │   └── telegram.py              # Bot de Telegram
-│   ├── backtest/                    # Motor de backtesting
-│   │   └── replay_engine.py         # ReplayEngine v11.1.2 (Event-Driven)
+│   ├── backtest/                  # ═══ Ecosistema de Backtesting v13.4 (Fidelity Engine) ═══
+│   │   ├── data/                  # Datasets parquet históricos de 90 días unificados
+│   │   ├── reports/               # Reportes JSON autogenerados con timestamp
+│   │   ├── replay_engine.py       # ReplayEngine v13.4 (Event-Driven Async)
+│   │   ├── fast_audit.py          # Auditoría rápida de profit con ATR real (True Range EWM 14)
+│   │   ├── multi_asset.py         # Simulación de portafolio multi-activo
+│   │   ├── stress_audit.py        # Evaluación de precisión del Gatekeeper (asíncrono)
+│   │   └── find_signals.py        # Buscador de señales Gold (SMC)
 │   ├── tests/                       # Tests de integridad (17 tests)
 │   │   ├── test_engine.py           # Test del motor principal
 │   │   ├── test_pipeline.py         # Test del pipeline completo
@@ -92,12 +98,8 @@ Slingshot_Trading/
 │   │   ├── test_nexus_apex.py       # Test Nexus
 │   │   ├── data/                    # Datasets para tests (.parquet)
 │   │   └── legacy/                  # Tests de versiones antiguas
-│   ├── tools/                       # Herramientas de auditoría
-│   │   ├── fast_profit_audit.py     # Auditoría rápida de rentabilidad
-│   │   ├── find_gold.py             # Buscador de setups en XAUUSD
-│   │   ├── integrity_audit.py       # Auditoría de integridad de datos
-│   │   ├── audit_numbers_v10.py     # Auditoría numérica v10
-│   │   └── multi_asset_backtest.py  # Backtest multi-activo
+│   ├── tools/                       # Herramientas de diagnóstico auxiliar
+│   │   └── integrity_audit.py       # Auditoría de integridad de datos y sistemas
 │   └── data/                        # Estado de sesión (runtime)
 │       ├── session_state_*.json     # Estado por activo (gitignored)
 │       ├── macro_state.json         # Estado macro global
@@ -155,6 +157,7 @@ Slingshot_Trading/
 | Tipo de archivo | Ubicación correcta | Regla |
 |---|---|---|
 | Script de diagnóstico temporal | `scratch/` | Gitignored. No commitear. |
+| Ecosistema de Backtesting | `engine/backtest/` | Commiteado. Motor principal, datasets y reportes JSON. |
 | Herramienta de auditoría reutilizable | `engine/tools/` | Commiteado. Debe funcionar sin errores. |
 | Script de infraestructura/DevOps | `scripts/` | Commiteado. Herramientas de sistema. |
 | Test de integridad del motor | `engine/tests/` | Commiteado. Se ejecutan con pytest. |

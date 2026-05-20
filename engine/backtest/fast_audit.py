@@ -5,7 +5,7 @@ import sys
 from datetime import datetime
 
 # Añadir root al path
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
 
 from engine.router.gatekeeper import SignalGatekeeper, GatekeeperContext
 from engine.indicators.htf_analyzer import HTFAnalyzer, HTFBias
@@ -19,8 +19,14 @@ logger.setLevel("ERROR")
 
 def fast_profit_audit():
     print("[FAST AUDIT] Calculando Profit Neto de 3 meses...")
-    data_file = "engine/tests/data/BTCUSDT_15m_90d.parquet"
-    if not os.path.exists(data_file): return
+    data_file = os.path.join(os.path.dirname(__file__), "data/BTCUSDT_15m_90d.parquet")
+    if not os.path.exists(data_file):
+        # Fallback a tests/data
+        data_file = os.path.join(os.path.dirname(__file__), "../tests/data/BTCUSDT_15m_90d.parquet")
+        
+    if not os.path.exists(data_file):
+        print(f"Error: No data found at {data_file}")
+        return
         
     df = pd.read_parquet(data_file)
     df.rename(columns={'t': 'timestamp', 'o': 'open', 'h': 'high', 'l': 'low', 'c': 'close', 'v': 'volume'}, inplace=True)
@@ -65,23 +71,26 @@ def fast_profit_audit():
             "timestamp": df['timestamp'].iloc[idx]
         }
         conf_res = conf_mgr.evaluate_signal(
-            df=df.iloc[idx-100:idx+1],
-            is_long=is_long,
-            current=df.iloc[idx],
-            asset="BTCUSDT",
-            signal=mock_signal
+            df=df.iloc[max(0, idx-100):idx+1],
+            signal=mock_signal,
         )
         
         print(f"Signal {idx} Score: {conf_res['score']}")
         if conf_res['score'] < 30: continue # Muy bajo
         
+        # [v13.4 FIX] Calcular ATR real (True Range con EWM 14) en vez de stddev
+        tr_high_low = df['high'].iloc[max(0, idx-20):idx+1] - df['low'].iloc[max(0, idx-20):idx+1]
+        tr_high_close = (df['high'].iloc[max(0, idx-20):idx+1] - df['close'].iloc[max(0, idx-20):idx+1].shift(1)).abs()
+        tr_low_close = (df['low'].iloc[max(0, idx-20):idx+1] - df['close'].iloc[max(0, idx-20):idx+1].shift(1)).abs()
+        true_range = pd.concat([tr_high_low, tr_high_close, tr_low_close], axis=1).max(axis=1)
+        atr_real = float(true_range.ewm(alpha=1/14, adjust=False).mean().iloc[-1])
+        
         entry = current_price
-        # Si pasa el veto, usamos el RiskManager real para SL/TP
         risk_data = risk_mgr.calculate_position(
             current_price=entry,
             signal_type=sig_type,
             market_regime="MARKUP" if is_long else "MARKDOWN",
-            atr_value=df['close'].rolling(20).std().iloc[idx] * 1.5
+            atr_value=atr_real
         )
         
         sl = risk_data['stop_loss']
@@ -123,7 +132,10 @@ def fast_profit_audit():
 
     # Exportar a JSON para el usuario
     import json
-    report_path = "tmp/backtest_report_BTCUSDT.json"
+    reports_dir = os.path.join(os.path.dirname(__file__), '..', 'backtest', 'reports')
+    os.makedirs(reports_dir, exist_ok=True)
+    timestamp_str = datetime.now().strftime('%Y%m%d_%H%M%S')
+    report_path = os.path.join(reports_dir, f"fast_audit_BTCUSDT_{timestamp_str}.json")
     summary = {
         "symbol": "BTCUSDT",
         "interval": "15m",
@@ -131,8 +143,8 @@ def fast_profit_audit():
         "win_rate": round((winners/trades_executed*100 if trades_executed > 0 else 0), 1),
         "total_trades": trades_executed,
         "net_profit_usdt": round(total_r * 100, 2),
-        "audit_date": "2026-05-03",
-        "status": "VERIFIED_APEX_V10"
+        "audit_date": timestamp_str,
+        "status": "VERIFIED_V13.4"
     }
     with open(report_path, "w") as f:
         json.dump(summary, f, indent=4)

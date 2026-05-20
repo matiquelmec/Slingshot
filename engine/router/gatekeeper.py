@@ -27,6 +27,7 @@ from engine.core.memory import blackbox
 from engine.core.validator import validator_agent
 from engine.risk.risk_manager import RiskManager
 from collections import deque
+import asyncio
 import time
 
 # --- CACHE DE AUDITORÍA v5.7 ---

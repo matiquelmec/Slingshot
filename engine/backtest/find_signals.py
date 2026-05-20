@@ -1,15 +1,19 @@
 import pandas as pd
 import os
 import sys
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
 from engine.strategies.smc import SMCInstitutionalStrategy
 from engine.indicators.structure import identify_order_blocks
 
 def find_golden_candles():
     print("[DIAGNOSTIC] Buscando señales en el dataset de 90 días...")
-    data_file = "engine/tests/data/BTCUSDT_15m_90d.parquet"
+    data_file = os.path.join(os.path.dirname(__file__), "data/BTCUSDT_15m_90d.parquet")
     if not os.path.exists(data_file):
-        print("Error: No data.")
+        # Fallback a tests/data
+        data_file = os.path.join(os.path.dirname(__file__), "../tests/data/BTCUSDT_15m_90d.parquet")
+        
+    if not os.path.exists(data_file):
+        print(f"Error: No data found at {data_file}")
         return
         
     df = pd.read_parquet(data_file)

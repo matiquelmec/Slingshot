@@ -2,10 +2,10 @@ import pandas as pd
 import os
 import sys
 import asyncio
-from datetime import datetime
+from datetime import datetime, timedelta
 
 # Añadir root al path
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
 
 from engine.router.gatekeeper import SignalGatekeeper, GatekeeperContext
 from engine.indicators.htf_analyzer import HTFBias
@@ -15,14 +15,15 @@ from engine.core.logger import logger
 # Desactivar logs ruidosos
 logger.setLevel("ERROR")
 
-def run_stress_audit():
+async def run_stress_audit():
     print("\n[STRESS AUDIT v10.0] Evaluando precision de los filtros...")
     
     risk = RiskManager()
     gatekeeper = SignalGatekeeper(risk_manager=risk)
     
-    # Mock de señales (Simulamos 100 señales de LONG)
+    # Mock de señales (Simulamos 100 señales de LONG con timestamps)
     mock_signals = []
+    base_time = datetime.now()
     for i in range(100):
         mock_signals.append({
             "asset": "BTCUSDT",
@@ -31,7 +32,8 @@ def run_stress_audit():
             "atr_value": 500,
             "confluence": {"score": 70, "confluences": ["SMC_OB"]},
             "regime": "RANGING",
-            "interval_minutes": 15
+            "interval_minutes": 15,
+            "timestamp": base_time + timedelta(minutes=15*i)
         })
 
     # Escenario A: Sin Filtro (Macro Neutral)
@@ -39,13 +41,21 @@ def run_stress_audit():
     # Escenario B: Con Filtro (Macro en contra)
     bias_hostile = HTFBias(direction="BEARISH", strength=1.0, reason="Bearish", m1_regime="MARKDOWN", w1_regime="MARKDOWN", d1_regime="MARKDOWN", h4_regime="MARKDOWN", h1_regime="MARKDOWN")
     
-    # Mock Context y DataFrame
+    # Mock Context y DataFrame con soporte temporal completo
     context = GatekeeperContext(liquidation_clusters=[], heatmap={})
-    # Necesitamos columnas para que el ConfluenceManager no explote
-    mock_df = pd.DataFrame([{"close": 50000, "volume": 1000, "high": 50100, "low": 49900, "open": 50000}] * 100)
+    timestamps = [base_time + timedelta(minutes=15*i) for i in range(100)]
+    mock_df = pd.DataFrame({
+        "close": [50000] * 100,
+        "volume": [1000] * 100,
+        "high": [50100] * 100,
+        "low": [49900] * 100,
+        "open": [50000] * 100,
+        "timestamp": timestamps,
+        "t": [int(ts.timestamp()) for ts in timestamps]
+    })
 
     # Ejecutar Escenario A
-    res_a = gatekeeper.process(
+    res_a = await gatekeeper.process(
         signals=list(mock_signals),
         df=mock_df,
         smc_map={},
@@ -57,7 +67,7 @@ def run_stress_audit():
     )
     
     # Ejecutar Escenario B
-    res_b = gatekeeper.process(
+    res_b = await gatekeeper.process(
         signals=[{**s} for s in mock_signals],
         df=mock_df,
         smc_map={},
@@ -86,4 +96,4 @@ def run_stress_audit():
     print("El Win Rate proyectado ha subido al eliminar falsos positivos institucionales.")
 
 if __name__ == "__main__":
-    run_stress_audit()
+    asyncio.run(run_stress_audit())

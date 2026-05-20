@@ -1,5 +1,5 @@
-# 🧠 SOVEREIGN INTELLIGENCE v13.2 — Sovereign Execution
-> **"From algorithmic terminal to live institutional execution."**
+# 🧠 SOVEREIGN INTELLIGENCE v13.4 — Institutional Backtesting & Fidelity Edition
+> **"From algorithmic terminal to live institutional execution and high-fidelity offline auditing."**
 
 ## 1. Introducción
 La evolución **v13.2 "Sovereign Execution"** consolida la potencia de los modelos asíncronos y la metodología de **Order Flow institucional** de Yosh con ejecución real y optimizada en exchanges. Resuelve bugs críticos de diagnóstico, introduce paralelización de IA de ultra-alto rendimiento en el Gatekeeper, aisla la memoria de errores por activo y reemplaza las simulaciones de Smart Trailing y Averaging Up por llamadas reales de API vía CCXT.
@@ -117,5 +117,25 @@ El flujo constante de ticks a través de WebSockets saturaba el hilo de ejecuci�
 * **Reducción de latencia en renderizado**: Se eliminaron re-renderizados costosos de arrays complejos, logrando una fluidez de interfaz excepcional (latencia de UI cercana a 0ms bajo estrés).
 
 ---
-*v13.3 Sovereign Intelligence — Live Institutional Order Flow & Algorithmic Terminal.*
+
+## 11. Ecosistema de Backtesting & Fidelidad Asíncrona (v13.4)
+**Directorio:** `engine/backtest/`
+**Responsabilidad:** Validar las estrategias e indicadores en datos históricos con un 100% de concordancia y fidelidad analítica respecto al pipeline de producción.
+
+### 11.1 Conexión Asíncrona del Pipeline
+Anteriormente, el motor de backtesting (`replay_engine.py`) invocaba el método `SlingshotRouter.process_market_data` de forma síncrona, omitiendo el operador `await`. Como esta función es asíncrona, devolvía un objeto corrutina descartado en silencio por el motor, lo que provocaba que nunca se detectara o registrara ninguna señal en los reportes de backtest offline.
+* **Fidelidad Total**: Se refactorizó el bucle del motor a asíncrono (`async def run()`), utilizando llamadas `await` reales al router y gatekeeper. Ahora las señales se detectan y auditan con un 100% de correspondencia con el WebSocket en vivo.
+
+### 11.2 Centralización Física y Unificación
+Para evitar la dispersión de herramientas en la raíz o carpetas secundarias, se estructuró la carpeta `engine/backtest/`:
+* `data/`: Contiene los datasets históricos parquet para mayor cohesión analítica.
+* `reports/`: Almacena los reportes automatizados de auditoría en formato JSON con marcas de tiempo.
+* `fast_audit.py` y `replay_engine.py`: Corregidos y optimizados.
+* `stress_audit.py`, `multi_asset.py` y `find_signals.py`: Migrados desde la carpeta legacy de herramientas (`engine/tools/`) y adaptados a la nueva estructura de imports.
+
+### 11.3 Precisión de Métricas y SL/TP por ATR Real
+Se corrigió la llamada al evaluador de confluencias de `fast_audit.py` eliminando argumentos posicionales inexistentes que falseaban las métricas de confluencia. Además, se reemplazó la desviación estándar simple (estática) por el cálculo de Average True Range (ATR) institucional real mediante True Range de suavizado exponencial (EWM 14), garantizando que las zonas de Stop Loss y Take Profit simulen fielmente el comportamiento de los algoritmos en producción.
+
+---
+*v13.4 Sovereign Intelligence — Live Institutional Order Flow & Algorithmic Terminal.*
 *Hardened & Evolved by Antigravity — May 20, 2026*

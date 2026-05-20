@@ -4,16 +4,17 @@ import glob
 import pandas as pd
 from datetime import datetime
 
-sys.path.append(os.getcwd())
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
 
 from engine.backtest.replay_engine import EventDrivenReplayEngine
+import asyncio
 
-DATA_DIR = "engine/tests/data"
+DATA_DIR = os.path.join(os.path.dirname(__file__), "data")
 # Buscamos archivos de 4h que acabamos de bajar
 files = glob.glob(os.path.join(DATA_DIR, "*_4h_90d.parquet"))
 
 if not files:
-    print("No se encontraron archivos 4h. Abortando.")
+    print(f"No se encontraron archivos 4h en {DATA_DIR}. Abortando.")
     sys.exit(1)
 
 print(f"Encontrados {len(files)} activos para el portafolio 4h.")
@@ -27,7 +28,7 @@ for f in files:
     print("="*40)
     
     engine = EventDrivenReplayEngine(data_path=f, interval="4h", symbol=asset)
-    engine.run()
+    asyncio.run(engine.run())
     
     # Marcamos el asset en cada trade para el resumen
     for t in engine.closed_trades + engine.active_trades:
