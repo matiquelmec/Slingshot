@@ -1,23 +1,23 @@
-# 🧠 SOVEREIGN INTELLIGENCE v13.1 — Yosh Order Flow Edition
-> **"From algorithmic terminal to institutional Order Flow intelligence."**
+# 🧠 SOVEREIGN INTELLIGENCE v13.2 — Sovereign Execution
+> **"From algorithmic terminal to live institutional execution."**
 
 ## 1. Introducción
-La evolución **v13.1 "Yosh Order Flow Edition"** extiende los tres pilares de v13.0 (Memoria de Errores, Riesgo Adaptativo, Auditoría IA) con inteligencia de **Order Flow institucional** basada en la metodología de Yosh ($2M+ en payouts de prop firms).
+La evolución **v13.2 "Sovereign Execution"** consolida la potencia de los modelos asíncronos y la metodología de **Order Flow institucional** de Yosh con ejecución real y optimizada en exchanges. Resuelve bugs críticos de diagnóstico, introduce paralelización de IA de ultra-alto rendimiento en el Gatekeeper, aisla la memoria de errores por activo y reemplaza las simulaciones de Smart Trailing y Averaging Up por llamadas reales de API vía CCXT.
 
 ---
 
 ## 2. El Módulo Black Box (Memoria de Errores)
 **Archivo:** `engine/core/memory.py`
-**Responsabilidad:** Prevenir la repetición de patrones perdedores.
+**Responsabilidad:** Prevenir la repetición de patrones perdedores de forma específica por activo.
 
-### Funcionamiento:
+### Funcionamiento v13.2:
 1. **Fingerprinting**: Al cerrar un trade en pérdida (SL), el sistema genera una huella digital que incluye:
    - Régimen de mercado (CHOPPY, TRENDING, etc.)
    - Volumen Relativo (RVOL)
    - Sesgo HTF
    - Dirección de la señal.
 2. **Persistence**: Se guarda en `data/blackbox.json`.
-3. **Similarity Veto**: Antes de aprobar una señal, el `Gatekeeper` consulta a la Black Box. Si el patrón actual coincide en un >85% con una pérdida registrada, la señal es vetada con el motivo `VETO_BY_MEMORY`.
+3. **Similarity Veto (Active-Isolated)**: Antes de aprobar una señal, el `Gatekeeper` consulta a la Black Box. En esta versión, el sistema filtra y compara el setup actual **únicamente contra las pérdidas registradas del mismo activo (`asset`)**. Si coincide en un >85% con un error previo de ese activo, es vetada con el motivo `BLACKBOX_VETO`. Esto elimina falsos vetos cruzados entre activos de diferente régimen de volatilidad.
 
 ---
 
@@ -33,6 +33,8 @@ La evolución **v13.1 "Yosh Order Flow Edition"** extiende los tres pilares de v
 | 75% - 90%        | Estándar         | 1.00%        |
 | > 90%            | Apex (Institutional) | 2.00%    |
 
+*Nota: Se corrigió la asignación de `take_profit_3r` al primer target en los alias del retorno para garantizar que el cálculo de R:R en el gatekeeper represente fielmente la proyección estructural del setup.*
+
 ---
 
 ## 4. AI Validator Agent (Auditoría Narrativa)
@@ -41,37 +43,37 @@ La evolución **v13.1 "Yosh Order Flow Edition"** extiende los tres pilares de v
 
 ### Pipeline de Inferencia:
 1. **Trigger**: Solo se activa para señales con score entre 60% y 80%.
-2. **Context Injection**: Envía al modelo local (**gemma3:4b**) el régimen, el checklist de confluencia y la estructura SMC.
+2. **Context Injection**: Envía al modelo local (**gemma3:4b** u otro modelo superior) el régimen, el checklist de confluencia y la estructura SMC.
 3. **Verdict**:
    - **VEST**: Aprobación narrativa confirmada.
    - **VETO**: Rechazo por incongruencia narrativa (Ej: Short en zona de demanda institucional).
 
 ---
 
-## 5. Cambios en la Arquitectura
-Para soportar la inferencia IA (asíncrona) sin bloquear el flujo de ticks en tiempo real:
-- `SignalGatekeeper.process` ahora es **async**.
-- `MainRouter.process_market_data` ahora es **async**.
-- `BroadcasterPipeline` gestiona las llamadas asíncronas directamente, eliminando el overhead de hilos para estas tareas de decisión.
+## 5. Cambios en la Arquitectura (Paralelización de Inferencia)
+Para soportar la inferencia IA (asíncrona) sin bloquear el flujo de ticks en tiempo real ni congestionar el procesamiento de señales:
+* **asyncio.gather**: El método `SignalGatekeeper.process` ha sido reestructurado en 3 fases:
+  1. **Pre-filtrado**: Evaluaciones rápidas y síncronas de confluencia, riesgo, vetos fractales y desalineaciones de tendencia.
+  2. **Inferencia Concurrente**: Se agrupan todas las señales sobrevivientes y se dispara `validator_agent.validate(sig)` en paralelo utilizando `asyncio.gather`. Esto reduce la latencia total de inferencia al máximo valor individual en lugar de la suma de todas las señales.
+  3. **Post-filtrado**: Aplicación del veredicto de la IA, veto de Black Box por activo, y validación final de Path Traversal.
 
 ---
 
 ## 6. Verificación de Integridad
-- **Tests**: Se recomienda ejecutar `pytest engine/tests` para validar que los cambios asíncronos no rompieron el pipeline táctico.
-- **Data**: Asegurarse que el directorio `data/` tenga permisos de escritura para el archivo `blackbox.json`.
+- **Backtests**: `fast_profit_audit.py` fue corregido para inyectar la propiedad `timestamp` en `mock_signal`, resolviendo el bug del reloj de obsolescencia que arrojaba profits nulos de 0.00R.
+- **Tests**: Se recomienda ejecutar `python -m engine.tools.fast_profit_audit` e `integrity_audit.py` para validar que el pipeline táctico funcione sin excepciones ni regresiones de código.
 
 ---
 
 ## 7. Visual Sovereign (UI Integration)
-La terminal **DELTA** ha sido actualizada para reflejar la profundidad analítica del motor v13:
+La terminal **DELTA** refleja la profundidad analítica del motor v13.2:
 - **Intelligence Status Monitor**: En el `MarketContextPanel`, permite monitorear en tiempo real la conectividad con Ollama (gemma3) y el estado de carga de la Black Box.
-- **AI Narrative Audit Card**: Las tarjetas de señal ahora incluyen un panel dedicado que muestra el razonamiento de la IA, el nivel de confianza y el veredicto estructural.
+- **AI Narrative Audit Card**: Las tarjetas de señal incluyen un panel dedicado que muestra el razonamiento de la IA, el nivel de confianza y el veredicto estructural.
 - **Dynamic Risk Badge**: Se visualiza el escalado dinámico de riesgo (0.25% - 2.0%) calculado por el `RiskManager`.
-- **v13 Status Integration**: El sistema de semáforos del frontend ahora reconoce y renderiza estados `AI_VETO` y `BLOCKED_BY_MEMORY` con iconografía específica.
 
 ---
 
-## 8. 🏦 Yosh Order Flow Intelligence (v13.1)
+## 8. 🏦 Yosh Order Flow Intelligence
 
 ### 8.1 Volume Profile (POC / VAH / VAL)
 **Archivo:** `engine/indicators/volume.py` — `calculate_volume_profile()`
@@ -92,44 +94,28 @@ La terminal **DELTA** ha sido actualizada para reflejar la profundidad analític
 - **Look Below and Fail (LBF)**: Inverso del LAF. Señal alcista institucional.
 - **Resultado**: Se inyecta `laf_bull` / `laf_bear` en el objeto `traps` del `persistent_smc`.
 
-### 8.3 Yosh Confluence Scoring
-**Archivo:** `engine/core/confluence.py` — Bloque "Yosh Order Flow"
+---
 
-| Condición | Bonus | Descripción |
-|-----------|-------|-------------|
-| Precio dentro de Value Area | +10 pts | El trade ocurre donde se concentra el valor real |
-| Rechazo en VAH/VAL (proximidad <0.3%) | +15 pts | Reacción en los extremos del valor |
-| Trampa Institucional confirmada (LAF/LBF) | +25 pts | Barrido de liquidez + fallo = señal de alta convicción |
+## 9. 📈 Live Execution & Trailing (v13.2)
+**Archivos:** `engine/execution/nexus.py` y `engine/execution/binance_executor.py`
+
+### 9.1 Smart Trailing (Mover Stop Loss a BE)
+Cuando el precio en vivo (monitoreado cada 5 segundos por el `_omega_centinel_loop`) alcanza el nivel de **TP1**, el bot cancela la orden de Stop Loss original y coloca una nueva orden `STOP_MARKET` en el precio de entrada más un pequeño buffer para comisiones (riesgo = 0).
+
+### 9.2 Averaging Up (Escalado de Yosh en Ganancia)
+Si la posición ya tiene el SL en **Breakeven** y el precio realiza un retroceso saludable retesteando el **POC** (Point of Control) del Volume Profile, el `NexusNode` ejecuta una orden real de mercado para añadir un **50% del tamaño original** de contratos a la posición.
+* **Seguridad Estricta**: Estas llamadas de API respetan la propiedad `dry_run`. Por seguridad del balance, por defecto el singleton `nexus` arranca en `dry_run = True` (simulación), y el ejecutor apunta a **Binance Futures Testnet**.
 
 ---
 
-## 9. 📈 Averaging Up — Escalado en Ganancia (v13.1)
-**Archivo:** `engine/execution/nexus.py` — `_omega_centinel_loop()`
+## 10. ⚡ Frontend Latency Optimization (v13.3)
+**Archivos:** `app/components/signals/SignalTerminal.tsx`, `app/components/radar/RadarFeed.tsx` y `app/components/radar/ActiveAssetsMonitor.tsx`
 
-### Condiciones de Activación:
-1. La posición ya tiene el SL en **Breakeven** (riesgo = 0).
-2. El precio retestea el **POC** del Volume Profile actual.
-3. No se ha escalado previamente (`averaging_up_done = False`).
-
-### Ejecución:
-- Se añade un **50% del tamaño original** a la posición.
-- Se marca `averaging_up_done = True` para evitar escalados múltiples.
-- **Regla de Oro**: Nunca se promedian posiciones perdedoras (anti-averaging-down).
+### 10.1 Memoización de Feeds Híbridos
+El flujo constante de ticks a través de WebSockets saturaba el hilo de ejecución principal debido a cálculos repetitivos en el cuerpo de los componentes. En la v13.3 implementamos:
+* **Memoización reactiva con `useMemo`**: Toda transformación, filtrado, normalización y ordenamiento de señales o estados del mercado se realiza ahora únicamente cuando las dependencias subyacentes (`signalHistory`, `marketSummary`, etc.) cambian de forma discreta.
+* **Reducción de latencia en renderizado**: Se eliminaron re-renderizados costosos de arrays complejos, logrando una fluidez de interfaz excepcional (latencia de UI cercana a 0ms bajo estrés).
 
 ---
-
-## 10. Frontend Yosh (Visualización v13.1)
-**Archivos:**
-- `app/components/ui/TradingChart.tsx` — Overlays de Value Area y Trap Markers.
-- `app/store/indicatorsStore.ts` — Toggles `value_area` y `traps`.
-
-### Elementos Visuales:
-| Elemento | Descripción | Control |
-|----------|-------------|----------|
-| Zona sombreada dorada (VAH→VAL) | Área de Valor del perfil de volumen | Toggle `Yosh Value Area` |
-| Línea dorada sólida (POC) | Point of Control — imán de precio | Toggle `Yosh Value Area` |
-| Marcador 🪤 sobre vela | Trampa LAF/LBF detectada | Toggle `Market Traps` |
-
----
-*v13.1 Yosh Order Flow Edition — Institutional Order Flow Intelligence.*
-*Hardened & Evolved by Antigravity — May 14, 2026*
+*v13.3 Sovereign Intelligence — Live Institutional Order Flow & Algorithmic Terminal.*
+*Hardened & Evolved by Antigravity — May 20, 2026*

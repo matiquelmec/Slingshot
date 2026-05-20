@@ -58,7 +58,12 @@ def fast_profit_audit():
         
         from engine.core.confluence import ConfluenceManager
         conf_mgr = ConfluenceManager()
-        mock_signal = {"price": current_price, "signal_type": sig_type, "interval_minutes": 15}
+        mock_signal = {
+            "price": current_price,
+            "signal_type": sig_type,
+            "interval_minutes": 15,
+            "timestamp": df['timestamp'].iloc[idx]
+        }
         conf_res = conf_mgr.evaluate_signal(
             df=df.iloc[idx-100:idx+1],
             is_long=is_long,

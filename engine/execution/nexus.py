@@ -68,11 +68,29 @@ class NexusNode:
                             # Mover SL a Entry + Pequeño buffer para comisiones
                             new_sl = entry * 1.0005 if is_long else entry * 0.9995
                             
-                            # Cancelar SL antiguo y poner nuevo (Simulado en Nexus por ahora)
-                            # En producción, llamaríamos a self.executor.update_stop_loss(asset, new_sl)
-                            pos["signal"]["stop_loss"] = new_sl
-                            pos["smart_trailing"] = {"be_active": True, "trailing_active": True}
-                            logger.info(f"🛡️ [OMEGA] SL de {asset} movido a BE: ${new_sl:.2f}")
+                            # Cancelar SL antiguo y colocar nuevo en vivo
+                            old_sl_id = None
+                            protection_orders = pos.get("execution", {}).get("protection_orders", [])
+                            if protection_orders:
+                                old_sl_id = protection_orders[0]
+                            
+                            sl_side = 'sell' if is_long else 'buy'
+                            amount = pos.get("execution", {}).get("amount", 0.0)
+                            
+                            new_sl_id = await self.executor.update_stop_loss(
+                                symbol=asset,
+                                old_order_id=old_sl_id,
+                                new_stop_price=new_sl,
+                                amount=amount,
+                                side=sl_side
+                            )
+                            
+                            if new_sl_id:
+                                if protection_orders:
+                                    pos["execution"]["protection_orders"][0] = new_sl_id
+                                pos["signal"]["stop_loss"] = new_sl
+                                pos["smart_trailing"] = {"be_active": True, "trailing_active": True}
+                                logger.info(f"🛡️ [OMEGA] SL de {asset} movido a BE de forma real: ${new_sl:.2f}")
 
                     # 4. 🚀 [YOSH v13.1] AVERAGING UP (Escalado en Ganancia)
                     # Si ya estamos en BE y el precio retrocede a una zona de VALOR, añadir contratos.
@@ -81,26 +99,36 @@ class NexusNode:
                         session_state = store.get_session_state(asset)
                         vp = (session_state or {}).get("volume_profile", {})
                         
-                        if vp and vp.get("vah"):
+                        if vp and vp.get("poc"):
                             poc = vp["poc"]
-                            vah = vp["vah"]
-                            val = vp["val"]
                             
-                            # Criterio: El precio retrocede al POC o VAL/VAH (dependiendo de la dirección)
+                            # Criterio: El precio retrocede al POC (dependiendo de la dirección)
                             target_ref = poc # Usamos el POC como imán de valor principal
                             retest_zone = (current_price <= target_ref * 1.001 and current_price >= target_ref) if is_long else \
                                           (current_price >= target_ref * 0.999 and current_price <= target_ref)
                             
                             if retest_zone:
                                 logger.warning(f"📈 [YOSH] Retest de VALOR detectado en {asset} (${current_price:.2f}). Ejecutando AVERAGING UP...")
-                                # Ejecutar adición del 50% del tamaño original
                                 try:
-                                    # En un sistema real: await self.executor.scale_position(asset, size * 0.5)
-                                    pos["averaging_up_done"] = True
-                                    pos["signal"]["position_size_usdt"] *= 1.5 # Simulación de aumento de tamaño
-                                    logger.info(f"✅ [YOSH] Posición {asset} escalada exitosamente. Nuevo tamaño: ${pos['signal']['position_size_usdt']:.2f}")
+                                    side = 'buy' if is_long else 'sell'
+                                    size_usd = float(sig.get("position_size_usdt", sig.get("position_size", 100)))
+                                    leverage = int(sig.get("leverage", 1))
+                                    
+                                    # Añadir 50% de contratos
+                                    scale_success = await self.executor.scale_position(
+                                        symbol=asset,
+                                        side=side,
+                                        amount_usd=size_usd * 0.5,
+                                        leverage=leverage
+                                    )
+                                    
+                                    if scale_success:
+                                        pos["averaging_up_done"] = True
+                                        pos["signal"]["position_size_usdt"] *= 1.5
+                                        logger.info(f"✅ [YOSH] Posición {asset} escalada de forma real. Nuevo tamaño en memoria: ${pos['signal']['position_size_usdt']:.2f}")
                                 except Exception as scale_err:
                                     logger.error(f"❌ [YOSH] Error al escalar posición: {scale_err}")
+
 
                     # 3. Verificar si la posición se ha cerrado (SL o TP3 final hit)
                     # Esto es una simplificación; un sistema real monitorearía WebSockets de órdenes

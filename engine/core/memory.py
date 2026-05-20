@@ -95,11 +95,11 @@ class BlackBox:
         asset = current_signal.get("asset", "UNKNOWN")
         sig_type = current_signal.get("signal_type", current_signal.get("type", "LONG"))
         
-        # Filtrar solo trades perdedores del mismo activo y tipo (o similares)
-        failures = [m for m in self.memory if m["result"] == "STOP_LOSS"]
+        # Filtrar solo trades perdedores del mismo activo
+        failures = [m for m in self.memory if m["result"] == "STOP_LOSS" and m.get("asset") == asset]
         
         if not failures:
-            return {"match": False, "confidence": 1.0, "reason": "Sin historial de pérdidas"}
+            return {"match": False, "confidence": 1.0, "reason": f"Sin historial de pérdidas para {asset}"}
 
         max_similarity = 0.0
         worst_match_reason = ""

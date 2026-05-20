@@ -51,27 +51,29 @@ export default function RadarFeed() {
         return () => document.removeEventListener('visibilitychange', handleVisibility);
     }, []);
 
-    // Híbrido: Caché Base + Websocket Maestro
-    const displayMap = new Map();
-    globalSignals.forEach(s => displayMap.set(s.id || `${s.timestamp}-${s.asset}`, s));
-    Object.values(auditedSignals).forEach(s => {
-        // Normalización v5.7.155 Master Gold: El Auditor de Zustand usa 'price' pero el Radar local usa 'entry_price'
-        const normalized: RadarSignal = {
-            ...s,
-            entry_price: (s as any).price || (s as any).entry_price || 0,
-            asset: s.asset || ''
-        } as RadarSignal;
-        displayMap.set(s.id || `${s.timestamp}-${s.asset}`, normalized);
-    });
-    
-    // Sort descendente por tiempo (las más nuevas primero)
-    const signals = Array.from(displayMap.values())
-        .sort((a, b) => new Date(b.created_at || b.timestamp).getTime() - new Date(a.created_at || a.timestamp).getTime());
+    // Híbrido: Caché Base + Websocket Maestro (Memoizado)
+    const filteredSignals = React.useMemo(() => {
+        const displayMap = new Map();
+        globalSignals.forEach(s => displayMap.set(s.id || `${s.timestamp}-${s.asset}`, s));
+        Object.values(auditedSignals).forEach(s => {
+            // Normalización v5.7.155 Master Gold: El Auditor de Zustand usa 'price' pero el Radar local usa 'entry_price'
+            const normalized: RadarSignal = {
+                ...s,
+                entry_price: (s as any).price || (s as any).entry_price || 0,
+                asset: s.asset || ''
+            } as RadarSignal;
+            displayMap.set(s.id || `${s.timestamp}-${s.asset}`, normalized);
+        });
+        
+        // Sort descendente por tiempo (las más nuevas primero)
+        const signals = Array.from(displayMap.values())
+            .sort((a, b) => new Date(b.created_at || b.timestamp).getTime() - new Date(a.created_at || a.timestamp).getTime());
 
-    const filteredSignals = signals.filter(s =>
-        s.asset.toLowerCase().includes(filter.toLowerCase()) ||
-        s.signal_type.toLowerCase().includes(filter.toLowerCase())
-    );
+        return signals.filter(s =>
+            s.asset.toLowerCase().includes(filter.toLowerCase()) ||
+            s.signal_type.toLowerCase().includes(filter.toLowerCase())
+        );
+    }, [globalSignals, auditedSignals, filter]);
 
     const handleDeepDive = (signal: RadarSignal) => {
         // Guardamos en localStorage para que el Dashboard lo redireccione al activo correcto

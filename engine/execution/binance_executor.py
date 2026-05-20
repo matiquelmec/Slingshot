@@ -180,6 +180,84 @@ class BinanceExecutor:
             # En sync no hay await client.close()
             pass
 
+    async def update_stop_loss(self, symbol: str, old_order_id: str, new_stop_price: float, amount: float, side: str) -> Optional[str]:
+        """
+        Actualiza un Stop Loss cancelando el anterior y colocando uno nuevo.
+        """
+        if self.dry_run:
+            logger.info(f"🧪 [DRY RUN] Actualizando SL para {symbol}: Cancelar {old_order_id} -> Nuevo SL en {new_stop_price}")
+            return "dry_run_sl_id"
+
+        await self._load_markets()
+        if 'USDT' not in symbol: symbol += 'USDT'
+        
+        try:
+            # 1. Cancelar orden antigua si existe
+            if old_order_id:
+                try:
+                    await asyncio.to_thread(self.client.cancel_order, id=old_order_id, symbol=symbol)
+                    logger.info(f"🛡️ SL antiguo {old_order_id} cancelado para {symbol}")
+                except Exception as cancel_err:
+                    logger.warning(f"⚠️ No se pudo cancelar SL {old_order_id} (puede estar cerrado/inexistente): {cancel_err}")
+            
+            # 2. Crear nueva orden de Stop Loss
+            sl_order = await asyncio.to_thread(
+                self.client.create_order,
+                symbol=symbol,
+                type='STOP_MARKET',
+                side=side,
+                amount=amount,
+                params={
+                    'stopPrice': self.client.price_to_precision(symbol, new_stop_price),
+                    'reduceOnly': True
+                }
+            )
+            logger.info(f"🛡️ Nuevo SL colocado en {new_stop_price} para {symbol}. Nuevo Order ID: {sl_order['id']}")
+            return sl_order['id']
+        except Exception as e:
+            logger.error(f"❌ Error actualizando Stop Loss para {symbol}: {e}")
+            return None
+
+    async def scale_position(self, symbol: str, side: str, amount_usd: float, leverage: int) -> bool:
+        """
+        Ejecuta una orden de mercado para añadir contratos (Averaging Up / Escalado).
+        """
+        if self.dry_run:
+            logger.info(f"🧪 [DRY RUN] Escalando posición {symbol} ({side.upper()}) con ${amount_usd} de volumen nominal.")
+            return True
+
+        await self._load_markets()
+        if 'USDT' not in symbol: symbol += 'USDT'
+        
+        try:
+            # 1. Obtener precio actual para calcular contratos
+            ticker = await asyncio.to_thread(self.client.fetch_ticker, symbol)
+            current_price = ticker['last']
+            
+            raw_amount = (amount_usd * leverage) / current_price
+            market = self.client.market(symbol)
+            min_amount = market['limits']['amount']['min']
+            amount = float((Decimal(str(raw_amount)) / Decimal(str(min_amount))).quantize(Decimal('1'), rounding=ROUND_DOWN) * Decimal(str(min_amount)))
+            
+            if amount <= 0:
+                logger.warning(f"⚠️ Cantidad de escalado muy pequeña para {symbol}: {raw_amount}")
+                return False
+
+            logger.info(f"🚀 Enviando orden de escalado de mercado {side.upper()} para {symbol}: {amount} unidades")
+            
+            scale_order = await asyncio.to_thread(
+                self.client.create_order,
+                symbol=symbol,
+                type='market',
+                side=side,
+                amount=amount
+            )
+            logger.info(f"✅ Escalado exitoso en {symbol}. Order ID: {scale_order['id']}")
+            return True
+        except Exception as e:
+            logger.error(f"❌ Error ejecutando escalado para {symbol}: {e}")
+            return False
+
 if __name__ == "__main__":
     executor = BinanceExecutor(dry_run=True)
     print("Módulo BinanceExecutor inicializado (Modo Sync/Hilos).")

@@ -65,27 +65,29 @@ export default function SignalTerminal() {
     }, [searchParams, activeSymbol, connect]);
 
     // Los audiosignals siguen siendo directos para el Feed de auditoría
-    const displayMap = new Map();
-    Object.values(signalHistory).forEach(s => displayMap.set(s.id || `${s.timestamp}-${s.asset}`, s));
-    Object.values(auditedSignals).forEach(s => displayMap.set(s.id || `${s.timestamp}-${s.asset}`, s));
-    
-    // Sort descendente por tiempo + Filtrado por Activo y Estado (v5.8.0)
-    const displaySignals = Array.from(displayMap.values())
-        .filter(s => viewMode === 'GLOBAL' || s.asset === activeSymbol)
-        .filter(s => {
-            if (!hideBlocked) return true;
-            const score = s.confluence?.score || s.confluence_score || 0;
-            return !s.status?.startsWith('BLOCKED') && s.status !== 'VETADA' && score >= 25;
-        })
-        .sort((a, b) => {
-            const timeA = new Date(a.created_at || a.timestamp).getTime();
-            const timeB = new Date(b.created_at || b.timestamp).getTime();
-            return timeB - timeA;
-        })
-        .slice(0, 50);
+    const displaySignals = React.useMemo(() => {
+        const displayMap = new Map();
+        Object.values(signalHistory).forEach(s => displayMap.set(s.id || `${s.timestamp}-${s.asset}`, s));
+        Object.values(auditedSignals).forEach(s => displayMap.set(s.id || `${s.timestamp}-${s.asset}`, s));
+        
+        // Sort descendente por tiempo + Filtrado por Activo y Estado (v5.8.0)
+        return Array.from(displayMap.values())
+            .filter(s => viewMode === 'GLOBAL' || s.asset === activeSymbol)
+            .filter(s => {
+                if (!hideBlocked) return true;
+                const score = s.confluence?.score || s.confluence_score || 0;
+                return !s.status?.startsWith('BLOCKED') && s.status !== 'VETADA' && score >= 25;
+            })
+            .sort((a, b) => {
+                const timeA = new Date(a.created_at || a.timestamp).getTime();
+                const timeB = new Date(b.created_at || b.timestamp).getTime();
+                return timeB - timeA;
+            })
+            .slice(0, 50);
+    }, [signalHistory, auditedSignals, viewMode, activeSymbol, hideBlocked]);
 
-    const activeCount = displaySignals.filter(s => s.status === 'ACTIVE').length;
-    const blockedCount = displaySignals.filter(s => s.status?.startsWith('BLOCKED')).length;
+    const activeCount = React.useMemo(() => displaySignals.filter(s => s.status === 'ACTIVE').length, [displaySignals]);
+    const blockedCount = React.useMemo(() => displaySignals.filter(s => s.status?.startsWith('BLOCKED')).length, [displaySignals]);
 
     return (
         <div className="flex flex-col h-full bg-[#03070E]/80 backdrop-blur-2xl border-t border-white/10 overflow-hidden relative">

@@ -73,28 +73,30 @@ export default function ActiveAssetsMonitor() {
         loadInitialSync();
     }, []);
 
-    // 3. Fusión Híbrida Inteligente: Base de API Inicial fusionada con Eventos WebSocket
-    const displayMap = new Map();
-    globalStates.forEach(s => displayMap.set(s.asset.toUpperCase(), s));
-    
-    // Transmisión de estado vivo (Zustand radar_update)
-    Object.values(marketSummary).forEach((s: any) => {
-        if(s.asset) {
-            const assetKey = s.asset.toUpperCase();
-            displayMap.set(assetKey, {
-               ...(displayMap.get(assetKey) || {}),
-               ...s,
-               price: s.price || s.current_price,
-               last_updated: new Date().toISOString()
-            });
-        }
-    });
+    // 3. Fusión Híbrida Inteligente (Memoizado)
+    const states = React.useMemo(() => {
+        const displayMap = new Map();
+        globalStates.forEach(s => displayMap.set(s.asset.toUpperCase(), s));
+        
+        // Transmisión de estado vivo (Zustand radar_update)
+        Object.values(marketSummary).forEach((s: any) => {
+            if(s.asset) {
+                const assetKey = s.asset.toUpperCase();
+                displayMap.set(assetKey, {
+                   ...(displayMap.get(assetKey) || {}),
+                   ...s,
+                   price: s.price || s.current_price,
+                   last_updated: new Date().toISOString()
+                });
+            }
+        });
 
-    // 4. Aplicar el filtro de la watchlist del usuario + Master Watchlist (Elite Assets)
-    const states = Array.from(displayMap.values()).filter((s: any) => 
-        (watchlist && watchlist.includes(s.asset.toUpperCase())) || 
-        (MASTER_WATCHLIST && MASTER_WATCHLIST.includes(s.asset.toUpperCase()))
-    );
+        // 4. Aplicar el filtro de la watchlist del usuario + Master Watchlist (Elite Assets)
+        return Array.from(displayMap.values()).filter((s: any) => 
+            (watchlist && watchlist.includes(s.asset.toUpperCase())) || 
+            (MASTER_WATCHLIST && MASTER_WATCHLIST.includes(s.asset.toUpperCase()))
+        );
+    }, [globalStates, marketSummary, watchlist]);
 
     const getBiasIcon = (bias?: string) => {
         switch (bias) {

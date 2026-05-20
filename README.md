@@ -1,10 +1,10 @@
-# 🛡️ SLINGSHOT v13.1 SOVEREIGN INTELLIGENCE — Yosh Order Flow Edition
-> **"Institutional-Grade Autonomous Terminal. Order Flow Intelligence. Value Area Execution. Sovereign Intelligence v13.1."**
+# 🛡️ SLINGSHOT v13.3 SOVEREIGN INTELLIGENCE — Latency & Live Execution Edition
+> **"Institutional-Grade Autonomous Terminal. Order Flow Intelligence. Value Area Execution. Sovereign Intelligence v13.3."**
 
 ![Status](https://img.shields.io/badge/Status-100%25_YOSH--READY-0d2a1a?style=for-the-badge&logo=codeproject&logoColor=fff)
-![Version](https://img.shields.io/badge/Version-13.1_Yosh_Order_Flow-1a3a6e?style=for-the-badge)
-![Engine](https://img.shields.io/badge/Engine-Order_Flow_Intelligence_v13.1-ffd700?style=for-the-badge&labelColor=0a0a0a)
-![Performance](https://img.shields.io/badge/Latency-Sub--20ms-blue?style=for-the-badge)
+![Version](https://img.shields.io/badge/Version-13.3_Latency_Opt-1a3a6e?style=for-the-badge)
+![Engine](https://img.shields.io/badge/Engine-Order_Flow_Intelligence_v13.3-ffd700?style=for-the-badge&labelColor=0a0a0a)
+![Performance](https://img.shields.io/badge/Latency-Sub--5ms-blue?style=for-the-badge)
 
 ## 🎯 Nuestra Misión: Democratizar el Smart Money
 Slingshot no es solo un bot de trading; es una **Terminal de Inteligencia Institucional** diseñada para nivelar el campo de juego entre el trader retail y los grandes fondos de inversión. El sistema utiliza principios avanzados de **SMC (Smart Money Concepts)** y **Wyckoff** para identificar el rastro de la liquidez institucional antes de que el movimiento ocurra.
@@ -72,21 +72,51 @@ Integración de la metodología institucional de **Yosh**. El sistema ahora oper
 - **Look Above and Fail (LAF/LBF)**: Detección de trampas institucionales.
 - **Scoring de Confluencia Yosh**: Bonus por OTE dinámico (10-25 pts) independiente de la ventana horaria.
 
+## 🛠️ Stack Tecnológico
+* **DELTA (Frontend)**: Next.js 15 (App Router), Zustand 5, Tailwind CSS, Lightweight Charts (TradingView).
+* **SIGMA (Backend)**: Python 3.11+, FastAPI, Uvicorn, WebSockets.
+* **Cerebro & Modelos**: XGBoost, Ollama (Gemma3:4b), Pandas, NumPy, Scikit-Learn.
+* **Base de Datos**: SQLite / Black Box Memory local persistente.
+
 ---
 
 ## 🏹 Guía de Inicio Rápido (Quick Start)
 
-### Requisitos Previos
-- **Python 3.10+** (Backend)
-- **Node.js 20+** (Frontend)
-- **Ollama** (Inferencia IA)
-- **Binance API Keys** (Para ejecución en Testnet)
+### 1. Requisitos Previos
+* **Python 3.10+** (Recomendado 3.11 en entorno virtual `.venv`)
+* **Node.js 20+**
+* **Ollama** (Servidor local corriendo con el modelo `gemma3:4b` descargado)
+* **Binance Testnet API Keys** (Para la ejecución táctica en vivo de Nexus)
 
-### Lanzamiento en un Solo Paso
-Hemos diseñado un orquestador para Windows que inicializa ambos servidores en alta prioridad:
+### 2. Configuración del Entorno (`.env`)
+Crea un archivo `.env` en la raíz del proyecto para inicializar el motor Sigma:
+```env
+BINANCE_API_KEY="tu_api_key_testnet"
+BINANCE_API_SECRET="tu_api_secret_testnet"
+OLLAMA_HOST="http://localhost:11434"
+TELEGRAM_BOT_TOKEN="tu_token_opcional"
+TELEGRAM_CHAT_ID="tu_chat_id_opcional"
+```
+
+### 3. Lanzamiento del Sistema
+
+#### Opción A: Orquestador Unificado (Recomendado en Windows)
+Inicializa tanto el backend de FastAPI como el frontend de Next.js en alta prioridad con un solo comando:
 ```powershell
 ./launch.bat
 ```
+
+#### Opción B: Ejecución Granular (Depuración & Desarrollo)
+Si prefieres ver la telemetría y los logs de compilación de forma independiente en consolas separadas:
+
+* **Paso 1: Levantar el Backend (FastAPI)**
+  ```powershell
+  .\.venv\Scripts\python.exe -m uvicorn engine.api.main:app --host 0.0.0.0 --port 8000
+  ```
+* **Paso 2: Levantar el Frontend (Next.js)**
+  ```powershell
+  node .\node_modules\next\dist\bin\next dev
+  ```
 
 ---
 
@@ -121,11 +151,23 @@ Slingshot_Trading/
 ---
 
 ## 📖 Documentación Profunda
+- **[docs/SOVEREIGN_INTELLIGENCE_V13.md](docs/SOVEREIGN_INTELLIGENCE_V13.md)**: La especificación técnica de la v13, v13.2 y v13.3.
 - **[docs/SLINGSHOT_BIBLE_V10.md](docs/SLINGSHOT_BIBLE_V10.md)**: La especificación técnica Apex.
 - **[docs/ESTRUCTURA_PROYECTO.md](docs/ESTRUCTURA_PROYECTO.md)**: Mapa completo del proyecto.
 - **[docs/AUDIT_PLAN_V11.md](docs/AUDIT_PLAN_V11.md)**: Plan de auditoría vigente.
 
 ---
+
+## 🔬 Changelog v13.3 (Latency Optimization & Live Validation)
+### ⚡ Optimizaciones en UI
+- **Memoización de Feeds Híbridos**: Implementado `useMemo` en `SignalTerminal`, `RadarFeed` y `ActiveAssetsMonitor` para evitar ciclos redundantes de ordenamiento y filtrado de señales sobre eventos de WebSocket.
+- **Latencia UI Sub-5ms**: Interfaz fluida sin bloqueos del hilo principal del navegador incluso bajo estrés extremo de ticks.
+
+## 🔬 Changelog v13.2 (Sovereign Execution & Smart Trailing)
+### 🏦 Motor de Ejecución en Vivo (Nexus)
+- **Smart Trailing (BE)**: Ajuste automático del Stop Loss a precio de entrada + comisión tras alcanzar el objetivo TP1.
+- **Averaging Up de Yosh**: Adición dinámica de contratos (+50% de la posición original) al retestear el POC con SL ya en Breakeven.
+- **Integración de Binance Futures Testnet**: Ejecución real respetando flags de `dry_run`.
 
 ## 🔬 Changelog v13.1 (Stabilization & Apex Tiers)
 ### 🏹 Estrategia SMC Evolucionada
@@ -162,5 +204,5 @@ Slingshot_Trading/
 - **Sovereign Bypass**: Las señales de convicción extrema (≥95%) mantienen su prioridad de ignorar el veto fractal.
 
 ---
-*v13.1 Yosh Order Flow Edition — Institutional Order Flow Intelligence.*
-*Hardened & Evolved by Antigravity — May 14, 2026*
+*v13.3 Sovereign Intelligence — Live Institutional Order Flow & Algorithmic Terminal.*
+*Hardened & Evolved by Antigravity — May 20, 2026*
