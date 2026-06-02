@@ -57,6 +57,11 @@ const SignalCardItem: React.FC<SignalCardItemProps> = ({ signal, currentPrice })
         return { lifecycle: lc, style: st };
     }, [signal, effectivePrice]); 
 
+    const isBlocked = useMemo(() => {
+        const validStatuses = ['ACTIVE', 'APPROVED', 'PENDING', 'FILLED', 'CLOSED_TP_MAX', 'STOPPED_OUT'];
+        return signal.status && !validStatuses.includes(signal.status);
+    }, [signal.status]);
+
     return (
         <motion.div
             initial={{ opacity: 0, x: -20 }}
@@ -86,7 +91,7 @@ const SignalCardItem: React.FC<SignalCardItemProps> = ({ signal, currentPrice })
 
             {/* ── Fila 2: Estado Educativo o Reporte de Auditoría ── */}
             <div className={`text-[9px] font-mono px-2 py-1.5 rounded border border-white/5 bg-black/30 mb-2 ${lifecycle.color} leading-relaxed relative overflow-hidden group`}>
-                {signal.status?.startsWith('BLOCKED') && (
+                {isBlocked && (
                     <div className="absolute left-0 top-0 bottom-0 w-1 bg-red-500/30 group-hover:bg-red-500/60 transition-all" />
                 )}
                 <div className="flex items-start gap-2">
@@ -101,13 +106,13 @@ const SignalCardItem: React.FC<SignalCardItemProps> = ({ signal, currentPrice })
             </div>
 
             {/* ── SECCIÓN DE EVIDENCIA AUDITORÍA (Solo para bloqueadas) ── */}
-            {signal.status?.startsWith('BLOCKED') && (
+            {isBlocked && (
                 <div className="mb-2 px-2 py-1.5 bg-red-500/5 rounded border border-red-500/10 text-[8px] font-mono">
                     <span className="text-red-400 font-bold tracking-widest uppercase mb-1 block">🛡️ AUDIT EVIDENCE</span>
                     <div className="grid grid-cols-2 gap-x-3 gap-y-1 opacity-70">
                         <div className="flex justify-between border-b border-white/5 pb-0.5">
                             <span className="text-white/40">Status:</span>
-                            <span className="text-red-300 font-bold">{signal.status.replace('BLOCKED_BY_', '')}</span>
+                            <span className="text-red-300 font-bold">{signal.status ? signal.status.replace('BLOCKED_BY_', '') : ''}</span>
                         </div>
                         <div className="flex justify-between border-b border-white/5 pb-0.5">
                             <span className="text-white/40">Direction:</span>

@@ -126,7 +126,7 @@ export default function RadarFeed() {
                             {filteredSignals.map((signal) => {
                                 const isLong = signal.signal_type.toUpperCase().includes('LONG');
                                 const score = signal.confluence?.score || signal.confluence_score || 0;
-                                const isBlocked = signal.status?.startsWith('BLOCKED') || signal.status === 'STAND_BY';
+                                const isBlocked = signal.status && !['ACTIVE', 'APPROVED', 'PENDING', 'FILLED', 'CLOSED_TP_MAX', 'STOPPED_OUT'].includes(signal.status);
 
                                 return (
                                     <motion.div

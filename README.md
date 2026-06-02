@@ -1,9 +1,9 @@
-# 🛡️ SLINGSHOT v13.4 SOVEREIGN INTELLIGENCE — Institutional Backtesting & Fidelity Edition
-> **"Institutional-Grade Autonomous Terminal. Order Flow Intelligence. Value Area Execution. Sovereign Intelligence v13.4."**
+# 🛡️ SLINGSHOT v13.6 APEX SOVEREIGN — Precision Calibration & State Unification
+> **"Institutional-Grade Autonomous Terminal. Order Flow Intelligence. Value Area Execution. Sovereign Intelligence v13.6."**
 
 ![Status](https://img.shields.io/badge/Status-100%25_YOSH--READY-0d2a1a?style=for-the-badge&logo=codeproject&logoColor=fff)
-![Version](https://img.shields.io/badge/Version-13.4_Backtest_Fidelity-1a3a6e?style=for-the-badge)
-![Engine](https://img.shields.io/badge/Engine-Order_Flow_Intelligence_v13.4-ffd700?style=for-the-badge&labelColor=0a0a0a)
+![Version](https://img.shields.io/badge/Version-13.6_Apex_Sovereign-1a3a6e?style=for-the-badge)
+![Engine](https://img.shields.io/badge/Engine-Order_Flow_Intelligence_v13.6-ffd700?style=for-the-badge&labelColor=0a0a0a)
 ![Performance](https://img.shields.io/badge/Latency-Sub--5ms-blue?style=for-the-badge)
 
 ## 🎯 Nuestra Misión: Democratizar el Smart Money
@@ -158,12 +158,21 @@ Slingshot_Trading/
 ---
 
 ## 📖 Documentación Profunda
-- **[docs/SOVEREIGN_INTELLIGENCE_V13.md](docs/SOVEREIGN_INTELLIGENCE_V13.md)**: La especificación técnica de la v13, v13.2 y v13.3.
+- **[docs/SOVEREIGN_INTELLIGENCE_V13.md](docs/SOVEREIGN_INTELLIGENCE_V13.md)**: La especificación técnica de la v13, v13.4 y v13.6 Apex Sovereign.
 - **[docs/SLINGSHOT_BIBLE_V10.md](docs/SLINGSHOT_BIBLE_V10.md)**: La especificación técnica Apex.
 - **[docs/ESTRUCTURA_PROYECTO.md](docs/ESTRUCTURA_PROYECTO.md)**: Mapa completo del proyecto.
 - **[docs/AUDIT_PLAN_V11.md](docs/AUDIT_PLAN_V11.md)**: Plan de auditoría vigente.
 
 ---
+
+## 🔬 Changelog v13.6 (Precision Calibration & State Unification)
+### 🛡️ Calibración de Precisión en Gatekeeper
+- **Umbral OTE Estricto**: Se elevó el parámetro `ote_min_confidence` a **85%** en `gatekeeper_config.json`. Cualquier señal detectada fuera de la zona óptima de entrada (OTE) debe cumplir ahora con una confluencia mínima de 85% para omitir el veto técnico y ser aprobada, previniendo operaciones de baja confluencia en zonas de riesgo.
+
+### 📊 Saneamiento Visual de la Interfaz
+- **Lista Blanca de Estados Operativos**: Se resolvió el bug de fuga visual que renderizaba erróneamente señales vetadas (ej. con baja confluencia al 40% y estado `"LOW_CONFLUENCE"` o `"BLACKBOX_VETO"`) como activas.
+- **Unificación de Filtros**: Se reemplazó el filtro legacy basado en prefijo `startsWith('BLOCKED')` en el frontend por un filtrado estricto basado en una lista blanca explícita de estados autorizados: `['ACTIVE', 'APPROVED', 'PENDING', 'FILLED', 'CLOSED_TP_MAX', 'STOPPED_OUT']`.
+- **Implementación Consistente**: Aplicada esta lista blanca en `SignalTerminal.tsx`, `RadarFeed.tsx`, `SignalCardItem.tsx` y la lógica auxiliar en `signalLogic.ts`. Las señales bloqueadas ahora se muestran correctamente como vetadas en la UI del Radar Center y de la Terminal y se desactivan sus controles interactivos.
 
 ## 🔬 Changelog v13.4 (Institutional Backtesting & Fidelity Edition)
 ### 📈 Reconstrucción de Fidelidad en Backtesting
@@ -219,5 +228,5 @@ Slingshot_Trading/
 - **Sovereign Bypass**: Las señales de convicción extrema (≥95%) mantienen su prioridad de ignorar el veto fractal.
 
 ---
-*v13.3 Sovereign Intelligence — Live Institutional Order Flow & Algorithmic Terminal.*
-*Hardened & Evolved by Antigravity — May 20, 2026*
+*v13.6 Apex Sovereign — Precision Calibration & State Unification.*
+*Hardened & Evolved by Antigravity — May 21, 2026*

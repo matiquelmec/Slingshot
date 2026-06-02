@@ -60,6 +60,7 @@ class ConfluenceManager:
         score = 0
         total_weight = 0
         smt_strength = 0 # Inicialización para evitar NameError [FIX v11.1]
+        cluster_hit = False # Inicialización para evitar NameError [FIX v13.6]
 
         # 1. NARRATIVA ESTRUCTURAL (Peso 15)
         narrative_weight = 15
@@ -107,18 +108,24 @@ class ConfluenceManager:
             checklist.append({"factor": "Zonas POI", "status": "NEUTRAL", "detail": "Sin POI claro"})
 
         # 3. LIQUIDEZ Y SWEEPS (Peso 30)
-        liq_weight = 30
+        # 3. LIQUIDEZ Y SWEEPS (Peso 30 total si hay sesiones)
+        current_session = session_data.get('current_session') if session_data else None
+        liq_weight = 30 if current_session else 20
         total_weight += liq_weight
-        current_session = session_data.get('current_session', 'OFF_HOURS')
         
         # Detección de barrido (Sweep) usando la nueva lógica de memoria en smc.py
         has_sweep = bool(current.get('recent_sweep_bull' if is_long else 'recent_sweep_bear', False))
         
-        liq_pts = (10 if current_session != 'OFF_HOURS' else 0) + (20 if has_sweep else 0)
+        if current_session:
+            liq_pts = (10 if current_session != 'OFF_HOURS' else 0) + (20 if has_sweep else 0)
+            detail_str = f"Sweep: {has_sweep} | Session: {current_session}"
+        else:
+            liq_pts = (20 if has_sweep else 0)
+            detail_str = f"Sweep: {has_sweep}"
+            
         score += liq_pts
-        
         status = "CONFIRMADO" if liq_pts >= 20 else "PARCIAL" if liq_pts > 0 else "BAJO"
-        checklist.append({"factor": "Liquidez", "status": status, "detail": f"Sweep: {has_sweep} | Session: {current_session}"})
+        checklist.append({"factor": "Liquidez", "status": status, "detail": detail_str})
 
         # 4. VOLUMEN INSTITUCIONAL (RVOL) (Peso 15)
         vol_weight = 15
@@ -132,15 +139,19 @@ class ConfluenceManager:
 
         # 5. ALGORITMO NEURAL (Peso 10)
         ml_weight = 10
-        total_weight += ml_weight
-        ml_prob = float(ml_projection.get('probability', 50))
-        ml_ok = (is_long and ml_projection.get('direction') == 'ALCISTA' and ml_prob > 55) or \
-                (not is_long and ml_projection.get('direction') == 'BAJISTA' and ml_prob > 55)
-        if ml_ok:
-            score += ml_weight
-            checklist.append({"factor": "Predicción IA", "status": "CONFIRMADO", "detail": f"Prob: {ml_prob:.0f}%"})
+        ml_prob = ml_projection.get('probability') if ml_projection else None
+        if ml_prob is not None:
+            total_weight += ml_weight
+            ml_prob_val = float(ml_prob)
+            ml_ok = (is_long and ml_projection.get('direction') == 'ALCISTA' and ml_prob_val > 55) or \
+                    (not is_long and ml_projection.get('direction') == 'BAJISTA' and ml_prob_val > 55)
+            if ml_ok:
+                score += ml_weight
+                checklist.append({"factor": "Predicción IA", "status": "CONFIRMADO", "detail": f"Prob: {ml_prob_val:.0f}%"})
+            else:
+                checklist.append({"factor": "Predicción IA", "status": "NEUTRAL", "detail": "IA Observando"})
         else:
-            checklist.append({"factor": "Predicción IA", "status": "NEUTRAL", "detail": "IA Observando"})
+            checklist.append({"factor": "Predicción IA", "status": "CALIBRANDO", "detail": "Datos insuficientes (Bypass)"})
 
         # [REFACTOR v12.0] APEX OVERRIDE (Bono de Convicción Extrema)
         # Si el motor de absorción detecta actividad institucional masiva, el score recibe un boost.
@@ -292,29 +303,32 @@ class ConfluenceManager:
 
         # 7. CLUSTERS DE LIQUIDACIÓN (Peso 10) v4.0 (Enhanced Volume Filtering)
         liq_cluster_weight = 10
-        total_weight += liq_cluster_weight
-        price = float(current.get('close', 0))
-        cluster_hit = False
-        hit_strength = 0
-        
-        for cluster in liq_clusters:
-            # Si el precio está cerca de un cluster masivo de liquidación en la dirección del trade
-            c_price = float(cluster.get('price', 0))
-            c_strength = int(cluster.get('strength', 0))
-            dist = abs(price - c_price) / price
+        if liq_clusters:
+            total_weight += liq_cluster_weight
+            price = float(current.get('close', 0))
+            cluster_hit = False
+            hit_strength = 0
             
-            # FILTRO CRÍTICO v2.0: Distancia < 1% Y Fuerza > 50%
-            if dist < 0.01 and c_strength > 50:
-                if (is_long and c_price > price) or (not is_long and c_price < price):
-                    cluster_hit = True
-                    hit_strength = c_strength
-                    break
-        
-        if cluster_hit:
-            score += liq_cluster_weight
-            checklist.append({"factor": "Liq Clusters", "status": "CONFIRMADO", "detail": f"Imán de liquidez masiva detectado ({hit_strength}%)"})
+            for cluster in liq_clusters:
+                # Si el precio está cerca de un cluster masivo de liquidación en la dirección del trade
+                c_price = float(cluster.get('price', 0))
+                c_strength = int(cluster.get('strength', 0))
+                dist = abs(price - c_price) / price
+                
+                # FILTRO CRÍTICO v2.0: Distancia < 1% Y Fuerza > 50%
+                if dist < 0.01 and c_strength > 50:
+                    if (is_long and c_price > price) or (not is_long and c_price < price):
+                        cluster_hit = True
+                        hit_strength = c_strength
+                        break
+            
+            if cluster_hit:
+                score += liq_cluster_weight
+                checklist.append({"factor": "Liq Clusters", "status": "CONFIRMADO", "detail": f"Imán de liquidez masiva detectado ({hit_strength}%)"})
+            else:
+                checklist.append({"factor": "Liq Clusters", "status": "NEUTRAL", "detail": "Sin clusters institucionales cercanos"})
         else:
-            checklist.append({"factor": "Liq Clusters", "status": "NEUTRAL", "detail": "Sin clusters institucionales cercanos"})
+            checklist.append({"factor": "Liq Clusters", "status": "CALIBRANDO", "detail": "Datos de liquidaciones no disponibles (Bypass)"})
 
         # 8. PUNTUACIÓN DE NOTICIAS
         if news_score >= 0.7: score += 5
@@ -386,15 +400,18 @@ class ConfluenceManager:
             m1 = getattr(htf_bias, 'm1_regime', 'UNKNOWN')
             w1 = getattr(htf_bias, 'w1_regime', 'UNKNOWN')
             
-            is_macro_aligned = (is_long and m1 == "MARKUP" and w1 == "MARKUP") or \
-                               (not is_long and m1 == "MARKDOWN" and w1 == "MARKDOWN")
-            
-            if not is_macro_aligned:
-                score -= 20
-                checklist.append({"factor": "Macro Fractal", "status": "DIVERGENTE", "detail": f"1M/1W no alineados (-20pts)"})
+            if m1 == 'UNKNOWN' or w1 == 'UNKNOWN':
+                checklist.append({"factor": "Macro Fractal", "status": "NEUTRAL", "detail": "1M/1W no disponibles en este entorno"})
             else:
-                score += 10
-                checklist.append({"factor": "Macro Fractal", "status": "CONFIRMADO", "detail": "Armonía 1M + 1W detectada (+10pts)"})
+                is_macro_aligned = (is_long and m1 == "MARKUP" and w1 == "MARKUP") or \
+                                   (not is_long and m1 == "MARKDOWN" and w1 == "MARKDOWN")
+                
+                if not is_macro_aligned:
+                    score -= 20
+                    checklist.append({"factor": "Macro Fractal", "status": "DIVERGENTE", "detail": f"1M/1W no alineados (-20pts)"})
+                else:
+                    score += 10
+                    checklist.append({"factor": "Macro Fractal", "status": "CONFIRMADO", "detail": "Armonía 1M + 1W detectada (+10pts)"})
 
             htf_score = htf_bias.strength * 100
             is_contrary = (is_long and htf_bias.direction == 'BEARISH') or (not is_long and htf_bias.direction == 'BULLISH')
@@ -433,8 +450,9 @@ class ConfluenceManager:
 
         # 🚀 12. METODOLOGÍA YOSH (ORDER FLOW) — v13.1
         # Inyectamos el Perfil de Volumen y Detección de Trampas
-        vp = current.get("volume_profile")
-        traps = current.get("traps", {})
+        smc_map = kwargs.get('smc_map', {})
+        vp = smc_map.get("volume_profile") if smc_map else None
+        traps = smc_map.get("traps", {}) if smc_map else {}
         
         if vp and vp.get("vah") and vp.get("val"):
             vah, val, poc = vp["vah"], vp["val"], vp["poc"]
@@ -601,38 +619,41 @@ class ConfluenceManager:
 
         # 🚀 10. ALINEACIÓN HTF (Peso 25 — EL ANCLA) v5.7.155 Master Gold
         onchain_weight = 15
-        total_weight += onchain_weight
-        onchain_bias = kwargs.get('onchain_bias', 'NEUTRAL')
+        onchain_bias = kwargs.get('onchain_bias')
         
-        onchain_pts = 0
-        onchain_status = "NEUTRAL"
-        onchain_detail = "Datos On-Chain estables"
+        if onchain_bias and onchain_bias != 'NEUTRAL':
+            total_weight += onchain_weight
+            onchain_pts = 0
+            onchain_status = "NEUTRAL"
+            onchain_detail = "Datos On-Chain estables"
 
-        if onchain_bias == "BULLISH_ACCUMULATION":
-            if is_long:
-                onchain_pts = onchain_weight
-                onchain_status = "CONFIRMADO ✅"
-                onchain_detail = "Acumulación ballena en rango (Aumento OI)"
-            else:
-                onchain_pts = -5
-                onchain_status = "DIVERGENTE ⚠️"
-                onchain_detail = "Posible trampa de liquidez en Short"
-        elif onchain_bias == "BEARISH_WARNING":
-            onchain_status = "ALERTA 🔴"
-            onchain_detail = "Alta entrada de capital a Exchanges (> $10M)"
-            if not is_long:
-                onchain_pts = onchain_weight
-            else:
-                onchain_pts = -15
-                multiplier *= 0.5 # Reducción drástica por flujo Bearish
-        elif onchain_bias == "OVERLEVERAGED_LONGS":
-            onchain_status = "PRECAUCIÓN ⚠️"
-            onchain_detail = "Sobreapalancamiento detectado (Funding Alto)"
-            if is_long: 
-                multiplier *= 0.7 # Riesgo de Long Squeeze
+            if onchain_bias == "BULLISH_ACCUMULATION":
+                if is_long:
+                    onchain_pts = onchain_weight
+                    onchain_status = "CONFIRMADO ✅"
+                    onchain_detail = "Acumulación ballena en rango (Aumento OI)"
+                else:
+                    onchain_pts = -5
+                    onchain_status = "DIVERGENTE ⚠️"
+                    onchain_detail = "Posible trampa de liquidez en Short"
+            elif onchain_bias == "BEARISH_WARNING":
+                onchain_status = "ALERTA 🔴"
+                onchain_detail = "Alta entrada de capital a Exchanges (> $10M)"
+                if not is_long:
+                    onchain_pts = onchain_weight
+                else:
+                    onchain_pts = -15
+                    multiplier *= 0.5 # Reducción drástica por flujo Bearish
+            elif onchain_bias == "OVERLEVERAGED_LONGS":
+                onchain_status = "PRECAUCIÓN ⚠️"
+                onchain_detail = "Sobreapalancamiento detectado (Funding Alto)"
+                if is_long: 
+                    multiplier *= 0.7 # Riesgo de Long Squeeze
 
-        score += onchain_pts
-        checklist.append({"factor": "On-Chain Sentinel", "status": onchain_status, "detail": onchain_detail})
+            score += onchain_pts
+            checklist.append({"factor": "On-Chain Sentinel", "status": onchain_status, "detail": onchain_detail})
+        else:
+            checklist.append({"factor": "On-Chain Sentinel", "status": "CALIBRANDO", "detail": "Datos On-Chain no disponibles (Bypass)"})
 
         # RESULTADO FINAL
         base_score = int((score / total_weight) * 100) if total_weight > 0 else 0

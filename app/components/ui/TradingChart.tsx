@@ -6,6 +6,7 @@ import {
     CandlestickSeries,
     HistogramSeries,
     BaselineSeries,
+    LineSeries,
     createSeriesMarkers,
     ColorType,
     CrosshairMode,
@@ -26,6 +27,7 @@ export default function TradingChart() {
     const chartRef = useRef<IChartApi | null>(null);
     const candleSeriesRef = useRef<ISeriesApi<'Candlestick'> | null>(null);
     const volumeRef = useRef<ISeriesApi<'Histogram'> | null>(null);
+    const williamsRRef = useRef<ISeriesApi<'Line'> | null>(null);
     const sessionSeriesRef = useRef<ISeriesApi<'Baseline'>[]>([]);
     const valueAreaSeriesRef = useRef<ISeriesApi<'Baseline'> | null>(null);
     const priceLineRef = useRef<any>(null);
@@ -38,7 +40,7 @@ export default function TradingChart() {
     const fvgSeriesRef = useRef<ISeriesApi<'Baseline'>[]>([]);
     const markersDetachRef = useRef<{ detach: () => void } | null>(null);
 
-    const { candles, isConnected, smcData, liquidityHeatmap, tacticalDecision, sessionData, liquidations, latestPrice } = useTelemetryStore();
+    const { candles, isConnected, smcData, liquidityHeatmap, tacticalDecision, sessionData, liquidations, latestPrice, activeSymbol, auditedSignals, signalHistory } = useTelemetryStore();
     const { indicators } = useIndicatorsStore();
     const isEnabled = (id: string) => indicators.find(i => i.id === id)?.enabled ?? false;
 
@@ -68,6 +70,18 @@ export default function TradingChart() {
         });
         chart.priceScale('volume').applyOptions({ scaleMargins: { top: 0.8, bottom: 0 }, borderVisible: false });
 
+        williamsRRef.current = chart.addSeries(LineSeries, {
+            priceScaleId: 'williams_r',
+            color: '#8B5CF6',
+            lineWidth: 1.5,
+            priceLineVisible: false,
+            lastValueVisible: false,
+        });
+        chart.priceScale('williams_r').applyOptions({
+            scaleMargins: { top: 0.82, bottom: 0.08 },
+            borderVisible: false,
+        });
+
         return () => { chart.remove(); };
     }, []);
 
@@ -91,6 +105,27 @@ export default function TradingChart() {
                     })) as any);
                     chartRef.current?.priceScale('volume').applyOptions({ scaleMargins: { top: 0.85, bottom: 0 }, visible: true });
                 } catch (e) {}
+            }
+        }
+
+        if (williamsRRef.current) {
+            const isR = isEnabled('williams_r');
+            williamsRRef.current.applyOptions({ visible: isR });
+            if (isR) {
+                try {
+                    const rData = sorted.map((c, idx) => {
+                        const start = Math.max(0, idx - 13);
+                        const slice = sorted.slice(start, idx + 1);
+                        const hh = Math.max(...slice.map(x => x.high));
+                        const ll = Math.min(...slice.map(x => x.low));
+                        const val = hh === ll ? -50 : ((hh - c.close) / (hh - ll + 1e-9)) * -100;
+                        return { time: c.time, value: val };
+                    });
+                    williamsRRef.current.setData(rData as any);
+                    chartRef.current?.priceScale('williams_r').applyOptions({ visible: true });
+                } catch(e){}
+            } else {
+                chartRef.current?.priceScale('williams_r').applyOptions({ visible: false });
             }
         }
     }, [candles, indicators]);
@@ -265,32 +300,64 @@ export default function TradingChart() {
         }
     }, [smcData, indicators, candles.length]);
 
-    // ── Traps (Markers v5 API) ──
+    // ── Markers (Traps & Larry Williams Oops) ──
     useEffect(() => {
         const s = candleSeriesRef.current;
         if (!s) return;
 
-        // Si traps está desactivado, limpiar marcadores existentes
-        if (!isEnabled('traps')) {
-            if (markersDetachRef.current) { try { markersDetachRef.current.detach(); } catch(e){} markersDetachRef.current = null; }
-            trapMarkersRef.current = [];
-            return;
+        if (markersDetachRef.current) { try { markersDetachRef.current.detach(); } catch(e){} markersDetachRef.current = null; }
+
+        const markers: any[] = [];
+
+        // 1. Traps Markers
+        if (isEnabled('traps') && smcData?.traps) {
+            const last = candles[candles.length - 1];
+            if (last) {
+                if (smcData.traps.laf_bull) { markers.push({ time: last.time, position: 'belowBar', color: '#FF00FF', shape: 'arrowUp', text: 'LBF 🪤' }); }
+                if (smcData.traps.laf_bear) { markers.push({ time: last.time, position: 'aboveBar', color: '#FF00FF', shape: 'arrowDown', text: 'LAF 🪤' }); }
+            }
         }
 
-        if (!smcData?.traps) return;
-        const last = candles[candles.length - 1];
-        if (!last) return;
-        let changed = false;
-        const newM = [...trapMarkersRef.current];
-        if (smcData.traps.laf_bull) { newM.push({ time: last.time, position: 'belowBar', color: '#FF00FF', shape: 'arrowUp', text: 'LBF 🪤' }); changed = true; }
-        if (smcData.traps.laf_bear) { newM.push({ time: last.time, position: 'aboveBar', color: '#FF00FF', shape: 'arrowDown', text: 'LAF 🪤' }); changed = true; }
-        if (changed) {
-            const unique = newM.filter((v, i, a) => a.findIndex(t => t.time === v.time && t.text === v.text) === i).slice(-50);
-            trapMarkersRef.current = unique;
-            if (markersDetachRef.current) { try { markersDetachRef.current.detach(); } catch(e){} }
-            try { markersDetachRef.current = createSeriesMarkers(s, unique); } catch(e){ console.warn("[Chart] createSeriesMarkers failed:", e); }
+        // 2. Larry Williams / Oops Reversal & SMC Signals
+        if (isEnabled('williams_oops')) {
+            const allSignals = [
+                ...Object.values(auditedSignals || {}),
+                ...Object.values(signalHistory || {})
+            ];
+            
+            allSignals.forEach((sig: any) => {
+                if (sig.asset?.toUpperCase() !== activeSymbol?.toUpperCase()) return;
+                
+                const rawTs = Number(sig.timestamp || sig.time);
+                if (isNaN(rawTs) || rawTs <= 0) return;
+                const ts = rawTs > 10000000000 ? Math.floor(rawTs / 1000) : Math.floor(rawTs);
+                
+                const isLong = sig.signal_type?.toUpperCase().includes('LONG') || sig.type?.toUpperCase().includes('LONG');
+                
+                if (sig.type?.includes('Oops') || sig.strategy?.includes('Oops') || sig.type === 'Oops! Reversal') {
+                    markers.push({
+                        time: ts,
+                        position: isLong ? 'belowBar' : 'aboveBar',
+                        color: '#E11D48',
+                        shape: isLong ? 'arrowUp' : 'arrowDown',
+                        text: `Oops! ${isLong ? 'Buy' : 'Sell'}`
+                    });
+                }
+            });
         }
-    }, [smcData, indicators]);
+
+        const unique = markers
+            .filter((v, i, a) => a.findIndex(t => t.time === v.time && t.text === v.text) === i)
+            .sort((a, b) => Number(a.time) - Number(b.time));
+
+        if (unique.length > 0) {
+            try {
+                markersDetachRef.current = createSeriesMarkers(s, unique);
+            } catch(e) {
+                console.warn("[Chart] createSeriesMarkers failed:", e);
+            }
+        }
+    }, [smcData, auditedSignals, signalHistory, indicators, candles.length, activeSymbol]);
 
     // ── Key Levels, Sessions & Fibonacci ──
     const killzoneSeriesRef = useRef<ISeriesApi<'Baseline'>[]>([]);
@@ -374,100 +441,101 @@ export default function TradingChart() {
         killzoneSeriesRef.current.forEach(sr => { try { chart.removeSeries(sr); } catch(e){} });
         killzoneSeriesRef.current = [];
 
-        if (sessionData?.sessions && typeof sessionData.sessions === 'object' && isEnabled('session')) {
-            const { sessions } = sessionData;
+        const isSessionEnabled = isEnabled('session');
+        const isOopsEnabled = isEnabled('williams_oops');
 
-            const sessionColors: Record<string, { color: string; bg: string; kz: string }> = {
-                asia:   { color: 'rgba(251,146,60,0.8)', bg: 'rgba(251,146,60,0.25)', kz: 'rgba(251,146,60,0.40)' },
-                london: { color: 'rgba(96,165,250,0.8)',  bg: 'rgba(96,165,250,0.25)',  kz: 'rgba(96,165,250,0.40)' },
-                ny:     { color: 'rgba(192,132,252,0.8)', bg: 'rgba(192,132,252,0.25)', kz: 'rgba(192,132,252,0.40)' },
-            };
-
-            const sorted = [...candles].sort((a, b) => Number(a.time) - Number(b.time)).filter((c, i, arr) => i === 0 || c.time !== arr[i - 1].time);
-
+        if (sessionData && (isSessionEnabled || isOopsEnabled)) {
             // PDH / PDL / ONH / ONL
             const { pdh, pdl, onh, onl } = sessionData;
-            addLine(pdh, '#FF9F00', '🏦 PDH (DAILY HIGH)', LineStyle.Solid, 3);
-            addLine(pdl, '#00FF00', '🏦 PDL (DAILY LOW)', LineStyle.Solid, 3);
-            if (onh) addLine(onh, '#FF00FF', '🌙 ONH (OVERNIGHT HIGH)', LineStyle.Dashed, 2);
-            if (onl) addLine(onl, '#FF00FF', '🌙 ONL (OVERNIGHT LOW)', LineStyle.Dashed, 2);
+            
+            // Dibujar PDH/PDL si cualquiera de los dos está activado
+            if (pdh) addLine(pdh, isOopsEnabled ? '#E11D48' : '#FF9F00', isOopsEnabled ? '🏦 PDH (LARRY WILLIAMS)' : '🏦 PDH (DAILY HIGH)', LineStyle.Solid, 2);
+            if (pdl) addLine(pdl, isOopsEnabled ? '#10B981' : '#00FF00', isOopsEnabled ? '🏦 PDL (LARRY WILLIAMS)' : '🏦 PDL (DAILY LOW)', LineStyle.Solid, 2);
 
-            // LVN Lines
-            const lvns = sessionData?.volume_profile?.lvns || [];
-            lvns.forEach((lvn: number, i: number) => {
-                addLine(lvn, 'rgba(200,200,200,0.5)', `📉 LVN ${i + 1}`, LineStyle.Dotted, 1);
-            });
+            if (isSessionEnabled && sessionData.sessions && typeof sessionData.sessions === 'object') {
+                const { sessions } = sessionData;
 
-            if (sorted.length > 0) {
-                // Historical Session Boxes
-                Object.entries(sessions).forEach(([id, info]: [string, any]) => {
-                    if (info.start_utc == null || info.end_utc == null) return;
-                    if (!sessionColors[id]) return;
+                const sessionColors: Record<string, { color: string; bg: string; kz: string }> = {
+                    asia:   { color: 'rgba(251,146,60,0.8)', bg: 'rgba(251,146,60,0.25)', kz: 'rgba(251,146,60,0.40)' },
+                    london: { color: 'rgba(96,165,250,0.8)',  bg: 'rgba(96,165,250,0.25)',  kz: 'rgba(96,165,250,0.40)' },
+                    ny:     { color: 'rgba(192,132,252,0.8)', bg: 'rgba(192,132,252,0.25)', kz: 'rgba(192,132,252,0.40)' },
+                };
 
-                    let currentBlock: any[] = [];
-                    const blocks: any[][] = [];
+                const sorted = [...candles].sort((a, b) => Number(a.time) - Number(b.time)).filter((c, i, arr) => i === 0 || c.time !== arr[i - 1].time);
 
-                    for (let i = 0; i < sorted.length; i++) {
-                        const c = sorted[i];
-                        const h = new Date(Number(c.time) * 1000).getUTCHours();
-                        let inside = false;
-                        if (info.start_utc < info.end_utc) inside = h >= info.start_utc && h < info.end_utc;
-                        else inside = h >= info.start_utc || h < info.end_utc;
+                if (onh) addLine(onh, '#FF00FF', '🌙 ONH (OVERNIGHT HIGH)', LineStyle.Dashed, 2);
+                if (onl) addLine(onl, '#FF00FF', '🌙 ONL (OVERNIGHT LOW)', LineStyle.Dashed, 2);
 
-                        if (inside) { currentBlock.push(c); }
-                        else { if (currentBlock.length > 0) { blocks.push(currentBlock); currentBlock = []; } }
-                    }
-                    if (currentBlock.length > 0) blocks.push(currentBlock);
+                // LVN Lines
+                const lvns = sessionData?.volume_profile?.lvns || [];
+                lvns.forEach((lvn: number, i: number) => {
+                    addLine(lvn, 'rgba(200,200,200,0.5)', `📉 LVN ${i + 1}`, LineStyle.Dotted, 1);
+                });
 
-                    blocks.forEach((blockCandles) => {
-                        if (blockCandles.length < 2) return;
-                        const blockHigh = Math.max(...blockCandles.map(c => c.high));
-                        const blockLow = Math.min(...blockCandles.map(c => c.low));
+                if (sorted.length > 0) {
+                    // Historical Session Boxes
+                    Object.entries(sessions).forEach(([id, info]: [string, any]) => {
+                        if (info.start_utc == null || info.end_utc == null) return;
+                        if (!sessionColors[id]) return;
 
-                        try {
-                            const bracket = chart.addSeries(BaselineSeries, {
-                                baseValue: { type: 'price', price: blockLow },
-                                topFillColor1: sessionColors[id].bg, topFillColor2: 'transparent',
-                                topLineColor: sessionColors[id].color, lineWidth: 1,
-                                bottomFillColor1: 'transparent', bottomFillColor2: 'transparent', bottomLineColor: 'transparent',
-                                priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false,
-                            });
-                            bracket.setData(blockCandles.map(c => ({ time: c.time, value: blockHigh })) as any);
-                            sessionSeriesRef.current.push(bracket);
-                        } catch(e){}
+                        let currentBlock: any[] = [];
+                        const blocks: any[][] = [];
 
-                        // Killzone Glow
-                        const kzHours = id === 'asia' ? 4 : 3;
-                        const kzStart = info.start_utc;
-                        const kzEnd = (info.start_utc + kzHours) % 24;
-                        const kzCandles = blockCandles.filter(c => {
-                            const hh = new Date(Number(c.time) * 1000).getUTCHours();
-                            if (kzStart < kzEnd) return hh >= kzStart && hh < kzEnd;
-                            return hh >= kzStart || hh < kzEnd;
-                        });
+                        for (let i = 0; i < sorted.length; i++) {
+                            const c = sorted[i];
+                            const h = new Date(Number(c.time) * 1000).getUTCHours();
+                            let inside = false;
+                            if (info.start_utc < info.end_utc) inside = h >= info.start_utc && h < info.end_utc;
+                            else inside = h >= info.start_utc || h < info.end_utc;
 
-                        if (kzCandles.length > 0) {
+                            if (inside) { currentBlock.push(c); }
+                            else { if (currentBlock.length > 0) { blocks.push(currentBlock); currentBlock = []; } }
+                        }
+                        if (currentBlock.length > 0) blocks.push(currentBlock);
+
+                        blocks.forEach((blockCandles) => {
+                            if (blockCandles.length < 2) return;
+                            const blockHigh = Math.max(...blockCandles.map(c => c.high));
+                            const blockLow = Math.min(...blockCandles.map(c => c.low));
+
                             try {
-                                const kzGlow = chart.addSeries(BaselineSeries, {
+                                const bracket = chart.addSeries(BaselineSeries, {
                                     baseValue: { type: 'price', price: blockLow },
-                                    topFillColor1: sessionColors[id].kz, topFillColor2: sessionColors[id].kz,
-                                    topLineColor: 'transparent', lineWidth: 1,
+                                    topFillColor1: sessionColors[id].bg, topFillColor2: 'transparent',
+                                    topLineColor: sessionColors[id].color, lineWidth: 1,
+                                    bottomFillColor1: 'transparent', bottomFillColor2: 'transparent', bottomLineColor: 'transparent',
                                     priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false,
                                 });
-                                kzGlow.setData(kzCandles.map(c => ({ time: c.time, value: blockHigh })) as any);
-                                killzoneSeriesRef.current.push(kzGlow);
+                                bracket.setData(blockCandles.map(c => ({ time: c.time, value: blockHigh })) as any);
+                                sessionSeriesRef.current.push(bracket);
                             } catch(e){}
-                        }
+
+                            // Killzone Glow
+                            const kzHours = id === 'asia' ? 4 : 3;
+                            const kzStart = info.start_utc;
+                            const kzEnd = (info.start_utc + kzHours) % 24;
+                            const kzCandles = blockCandles.filter(c => {
+                                const hh = new Date(Number(c.time) * 1000).getUTCHours();
+                                if (kzStart < kzEnd) return hh >= kzStart && hh < kzEnd;
+                                return hh >= kzStart || hh < kzEnd;
+                            });
+
+                            if (kzCandles.length > 0) {
+                                try {
+                                    const kzGlow = chart.addSeries(BaselineSeries, {
+                                        baseValue: { type: 'price', price: blockLow },
+                                        topFillColor1: sessionColors[id].kz, topFillColor2: sessionColors[id].kz,
+                                        topLineColor: 'transparent', lineWidth: 1,
+                                        priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false,
+                                    });
+                                    kzGlow.setData(kzCandles.map(c => ({ time: c.time, value: blockHigh })) as any);
+                                    killzoneSeriesRef.current.push(kzGlow);
+                                } catch(e){}
+                            }
+                        });
                     });
-                });
+                }
             }
-        } else if (isEnabled('session') && sessionData) {
-            // Fallback: solo líneas fijas si no hay sessions object
-            const { pdh, pdl, onh, onl } = sessionData;
-            addLine(pdh, '#FF9F00', 'DAILY HIGH', LineStyle.Solid, 3);
-            addLine(pdl, '#00FF00', 'DAILY LOW', LineStyle.Solid, 3);
-            if (onh) addLine(onh, '#FF00FF', 'OVERNIGHT H', LineStyle.Dashed, 2);
-            if (onl) addLine(onl, '#FF00FF', 'OVERNIGHT L', LineStyle.Dashed, 2);
         }
     }, [tacticalDecision, sessionData, indicators, candles.length]);
 

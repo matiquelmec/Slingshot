@@ -13,6 +13,18 @@ from engine.indicators.liquidations import estimate_liquidation_clusters
 from engine.indicators.htf_analyzer import HTFAnalyzer
 from engine.core.logger import logger
 
+# Bypassear el validador de IA local en Ollama para acelerar el backtest offline
+from engine.core.validator import validator_agent
+async def mock_validate(signal):
+    return {
+        "approved": True, 
+        "ai_reasoning": "MOCK: Aprobación automática en Backtest Offline.",
+        "confidence": 1.0,
+        "verdict": "VEST"
+    }
+validator_agent.validate = mock_validate
+
+
 # Configuración de logs para auditoría (WARNING para velocidad)
 logger.setLevel("WARNING")
 
@@ -23,11 +35,12 @@ class EventDrivenReplayEngine:
     manteniendo una fidelidad del 100% con la lógica de producción.
     """
     
-    def __init__(self, data_path: str, symbol: str = "BTCUSDT", interval: str = "15m", window_size: int = 200):
+    def __init__(self, data_path: str, symbol: str = "BTCUSDT", interval: str = "15m", window_size: int = 200, verbose: bool = False):
         self.data_path = data_path
         self.symbol = symbol
         self.interval = interval
         self.window_size = window_size
+        self.verbose = verbose
         self.router = SlingshotRouter()
         self.htf_analyzer = HTFAnalyzer()
         
@@ -60,6 +73,15 @@ class EventDrivenReplayEngine:
         self.df_1w = df.resample('1W').agg({'open': 'first', 'high': 'max', 'low': 'min', 'close': 'last', 'volume': 'sum'}).dropna()
         self.df_1m = df.resample('1ME').agg({'open': 'first', 'high': 'max', 'low': 'min', 'close': 'last', 'volume': 'sum'}).dropna()
         
+        # Precalculamos regímenes en HTF para evitar bucles redundantes lentos
+        from engine.indicators.regime import RegimeDetector
+        rd = RegimeDetector()
+        self.df_h1 = rd.detect_regime(self.df_h1)
+        self.df_h4 = rd.detect_regime(self.df_h4)
+        self.df_1d = rd.detect_regime(self.df_1d)
+        self.df_1w = rd.detect_regime(self.df_1w)
+        self.df_1m = rd.detect_regime(self.df_1m)
+        
         return df
 
     async def run(self):
@@ -82,11 +104,11 @@ class EventDrivenReplayEngine:
                 
                 # 2. Obtener Contexto HTF Sincronizado (No miramos al futuro)
                 # Solo pasamos los datos que existían hasta 'current_time'
-                h1_window = self.df_h1[self.df_h1.index < current_time].tail(100)
-                h4_window = self.df_h4[self.df_h4.index < current_time].tail(100)
-                d1_window = self.df_1d[self.df_1d.index < current_time].tail(100)
-                w1_window = self.df_1w[self.df_1w.index < current_time].tail(20)
-                m1_window = self.df_1m[self.df_1m.index < current_time].tail(12)
+                h1_window = self.df_h1[self.df_h1.index + pd.Timedelta(hours=1) <= current_time].tail(100)
+                h4_window = self.df_h4[self.df_h4.index + pd.Timedelta(hours=4) <= current_time].tail(100)
+                d1_window = self.df_1d[self.df_1d.index + pd.Timedelta(days=1) <= current_time].tail(100)
+                w1_window = self.df_1w[self.df_1w.index <= current_time].tail(20)
+                m1_window = self.df_1m[self.df_1m.index <= current_time].tail(12)
                 
                 # 3. Analizar Sesgo con Fidelidad de Producción
                 htf_bias = self.htf_analyzer.analyze_bias(
@@ -124,11 +146,11 @@ class EventDrivenReplayEngine:
                 self._update_active_trades(current_candle, result=result)
                 
                 # [AUDITORIA v8.9.3] Log de bloqueos reales
-                gate_blocked = result.get("blocked_signals", [])
-                for sig in gate_blocked:
-                    reason = sig.get("blocked_reason") or sig.get("gatekeeper_veto") or "Motivo No Especificado"
-                    # Usar el índice de la vela para el log
-                    print(f"[{current_candle['timestamp']}] [BLOCKED] {sig.get('signal_type')} | Reason: {reason}")
+                if self.verbose:
+                    gate_blocked = result.get("blocked_signals", [])
+                    for sig in gate_blocked:
+                        reason = sig.get("blocked_reason") or sig.get("gatekeeper_veto") or "Motivo No Especificado"
+                        print(f"[{current_candle['timestamp']}] [BLOCKED] {sig.get('signal_type')} | Reason: {reason}")
                 
                 # Progress bar
                 if i % 100 == 0:
@@ -335,15 +357,23 @@ class EventDrivenReplayEngine:
         print(f"\n[OK] Reporte guardado en: {report_file}")
 
 if __name__ == "__main__":
-    # Asegurar que existe data histórica (usar el fetcher si no existe)
-    data_file = os.path.join(os.path.dirname(__file__), "data/BTCUSDT_15m_90d.parquet")
-    # Fallback a la ruta legacy
-    if not os.path.exists(data_file):
-        data_file = os.path.join(os.path.dirname(__file__), "../tests/data/BTCUSDT_15m_90d.parquet")
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--data_path", type=str, default="")
+    parser.add_argument("--symbol", type=str, default="BTCUSDT")
+    parser.add_argument("--interval", type=str, default="15m")
+    args = parser.parse_args()
     
+    data_file = args.data_path
+    if not data_file:
+        data_file = os.path.join(os.path.dirname(__file__), f"data/{args.symbol}_{args.interval}_90d.parquet")
+        
+    if not os.path.exists(data_file):
+        data_file = os.path.join(os.path.dirname(__file__), f"../tests/data/{args.symbol}_{args.interval}_90d.parquet")
+        
     if not os.path.exists(data_file):
         print(f"⚠️ Faltan datos históricos en: {data_file}")
         print("Por favor, ejecuta primero: python scripts/historical_fetcher.py")
     else:
-        engine = EventDrivenReplayEngine(data_path=data_file, interval="15m")
+        engine = EventDrivenReplayEngine(data_path=data_file, interval=args.interval, symbol=args.symbol)
         asyncio.run(engine.run())

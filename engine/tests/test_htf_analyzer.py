@@ -27,19 +27,25 @@ def generate_mock_df(direction='bullish', length=200):
 
 def test_bullish_bias():
     analyzer = HTFAnalyzer()
+    df_1m = pd.DataFrame()
+    df_1w = pd.DataFrame()
+    df_1d = generate_mock_df('bullish', 250)
     df_h4 = generate_mock_df('bullish', 250)
     df_h1 = generate_mock_df('bullish', 250)
     
-    bias = analyzer.analyze_bias(df_h4, df_h1)
+    bias = analyzer.analyze_bias(df_1m, df_1w, df_1d, df_h4, df_h1)
     logger.info(f"\nTEST BULLISH: Direction={bias.direction}, Strength={bias.strength}, Reason={bias.reason}")
     assert bias.direction == 'BULLISH'
 
 def test_bearish_bias():
     analyzer = HTFAnalyzer()
+    df_1m = pd.DataFrame()
+    df_1w = pd.DataFrame()
+    df_1d = generate_mock_df('bearish', 250)
     df_h4 = generate_mock_df('bearish', 250)
     df_h1 = generate_mock_df('bearish', 250)
     
-    bias = analyzer.analyze_bias(df_h4, df_h1)
+    bias = analyzer.analyze_bias(df_1m, df_1w, df_1d, df_h4, df_h1)
     logger.info(f"\nTEST BEARISH: Direction={bias.direction}, Strength={bias.strength}, Reason={bias.reason}")
     assert bias.direction == 'BEARISH'
 

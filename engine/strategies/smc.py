@@ -8,6 +8,7 @@ import pandas as pd
 import numpy as np
 from engine.core.logger import logger
 from engine.inference.volume_pattern import VolumePatternScheduler
+from engine.indicators.structure import identify_look_and_fail
 
 class SMCInstitutionalStrategy:
     def __init__(self):
@@ -30,13 +31,19 @@ class SMCInstitutionalStrategy:
             if col not in df.columns:
                 df[col] = True # Fallback permisivo si no hay datos de FVG
 
-        # 4. Liquidity Sweeps (Dinamizados)
-        lookback_liquidity = 20 
-        min_prev = df['low'].rolling(window=lookback_liquidity).min().shift(1)
-        max_prev = df['high'].rolling(window=lookback_liquidity).max().shift(1)
-        
-        df['recent_sweep_bull'] = (df['low'] < min_prev).rolling(window=10).max().astype(bool)
-        df['recent_sweep_bear'] = (df['high'] > max_prev).rolling(window=10).max().astype(bool)
+        # 4. Liquidity Sweeps (Dinamizados usando LAF/LBF de Yosh)
+        try:
+            # Calcular trampas de liquidez reales
+            df_temp = identify_look_and_fail(df)
+            df['recent_sweep_bull'] = df_temp['laf_bull'].rolling(window=10).max().astype(bool)
+            df['recent_sweep_bear'] = df_temp['laf_bear'].rolling(window=10).max().astype(bool)
+        except Exception as e:
+            logger.warning(f"[SMC_STRATEGY] Falló identify_look_and_fail: {e}. Usando fallback naive.")
+            lookback_liquidity = 20 
+            min_prev = df['low'].rolling(window=lookback_liquidity).min().shift(1)
+            max_prev = df['high'].rolling(window=lookback_liquidity).max().shift(1)
+            df['recent_sweep_bull'] = (df['low'] < min_prev).rolling(window=10).max().astype(bool)
+            df['recent_sweep_bear'] = (df['high'] > max_prev).rolling(window=10).max().astype(bool)
         
         # 5. Memoria de Estructura Dinámica [Fase 1.3]
         # Extraer minutos del string de intervalo (ej: "15m" -> 15, "1h" -> 60)
@@ -54,11 +61,12 @@ class SMCInstitutionalStrategy:
         df['recent_ob_bear'] = df['ob_bearish'].rolling(window=ob_memory_window).max().astype(bool)
 
         # [REFACTOR v12.0] Tracking de Niveles de OB para Retesteo
-        # Guardamos el techo y fondo del OB más reciente para validar entradas tácticas
-        df['ob_bull_top'] = df['high'].where(df['ob_bullish']).ffill()
-        df['ob_bull_bottom'] = df['low'].where(df['ob_bullish']).ffill()
-        df['ob_bear_top'] = df['high'].where(df['ob_bearish']).ffill()
-        df['ob_bear_bottom'] = df['low'].where(df['ob_bearish']).ffill()
+        # Guardamos el techo y fondo del OB más reciente para validar entradas tácticas.
+        # Desplazamos con shift(1) para medir los límites de la vela C1 (Order Block real) en lugar del imbalance (C2).
+        df['ob_bull_top'] = df['high'].shift(1).where(df['ob_bullish']).ffill()
+        df['ob_bull_bottom'] = df['low'].shift(1).where(df['ob_bullish']).ffill()
+        df['ob_bear_top'] = df['high'].shift(1).where(df['ob_bearish']).ffill()
+        df['ob_bear_bottom'] = df['low'].shift(1).where(df['ob_bearish']).ffill()
 
         # [RELAJACIÓN v9.2] FVG Memory para Swing Trading
         fvg_window = 3 if val > 15 else 1

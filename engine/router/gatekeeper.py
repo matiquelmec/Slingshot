@@ -30,6 +30,46 @@ from collections import deque
 import asyncio
 import time
 
+# New imports for dynamic config
+from pathlib import Path
+import json
+
+CONFIG_PATH = Path(__file__).with_name('gatekeeper_config.json')
+
+def _load_gatekeeper_config():
+    """Carga la configuración de umbrales desde `gatekeeper_config.json`.
+    Si el archivo no existe o falla la carga, devuelve valores por defecto.
+    """
+    if CONFIG_PATH.exists():
+        try:
+            with open(CONFIG_PATH, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception as e:
+            logger.error(f"[GATEKEEPER] Error loading config: {e}")
+    # Valores por defecto seguros (calibrados con auditoría v13.6)
+    return {
+        "confidence_thresholds": {
+            "STRONG_BULL": 70,
+            "STRONG_BEAR": 70,
+            "CHOPPY": 65,
+            "TRENDING_BULL": 65,
+            "TRENDING_BEAR": 65,
+            "TRANSITION": 65,
+            "DEFAULT": 70
+        },
+        "rvol_thresholds": {
+            "STRONG": 1.0,
+            "CHOPPY": 1.2,
+            "DEFAULT": 1.0
+        },
+        "ote_tolerance_pct": 0.5,
+        "ote_min_confidence": 70,
+        "min_score_long": 70,
+        "min_score_short": 75,
+        "blocked_hours_utc": [9, 12, 13, 16]
+    }
+
+
 # --- CACHE DE AUDITORÍA v5.7 ---
 SIGNALS_HISTORY = {} # {asset: deque([(timestamp, signal_type)])}
 
@@ -66,6 +106,8 @@ class SignalGatekeeper:
 
     def __init__(self, risk_manager: RiskManager):
         self._risk = risk_manager
+        # Load dynamic configuration for thresholds
+        self._config = _load_gatekeeper_config()
 
     async def process(
         self,
@@ -142,6 +184,21 @@ class SignalGatekeeper:
                     self._block(sig, "BLOCKED_BY_SESSION", "Peligro: Cierre de vela H4/D1 inminente (Ruido de cierre institucional)", result)
                 return result
 
+        # ── Filtro 0.6: Horario Destructivo (Auditoría v13.6) ────────────────
+        # Horas con WR < 17% y R negativo: 09, 12, 13, 16 UTC
+        blocked_hours = self._config.get('blocked_hours_utc', [9, 12, 13, 16])
+        # [WEEKEND_OPTIMIZATION v10.0] Fines de semana no bloqueamos las 12 y 13 UTC (las noticias de Wall Street no aplican)
+        is_weekend = now.weekday() >= 5
+        if is_weekend:
+            blocked_hours = [h for h in blocked_hours if h not in [12, 13]]
+
+        if hour_of_day in blocked_hours:
+            if not silent:
+                logger.info(f"[GATEKEEPER] [HOUR_VETO] Hora {hour_of_day}:00 UTC bloqueada (históricamente destructiva).")
+            for sig in signals:
+                self._block(sig, "HOUR_VETO", f"Hora {hour_of_day}:00 UTC bloqueada por auditoría estadística (WR < 17%)", result)
+            return result
+
         # 🧠 [DELTA v6.1] Cerebro de Régimen (Mandatos de Supervivencia)
         regime_info = regime_details or {"regime": "UNKNOWN", "bias": "NEUTRAL", "confidence": 0}
         regime_type = str(regime_info.get("regime", "UNKNOWN")).upper()
@@ -208,7 +265,7 @@ class SignalGatekeeper:
 
             risk_data = self._risk.calculate_position(
                 current_price=sig.get("price", 0),
-                signal_type=sig.get("type", "LONG"),
+                signal_type=sig_type,
                 market_regime=regime_details or "RANGING",
                 smc_data=smc_map,
                 atr_value=sig.get("atr_value", 0.0),
@@ -224,19 +281,37 @@ class SignalGatekeeper:
                 
             sig.update(risk_data)
 
+            # [200 IQ SPECIAL SL FILTER]
+            if risk_data.get("sl_exceeded_max"):
+                if not silent:
+                    logger.warning(f"[GATEKEEPER] [SL_MAX_EXCEEDED] {asset} {sig_type} SL supera el límite máximo permitido para este activo.")
+                self._block(sig, "SL_MAX_EXCEEDED", f"Stop Loss excede el porcentaje máximo permitido para {asset}.", result)
+                continue
+
             if htf_bias:
                 fractal_veto = False
                 m1 = htf_bias.m1_regime
                 w1 = htf_bias.w1_regime
+                d1 = htf_bias.d1_regime
+                h4 = htf_bias.h4_regime
                 
+                # [200 IQ ALTCOIN COUNTERTREND VETO]
+                if not is_long and asset.upper() in ["ETHUSDT", "SOLUSDT"]:
+                    if d1 in ["MARKUP", "BULLISH"] or h4 in ["MARKUP", "BULLISH"]:
+                        reason = f"Veto Tendencial Altcoin: Prohibido abrir SHORT en {asset} mientras H4/D1 sea alcista (H4: {h4}, D1: {d1})"
+                        if not silent:
+                            logger.warning(f"[GATEKEEPER] [COUNTERTREND_VETO] {asset} SHORT bloqueado por régimen alcista H4/D1.")
+                        self._block(sig, "COUNTERTREND_VETO", reason, result)
+                        continue
+
                 if is_long:
-                    if m1 == 'MARKDOWN' and w1 == 'MARKDOWN':
+                    if (m1 == 'MARKDOWN' and w1 == 'MARKDOWN') or (d1 == 'MARKDOWN' and h4 == 'MARKDOWN'):
                         fractal_veto = True
-                        reason = "Veto Fractal: Tendencia Mensual y Semanal bajistas (Markdown). Prohibido buscar Longs."
+                        reason = f"Veto Fractal: Tendencia macro bajista. Mensual/Semanal en Markdown ({m1}/{w1}) o Diario/H4 en Markdown ({d1}/{h4}). Prohibido buscar Longs."
                 else:
-                    if m1 == 'MARKUP' and w1 == 'MARKUP':
+                    if (m1 == 'MARKUP' and w1 == 'MARKUP') or (d1 == 'MARKUP' and h4 == 'MARKUP'):
                         fractal_veto = True
-                        reason = "Veto Fractal: Tendencia Mensual y Semanal alcistas (Markup). Prohibido buscar Shorts."
+                        reason = f"Veto Fractal: Tendencia macro alcista. Mensual/Semanal en Markup ({m1}/{w1}) o Diario/H4 en Markup ({d1}/{h4}). Prohibido buscar Shorts."
                 
                 if fractal_veto:
                     if conf_score >= 95:
@@ -249,20 +324,31 @@ class SignalGatekeeper:
                         self._block(sig, "FRACTAL_VETO", reason, result)
                         continue
 
+            # Dynamic alignment veto thresholds based on regime
             alignment_veto = False
-            if regime_bias == "BULLISH" and not is_long and "STRONG" in regime_type:
-                if conf_score < 80: alignment_veto = True
-            elif regime_bias == "BEARISH" and is_long and "STRONG" in regime_type:
-                if conf_score < 80: alignment_veto = True
-                
-            if alignment_veto and conf_score >= 90:
+            # Base required score per regime – now driven by config
+            conf_thresholds = self._config.get('confidence_thresholds', {})
+            default_score = conf_thresholds.get('DEFAULT', 65)
+            # Determine required score based on regime and bias
+            if regime_bias == "BULLISH" and not is_long:
+                # Longs contra tendencia bajista
+                required_score = conf_thresholds.get(regime_type.upper(), default_score)
+                if conf_score < required_score:
+                    alignment_veto = True
+            elif regime_bias == "BEARISH" and is_long:
+                # Shorts contra tendencia alcista
+                required_score = conf_thresholds.get(regime_type.upper(), default_score)
+                if conf_score < required_score:
+                    alignment_veto = True
+            # High score override
+            if alignment_veto and conf_score >= 92:
                 if not silent:
                     logger.info(f"⚡ [GATEKEEPER] [APEX_OVERRIDE] {asset} permitiendo contratendencia por alta absorción ({conf_score}%).")
                 alignment_veto = False
-                
+            # Block if still vetoed
             if alignment_veto:
                 if not silent:
-                    logger.info(f"[GATEKEEPER] [DELTA_BLOCK] Desalineacion Macroestructural ({sig_type} vs {regime_type}). Confianza {conf_score}% insuficiente para contratendencia.")
+                    logger.info(f"[GATEKEEPER] [DELTA_BLOCK] Desalineación macroestructural ({sig_type} vs {regime_type}). Confianza {conf_score}% insuficiente.")
                 self._block(sig, "DELTA_VETO", f"Conflicto de Tendencia: Intentando operar contra {regime_type} con confianza insuficiente ({conf_score}%)", result)
                 continue
 
@@ -274,6 +360,21 @@ class SignalGatekeeper:
             ai_results = await asyncio.gather(*tasks)
             for sig, ai_audit in zip(candidates, ai_results):
                 sig["ai_audit"] = ai_audit
+            # ---- Nuevo filtro RVOL ----
+            for sig in list(candidates):
+                rvol = float(sig.get('rvol', 0))
+                # Determine required RVOL per regime – driven by config
+                rvol_cfg = self._config.get('rvol_thresholds', {})
+                if regime_type.startswith('STRONG'):
+                    min_rvol = rvol_cfg.get('STRONG', 1.0)
+                elif regime_type == 'CHOPPY':
+                    min_rvol = rvol_cfg.get('CHOPPY', 1.2)
+                else:
+                    min_rvol = rvol_cfg.get('DEFAULT', 1.0)
+                if rvol < min_rvol:
+                    sig["blocked_reason"] = f"RVOL_VETO: Volumen relativo {rvol:.2f} < requerido {min_rvol} para régimen {regime_type}"
+                    self._block(sig, "RVOL_VETO", sig["blocked_reason"], result)
+                    candidates.remove(sig)
 
         # Fase 3: Post-filtrado secuencial
         for sig in candidates:
@@ -308,7 +409,12 @@ class SignalGatekeeper:
                         continue
 
             # ── Filtro 2.7: Anti-Spam de Volatilidad ──
-            now_ts = time.time()
+            # [BACKTEST_FIX] Usar timestamp de la señal en lugar de CPU time.time()
+            try:
+                now_ts = pd.to_datetime(sig.get("timestamp"), utc=True).timestamp()
+            except Exception:
+                now_ts = time.time()
+
             if asset not in SIGNALS_HISTORY:
                 SIGNALS_HISTORY[asset] = deque(maxlen=20)
             
@@ -354,7 +460,11 @@ class SignalGatekeeper:
             ote_data = sig.get("fib_ote", {})
             if ote_data:
                 is_in_zone = ote_data.get("is_in_ote", False)
-                if not is_in_zone and conf_score < 85:
+                # Allow a small tolerance around the OTE zone (configurable)
+                ote_cfg = self._config.get('ote_tolerance_pct', 0.5)
+                distance_pct = ote_data.get('distance_pct', 0)  # percent distance from zone centre if available
+                # If within tolerance or confidence already high, accept
+                if not is_in_zone and distance_pct > ote_cfg and conf_score < self._config.get('ote_min_confidence', 70):
                     self._block(sig, "VALUE_ZONE_VETO", "Entrada Ineficiente: El precio no está en zona OTE (Optimal Trade Entry) o Descuento/Premium.", result)
                     continue
 
@@ -365,26 +475,46 @@ class SignalGatekeeper:
                 self._block(sig, "DELTA_VETO", f"Matemática desfavorable: Ratio R:R de {sig.get('rr_ratio', 0):.2f} es inferior al mínimo institucional ({min_rr})", result)
                 continue
 
-            # Umbral de Score Adaptativo
+            # Adjust min_score based on regime stress and asset
             stress_premium = 15 if regime_stress else 0
             if asset == "BTCUSDT":
-                min_score = 25 + stress_premium
+                base_min = 25
             elif asset == "SOLUSDT":
-                min_score = 45 + stress_premium
+                base_min = 45
             elif asset == "ETHUSDT":
-                min_score = 35 + stress_premium
+                base_min = 35
             else:
-                min_score = 35 + stress_premium
+                base_min = 35
+            # Dynamic boost for strong regimes
+            if regime_type.startswith('STRONG'):
+                base_min += 10
+            elif regime_type == 'CHOPPY':
+                base_min += 5
+            min_score = base_min + stress_premium
             
             if regime_stress and not silent:
                 logger.warning(f"[GATEKEEPER] STRESS DETECTADO: Elevando umbral de score (+{stress_premium}%)")
-
-            if not silent:
-                logger.info(f"[GATEKEEPER_AUDIT] Asset: {asset} | Score: {score}% | Required: {min_score}%")
             
-            min_score_final = 50 if val <= 15 else 35
+            if not silent:
+                logger.info(f"[GATEKEEPER_AUDIT] Asset: {asset} | Score: {score}% | Required: {min_score}% (Regime: {regime_type})")
+            
+            # Final fallback threshold – direction-aware (Auditoría v13.6)
+            # Para activos principales con calibración adaptativa, respetamos el min_score calculado dinámicamente.
+            # Para cortos en altcoins volátiles, sumamos un offset de +5 por seguridad.
+            # Para activos genéricos, usamos el fallback direccional estándar.
+            asset_upper = asset.upper()
+            if asset_upper in ["BTCUSDT", "ETHUSDT", "SOLUSDT", "XRPUSDT", "BNBUSDT", "LINKUSDT", "PAXGUSDT", "XAGUSDT"]:
+                min_score_final = min_score
+                if not is_long and asset_upper != "BTCUSDT":
+                    min_score_final += 5  # Offset de seguridad para cortos en altcoins volátiles
+            else:
+                min_score_long = self._config.get('min_score_long', 70)
+                min_score_short = self._config.get('min_score_short', 75)
+                min_score_final = min_score_long if is_long else min_score_short
+                min_score_final = max(min_score_final, min_score)
+
             if score < min_score_final:
-                reason = sig.get("confluence", {}).get("veto_reason") or f"Confianza {score}% < {min_score_final}%"
+                reason = sig.get("confluence", {}).get("veto_reason") or f"Confianza {score}% < {min_score_final}% ({'LONG' if is_long else 'SHORT'} - Activo: {asset})"
                 self._block(sig, "LOW_CONFLUENCE", reason, result)
                 continue
             

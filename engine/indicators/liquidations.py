@@ -27,25 +27,29 @@ def estimate_liquidation_clusters(df: pd.DataFrame, current_price: float) -> Lis
     # Media de volumen para normalización
     avg_vol = recent_df['volume'].mean() if 'volume' in recent_df.columns else 1.0
 
+    # Extraer arrays de numpy nativos para evitar el overhead severo de .iloc en bucle
+    highs = recent_df['high'].values
+    lows = recent_df['low'].values
+    volumes = recent_df['volume'].values if 'volume' in recent_df.columns else np.ones(len(recent_df)) * avg_vol
+
     # Detección de pivotes locales
     for i in range(2, len(recent_df) - 2):
-        # ... lógica de pivots ...
-        high_pivot = (recent_df['high'].iloc[i] > recent_df['high'].iloc[i-1] and 
-                      recent_df['high'].iloc[i] > recent_df['high'].iloc[i-2] and 
-                      recent_df['high'].iloc[i] > recent_df['high'].iloc[i+1] and 
-                      recent_df['high'].iloc[i] > recent_df['high'].iloc[i+2])
+        high_pivot = (highs[i] > highs[i-1] and 
+                      highs[i] > highs[i-2] and 
+                      highs[i] > highs[i+1] and 
+                      highs[i] > highs[i+2])
         
-        low_pivot = (recent_df['low'].iloc[i] < recent_df['low'].iloc[i-1] and 
-                     recent_df['low'].iloc[i] < recent_df['low'].iloc[i-2] and 
-                     recent_df['low'].iloc[i] < recent_df['low'].iloc[i+1] and 
-                     recent_df['low'].iloc[i] < recent_df['low'].iloc[i+2])
+        low_pivot = (lows[i] < lows[i-1] and 
+                     lows[i] < lows[i-2] and 
+                     lows[i] < lows[i+1] and 
+                     lows[i] < lows[i+2])
 
         # Volumen negociado en este pivot (factor de intensidad institucional)
-        pivot_vol = recent_df['volume'].iloc[i] if 'volume' in recent_df.columns else avg_vol
+        pivot_vol = volumes[i]
         vol_multiplier = max(1.0, pivot_vol / avg_vol) if avg_vol > 0 else 1.0
 
         if high_pivot:
-            pivot_price = recent_df['high'].iloc[i]
+            pivot_price = highs[i]
             for config in leverages:
                 liq_price = pivot_price * (1 + config['margin'] + 0.001)
                 if liq_price > current_price:
@@ -58,7 +62,7 @@ def estimate_liquidation_clusters(df: pd.DataFrame, current_price: float) -> Lis
                     })
 
         if low_pivot:
-            pivot_price = recent_df['low'].iloc[i]
+            pivot_price = lows[i]
             for config in leverages:
                 liq_price = pivot_price * (1 - config['margin'] - 0.001)
                 if liq_price < current_price:

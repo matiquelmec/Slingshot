@@ -75,8 +75,8 @@ export default function SignalTerminal() {
             .filter(s => viewMode === 'GLOBAL' || s.asset === activeSymbol)
             .filter(s => {
                 if (!hideBlocked) return true;
-                const score = s.confluence?.score || s.confluence_score || 0;
-                return !s.status?.startsWith('BLOCKED') && s.status !== 'VETADA' && score >= 25;
+                const validStatuses = ['ACTIVE', 'APPROVED', 'PENDING', 'FILLED', 'CLOSED_TP_MAX', 'STOPPED_OUT'];
+                return validStatuses.includes(s.status || '');
             })
             .sort((a, b) => {
                 const timeA = new Date(a.created_at || a.timestamp).getTime();

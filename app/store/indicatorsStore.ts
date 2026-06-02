@@ -25,6 +25,8 @@ export const INDICATOR_DEFAULTS: Indicator[] = [
     { id: 'heatmap', label: 'Heatmap Neural', sublabel: 'Muros de Liquidez (Order Book)', enabled: true, color: '#BF00FF' },
     { id: 'value_area', label: 'Yosh Value Area', sublabel: 'VAH/VAL/POC (Perfil de Volumen)', enabled: true, color: '#FFD700' },
     { id: 'traps', label: 'Market Traps', sublabel: 'Look Above/Below and Fail', enabled: true, color: '#FF00FF' },
+    { id: 'williams_oops', label: 'Oops! Reversal', sublabel: 'Niveles Larry Williams (PDH/PDL)', enabled: true, color: '#E11D48' },
+    { id: 'williams_r', label: 'Williams %R', sublabel: 'Sobrecompra / Sobreventa (14p)', enabled: false, color: '#8B5CF6' },
 ];
 
 export const useIndicatorsStore = create<IndicatorsState>((set) => ({

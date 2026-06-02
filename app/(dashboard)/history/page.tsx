@@ -27,14 +27,14 @@ export default function HistoryPage() {
     const [filterAsset, setFilterAsset] = useState('ALL');
 
     useEffect(() => {
-        fetchSignals();
+        fetchSignals(true);
         // Auto-refresh every 5 seconds since it's a local live memory stream
-        const interval = setInterval(fetchSignals, 5000);
+        const interval = setInterval(() => fetchSignals(false), 5000);
         return () => clearInterval(interval);
     }, []);
 
-    const fetchSignals = async () => {
-        setLoading(true);
+    const fetchSignals = async (showLoading = false) => {
+        if (showLoading) setLoading(true);
         try {
             const res = await fetch('http://localhost:8000/api/v1/signals');
             if (res.ok) {
@@ -44,17 +44,22 @@ export default function HistoryPage() {
         } catch(e) {
             console.error("Local Master not ready");
         } finally {
-            setLoading(false);
+            if (showLoading) setLoading(false);
         }
     };
 
     const StatusBadge = ({ status }: { status: string }) => {
         switch (status) {
             case 'ACTIVE':
+            case 'APPROVED':
                 return <span className="px-2 py-0.5 rounded border border-neon-cyan/30 bg-neon-cyan/10 text-neon-cyan text-[9px] font-bold tracking-widest flex items-center gap-1"><Clock size={10} /> ACTIVE</span>;
+            case 'FILLED':
+                return <span className="px-2 py-0.5 rounded border border-neon-cyan/30 bg-neon-cyan/20 text-neon-cyan text-[9px] font-bold tracking-widest flex items-center gap-1"><Target size={10} /> FILLED</span>;
             case 'HIT_TP':
+            case 'CLOSED_TP_MAX':
                 return <span className="px-2 py-0.5 rounded border border-neon-green/30 bg-neon-green/10 text-neon-green text-[9px] font-bold tracking-widest flex items-center gap-1"><CheckCircle2 size={10} /> HIT TP</span>;
             case 'HIT_SL':
+            case 'STOPPED_OUT':
                 return <span className="px-2 py-0.5 rounded border border-neon-red/30 bg-neon-red/10 text-neon-red text-[9px] font-bold tracking-widest flex items-center gap-1"><XCircle size={10} /> HIT SL</span>;
             case 'EXPIRED':
                 return <span className="px-2 py-0.5 rounded border border-white/20 bg-white/5 text-white/50 text-[9px] font-bold tracking-widest flex items-center gap-1"><AlertTriangle size={10} /> EXPIRED</span>;
@@ -73,8 +78,10 @@ export default function HistoryPage() {
         );
     };
 
-    const uniqueAssets = Array.from(new Set(signals.map(s => s.asset)));
-    const filteredSignals = filterAsset === 'ALL' ? signals : signals.filter(s => s.asset === filterAsset);
+    const approvedStatuses = ['ACTIVE', 'APPROVED', 'FILLED', 'HIT_TP', 'CLOSED_TP_MAX', 'HIT_SL', 'STOPPED_OUT', 'EXPIRED'];
+    const uniqueAssets = Array.from(new Set(signals.filter(s => approvedStatuses.includes(s.status)).map(s => s.asset)));
+    const filteredSignals = (filterAsset === 'ALL' ? signals : signals.filter(s => s.asset === filterAsset))
+        .filter(s => approvedStatuses.includes(s.status));
 
     // Métricas rápidas
     const totalSignals = filteredSignals.length;
@@ -126,7 +133,7 @@ export default function HistoryPage() {
                     </select>
                     
                     <button 
-                        onClick={fetchSignals} 
+                        onClick={() => fetchSignals(true)} 
                         className="ml-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded p-1.5 text-white/50 hover:text-white/90 transition-colors"
                         title="Actualizar registro"
                     >

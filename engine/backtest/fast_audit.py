@@ -107,11 +107,11 @@ def fast_profit_audit():
         
         for _, row in future.iterrows():
             if is_long:
-                if row['high'] >= tp: hit_tp = True; break
                 if row['low'] <= sl: hit_sl = True; break
+                if row['high'] >= tp: hit_tp = True; break
             else:
-                if row['low'] <= tp: hit_tp = True; break
                 if row['high'] >= sl: hit_sl = True; break
+                if row['low'] <= tp: hit_tp = True; break
         
         if hit_tp:
             winners += 1

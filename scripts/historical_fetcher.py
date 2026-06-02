@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 
 # Configuración Institucional
 TARGET_ASSETS = ["BTCUSDT", "ETHUSDT", "SOLUSDT", "BNBUSDT", "XRPUSDT", "LINKUSDT"]
-INTERVAL = "4h"
+INTERVAL = "15m"
 DAYS_TO_FETCH = 90
 DATA_DIR = os.path.join(os.path.dirname(__file__), "../engine/backtest/data")
 

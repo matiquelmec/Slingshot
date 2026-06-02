@@ -1,0 +1,21 @@
+{
+  "confidence_thresholds": {
+    "STRONG_BULL": 70,
+    "STRONG_BEAR": 70,
+    "CHOPPY": 65,
+    "TRENDING_BULL": 65,
+    "TRENDING_BEAR": 65,
+    "TRANSITION": 65,
+    "DEFAULT": 70
+  },
+  "rvol_thresholds": {
+    "STRONG": 1.0,
+    "CHOPPY": 1.2,
+    "DEFAULT": 1.0
+  },
+  "ote_tolerance_pct": 0.5,
+  "ote_min_confidence": 85,
+  "min_score_long": 70,
+  "min_score_short": 80,
+  "blocked_hours_utc": [9, 12, 13, 16]
+}

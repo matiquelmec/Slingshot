@@ -102,12 +102,12 @@ def test_enrich_signal():
     print(f"  [PASS] enrich_signal | SL: {enriched['stop_loss']} | TP: {enriched['take_profit_3r']} | Expira: {enriched['expiry_timestamp']}")
 
 
-def test_slingshot_router_smoke():
+async def test_slingshot_router_smoke():
     """Pipeline completo SlingshotRouter con datos sinteticos."""
     from engine.main_router import SlingshotRouter
 
     router = SlingshotRouter()
-    result = router.process_market_data(_make_df(), asset="BTCUSDT", interval="15m", silent=True)
+    result = await router.process_market_data(_make_df(), asset="BTCUSDT", interval="15m", silent=True)
 
     assert isinstance(result, dict),               "Resultado debe ser dict"
     assert "signals" in result,                    "Clave 'signals' faltante"
@@ -138,10 +138,15 @@ if __name__ == "__main__":
     ]
 
     passed = failed = 0
+    import inspect
+    import asyncio
     for name, fn in suite:
         print(f"\n[TEST] {name}")
         try:
-            fn()
+            if inspect.iscoroutinefunction(fn):
+                asyncio.run(fn())
+            else:
+                fn()
             passed += 1
         except Exception as e:
             import traceback

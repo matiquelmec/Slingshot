@@ -2,6 +2,36 @@ import logging
 from logging.handlers import RotatingFileHandler
 import os
 
+class SecretRedactingFilter(logging.Filter):
+    """
+    Scrubs sensitive API keys and secrets from log messages.
+    """
+    def filter(self, record):
+        if not isinstance(record.msg, str):
+            return True
+            
+        msg = record.msg
+        try:
+            from engine.api.config import settings
+            secrets = []
+            if getattr(settings, "BINANCE_API_KEY", None):
+                secrets.append(settings.BINANCE_API_KEY)
+            if getattr(settings, "BINANCE_API_SECRET", None):
+                secrets.append(settings.BINANCE_API_SECRET)
+            if getattr(settings, "GEMINI_API_KEY", None):
+                secrets.append(settings.GEMINI_API_KEY)
+            if getattr(settings, "TELEGRAM_BOT_TOKEN", None):
+                secrets.append(settings.TELEGRAM_BOT_TOKEN)
+                
+            for secret in secrets:
+                if secret and len(secret) > 4 and secret in msg:
+                    msg = msg.replace(secret, f"{secret[:4]}...[REDACTED]")
+        except Exception:
+            pass
+        
+        record.msg = msg
+        return True
+
 def setup_logger():
     # Only setup once
     logger = logging.getLogger("slingshot")
@@ -26,6 +56,11 @@ def setup_logger():
         console_handler = logging.StreamHandler()
         console_formatter = logging.Formatter('%(levelname)s: %(message)s')
         console_handler.setFormatter(console_formatter)
+        
+        # Apply secret scrubbing filter
+        redact_filter = SecretRedactingFilter()
+        file_handler.addFilter(redact_filter)
+        console_handler.addFilter(redact_filter)
         
         logger.addHandler(file_handler)
         logger.addHandler(console_handler)

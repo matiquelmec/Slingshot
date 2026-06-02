@@ -1,8 +1,8 @@
-# 🧠 SOVEREIGN INTELLIGENCE v13.4 — Institutional Backtesting & Fidelity Edition
-> **"From algorithmic terminal to live institutional execution and high-fidelity offline auditing."**
+# 🧠 SOVEREIGN INTELLIGENCE v13.6 — Precision Calibration & State Unification
+> **"From algorithmic terminal to live institutional execution, high-fidelity offline auditing, and strict operational state gating."**
 
 ## 1. Introducción
-La evolución **v13.2 "Sovereign Execution"** consolida la potencia de los modelos asíncronos y la metodología de **Order Flow institucional** de Yosh con ejecución real y optimizada en exchanges. Resuelve bugs críticos de diagnóstico, introduce paralelización de IA de ultra-alto rendimiento en el Gatekeeper, aisla la memoria de errores por activo y reemplaza las simulaciones de Smart Trailing y Averaging Up por llamadas reales de API vía CCXT.
+La evolución **v13.6 "Apex Sovereign"** consolida la precisión operativa del Gatekeeper mediante calibraciones dinámicas y unifica la gestión de estados en la interfaz para erradicar inconsistencias visuales en el terminal de señales y en el Radar Center. Esto se suma a las mejoras asíncronas de la v13.4, la ejecución en vivo vía CCXT de la v13.2, y el motor de confluencias institucionales de la v13.0.
 
 ---
 
@@ -137,5 +137,25 @@ Para evitar la dispersión de herramientas en la raíz o carpetas secundarias, s
 Se corrigió la llamada al evaluador de confluencias de `fast_audit.py` eliminando argumentos posicionales inexistentes que falseaban las métricas de confluencia. Además, se reemplazó la desviación estándar simple (estática) por el cálculo de Average True Range (ATR) institucional real mediante True Range de suavizado exponencial (EWM 14), garantizando que las zonas de Stop Loss y Take Profit simulen fielmente el comportamiento de los algoritmos en producción.
 
 ---
-*v13.4 Sovereign Intelligence — Live Institutional Order Flow & Algorithmic Terminal.*
-*Hardened & Evolved by Antigravity — May 20, 2026*
+
+## 12. Calibración del Gatekeeper & Saneamiento de Fugas Visuales (v13.6)
+**Archivos:** `engine/router/gatekeeper_config.json`, `app/components/signals/SignalTerminal.tsx`, `app/components/radar/RadarFeed.tsx`
+
+### 12.1 Calibración Estricta de OTE
+Para mejorar el factor de ganancia global y evitar la dispersión de capital en configuraciones dudosas fuera de zonas óptimas de entrada, se calibró el archivo de configuración del Gatekeeper:
+* **`ote_min_confidence` = 85**: En el pipeline del `SignalGatekeeper` (`engine/router/gatekeeper.py`), si una señal no se encuentra dentro de la zona OTE y excede la tolerancia matemática, ahora requiere un Confluence Score de al menos **85%** para omitir el veto técnico y ser aprobada. Las señales por debajo de este umbral son vetadas automáticamente con el motivo `"VALUE_ZONE_VETO"`.
+
+### 12.2 Lista Blanca de Estados Operativos (Frontend Gating)
+Anteriormente, el frontend filtraba señales bloqueadas o vetadas (como `"LOW_CONFLUENCE"`, `"BLACKBOX_VETO"`, `"VALUE_ZONE_VETO"`) verificando si el estado iniciaba con el prefijo `"BLOCKED"`. Debido a que los estados dinámicos de veto no siempre usaban dicho prefijo, se producían fugas de visualización, renderizando señales vetadas como si fueran operables.
+* **Solución de Lista Blanca**: Se implementó una lista blanca explícita de estados operativos válidos en el frontend:
+  ```typescript
+  const validStatuses = ['ACTIVE', 'APPROVED', 'PENDING', 'FILLED', 'CLOSED_TP_MAX', 'STOPPED_OUT'];
+  ```
+* **Comportamiento Visual y Operativo**:
+  - En la **Terminal de Señales** (`SignalTerminal.tsx` y `SignalCardItem.tsx`), cualquier señal que no pertenezca a la lista blanca se procesa como bloqueada. Se oculta el botón de ejecución y se muestra el badge de auditoría y vetos correspondiente.
+  - En el **Radar Center** (`RadarFeed.tsx`), las señales bloqueadas o de baja confluencia se renderizan con un indicador visual de bloqueo (candado de advertencia) y se inhabilita cualquier interacción, garantizando que el operador retail visualice exactamente los mismos límites del Gatekeeper institucional.
+  - En `signalLogic.ts`, se unificó la clasificación y ordenación para separar de forma limpia el historial de operaciones cerradas de las señales descartadas.
+
+---
+*v13.6 Apex Sovereign — Precision Calibration & State Unification.*
+*Hardened & Evolved by Antigravity — May 21, 2026*

@@ -15,37 +15,34 @@ export function getSignalLifecycle(sig: Signal, currentPrice: number | null, now
     const expiryTs = sig.expiry_timestamp ? new Date(sig.expiry_timestamp).getTime() : null;
 
     // 0. BLOQUEADA POR AUDITORÍA (Risk Manager / Macro / HTF / v13 Intelligence)
-    const blockedStatuses = [
-        'BLOCKED_BY_MACRO', 'BLOCKED_BY_FILTER', 'BLOCKED_BY_HTF', 
-        'BLOCKED_BY_CONFIDENCE', 'BLOCKED_BY_VOLATILITY', 'STAND_BY', 
-        'BLOCKED_EXPIRED', 'BLOCKED_BY_SESSION', 'DELTA_VETO', 
-        'SIGMA_VETO', 'BLOCKED_CHOPPY', 'BLOCKED_BY_MEMORY', 'AI_VETO'
-    ];
-    if (blockedStatuses.includes(sig.status as string)) {
+    const validStatuses = ['ACTIVE', 'APPROVED', 'PENDING', 'FILLED', 'CLOSED_TP_MAX', 'STOPPED_OUT'];
+    const isBlocked = sig.status && !validStatuses.includes(sig.status as string);
+    if (isBlocked) {
         const typeStr = sig.status === 'BLOCKED_BY_MACRO' ? 'MACRO' : 
                         sig.status === 'BLOCKED_BY_HTF' ? 'HTF' : 
-                        sig.status === 'BLOCKED_BY_CONFIDENCE' ? 'Score' :
+                        (sig.status === 'BLOCKED_BY_CONFIDENCE' || sig.status === 'LOW_CONFLUENCE') ? 'Score' :
                         sig.status === 'BLOCKED_BY_VOLATILITY' ? 'Volatilidad' :
                         sig.status === 'BLOCKED_BY_SESSION' ? 'Sesión' :
-                        sig.status === 'DELTA_VETO' ? 'Delta' :
+                        (sig.status === 'DELTA_VETO' || sig.status === 'BLOCKED_BY_DELTA') ? 'Delta' :
                         sig.status === 'SIGMA_VETO' ? 'Sigma' :
                         sig.status === 'BLOCKED_CHOPPY' ? 'Choppy' :
-                        sig.status === 'BLOCKED_BY_MEMORY' ? 'BlackBox' :
+                        (sig.status === 'BLOCKED_BY_MEMORY' || sig.status === 'BLACKBOX_VETO') ? 'BlackBox' :
                         sig.status === 'AI_VETO' ? 'AI Validator' :
                         sig.status === 'STAND_BY' ? 'Conflicto IA/SMC' :
-                        sig.status === 'BLOCKED_EXPIRED' ? 'Expirada' : 'Filtro';
+                        sig.status === 'BLOCKED_EXPIRED' ? 'Expirada' : 
+                        sig.status === 'VALUE_ZONE_VETO' ? 'Zona de Valor' : 'Filtro';
         
-        const borderColor = (sig.status === 'BLOCKED_BY_HTF' || sig.status === 'BLOCKED_BY_MEMORY') ? 'border-amber-500/30' : 
+        const borderColor = (sig.status === 'BLOCKED_BY_HTF' || sig.status === 'BLOCKED_BY_MEMORY' || sig.status === 'BLACKBOX_VETO') ? 'border-amber-500/30' : 
                           (sig.status === 'STAND_BY' || sig.status === 'AI_VETO') ? 'border-cyan-500/30' : 
                           sig.status === 'BLOCKED_BY_SESSION' ? 'border-orange-500/30' : 'border-red-500/10';
         
-        const textColor = (sig.status === 'BLOCKED_BY_HTF' || sig.status === 'BLOCKED_BY_MEMORY') ? 'text-amber-500/60' : 
+        const textColor = (sig.status === 'BLOCKED_BY_HTF' || sig.status === 'BLOCKED_BY_MEMORY' || sig.status === 'BLACKBOX_VETO') ? 'text-amber-500/60' : 
                         (sig.status === 'STAND_BY' || sig.status === 'AI_VETO') ? 'text-cyan-400/60' : 
                         sig.status === 'BLOCKED_BY_SESSION' ? 'text-orange-500/60' : 'text-white/40';
 
         const whySignal = sig.confluence?.reasoning || 'Criterio técnico base cumplido.';
         const rejectionDetail = sig.rejection_reason || (sig as any).blocked_reason || 
-                               (sig.status === 'BLOCKED_BY_CONFIDENCE' ? 'Confianza debajo del umbral del activo' : 'Rechazada por módulo de riesgo.');
+                               (sig.status === 'BLOCKED_BY_CONFIDENCE' || sig.status === 'LOW_CONFLUENCE' ? 'Confianza debajo del umbral del activo' : 'Rechazada por módulo de riesgo.');
 
         return {
             status: 'INVALIDADA', 

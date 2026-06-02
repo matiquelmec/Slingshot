@@ -84,14 +84,14 @@ class RiskManager:
 
     # --- MÓDULO SIGMA: SINTONIZADOR DE ACTIVOS --------------------------------
     ASSET_TUNING = {
-        "BTCUSDT":  {"atr_mult": 1.5, "tp1_ratio": 2.5, "tp1_vol": 0.60, "spread_impact": 0.0002}, # 0.02% (Alta Liquidez)
-        "ETHUSDT":  {"atr_mult": 3.0, "tp1_ratio": 2.5, "tp1_vol": 0.80, "spread_impact": 0.0003}, # 0.03%
-        "SOLUSDT":  {"atr_mult": 3.5, "tp1_ratio": 2.5, "tp1_vol": 0.80, "spread_impact": 0.0008}, # 0.08% (Volátil)
-        "XRPUSDT":  {"atr_mult": 2.5, "tp1_ratio": 2.5, "tp1_vol": 0.70, "spread_impact": 0.0005}, # 0.05%
-        "PAXGUSDT": {"atr_mult": 2.5, "tp1_ratio": 2.5, "tp1_vol": 0.80, "spread_impact": 0.0015}, # 0.15% (Baja Liquidez/Oro)
-        "XAGUSDT":  {"atr_mult": 2.5, "tp1_ratio": 2.5, "tp1_vol": 0.80, "spread_impact": 0.0015}, # 0.15% (Plata)
+        "BTCUSDT":  {"atr_mult": 1.5, "tp1_ratio": 2.5, "tp1_vol": 0.60, "spread_impact": 0.0002, "min_sl_pct": 0.0, "max_sl_pct": 100.0}, # 0.02% (Alta Liquidez)
+        "ETHUSDT":  {"atr_mult": 3.0, "tp1_ratio": 2.5, "tp1_vol": 0.80, "spread_impact": 0.0003, "min_sl_pct": 1.4, "max_sl_pct": 100.0}, # 0.03% (Sweeps profundos)
+        "SOLUSDT":  {"atr_mult": 3.5, "tp1_ratio": 2.5, "tp1_vol": 0.80, "spread_impact": 0.0008, "min_sl_pct": 0.8, "max_sl_pct": 2.2},  # 0.08% (Volátil - mechas)
+        "XRPUSDT":  {"atr_mult": 2.5, "tp1_ratio": 1.8, "tp1_vol": 0.75, "spread_impact": 0.0005, "min_sl_pct": 0.0, "max_sl_pct": 0.7},  # 0.05% (Precisión quirúrgica)
+        "PAXGUSDT": {"atr_mult": 2.5, "tp1_ratio": 2.5, "tp1_vol": 0.80, "spread_impact": 0.0015, "min_sl_pct": 0.0, "max_sl_pct": 100.0}, # 0.15% (Baja Liquidez/Oro)
+        "XAGUSDT":  {"atr_mult": 2.5, "tp1_ratio": 2.5, "tp1_vol": 0.80, "spread_impact": 0.0015, "min_sl_pct": 0.0, "max_sl_pct": 100.0}, # 0.15% (Plata)
     }
-    DEFAULT_TUNING = {"atr_mult": 1.8, "tp1_ratio": 1.5, "tp1_vol": 0.50, "spread_impact": 0.0010} # Default 0.1%
+    DEFAULT_TUNING = {"atr_mult": 1.8, "tp1_ratio": 1.5, "tp1_vol": 0.50, "spread_impact": 0.0010, "min_sl_pct": 0.0, "max_sl_pct": 100.0} # Default 0.1%
 
     def _adaptive_risk(self, confluence_score: int) -> float:
         """
@@ -130,6 +130,14 @@ class RiskManager:
         """
         tuning = self.ASSET_TUNING.get(asset.upper(), self.DEFAULT_TUNING)
         
+        # Obtener el régimen de mercado al principio para usarlo en SL y OTE
+        regime_str = "RANGING"
+        if isinstance(market_regime, dict):
+            regime_str = market_regime.get("regime", "RANGING")
+        elif isinstance(market_regime, str):
+            regime_str = market_regime
+        regime_upper = regime_str.upper()
+
         # [ADAPTIVE RISK v13.0]
         actual_risk_pct = self._adaptive_risk(confluence_score)
         risk_amount_usdt = self.account_balance * actual_risk_pct
@@ -145,31 +153,52 @@ class RiskManager:
         # Intento de SL Estructural Profundo (Protected Low/High)
         if smc_data or key_levels:
             if signal_type == "LONG":
-                # Buscar el OB Alcista o Soporte más PROFUNDO por debajo del precio
+                # Buscar el OB Alcista o Soporte más CERCANO por debajo del precio
                 obs = smc_data.get("order_blocks", {}).get("bullish", []) if smc_data else []
                 sups = key_levels.get("supports", []) if key_levels else []
                 structural_floors = [ob["bottom"] for ob in obs] + [s["price"] for s in sups]
                 valid_floors = [f for f in structural_floors if f < current_price]
                 if valid_floors:
-                    best_floor = min(valid_floors) # <-- EL SECRETO: El más lejano/profundo
-                    sl_candidate = best_floor - (fallback_atr * 0.5) # Le damos más aire al SL (0.5 ATR)
+                    best_floor = max(valid_floors)
+                    # Si es contra-tendencia o picado, le damos más aire al SL (0.8 ATR en lugar de 0.5 ATR)
+                    is_counter = (regime_upper in ["MARKDOWN", "BEARISH"])
+                    atr_mult = 0.8 if (regime_upper == "CHOPPY" or is_counter) else 0.5
+                    sl_candidate = best_floor - (fallback_atr * atr_mult)
                     # Límite de seguridad para no fundir la cuenta: 3x del riesgo base
                     if sl_candidate > (current_price - risk_dist * 3.0):
                         sl = sl_candidate
             else:
-                # Buscar el OB Bajista o Resistencia más ALTA por arriba del precio
+                # Buscar el OB Bajista o Resistencia más CERCANA por arriba del precio
                 obs = smc_data.get("order_blocks", {}).get("bearish", []) if smc_data else []
                 res = key_levels.get("resistances", []) if key_levels else []
                 structural_ceilings = [ob["top"] for ob in obs] + [r["price"] for r in res]
                 valid_ceilings = [c for c in structural_ceilings if c > current_price]
                 if valid_ceilings:
-                    best_ceiling = max(valid_ceilings) # <-- EL SECRETO: El más alto/protegido
-                    sl_candidate = best_ceiling + (fallback_atr * 0.5)
+                    best_ceiling = min(valid_ceilings)
+                    # Si es contra-tendencia o picado, le damos más aire al SL (0.8 ATR en lugar de 0.5 ATR)
+                    is_counter = (regime_upper in ["MARKUP", "BULLISH"])
+                    atr_mult = 0.8 if (regime_upper == "CHOPPY" or is_counter) else 0.5
+                    sl_candidate = best_ceiling + (fallback_atr * atr_mult)
                     if sl_candidate < (current_price + risk_dist * 3.0):
                         sl = sl_candidate
 
-        # Recálculo de riesgo final
-        final_risk = abs(current_price - sl)
+        # Recálculo de riesgo inicial
+        initial_risk_dist = abs(current_price - sl)
+        
+        # Aplicación de límites min_sl_pct y max_sl_pct específicos por activo
+        min_sl_dist = current_price * (tuning.get("min_sl_pct", 0.0) / 100.0)
+        max_sl_dist = current_price * (tuning.get("max_sl_pct", 100.0) / 100.0)
+        
+        sl_exceeded_max = False
+        if initial_risk_dist < min_sl_dist:
+            sl = current_price - min_sl_dist if signal_type == "LONG" else current_price + min_sl_dist
+            final_risk = min_sl_dist
+        elif initial_risk_dist > max_sl_dist:
+            sl_exceeded_max = True
+            final_risk = initial_risk_dist
+        else:
+            final_risk = initial_risk_dist
+
         if final_risk <= 0: final_risk = current_price * 0.01
 
         # Intento de TP Magnético (FVG, Liquidaciones, HTF External Liquidity)
@@ -188,10 +217,10 @@ class RiskManager:
                 if getattr(hb, "pwh", 0) > current_price: htf_targets.append(hb.pwh)
 
             fib_targets = []
-            if fib_data:
+            if fib_data and "levels" in fib_data:
                 # OTE: 0.618, 0.705, 0.786
-                for lvl in ["61.8%", "78.6%"]:
-                    price = fib_data.get(lvl)
+                for lvl in ["0.618", "0.786"]:
+                    price = fib_data["levels"].get(lvl)
                     if price and price > current_price:
                         fib_targets.append(price)
 
@@ -231,10 +260,10 @@ class RiskManager:
                 if getattr(hb, "pwl", float('inf')) < current_price and getattr(hb, "pwl", 0) > 0: htf_targets.append(hb.pwl)
 
             fib_targets = []
-            if fib_data:
+            if fib_data and "levels" in fib_data:
                 # OTE: 0.618, 0.705, 0.786
-                for lvl in ["61.8%", "78.6%"]:
-                    price = fib_data.get(lvl)
+                for lvl in ["0.618", "0.786"]:
+                    price = fib_data["levels"].get(lvl)
                     if price and price < current_price:
                         fib_targets.append(price)
 
@@ -265,17 +294,42 @@ class RiskManager:
         pos_size_nominal = risk_amount_usdt / max(0.001, sl_dist_pct)
         leverage = min(50, math.ceil(pos_size_nominal / self.account_balance))
         
-        # [SNIPER v10.0] Validación OTE (Optimal Trade Entry)
+        # [SNIPER v10.0] Validación OTE (Optimal Trade Entry) / Premium-Discount Zone (200 IQ Adaptive Entry)
         is_in_ote = False
-        if fib_data:
-            # OTE se define entre 61.8% y 78.6% (o niveles similares)
-            f61 = fib_data.get("61.8%", 0)
-            f78 = fib_data.get("78.6%", 0)
-            if f61 > 0 and f78 > 0:
-                high_ote = max(f61, f78)
-                low_ote = min(f61, f78)
-                # El precio debe estar en el "sweet spot"
-                is_in_ote = low_ote <= current_price <= high_ote
+        ote_key = "0.5" # Default to 0.5 (Equilibrium - standard discount/premium)
+        
+        # Determinar umbral dinámico basado en régimen, sesgo HTF y score de confluencia
+        htf_bias = kwargs.get("htf_bias")
+
+        # 1. Choppy o score de confluencia bajo -> Exigir descuento/premium profundo (0.618)
+        if regime_str.upper() in ["CHOPPY"] or confluence_score < 60:
+            ote_key = "0.618"
+        # 2. Si hay sesgo HTF muy fuerte a favor, permitir entrada más agresiva (0.5 o 0.382)
+        elif htf_bias:
+            bias_dir = getattr(htf_bias, "direction", "NEUTRAL").upper()
+            bias_strength = getattr(htf_bias, "strength", 0.5)
+            
+            if signal_type == "LONG" and bias_dir == "BULLISH" and bias_strength >= 0.75:
+                if bias_strength >= 0.85:
+                    ote_key = "0.382"
+                else:
+                    ote_key = "0.5"
+            elif signal_type == "SHORT" and bias_dir == "BEARISH" and bias_strength >= 0.75:
+                if bias_strength >= 0.85:
+                    ote_key = "0.382"
+                else:
+                    ote_key = "0.5"
+                    
+        if fib_data and "levels" in fib_data:
+            levels = fib_data.get("levels", {})
+            f_val = levels.get(ote_key, 0)
+            if f_val > 0:
+                if signal_type == "LONG":
+                    # Zona de descuento adaptativa
+                    is_in_ote = current_price <= f_val
+                else:
+                    # Zona de premium adaptativa
+                    is_in_ote = current_price >= f_val
 
         return {
             "entry_price": round(current_price, 5),
@@ -294,5 +348,6 @@ class RiskManager:
             "entry_zone_top": round(current_price * 1.001, 5),
             "entry_zone_bottom": round(current_price * 0.999, 5),
             "asset": asset,
-            "fib_ote": {"is_in_ote": is_in_ote}
+            "fib_ote": {"is_in_ote": is_in_ote},
+            "sl_exceeded_max": sl_exceeded_max
         }

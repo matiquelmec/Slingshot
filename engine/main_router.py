@@ -17,6 +17,7 @@ from engine.api.config import settings
 from engine.indicators.macro import get_macro_context
 from engine.risk.risk_manager import RiskManager
 from engine.strategies.smc import SMCInstitutionalStrategy
+from engine.strategies.larry_williams import LarryWilliamsOopsStrategy
 
 from engine.router.analyzer import MarketAnalyzer
 from engine.router.gatekeeper import SignalGatekeeper, GatekeeperContext
@@ -32,6 +33,7 @@ class SlingshotRouter:
     def __init__(self):
         self._analyzer   = MarketAnalyzer()
         self._strategy   = SMCInstitutionalStrategy()
+        self._williams_strategy = LarryWilliamsOopsStrategy()
         self._risk       = RiskManager(
             account_balance=settings.ACCOUNT_BALANCE,
             base_risk_pct=settings.MAX_RISK_PCT,
@@ -112,10 +114,17 @@ class SlingshotRouter:
 
         if heatmap: self._context.heatmap = heatmap # Inyección dinámica v5.7
 
-        # ── Fase 2: Detección de Oportunidades SMC ───────────────────────────
+        # ── Fase 2: Detección de Oportunidades SMC y Larry Williams ──────────
         df_analyzed   = market_map.df_analyzed
         analyzed_df   = self._strategy.analyze(df_analyzed, interval=interval)
         opportunities = self._strategy.find_opportunities(analyzed_df, asset=asset)
+
+        try:
+            df_williams = self._williams_strategy.analyze(analyzed_df, interval=interval)
+            williams_opps = self._williams_strategy.find_opportunities(df_williams, asset=asset)
+            opportunities.extend(williams_opps)
+        except Exception as we:
+            logger.error(f"[ROUTER] Error ejecutando Larry Williams Strategy para {asset}: {we}")
 
         # Ordenar por timestamp descendente
         try:

@@ -13,6 +13,9 @@ class RegimeDetector:
         self.window = window
 
     def detect_regime(self, df: pd.DataFrame) -> pd.DataFrame:
+        if 'market_regime' in df.columns and not df.empty:
+            return df
+            
         if df.empty or len(df) < self.window:
             df['market_regime'] = 'UNKNOWN'
             return df
