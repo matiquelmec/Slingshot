@@ -432,15 +432,15 @@ class SignalGatekeeper:
             
             SIGNALS_HISTORY[asset].append((now_ts, sig_type_spam))
 
-            # Conflict Manager (IA vs SMC)
-            if context.ml_projection and "direction" in context.ml_projection:
-                ml_dir = str(context.ml_projection["direction"]).upper()
-                if is_long and ml_dir == "BAJISTA":
-                    self._block(sig, "STAND_BY", "[CONFLICT MANAGER] ML proyecta Venta (Stand-by)", result)
-                    continue
-                if not is_long and ml_dir == "ALCISTA":
-                    self._block(sig, "STAND_BY", "[CONFLICT MANAGER] ML proyecta Compra (Stand-by)", result)
-                    continue
+            # Conflict Manager (IA vs SMC) - DESACTIVADO A SOLICITUD DEL USUARIO
+            # if context.ml_projection and "direction" in context.ml_projection:
+            #     ml_dir = str(context.ml_projection["direction"]).upper()
+            #     if is_long and ml_dir == "BAJISTA":
+            #         self._block(sig, "STAND_BY", "[CONFLICT MANAGER] ML proyecta Venta (Stand-by)", result)
+            #         continue
+            #     if not is_long and ml_dir == "ALCISTA":
+            #         self._block(sig, "STAND_BY", "[CONFLICT MANAGER] ML proyecta Compra (Stand-by)", result)
+            #         continue
 
             # ── Filtro 2.6: Mitigación Instantánea (Volatilidad Ghost) ──
             try:
