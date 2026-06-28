@@ -342,12 +342,6 @@ class NexusNode:
 
             if result.get("status") == "success":
                 logger.info(f"✅ [NEXUS] Posición abierta en {asset}. ID: {result.get('main_order_id')}")
-                
-                # [OMEGA INJECT UPDATE] Actualizar estado de señal a FILLED y transmitir inmediatamente
-                signal["status"] = "FILLED"
-                await store.save_signal(signal)
-                from engine.api.registry import registry
-                await registry.broadcast_global({"type": "signal_auditor_update", "data": signal})
 
                 self._active_positions[asset] = {
                     "signal": signal,
