@@ -148,7 +148,15 @@ class SignalHandler:
         if not risk_pct or not pos_size:
             try:
                 from engine.risk.risk_manager import RiskManager
-                balance = getattr(ghost, "total_balance", 1000.0)
+                from engine.execution.nexus import nexus
+                
+                balance = 1000.0
+                if not nexus.dry_run:
+                    balance = await nexus.executor.get_balance()
+                    logger.info(f"💰 [RISK] Sincronizado balance real desde Bitunix para gestión de riesgo: ${balance:.2f} USDT")
+                else:
+                    balance = getattr(ghost, "total_balance", 1000.0)
+                    
                 rm = RiskManager(account_balance=float(balance))
                 calc = rm.calculate_position(
                     current_price=float(sig.get("price", 0)),
@@ -206,6 +214,7 @@ class SignalHandler:
             "tp2":              calc.get("tp2", sig.get("tp2")) if 'calc' in locals() else sig.get("tp2"),
             "tp3":              calc.get("tp3", sig.get("tp3")) if 'calc' in locals() else sig.get("tp3"),
             "tp1_vol_pct":      calc.get("tp1_vol_pct", 0.60) if 'calc' in locals() else 0.60,
+            "is_test":          sig.get("is_test", False),
         }
 
         # ── Persistencia en RAM ───────────────────────────────────────────────
