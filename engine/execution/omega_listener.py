@@ -40,13 +40,22 @@ class OmegaCentinel:
             # Las señales nuevas empiezan en "ACTIVE" (que para nosotros es PENDING ENTRY)
             # En v8, vamos a considerar que una señal en Radar = PENDING, y FILLED = OMEGA ACTIVA.
             signal_type = sig.get("signal_type", "LONG").upper()
-            ez_bottom = float(sig.get("entry_zone_bottom", sig.get("price", 0)))
-            ez_top = float(sig.get("entry_zone_top", sig.get("price", 0)))
-            entry_price = float(sig.get("price", 0))
-            sl = float(sig.get("stop_loss", 0))
-            tp1 = float(sig.get("tp1", 0))
-            tp2 = float(sig.get("tp2", 0))
-            tp3 = float(sig.get("tp3", 0))
+            # Safe parsing helper to protect against NoneType
+            def safe_float(val, default=0.0):
+                if val is None:
+                    return default
+                try:
+                    return float(val)
+                except (ValueError, TypeError):
+                    return default
+
+            ez_bottom = safe_float(sig.get("entry_zone_bottom"), safe_float(sig.get("price"), 0.0))
+            ez_top = safe_float(sig.get("entry_zone_top"), safe_float(sig.get("price"), 0.0))
+            entry_price = safe_float(sig.get("price"), 0.0)
+            sl = safe_float(sig.get("stop_loss"), 0.0)
+            tp1 = safe_float(sig.get("tp1"), 0.0)
+            tp2 = safe_float(sig.get("tp2"), 0.0)
+            tp3 = safe_float(sig.get("tp3"), 0.0)
 
             changed = False
 
