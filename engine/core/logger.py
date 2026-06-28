@@ -32,6 +32,19 @@ class SecretRedactingFilter(logging.Filter):
         record.msg = msg
         return True
 
+class WindowsSafeRotatingFileHandler(RotatingFileHandler):
+    """
+    Subclase de RotatingFileHandler que maneja con gracia los conflictos de bloqueo
+    de archivos de Windows (WinError 32) al rotar logs en entornos multiproceso.
+    """
+    def doRollover(self):
+        try:
+            super().doRollover()
+        except (PermissionError, OSError):
+            # En Windows, si el archivo de log está bloqueado por otro proceso de Uvicorn,
+            # evitamos romper el flujo o inundar la consola con trazas de error.
+            pass
+
 def setup_logger():
     # Only setup once
     logger = logging.getLogger("slingshot")
@@ -43,7 +56,7 @@ def setup_logger():
         os.makedirs(log_dir, exist_ok=True)
         
         # Rotating File Handler: Max 10MB per file, keep 5 backups
-        file_handler = RotatingFileHandler(
+        file_handler = WindowsSafeRotatingFileHandler(
             filename=os.path.join(log_dir, "slingshot.log"),
             maxBytes=10 * 1024 * 1024,
             backupCount=5,
