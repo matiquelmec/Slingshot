@@ -418,20 +418,33 @@ async def ai_worker():
                     if task.get('format') == 'json':
                         groq_payload["response_format"] = {"type": "json_object"}
                     
-                    response = await client.post(url, json=groq_payload, headers=headers)
+                    response = None
+                    for attempt in range(3):
+                        response = await client.post(url, json=groq_payload, headers=headers)
+                        if response.status_code == 429:
+                            try:
+                                retry_after = float(response.headers.get("retry-after", 2.0))
+                            except (TypeError, ValueError):
+                                retry_after = 2.0
+                            logger.warning(f"[AI_WORKER] ⚠️ Rate limit (429) en Groq. Esperando {retry_after}s antes de reintentar (Intento {attempt+1}/3)...")
+                            await asyncio.sleep(retry_after)
+                            continue
+                        break
                     
                     if task['future'].cancelled():
                         _ai_queue.task_done()
                         continue
                         
-                    if response.status_code == 200:
+                    if response and response.status_code == 200:
                         result = response.json()
                         content = result["choices"][0]["message"]["content"].strip()
                         logger.info(f"[AI_WORKER] ✅ Respuesta de Groq Cloud para {task.get('asset')} ({len(content)} bytes)")
                         if not task['future'].done():
                             task['future'].set_result(content)
                     else:
-                        logger.error(f"[AI_WORKER] ❌ Error de Groq API: {response.status_code} para {task.get('asset')} - {response.text}")
+                        status_code = response.status_code if response else "Unknown"
+                        response_text = response.text if response else "No response"
+                        logger.error(f"[AI_WORKER] ❌ Error de Groq API: {status_code} para {task.get('asset')} - {response_text}")
                         # Fallback determinístico
                         fallback_content = _deterministic_verdict(task.get('asset'), {})
                         if not task['future'].done():
