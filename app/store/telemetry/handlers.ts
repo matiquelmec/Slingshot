@@ -223,8 +223,21 @@ export const handleWsMessage = (
                 if (!advice) break;
                 set((state) => {
                     if (advice.asset && !isSameSymbol(advice.asset, state.activeSymbol)) return state;
+                    const key = `${advice.asset || state.activeSymbol}:${advice.interval || state.activeTimeframe}`;
                     return {
-                        advisorLogs: { ...state.advisorLogs, [advice.asset || state.activeSymbol]: advice }
+                        advisorLogs: { ...state.advisorLogs, [key]: advice }
+                    };
+                });
+                break;
+            }
+
+            case 'connection_mode': {
+                const connData = data.data;
+                if (!connData) break;
+                set((state) => {
+                    if (!isSameSymbol(connData.symbol, state.activeSymbol)) return state;
+                    return {
+                        connectionMode: connData.mode || 'WS'
                     };
                 });
                 break;

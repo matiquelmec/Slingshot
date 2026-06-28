@@ -16,6 +16,7 @@ const LatticeScanner = dynamic(() => import('../components/ui/LatticeScanner'), 
 const MacroCalendar = dynamic(() => import('../components/macro/MacroCalendar'), { ssr: false });
 const EliteConsole = dynamic(() => import('../components/ui/EliteConsole'), { ssr: false });
 const OmegaCentinelPanel = dynamic(() => import('../components/execution/OmegaCentinelPanel'), { ssr: false });
+const PlanOperativoPanel = dynamic(() => import('../components/ui/PlanOperativoPanel'), { ssr: false });
 
 // ── Tipos ─────────────────────────────────────────────────────────────────────
 
@@ -36,7 +37,7 @@ export default function OverviewPage() {
     const [newSymbol, setNewSymbol] = useState('');
     const [availableSymbols, setAvailableSymbols] = useState<string[]>([]);
     const [filteredSymbols, setFilteredSymbols] = useState<string[]>([]);
-    const [sidePanelMode, setSidePanelMode] = useState<'LOGS' | 'NEWS' | 'LIQS' | 'CAL' | 'OMEGA'>('LIQS');
+    const [sidePanelMode, setSidePanelMode] = useState<'LOGS' | 'NEWS' | 'LIQS' | 'CAL' | 'OMEGA' | 'PLAN'>('LIQS');
 
     const { 
         activeSymbol, 
@@ -50,7 +51,7 @@ export default function OverviewPage() {
         marketSummary 
     } = useTelemetryStore();
 
-    const advisor_log = (advisorLogs as Record<string, any>)[activeSymbol] || null;
+    const advisor_log = (advisorLogs as Record<string, any>)[`${activeSymbol}:${activeTimeframe}`] || null;
 
     // ── Lifecycle ─────────────────────────────────────────────────────────────
 
@@ -359,6 +360,12 @@ export default function OverviewPage() {
                                 NEWS
                             </button>
                             <button
+                                onClick={() => setSidePanelMode('PLAN')}
+                                className={`px-3 py-1.5 rounded-lg text-[9px] font-black tracking-widest transition-all ${sidePanelMode === 'PLAN' ? 'bg-neon-cyan/20 text-neon-cyan border border-neon-cyan/30 shadow-[0_0_10px_rgba(0,229,255,0.2)]' : 'text-white/30 hover:text-white/60'}`}
+                            >
+                                PLAN
+                            </button>
+                            <button
                                 onClick={() => setSidePanelMode('LIQS')}
                                 className={`px-3 py-1.5 rounded-lg text-[9px] font-black tracking-widest transition-all ${sidePanelMode === 'LIQS' ? 'bg-neon-red/20 text-neon-red border border-neon-red/30 shadow-[0_0_10px_rgba(255,0,60,0.2)]' : 'text-white/30 hover:text-white/60'}`}
                             >
@@ -409,6 +416,8 @@ export default function OverviewPage() {
                                 <LiquidationScanner />
                             ) : sidePanelMode === 'CAL' ? (
                                 <MacroCalendar />
+                            ) : sidePanelMode === 'PLAN' ? (
+                                <PlanOperativoPanel />
                             ) : (
                                 <OmegaCentinelPanel />
                             )}

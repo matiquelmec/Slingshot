@@ -297,6 +297,7 @@ class AdvisorBridge:
                 await bc._broadcast({"type": "advisor_update", "data": {
                     "content":    advice_json["logic"],
                     "symbol":     self._symbol,
+                    "interval":   self._interval,
                     "status":     "GATEKEEPING",
                     "updated_at": datetime.now(timezone.utc).isoformat(),
                 }})
@@ -304,6 +305,7 @@ class AdvisorBridge:
                 # ── 9. Loading indicator ──────────────────────────────────────
                 await bc._broadcast({"type": "advisor_update", "data": {
                     "asset":      self._symbol,
+                    "interval":   self._interval,
                     "content":    "CONECTANDO CON EL MOTOR CUÁNTICO (Ollama)... ⚡",
                     "timestamp":  current_candle_ts,
                     "status":     "LOADING_IA",
@@ -341,6 +343,7 @@ class AdvisorBridge:
             advice_obj = {
                 "timestamp":  current_candle_ts,
                 "asset":      self._symbol,
+                "interval":   self._interval,
                 "content":    advice,
                 "status":     "COMPLETE",
                 "updated_at": datetime.now(timezone.utc).isoformat(),
@@ -353,6 +356,7 @@ class AdvisorBridge:
             logger.info(f"[ADVISOR_BRIDGE] ⚠️ Timeout en LLM Advisor ({self._symbol})")
             error_obj = {
                 "asset":   self._symbol,
+                "interval": self._interval,
                 "content": (
                     "⚠️ MOTOR IA SATURADO: Ollama está tardando demasiado. "
                     "Reintentando en la próxima vela..."
@@ -372,6 +376,7 @@ class AdvisorBridge:
             logger.error(f"[ADVISOR_BRIDGE] ❌ {self._symbol}:{self._interval} → Advisor error: {e}")
             await bc._broadcast({"type": "advisor_update", "data": {
                 "asset":      self._symbol,
+                "interval":   self._interval,
                 "content":    f"ADVISOR OFFLINE: {e}",
                 "status":     "ERROR",
                 "timestamp":  current_candle_ts,
