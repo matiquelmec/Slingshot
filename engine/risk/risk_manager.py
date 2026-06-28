@@ -22,7 +22,9 @@ class RiskManager:
         """ [PORTERO v6.6.7] """
         try:
             entry = float(signal_data.get("price", 0))
-            atr   = float(signal_data.get("atr_value", 0))
+            # [ROBUST ATR LOOKUP v11.2]
+            raw_atr = signal_data.get("atr_value") or signal_data.get("atr")
+            atr = float(raw_atr) if raw_atr is not None else 0.0
             asset = str(signal_data.get("asset", "UNKNOWN")).upper()
             interval_mins = int(signal_data.get("interval_minutes", 15))
             
@@ -34,9 +36,14 @@ class RiskManager:
             else:                      # Swing/Macro (2h, 4h, 8h, 1d)
                 dynamic_min_rr = 1.5
             
+            # Fallback Dinámico Profesional: Si el ATR no está disponible o es absurdamente bajo
+            # (menor a 0.05% del precio), aplicamos un fallback sano del 0.3% del precio de entrada
+            # para evitar bloqueos por fallos de indicadores o inicialización.
+            if atr <= 0.0 or atr < (entry * 0.0005):
+                atr = entry * 0.003
+                logger.warning(f"[RISK_MANAGER] ⚠️ ATR ausente o bajo para {asset}. Aplicando fallback de 0.3% ({atr:.2f})")
+            
             # [FASE 1.2] Filtro de Volatilidad Relativa (ATR Múltiplo)
-            # Ya no bloqueamos spreads estáticos de 2.5%, usamos ATR relativo
-            # (El rechazo por baja volatilidad se mantiene para evitar estancamientos)
             if atr < (entry * 0.001):
                 return {"approved": False, "rr_ratio": 0.0, "trade_quality": "LOW_VOL", "reason": f"Volatility too low: {atr:.2f}"}
 
