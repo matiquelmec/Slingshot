@@ -72,6 +72,31 @@ class AdvisorBridge:
         self._last_tactical_hash:  Optional[str]  = None
         self._advisor_task:        Optional[asyncio.Task] = None
 
+    async def _broadcast_advisor(self, bc, data: dict):
+        """
+        Sincroniza y transmite el veredicto del asesor a TODOS los broadcasters activos
+        del mismo activo para evitar pantallas de carga al cambiar de temporalidad.
+        """
+        from engine.api.registry import registry
+        payload = {"type": "advisor_update", "data": data}
+        
+        # Actualizar caché de este bridge
+        self._last_advisor_obj = data
+        
+        # Obtener todos los broadcasters hermanos (ej. BTCUSDT:3m, BTCUSDT:15m)
+        try:
+            async with registry._lock:
+                target_broadcasters = [
+                    b for key, b in registry._broadcasters.items()
+                    if key.startswith(f"{self._symbol.upper()}:")
+                ]
+            for b in target_broadcasters:
+                # Sincronizar el caché en todos los broadcasters
+                b.state.last_advisor = payload
+                await b._broadcast(payload)
+        except Exception as e:
+            logger.error(f"[ADVISOR_BRIDGE] Error en _broadcast_advisor global: {e}")
+
     # ── API Pública ───────────────────────────────────────────────────────────
 
     def get_tactical_hash(self, tactical: dict) -> str:
@@ -191,8 +216,7 @@ class AdvisorBridge:
         if not IS_LEAD:
             existing = await bc._store.get_advisor_advice(self._symbol)
             if existing:
-                self._last_advisor_obj = existing
-                await bc._broadcast({"type": "advisor_update", "data": existing})
+                await self._broadcast_advisor(bc, existing)
                 return
             if not is_absorption_alert:
                 return  # Esperamos al 15m
@@ -294,23 +318,23 @@ class AdvisorBridge:
                 logger.info(f"[ADVISOR_BRIDGE] 🛡️ Gatekeeping ACTIVE para {self._symbol}. Motivo: Confluencia {conf_score}% (Standby)")
                 
                 # Broadcast inmediato del bypass para limpiar loading en UI
-                await bc._broadcast({"type": "advisor_update", "data": {
+                await self._broadcast_advisor(bc, {
                     "content":    advice_json["logic"],
                     "symbol":     self._symbol,
                     "interval":   self._interval,
                     "status":     "GATEKEEPING",
                     "updated_at": datetime.now(timezone.utc).isoformat(),
-                }})
+                })
             else:
                 # ── 9. Loading indicator ──────────────────────────────────────
-                await bc._broadcast({"type": "advisor_update", "data": {
+                await self._broadcast_advisor(bc, {
                     "asset":      self._symbol,
                     "interval":   self._interval,
                     "content":    "CONECTANDO CON EL MOTOR CUÁNTICO (Ollama)... ⚡",
                     "timestamp":  current_candle_ts,
                     "status":     "LOADING_IA",
                     "updated_at": datetime.now(timezone.utc).isoformat(),
-                }})
+                })
                 self._advisor_task = asyncio.current_task()
 
                 # ── 10. Llamada al LLM ───────────────────────────────────────
@@ -349,8 +373,7 @@ class AdvisorBridge:
                 "updated_at": datetime.now(timezone.utc).isoformat(),
             }
             await bc._store.save_advisor_advice(self._symbol, advice_obj)
-            self._last_advisor_obj = advice_obj
-            await bc._broadcast({"type": "advisor_update", "data": advice_obj})
+            await self._broadcast_advisor(bc, advice_obj)
 
         except asyncio.TimeoutError:
             logger.info(f"[ADVISOR_BRIDGE] ⚠️ Timeout en LLM Advisor ({self._symbol})")
@@ -366,7 +389,7 @@ class AdvisorBridge:
                 "updated_at": datetime.now(timezone.utc).isoformat(),
             }
             self._last_advisor_obj = error_obj
-            await bc._broadcast({"type": "advisor_update", "data": error_obj})
+            await self._broadcast_advisor(bc, error_obj)
 
         except asyncio.CancelledError:
             pass  # Cancelación limpia — no es un error
@@ -374,12 +397,12 @@ class AdvisorBridge:
         except Exception as e:
             import traceback
             logger.error(f"[ADVISOR_BRIDGE] ❌ {self._symbol}:{self._interval} → Advisor error: {e}")
-            await bc._broadcast({"type": "advisor_update", "data": {
+            await self._broadcast_advisor(bc, {
                 "asset":      self._symbol,
                 "interval":   self._interval,
                 "content":    f"ADVISOR OFFLINE: {e}",
                 "status":     "ERROR",
                 "timestamp":  current_candle_ts,
                 "updated_at": datetime.now(timezone.utc).isoformat(),
-            }})
+            })
             traceback.print_exc()
