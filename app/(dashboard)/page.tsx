@@ -51,7 +51,7 @@ export default function OverviewPage() {
         marketSummary 
     } = useTelemetryStore();
 
-    const advisor_log = (advisorLogs as Record<string, any>)[`${activeSymbol}:${activeTimeframe}`] || null;
+    const advisor_log = (advisorLogs as Record<string, any>)[activeSymbol] || null;
 
     // ── Lifecycle ─────────────────────────────────────────────────────────────
 

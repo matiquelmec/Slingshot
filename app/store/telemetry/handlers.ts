@@ -223,9 +223,8 @@ export const handleWsMessage = (
                 if (!advice) break;
                 set((state) => {
                     if (advice.asset && !isSameSymbol(advice.asset, state.activeSymbol)) return state;
-                    const key = `${advice.asset || state.activeSymbol}:${advice.interval || state.activeTimeframe}`;
                     return {
-                        advisorLogs: { ...state.advisorLogs, [key]: advice }
+                        advisorLogs: { ...state.advisorLogs, [advice.asset || state.activeSymbol]: advice }
                     };
                 });
                 break;
