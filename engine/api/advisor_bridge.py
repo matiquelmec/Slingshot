@@ -34,6 +34,7 @@ from engine.indicators.ghost_data import (
 from engine.api.advisor import generate_tactical_advice
 from engine.api.advisor import check_ollama_status
 from engine.indicators.onchain_provider import get_onchain_summary
+from engine.api.config import settings
 
 if TYPE_CHECKING:
     pass
@@ -278,7 +279,11 @@ class AdvisorBridge:
                 f"Signals: {len(approved_signals)}A/{len(blocked_signals)}B"
             )
 
-            if not is_active_signal and not is_trending and conf_score < 40:
+            # Si tenemos APIs en la nube (Groq/Gemini), desactivamos el gatekeeping para ofrecer
+            # análisis multi-temporal general constante. Si es local, mantenemos el ahorro de CPU.
+            is_cloud_active = bool(settings.GROQ_API_KEY or settings.GEMINI_API_KEY)
+            
+            if not is_cloud_active and not is_active_signal and not is_trending and conf_score < 40:
                 # Bypass total — mercado en standby
                 advice_json = {
                     "verdict": "SIDEWAYS",

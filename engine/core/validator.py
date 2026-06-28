@@ -38,32 +38,77 @@ class ValidatorAgent:
         
         try:
             async with httpx.AsyncClient(timeout=10.0) as client:
-                response = await client.post(
-                    self.url,
-                    json={
-                        "model": self.model,
-                        "prompt": prompt,
-                        "stream": False,
-                        "format": "json" # Forzar respuesta en JSON
+                if settings.GROQ_API_KEY:
+                    url = "https://api.groq.com/openai/v1/chat/completions"
+                    headers = {
+                        "Authorization": f"Bearer {settings.GROQ_API_KEY}",
+                        "Content-Type": "application/json"
                     }
-                )
-                
-                if response.status_code != 200:
-                    logger.error(f"❌ [VALIDATOR] Error de Ollama ({response.status_code})")
-                    return self._fallback_response("Error de conexión con el núcleo neural.")
+                    groq_payload = {
+                        "model": "llama-3.3-70b-versatile",
+                        "messages": [
+                            {"role": "user", "content": prompt}
+                        ],
+                        "temperature": 0.2,
+                        "response_format": {"type": "json_object"}
+                    }
+                    response = await client.post(url, json=groq_payload, headers=headers)
+                    
+                    if response.status_code != 200:
+                        logger.error(f"❌ [VALIDATOR] Error de Groq API ({response.status_code}) - {response.text}")
+                        return self._fallback_response("Error de conexión con el núcleo neural de Groq.")
+                        
+                    result = response.json()
+                    response_text = result["choices"][0]["message"]["content"].strip()
+                elif settings.GEMINI_API_KEY:
+                    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={settings.GEMINI_API_KEY}"
+                    gemini_payload = {
+                        "contents": [{
+                            "parts": [{"text": prompt}]
+                        }],
+                        "generationConfig": {
+                            "responseMimeType": "application/json"
+                        }
+                    }
+                    response = await client.post(url, json=gemini_payload)
+                    
+                    if response.status_code != 200:
+                        logger.error(f"❌ [VALIDATOR] Error de Gemini API ({response.status_code}) - {response.text}")
+                        return self._fallback_response("Error de conexión con el núcleo neural en la nube de Google.")
+                        
+                    result = response.json()
+                    try:
+                        response_text = result["candidates"][0]["content"]["parts"][0]["text"].strip()
+                    except (KeyError, IndexError):
+                        response_text = "{}"
+                else:
+                    response = await client.post(
+                        self.url,
+                        json={
+                            "model": self.model,
+                            "prompt": prompt,
+                            "stream": False,
+                            "format": "json" # Forzar respuesta en JSON
+                        }
+                    )
+                    
+                    if response.status_code != 200:
+                        logger.error(f"❌ [VALIDATOR] Error de Ollama ({response.status_code})")
+                        return self._fallback_response("Error de conexión con el núcleo neural local.")
 
-                result = response.json()
-                response_text = result.get("response", "{}")
+                    result = response.json()
+                    response_text = result.get("response", "{}")
                 
                 try:
                     data = json.loads(response_text)
-                    verdict = str(data.get("verdict", "VETO")).upper()
+                    verdict = str(data.get("verdict", "VETO")).upper().strip()
                     reason = data.get("reason", "Sin justificación proporcionada.")
                     confidence = float(data.get("confidence", 0.5))
                     
-                    approved = verdict == "VEST" # VEST = Aprobar en terminología institucional
+                    # Robustez v13.1.2: Acepta variaciones de aprobación de modelos en la nube (Groq/Gemini)
+                    approved = verdict in ("VEST", "APPROVE", "APPROVED", "GO", "YES", "TRUE")
                     
-                    logger.info(f"🤖 [VALIDATOR] {asset} AI Verdict: {verdict} ({confidence*100:.0f}%) | Reason: {reason[:100]}...")
+                    logger.info(f"🤖 [VALIDATOR] {asset} AI Verdict: {verdict} ({confidence*100:.0f}%) | Approved: {approved} | Reason: {reason[:100]}...")
                     
                     return {
                         "approved": approved,

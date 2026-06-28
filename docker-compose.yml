@@ -8,7 +8,7 @@ services:
   backend:
     build:
       context: .
-      dockerfile: deploy/Dockerfile
+      dockerfile: scripts/deploy/Dockerfile
     container_name: slingshot-engine
     restart: always
     ports:
@@ -19,6 +19,8 @@ services:
       - OLLAMA_HOST=http://ollama:11434
     env_file:
       - .env
+    volumes:
+      - slingshot-data:/app/engine/data
     mem_limit: 2g
     mem_reservation: 512m
     cpus: 1.5
@@ -121,4 +123,6 @@ networks:
 
 volumes:
   ollama-models:
+    driver: local
+  slingshot-data:
     driver: local

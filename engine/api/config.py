@@ -15,8 +15,17 @@ class Settings(BaseSettings):
     BINANCE_API_KEY: Optional[str] = None
     BINANCE_API_SECRET: Optional[str] = None
 
+    # Bitunix
+    BITUNIX_API_KEY: Optional[str] = None
+    BITUNIX_SECRET_KEY: Optional[str] = None
+    ENABLE_LIVE_TRADING: bool = False
+    ALLOW_TEST_SIGNAL_IN_LIVE: bool = False
+
     # Gemini AI (LLM Advisor)
     GEMINI_API_KEY: Optional[str] = None
+
+    # Groq Cloud AI (LLM Advisor)
+    GROQ_API_KEY: Optional[str] = None
 
     # Whale Alert
     WHALE_ALERT_API_KEY: Optional[str] = None

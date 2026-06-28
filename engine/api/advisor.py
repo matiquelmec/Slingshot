@@ -37,9 +37,13 @@ OLLAMA_URL   = settings.OLLAMA_URL     # Configurable via .env — default: http
 _ollama_cache = {"status": False, "last_check": 0, "confirmed_online": False}
 
 async def check_ollama_status(force_recheck=False) -> bool:
-    """v5.9.4-Resilience: Salto agresivo si ya está confirmado online en la sesión."""
+    """v5.9.4-Resilience: Salto agresivo si ya está confirmado online en la sesión o si se usa Gemini API."""
     global _ollama_cache
     
+    # Si tenemos configurado Gemini o Groq, la IA está activa (cloud)
+    if settings.GEMINI_API_KEY or settings.GROQ_API_KEY:
+        return True
+        
     # 1. Bypass total: si ya se confirmó una vez, no volver a preguntar al servidor tags (que se bloquea en heavy load)
     if _ollama_cache["confirmed_online"]:
         return True
@@ -397,36 +401,114 @@ async def ai_worker():
                 continue
 
             try:
-                payload = {
-                    "model": DEFAULT_MODEL,
-                    "prompt": task['prompt'],
-                    "stream": False,
-                    "options": {"temperature": 0.3}
-                }
-                if task.get('format') == 'json':
-                    payload['format'] = 'json'
-
-                # Petición a Ollama con posibilidad de cancelación
-                response = await client.post(f"{OLLAMA_URL}/api/generate", json=payload)
-                
-                if task['future'].cancelled():
-                    _ai_queue.task_done()
-                    continue
-
-                if response.status_code == 200:
-                    result = response.json()
-                    content = result.get("response", "").strip()
-                    if not content:
-                        logger.warning(f"[AI_WORKER] Ollama devolvió respuesta vacía para {task.get('asset')}")
-                        content = json.dumps({"verdict": "SIDEWAYS", "logic": "EMPTY_RESPONSE", "threat": "LOW"})
+                if settings.GROQ_API_KEY:
+                    # RUTA CLOUD: Groq API (Inferencia hiper-rápida y de alta calidad Llama-3.3-70B)
+                    url = "https://api.groq.com/openai/v1/chat/completions"
+                    headers = {
+                        "Authorization": f"Bearer {settings.GROQ_API_KEY}",
+                        "Content-Type": "application/json"
+                    }
+                    groq_payload = {
+                        "model": "llama-3.3-70b-versatile",
+                        "messages": [
+                            {"role": "user", "content": task['prompt']}
+                        ],
+                        "temperature": 0.2
+                    }
+                    if task.get('format') == 'json':
+                        groq_payload["response_format"] = {"type": "json_object"}
                     
-                    logger.info(f"[AI_WORKER] ✅ Respuesta recibida para {task.get('asset')} ({len(content)} bytes)")
-                    if not task['future'].done():
-                        task['future'].set_result(content)
+                    response = await client.post(url, json=groq_payload, headers=headers)
+                    
+                    if task['future'].cancelled():
+                        _ai_queue.task_done()
+                        continue
+                        
+                    if response.status_code == 200:
+                        result = response.json()
+                        content = result["choices"][0]["message"]["content"].strip()
+                        logger.info(f"[AI_WORKER] ✅ Respuesta de Groq Cloud para {task.get('asset')} ({len(content)} bytes)")
+                        if not task['future'].done():
+                            task['future'].set_result(content)
+                    else:
+                        logger.error(f"[AI_WORKER] ❌ Error de Groq API: {response.status_code} para {task.get('asset')} - {response.text}")
+                        # Fallback determinístico
+                        fallback_content = _deterministic_verdict(task.get('asset'), {})
+                        if not task['future'].done():
+                            task['future'].set_result(fallback_content)
+                elif settings.GEMINI_API_KEY:
+                    # RUTA CLOUD: Gemini API (Inferencia instantánea sin costo local de CPU)
+                    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={settings.GEMINI_API_KEY}"
+                    
+                    # Estructura del payload según especificación de Google Generative Language API
+                    gemini_payload = {
+                        "contents": [{
+                            "parts": [{"text": task['prompt']}]
+                        }]
+                    }
+                    if task.get('format') == 'json':
+                        gemini_payload['generationConfig'] = {
+                            "responseMimeType": "application/json"
+                        }
+                    
+                    response = await client.post(url, json=gemini_payload)
+                    
+                    if task['future'].cancelled():
+                        _ai_queue.task_done()
+                        continue
+                        
+                    if response.status_code == 200:
+                        result = response.json()
+                        try:
+                            content = result["candidates"][0]["content"]["parts"][0]["text"].strip()
+                        except (KeyError, IndexError):
+                            content = ""
+                            
+                        if not content:
+                            logger.warning(f"[AI_WORKER] Gemini API devolvió respuesta vacía para {task.get('asset')}")
+                            content = json.dumps({"verdict": "SIDEWAYS", "logic": "EMPTY_RESPONSE", "threat": "LOW"})
+                        
+                        logger.info(f"[AI_WORKER] ✅ Respuesta de Gemini Cloud para {task.get('asset')} ({len(content)} bytes)")
+                        if not task['future'].done():
+                            task['future'].set_result(content)
+                    else:
+                        logger.error(f"[AI_WORKER] ❌ Error de Gemini API: {response.status_code} para {task.get('asset')} - {response.text}")
+                        # En caso de error de API, respondemos con el veredicto determinístico local
+                        fallback_content = _deterministic_verdict(task.get('asset'), {})
+                        if not task['future'].done():
+                            task['future'].set_result(fallback_content)
                 else:
-                    logger.error(f"[AI_WORKER] ❌ Error de Ollama: {response.status_code} para {task.get('asset')}")
-                    if not task['future'].done():
-                        task['future'].set_exception(Exception(f"Ollama error: {response.status_code}"))
+                    # RUTA LOCAL: Ollama local (CPU-heavy)
+                    payload = {
+                        "model": DEFAULT_MODEL,
+                        "prompt": task['prompt'],
+                        "stream": False,
+                        "options": {"temperature": 0.3}
+                    }
+                    if task.get('format') == 'json':
+                        payload['format'] = 'json'
+
+                    # Petición a Ollama con posibilidad de cancelación
+                    response = await client.post(f"{OLLAMA_URL}/api/generate", json=payload)
+                    
+                    if task['future'].cancelled():
+                        _ai_queue.task_done()
+                        continue
+
+                    if response.status_code == 200:
+                        result = response.json()
+                        content = result.get("response", "").strip()
+                        if not content:
+                            logger.warning(f"[AI_WORKER] Ollama devolvió respuesta vacía para {task.get('asset')}")
+                            content = json.dumps({"verdict": "SIDEWAYS", "logic": "EMPTY_RESPONSE", "threat": "LOW"})
+                        
+                        logger.info(f"[AI_WORKER] ✅ Respuesta de Ollama recibida para {task.get('asset')} ({len(content)} bytes)")
+                        if not task['future'].done():
+                            task['future'].set_result(content)
+                    else:
+                        logger.error(f"[AI_WORKER] ❌ Error de Ollama: {response.status_code} para {task.get('asset')}")
+                        if not task['future'].done():
+                            task['future'].set_exception(Exception(f"Ollama error: {response.status_code}"))
             except Exception as e:
                 if not task['future'].done():
                     task['future'].set_exception(e)
