@@ -164,7 +164,7 @@ const REGIME_META: Record<string, { color: string; bg: string; glow: string; lab
 };
 
 export default function PlanOperativoPanel() {
-    const { latestPrices, marketSummary } = useTelemetryStore();
+    const { latestPrices, marketSummary, smcData, liquidations, activeSymbol } = useTelemetryStore();
     const [expandedAsset, setExpandedAsset] = useState<string | null>('BTCUSDT');
 
     const timeInfo = useMemo(() => {
@@ -238,10 +238,124 @@ export default function PlanOperativoPanel() {
 
                         // Escalado inteligente de precios si hay discrepancia
                         const scale = livePrice / setup.refPrice;
-                        const entry = setup.refEntry * scale;
-                        const sl = setup.refSL * scale;
-                        const tp1 = setup.refTP1 * scale;
-                        const tp2 = setup.refTP2 * scale;
+                        let entry = setup.refEntry * scale;
+                        let sl = setup.refSL * scale;
+                        let tp1 = setup.refTP1 * scale;
+                        let tp2 = setup.refTP2 * scale;
+
+                        let reasonEntry = setup.reasonEntry;
+                        let reasonSL = setup.reasonSL;
+                        let reasonTP1 = setup.reasonTP1;
+                        let reasonTP2 = setup.reasonTP2;
+                        let isDynamic = false;
+
+                        // [NIVEL INSTITUCIONAL v12.0] Vinculación dinámica con SMC y Liquidaciones
+                        const isCurrentActive = activeSymbol === setup.symbol || activeSymbol.replace('USDT', '') === setup.symbol.replace('USDT', '');
+                        if (isCurrentActive) {
+                            if (setup.isLong) {
+                                // ── LONG SMC SETUP ──
+                                // 1. Entrada en Bullish OB o FVG alcista
+                                const bullOBs = smcData?.order_blocks?.bullish || [];
+                                const activeOB = bullOBs
+                                    .filter((ob: any) => ob.top < livePrice)
+                                    .sort((a: any, b: any) => b.top - a.top)[0]; // Más cercano por debajo
+
+                                if (activeOB) {
+                                    entry = activeOB.top;
+                                    sl = activeOB.bottom * 0.999;
+                                    reasonEntry = `[⚡ OB] Entrada en el límite superior del Bullish OB detectado en $${formatCurrency(activeOB.bottom)} - $${formatCurrency(activeOB.top)}.`;
+                                    reasonSL = `[🛡️ Invalidez] Colocado debajo del soporte inferior del Bullish OB ($${formatCurrency(activeOB.bottom)}).`;
+                                    isDynamic = true;
+                                } else {
+                                    const bullFVGs = smcData?.fvgs?.bullish || [];
+                                    const activeFVG = bullFVGs
+                                        .filter((fvg: any) => fvg.top < livePrice)
+                                        .sort((a: any, b: any) => b.top - a.top)[0];
+                                    if (activeFVG) {
+                                        entry = activeFVG.top;
+                                        sl = activeFVG.bottom * 0.998;
+                                        reasonEntry = `[⚡ FVG] Entrada en el límite superior del Fair Value Gap alcista en $${formatCurrency(activeFVG.top)}.`;
+                                        reasonSL = `[🛡️ Invalidez] Debajo del soporte inferior del FVG en $${formatCurrency(activeFVG.bottom)}.`;
+                                        isDynamic = true;
+                                    }
+                                }
+
+                                // 2. TP1 en la base del Bearish OB o FVG bajista
+                                const bearOBs = smcData?.order_blocks?.bearish || [];
+                                const targetOB = bearOBs
+                                    .filter((ob: any) => ob.bottom > livePrice)
+                                    .sort((a: any, b: any) => a.bottom - b.bottom)[0]; // Más cercano por arriba
+                                
+                                if (targetOB) {
+                                    tp1 = targetOB.bottom;
+                                    reasonTP1 = `[🎯 TP] Resistencia estructural en la base del Bearish OB en $${formatCurrency(targetOB.bottom)}.`;
+                                    isDynamic = true;
+                                }
+
+                                // 3. TP2 en la zona de liquidación más densa de Shorts
+                                if (liquidations && liquidations.length > 0) {
+                                    const shortLiqs = liquidations
+                                        .filter((liq: any) => liq.type === 'SHORT_LIQ' && liq.price > livePrice)
+                                        .sort((a: any, b: any) => b.volume - a.volume)[0];
+                                    if (shortLiqs) {
+                                        tp2 = shortLiqs.price;
+                                        reasonTP2 = `[🔥 LIQ] Target en zona de liquidación masiva de shorts de ${shortLiqs.leverage}x ($${formatCurrency(shortLiqs.price)}).`;
+                                        isDynamic = true;
+                                    }
+                                }
+                            } else {
+                                // ── SHORT SMC SETUP ──
+                                // 1. Entrada en Bearish OB o FVG bajista
+                                const bearOBs = smcData?.order_blocks?.bearish || [];
+                                const activeOB = bearOBs
+                                    .filter((ob: any) => ob.bottom > livePrice)
+                                    .sort((a: any, b: any) => a.bottom - b.bottom)[0]; // Más cercano por arriba
+
+                                if (activeOB) {
+                                    entry = activeOB.bottom;
+                                    sl = activeOB.top * 1.001;
+                                    reasonEntry = `[⚡ OB] Venta corta en el límite inferior del Bearish OB detectado en $${formatCurrency(activeOB.bottom)} - $${formatCurrency(activeOB.top)}.`;
+                                    reasonSL = `[🛡️ Invalidez] Colocado arriba del límite superior del Bearish OB ($${formatCurrency(activeOB.top)}).`;
+                                    isDynamic = true;
+                                } else {
+                                    const bearFVGs = smcData?.fvgs?.bearish || [];
+                                    const activeFVG = bearFVGs
+                                        .filter((fvg: any) => fvg.bottom > livePrice)
+                                        .sort((a: any, b: any) => a.bottom - b.bottom)[0];
+                                    if (activeFVG) {
+                                        entry = activeFVG.bottom;
+                                        sl = activeFVG.top * 1.002;
+                                        reasonEntry = `[⚡ FVG] Entrada corta en la base del Fair Value Gap bajista en $${formatCurrency(activeFVG.bottom)}.`;
+                                        reasonSL = `[🛡️ Invalidez] Arriba de la invalidez del FVG bajista en $${formatCurrency(activeFVG.top)}.`;
+                                        isDynamic = true;
+                                    }
+                                }
+
+                                // 2. TP1 en la cima del Bullish OB o FVG alcista
+                                const bullOBs = smcData?.order_blocks?.bullish || [];
+                                const targetOB = bullOBs
+                                    .filter((ob: any) => ob.top < livePrice)
+                                    .sort((a: any, b: any) => b.top - a.top)[0]; // Más cercano por debajo
+
+                                if (targetOB) {
+                                    tp1 = targetOB.top;
+                                    reasonTP1 = `[🎯 TP] Soporte estructural en el límite superior del Bullish OB en $${formatCurrency(targetOB.top)}.`;
+                                    isDynamic = true;
+                                }
+
+                                // 3. TP2 en la zona de liquidación más densa de Longs
+                                if (liquidations && liquidations.length > 0) {
+                                    const longLiqs = liquidations
+                                        .filter((liq: any) => liq.type === 'LONG_LIQ' && liq.price < livePrice)
+                                        .sort((a: any, b: any) => b.volume - a.volume)[0];
+                                    if (longLiqs) {
+                                        tp2 = longLiqs.price;
+                                        reasonTP2 = `[🔥 LIQ] Target en zona de liquidación masiva de longs de ${longLiqs.leverage}x ($${formatCurrency(longLiqs.price)}).`;
+                                        isDynamic = true;
+                                    }
+                                }
+                            }
+                        }
 
                         const risk = Math.abs(entry - sl);
                         const reward = Math.abs(tp2 - entry);
@@ -264,7 +378,14 @@ export default function PlanOperativoPanel() {
                                     <div className="flex items-center gap-2.5 min-w-0">
                                         <span className="text-sm shrink-0">{setup.icon}</span>
                                         <div className="min-w-0">
-                                            <span className="block text-xs font-black text-white/90 truncate">{setup.displayName}</span>
+                                            <div className="flex items-center gap-1.5">
+                                                <span className="block text-xs font-black text-white/90 truncate">{setup.displayName}</span>
+                                                {isDynamic && (
+                                                    <span className="text-[7px] text-[#00e5ff] bg-[#00e5ff]/10 border border-[#00e5ff]/35 font-bold px-1 rounded uppercase tracking-wider shrink-0">
+                                                        ✨ SMC DYNAMIC
+                                                    </span>
+                                                )}
+                                            </div>
                                             <span className="block text-[8px] text-white/40 tracking-wider truncate uppercase">{setup.strategy}</span>
                                         </div>
                                     </div>
@@ -300,22 +421,22 @@ export default function PlanOperativoPanel() {
                                                     <div className="bg-white/[0.02] border border-white/5 rounded-lg p-2">
                                                         <span className="block text-[7px] text-white/40 font-black uppercase">Precio Entrada (Entry)</span>
                                                         <span className="text-xs font-black text-neon-cyan">{formatCurrency(entry)}</span>
-                                                        <span className="block text-[7px] text-white/20 mt-1 italic leading-tight">{setup.reasonEntry}</span>
+                                                        <span className="block text-[7px] text-white/20 mt-1 italic leading-tight">{reasonEntry}</span>
                                                     </div>
                                                     <div className="bg-white/[0.02] border border-neon-red/10 rounded-lg p-2">
                                                         <span className="block text-[7px] text-white/40 font-black uppercase">Stop Loss (SL)</span>
                                                         <span className="text-xs font-black text-neon-red">{formatCurrency(sl)}</span>
-                                                        <span className="block text-[7px] text-white/20 mt-1 italic leading-tight">{setup.reasonSL}</span>
+                                                        <span className="block text-[7px] text-white/20 mt-1 italic leading-tight">{reasonSL}</span>
                                                     </div>
                                                     <div className="bg-white/[0.02] border border-neon-green/10 rounded-lg p-2">
                                                         <span className="block text-[7px] text-white/40 font-black uppercase">Take Profit 1 (TP1)</span>
                                                         <span className="text-xs font-black text-neon-green">{formatCurrency(tp1)}</span>
-                                                        <span className="block text-[7px] text-white/20 mt-1 italic leading-tight">{setup.reasonTP1}</span>
+                                                        <span className="block text-[7px] text-white/20 mt-1 italic leading-tight">{reasonTP1}</span>
                                                     </div>
                                                     <div className="bg-white/[0.02] border border-neon-green/10 rounded-lg p-2">
                                                         <span className="block text-[7px] text-white/40 font-black uppercase">Take Profit 2 (TP2)</span>
                                                         <span className="text-xs font-black text-neon-green/80">{formatCurrency(tp2)}</span>
-                                                        <span className="block text-[7px] text-white/20 mt-1 italic leading-tight">{setup.reasonTP2}</span>
+                                                        <span className="block text-[7px] text-white/20 mt-1 italic leading-tight">{reasonTP2}</span>
                                                     </div>
                                                 </div>
 
