@@ -164,9 +164,10 @@ const REGIME_META: Record<string, { color: string; bg: string; glow: string; lab
 };
 
 export default function PlanOperativoPanel() {
-    const { latestPrices, marketSummary, smcData, liquidations, activeSymbol } = useTelemetryStore();
+    const { latestPrices, marketSummary, smcData, liquidations, activeSymbol, sessionData } = useTelemetryStore();
     const [expandedAsset, setExpandedAsset] = useState<string | null>('BTCUSDT');
 
+    // [NIVEL INSTITUCIONAL v12.1] Sincronización de Reloj de Sesiones y Killzones del Servidor
     const timeInfo = useMemo(() => {
         const d = new Date();
         const utcDay = d.getUTCDay();
@@ -209,6 +210,35 @@ export default function PlanOperativoPanel() {
 
         return { dayName, dayStatus, dayReason, sessionName, isKillzone };
     }, []);
+
+    const currentSessionName = useMemo(() => {
+        if (!sessionData?.current_session) return timeInfo.sessionName;
+        const name = sessionData.current_session.toUpperCase();
+        if (name === 'NEW_YORK') return 'NEW YORK SESSION';
+        if (name === 'LONDON') return 'LONDON SESSION';
+        if (name === 'ASIA') return 'ASIA SESSION';
+        if (name === 'OFF_HOURS') return 'DEAD ZONE (INACTIVO)';
+        return `${name.replace('_', ' ')} SESSION`;
+    }, [sessionData?.current_session, timeInfo.sessionName]);
+
+    const isKillzoneActive = sessionData?.is_killzone !== undefined
+        ? sessionData.is_killzone
+        : timeInfo.isKillzone;
+        
+    const dayLabel = useMemo(() => {
+        if (!sessionData?.trading_day) return timeInfo.dayName;
+        const day = sessionData.trading_day.toLowerCase();
+        const daysMap: Record<string, string> = {
+            monday: 'Lunes',
+            tuesday: 'Martes',
+            wednesday: 'Miércoles',
+            thursday: 'Jueves',
+            friday: 'Viernes',
+            saturday: 'Sábado',
+            sunday: 'Domingo'
+        };
+        return daysMap[day] || sessionData.trading_day;
+    }, [sessionData?.trading_day, timeInfo.dayName]);
 
     const toggleAsset = (symbol: string) => {
         setExpandedAsset(expandedAsset === symbol ? null : symbol);
@@ -444,8 +474,8 @@ export default function PlanOperativoPanel() {
                                                 <div className="flex justify-between items-center text-[9px] bg-white/[0.02] p-2 rounded-lg border border-white/5">
                                                     <span className="text-white/40 font-black">Régimen: <span className={`${meta.color} font-black`}>{meta.label}</span></span>
                                                     <span className="text-white/40 font-black">
-                                                        Filtro: <span className={timeInfo.dayStatus === 'LOW' ? 'text-neon-red font-black' : timeInfo.isKillzone ? 'text-neon-green font-black' : 'text-yellow-400 font-black'}>
-                                                            {timeInfo.dayStatus === 'LOW' ? 'W-END (EVITAR)' : timeInfo.isKillzone ? 'K-ZONE' : 'STANDBY'}
+                                                        Filtro: <span className={timeInfo.dayStatus === 'LOW' ? 'text-neon-red font-black' : isKillzoneActive ? 'text-neon-green font-black' : 'text-yellow-400 font-black'}>
+                                                            {timeInfo.dayStatus === 'LOW' ? 'W-END (EVITAR)' : isKillzoneActive ? 'K-ZONE' : 'STANDBY'}
                                                         </span>
                                                     </span>
                                                     <span className="text-neon-cyan font-black">Ratio R:R: <span className="text-white">1:{rr}</span></span>
@@ -467,8 +497,8 @@ export default function PlanOperativoPanel() {
                             <Sparkles className="w-3.5 h-3.5 text-neon-cyan animate-pulse" />
                             <span className="text-[9px] font-black uppercase text-white/60">CONFLUENCIA TEMPORAL</span>
                         </div>
-                        <span className={`text-[8px] font-black px-1.5 py-0.5 rounded border ${timeInfo.dayStatus === 'HIGH' && timeInfo.isKillzone ? 'bg-neon-green/20 text-neon-green border-neon-green/30' : 'bg-yellow-500/10 text-yellow-400 border-yellow-400/20'}`}>
-                            {timeInfo.dayStatus === 'HIGH' && timeInfo.isKillzone ? 'VENTANA: APROBADA' : 'VENTANA: PRECAUCIÓN'}
+                        <span className={`text-[8px] font-black px-1.5 py-0.5 rounded border ${timeInfo.dayStatus === 'HIGH' && isKillzoneActive ? 'bg-neon-green/20 text-neon-green border-neon-green/30' : 'bg-yellow-500/10 text-yellow-400 border-yellow-400/20'}`}>
+                            {timeInfo.dayStatus === 'HIGH' && isKillzoneActive ? 'VENTANA: APROBADA' : 'VENTANA: PRECAUCIÓN'}
                         </span>
                     </div>
 
@@ -476,19 +506,19 @@ export default function PlanOperativoPanel() {
                         <div className="bg-white/[0.02] border border-white/5 p-2 rounded-lg">
                             <span className="block text-white/40 font-bold uppercase">DÍA DE OPERACIÓN</span>
                             <span className={`block text-[10px] font-black mt-0.5 ${timeInfo.dayStatus === 'HIGH' ? 'text-neon-green' : 'text-yellow-400'}`}>
-                                {timeInfo.dayName} ({timeInfo.dayStatus === 'HIGH' ? 'ALTA PROB.' : 'PROB. MEDIA/BAJA'})
+                                {dayLabel} ({timeInfo.dayStatus === 'HIGH' ? 'ALTA PROB.' : 'PROB. MEDIA/BAJA'})
                             </span>
                         </div>
                         <div className="bg-white/[0.02] border border-white/5 p-2 rounded-lg">
                             <span className="block text-white/40 font-bold uppercase">SESIÓN / HORARIO (UTC)</span>
-                            <span className={`block text-[10px] font-black mt-0.5 ${timeInfo.isKillzone ? 'text-neon-green' : 'text-white/60'}`}>
-                                {timeInfo.sessionName}
+                            <span className={`block text-[10px] font-black mt-0.5 ${isKillzoneActive ? 'text-neon-green' : 'text-white/60'}`}>
+                                {currentSessionName}
                             </span>
                         </div>
                     </div>
 
-                    <p className="text-[8.5px] text-white/40 leading-relaxed font-mono pl-2 border-l border-white/10">
-                        {timeInfo.dayReason} {timeInfo.isKillzone ? 'Estructura en máxima volatilidad institucional.' : 'Rango de bajo volumen. Mayor probabilidad de falsos rompimientos.'}
+                    <p className="text-[8.5px] text-white/40 leading-relaxed font-mono pl-2 border-l border-l-white/10">
+                        {timeInfo.dayReason} {isKillzoneActive ? 'Estructura en máxima volatilidad institucional.' : 'Rango de bajo volumen. Mayor probabilidad de falsos rompimientos.'}
                     </p>
                 </div>
 
