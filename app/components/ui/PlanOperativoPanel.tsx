@@ -2,7 +2,7 @@
 
 import React, { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Target, Compass, AlertTriangle, ArrowUpRight, ArrowDownRight, Award, Cpu, ChevronDown, ChevronUp, ShieldAlert, Sparkles } from 'lucide-react';
+import { Target, Compass, AlertTriangle, ArrowUpRight, ArrowDownRight, Award, Cpu, ChevronDown, ChevronUp, ShieldAlert, Sparkles, Copy, Check } from 'lucide-react';
 import { useTelemetryStore } from '../../store/telemetryStore';
 import { formatCurrency } from '../../utils/formatters';
 
@@ -166,6 +166,15 @@ const REGIME_META: Record<string, { color: string; bg: string; glow: string; lab
 export default function PlanOperativoPanel() {
     const { latestPrices, marketSummary, smcData, liquidations, activeSymbol, sessionData } = useTelemetryStore();
     const [expandedAsset, setExpandedAsset] = useState<string | null>('BTCUSDT');
+    const [copiedId, setCopiedId] = useState<string | null>(null);
+
+    const handleCopy = (value: number, id: string) => {
+        navigator.clipboard.writeText(value.toString());
+        setCopiedId(id);
+        setTimeout(() => {
+            setCopiedId(null);
+        }, 1500);
+    };
 
     // [NIVEL INSTITUCIONAL v12.1] Sincronización de Reloj de Sesiones y Killzones del Servidor
     const timeInfo = useMemo(() => {
@@ -448,24 +457,68 @@ export default function PlanOperativoPanel() {
                                                 
                                                 {/* Setup Grid */}
                                                 <div className="grid grid-cols-2 gap-2">
-                                                    <div className="bg-white/[0.02] border border-white/5 rounded-lg p-2">
-                                                        <span className="block text-[7px] text-white/40 font-black uppercase">Precio Entrada (Entry)</span>
-                                                        <span className="text-xs font-black text-neon-cyan">{formatCurrency(entry)}</span>
+                                                    <div className="bg-white/[0.02] border border-white/5 rounded-lg p-2 relative group/cell">
+                                                        <div className="flex justify-between items-start">
+                                                            <div>
+                                                                <span className="block text-[7px] text-white/40 font-black uppercase">Precio Entrada (Entry)</span>
+                                                                <span className="text-xs font-black text-neon-cyan">{formatCurrency(entry)}</span>
+                                                            </div>
+                                                            <button 
+                                                                onClick={(e) => { e.stopPropagation(); handleCopy(entry, `${setup.symbol}-entry`); }}
+                                                                className="opacity-0 group-hover/cell:opacity-100 transition-opacity p-1 bg-white/5 hover:bg-white/10 rounded text-white/60 hover:text-white"
+                                                                title="Copiar precio de entrada"
+                                                            >
+                                                                {copiedId === `${setup.symbol}-entry` ? <Check size={10} className="text-neon-green" /> : <Copy size={10} />}
+                                                            </button>
+                                                        </div>
                                                         <span className="block text-[7px] text-white/20 mt-1 italic leading-tight">{reasonEntry}</span>
                                                     </div>
-                                                    <div className="bg-white/[0.02] border border-neon-red/10 rounded-lg p-2">
-                                                        <span className="block text-[7px] text-white/40 font-black uppercase">Stop Loss (SL)</span>
-                                                        <span className="text-xs font-black text-neon-red">{formatCurrency(sl)}</span>
+                                                    <div className="bg-white/[0.02] border border-neon-red/10 rounded-lg p-2 relative group/cell">
+                                                        <div className="flex justify-between items-start">
+                                                            <div>
+                                                                <span className="block text-[7px] text-white/40 font-black uppercase">Stop Loss (SL)</span>
+                                                                <span className="text-xs font-black text-neon-red">{formatCurrency(sl)}</span>
+                                                            </div>
+                                                            <button 
+                                                                onClick={(e) => { e.stopPropagation(); handleCopy(sl, `${setup.symbol}-sl`); }}
+                                                                className="opacity-0 group-hover/cell:opacity-100 transition-opacity p-1 bg-white/5 hover:bg-white/10 rounded text-white/60 hover:text-white"
+                                                                title="Copiar Stop Loss"
+                                                            >
+                                                                {copiedId === `${setup.symbol}-sl` ? <Check size={10} className="text-neon-green" /> : <Copy size={10} />}
+                                                            </button>
+                                                        </div>
                                                         <span className="block text-[7px] text-white/20 mt-1 italic leading-tight">{reasonSL}</span>
                                                     </div>
-                                                    <div className="bg-white/[0.02] border border-neon-green/10 rounded-lg p-2">
-                                                        <span className="block text-[7px] text-white/40 font-black uppercase">Take Profit 1 (TP1)</span>
-                                                        <span className="text-xs font-black text-neon-green">{formatCurrency(tp1)}</span>
+                                                    <div className="bg-white/[0.02] border border-neon-green/10 rounded-lg p-2 relative group/cell">
+                                                        <div className="flex justify-between items-start">
+                                                            <div>
+                                                                <span className="block text-[7px] text-white/40 font-black uppercase">Take Profit 1 (TP1)</span>
+                                                                <span className="text-xs font-black text-neon-green">{formatCurrency(tp1)}</span>
+                                                            </div>
+                                                            <button 
+                                                                onClick={(e) => { e.stopPropagation(); handleCopy(tp1, `${setup.symbol}-tp1`); }}
+                                                                className="opacity-0 group-hover/cell:opacity-100 transition-opacity p-1 bg-white/5 hover:bg-white/10 rounded text-white/60 hover:text-white"
+                                                                title="Copiar Take Profit 1"
+                                                            >
+                                                                {copiedId === `${setup.symbol}-tp1` ? <Check size={10} className="text-neon-green" /> : <Copy size={10} />}
+                                                            </button>
+                                                        </div>
                                                         <span className="block text-[7px] text-white/20 mt-1 italic leading-tight">{reasonTP1}</span>
                                                     </div>
-                                                    <div className="bg-white/[0.02] border border-neon-green/10 rounded-lg p-2">
-                                                        <span className="block text-[7px] text-white/40 font-black uppercase">Take Profit 2 (TP2)</span>
-                                                        <span className="text-xs font-black text-neon-green/80">{formatCurrency(tp2)}</span>
+                                                    <div className="bg-white/[0.02] border border-neon-green/10 rounded-lg p-2 relative group/cell">
+                                                        <div className="flex justify-between items-start">
+                                                            <div>
+                                                                <span className="block text-[7px] text-white/40 font-black uppercase">Take Profit 2 (TP2)</span>
+                                                                <span className="text-xs font-black text-neon-green/80">{formatCurrency(tp2)}</span>
+                                                            </div>
+                                                            <button 
+                                                                onClick={(e) => { e.stopPropagation(); handleCopy(tp2, `${setup.symbol}-tp2`); }}
+                                                                className="opacity-0 group-hover/cell:opacity-100 transition-opacity p-1 bg-white/5 hover:bg-white/10 rounded text-white/60 hover:text-white"
+                                                                title="Copiar Take Profit 2"
+                                                            >
+                                                                {copiedId === `${setup.symbol}-tp2` ? <Check size={10} className="text-neon-green" /> : <Copy size={10} />}
+                                                            </button>
+                                                        </div>
                                                         <span className="block text-[7px] text-white/20 mt-1 italic leading-tight">{reasonTP2}</span>
                                                     </div>
                                                 </div>
