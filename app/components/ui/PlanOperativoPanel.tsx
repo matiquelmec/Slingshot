@@ -275,8 +275,9 @@ export default function PlanOperativoPanel() {
                         const livePrice = latestPrices[setup.symbol] || latestPrices[setup.symbol.replace('USDT', '')] || setup.refPrice;
                         const isExpanded = expandedAsset === setup.symbol;
 
-                        // Escalado inteligente de precios si hay discrepancia
-                        const scale = livePrice / setup.refPrice;
+                        // [OPTIMIZACIÓN v12.2] Evitar deriva de precios (drifting) si está cerca del rango del template
+                        const priceDev = Math.abs(livePrice - setup.refPrice) / setup.refPrice;
+                        const scale = priceDev < 0.15 ? 1.0 : livePrice / setup.refPrice;
                         let entry = setup.refEntry * scale;
                         let sl = setup.refSL * scale;
                         let tp1 = setup.refTP1 * scale;
