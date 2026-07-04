@@ -164,7 +164,7 @@ const REGIME_META: Record<string, { color: string; bg: string; glow: string; lab
 };
 
 export default function PlanOperativoPanel() {
-    const { latestPrices, marketSummary, smcData, liquidations, activeSymbol, sessionData } = useTelemetryStore();
+    const { latestPrices, marketSummary, smcData, liquidations, activeSymbol, sessionData, connectionStatus } = useTelemetryStore();
     const [expandedAsset, setExpandedAsset] = useState<string | null>('BTCUSDT');
     const [copiedId, setCopiedId] = useState<string | null>(null);
 
@@ -264,6 +264,15 @@ export default function PlanOperativoPanel() {
                     </h2>
                 </div>
             </div>
+
+            {connectionStatus !== 'CONNECTED' && (
+                <div className="mx-3 mt-3 p-2 bg-yellow-500/10 border border-yellow-500/20 text-yellow-400 text-[8.5px] rounded-lg flex items-center gap-2 font-mono">
+                    <AlertTriangle size={12} className="shrink-0 animate-pulse text-yellow-400" />
+                    <span>
+                        <strong>MODO OFFLINE:</strong> El motor backend no está conectado (Status: {connectionStatus}). Mostrando plantillas de referencia estáticas.
+                    </span>
+                </div>
+            )}
 
             {/* List */}
             <div className="flex-1 overflow-y-auto custom-scrollbar p-3 space-y-3">
