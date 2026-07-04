@@ -163,11 +163,17 @@ export interface SessionData {
     local_time_chile?: string;
     timestamp_utc?: number;
     is_killzone?: boolean;
+    is_overlap?: boolean;
+    is_silver_bullet?: boolean;
     sessions?: { asia: SessionInfo; london: SessionInfo; ny: SessionInfo; };
     pdh: number | null;
     pdl: number | null;
     pdh_swept?: boolean;
     pdl_swept?: boolean;
+    onh?: number | null;
+    onl?: number | null;
+    trading_day?: string;
+    volume_profile?: any;
 }
 
 export interface OrderBlockData {
@@ -187,6 +193,8 @@ export interface SMCDataPayload {
         bullish: OrderBlockData[];
         bearish: OrderBlockData[];
     };
+    volume_profile?: any;
+    traps?: any;
 }
 
 export interface OnChainMetrics {
