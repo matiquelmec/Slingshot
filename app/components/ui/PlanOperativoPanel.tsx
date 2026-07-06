@@ -345,6 +345,7 @@ export default function PlanOperativoPanel() {
                                 // Solo si la entrada es dinámica recalculamos TPs dinámicos
                                 if (isEntryDynamic) {
                                     isDynamic = true;
+                                    const riskAmt = Math.abs(entry - sl);
 
                                     // 2. TP1 en la base del Bearish OB o FVG bajista
                                     const bearOBs = smcData?.order_blocks?.bearish || [];
@@ -355,9 +356,13 @@ export default function PlanOperativoPanel() {
                                     if (targetOB) {
                                         tp1 = targetOB.bottom;
                                         reasonTP1 = `[🎯 TP] Resistencia estructural en la base del Bearish OB en ${formatCurrency(targetOB.bottom)}.`;
+                                    } else {
+                                        tp1 = entry + riskAmt * 1.5;
+                                        reasonTP1 = `[🎯 TP] Target proyectado a 1.5x del riesgo del stop loss estructural (${formatCurrency(tp1)}).`;
                                     }
 
                                     // 3. TP2 en la zona de liquidación más densa de Shorts
+                                    let foundTP2 = false;
                                     if (liquidations && liquidations.length > 0) {
                                         const shortLiqs = liquidations
                                             .filter((liq: any) => liq.type === 'SHORT_LIQ' && liq.price > livePrice)
@@ -365,7 +370,12 @@ export default function PlanOperativoPanel() {
                                         if (shortLiqs) {
                                             tp2 = shortLiqs.price;
                                             reasonTP2 = `[🔥 LIQ] Target en zona de liquidación masiva de shorts de ${shortLiqs.leverage}x (${formatCurrency(shortLiqs.price)}).`;
+                                            foundTP2 = true;
                                         }
+                                    }
+                                    if (!foundTP2) {
+                                        tp2 = entry + riskAmt * 3.0;
+                                        reasonTP2 = `[🔥 LIQ] Proyección matemática a 3.0x de beneficio asimétrico (${formatCurrency(tp2)}).`;
                                     }
                                 }
                             } else {
@@ -374,7 +384,7 @@ export default function PlanOperativoPanel() {
                                 const bearOBs = smcData?.order_blocks?.bearish || [];
                                 const activeOB = bearOBs
                                     .filter((ob: any) => ob.bottom > livePrice)
-                                    .sort((a: any, b: any) => a.bottom - b.bottom)[0]; // Más cercano por arriba
+                                    .sort((a: any, b: any) => b.bottom - b.bottom)[0]; // Más cercano por arriba
 
                                 if (activeOB) {
                                     entry = activeOB.bottom;
@@ -386,7 +396,7 @@ export default function PlanOperativoPanel() {
                                     const bearFVGs = smcData?.fvgs?.bearish || [];
                                     const activeFVG = bearFVGs
                                         .filter((fvg: any) => fvg.bottom > livePrice)
-                                        .sort((a: any, b: any) => a.bottom - b.bottom)[0];
+                                        .sort((a: any, b: any) => b.bottom - b.bottom)[0];
                                     if (activeFVG) {
                                         entry = activeFVG.bottom;
                                         sl = activeFVG.top * 1.002;
@@ -399,6 +409,7 @@ export default function PlanOperativoPanel() {
                                 // Solo si la entrada es dinámica recalculamos TPs dinámicos
                                 if (isEntryDynamic) {
                                     isDynamic = true;
+                                    const riskAmt = Math.abs(entry - sl);
 
                                     // 2. TP1 en la cima del Bullish OB o FVG alcista
                                     const bullOBs = smcData?.order_blocks?.bullish || [];
@@ -409,9 +420,13 @@ export default function PlanOperativoPanel() {
                                     if (targetOB) {
                                         tp1 = targetOB.top;
                                         reasonTP1 = `[🎯 TP] Soporte estructural en el límite superior del Bullish OB en ${formatCurrency(targetOB.top)}.`;
+                                    } else {
+                                        tp1 = entry - riskAmt * 1.5;
+                                        reasonTP1 = `[🎯 TP] Target proyectado a 1.5x del riesgo del stop loss estructural (${formatCurrency(tp1)}).`;
                                     }
 
                                     // 3. TP2 en la zona de liquidación más densa de Longs
+                                    let foundTP2 = false;
                                     if (liquidations && liquidations.length > 0) {
                                         const longLiqs = liquidations
                                             .filter((liq: any) => liq.type === 'LONG_LIQ' && liq.price < livePrice)
@@ -419,7 +434,12 @@ export default function PlanOperativoPanel() {
                                         if (longLiqs) {
                                             tp2 = longLiqs.price;
                                             reasonTP2 = `[🔥 LIQ] Target en zona de liquidación masiva de longs de ${longLiqs.leverage}x (${formatCurrency(longLiqs.price)}).`;
+                                            foundTP2 = true;
                                         }
+                                    }
+                                    if (!foundTP2) {
+                                        tp2 = entry - riskAmt * 3.0;
+                                        reasonTP2 = `[🔥 LIQ] Proyección matemática a 3.0x de beneficio asimétrico (${formatCurrency(tp2)}).`;
                                     }
                                 }
                             }
