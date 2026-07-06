@@ -164,7 +164,7 @@ const REGIME_META: Record<string, { color: string; bg: string; glow: string; lab
 };
 
 export default function PlanOperativoPanel() {
-    const { latestPrices, marketSummary, smcData, liquidations, activeSymbol, sessionData, connectionStatus } = useTelemetryStore();
+    const { latestPrices, marketSummary, smcData, liquidations, activeSymbol, sessionData, connectionStatus, connect } = useTelemetryStore();
     const [expandedAsset, setExpandedAsset] = useState<string | null>('BTCUSDT');
     const [copiedId, setCopiedId] = useState<string | null>(null);
 
@@ -250,7 +250,12 @@ export default function PlanOperativoPanel() {
     }, [sessionData?.trading_day, timeInfo.dayName]);
 
     const toggleAsset = (symbol: string) => {
-        setExpandedAsset(expandedAsset === symbol ? null : symbol);
+        const nextAsset = expandedAsset === symbol ? null : symbol;
+        setExpandedAsset(nextAsset);
+        if (nextAsset) {
+            // [NIVEL INSTITUCIONAL v12.3] Conexión atómica: Sincronizar WebSocket con la moneda expandida
+            connect(symbol);
+        }
     };
 
     return (
