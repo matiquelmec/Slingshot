@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Target, Compass, AlertTriangle, ArrowUpRight, ArrowDownRight, Award, Cpu, ChevronDown, ChevronUp, ShieldAlert, Sparkles, Copy, Check } from 'lucide-react';
 import { useTelemetryStore } from '../../store/telemetryStore';
@@ -175,6 +175,13 @@ export default function PlanOperativoPanel() {
             setCopiedId(null);
         }, 1500);
     };
+
+    // [NIVEL INSTITUCIONAL v12.4] Dos vías de Sincronía: Asegura que el acordeón y el store estén siempre alineados
+    useEffect(() => {
+        if (activeSymbol) {
+            setExpandedAsset(activeSymbol);
+        }
+    }, [activeSymbol]);
 
     // [NIVEL INSTITUCIONAL v12.1] Sincronización de Reloj de Sesiones y Killzones del Servidor
     const timeInfo = useMemo(() => {
