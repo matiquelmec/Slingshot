@@ -309,6 +309,7 @@ export default function PlanOperativoPanel() {
                         let reasonTP1 = setup.reasonTP1;
                         let reasonTP2 = setup.reasonTP2;
                         let isDynamic = false;
+                        let isEntryDynamic = false;
 
                         // [NIVEL INSTITUCIONAL v12.0] Vinculación dinámica con SMC y Liquidaciones
                         const isCurrentActive = activeSymbol === setup.symbol || activeSymbol.replace('USDT', '') === setup.symbol.replace('USDT', '');
@@ -324,9 +325,9 @@ export default function PlanOperativoPanel() {
                                 if (activeOB) {
                                     entry = activeOB.top;
                                     sl = activeOB.bottom * 0.999;
-                                    reasonEntry = `[⚡ OB] Entrada en el límite superior del Bullish OB detectado en $${formatCurrency(activeOB.bottom)} - $${formatCurrency(activeOB.top)}.`;
-                                    reasonSL = `[🛡️ Invalidez] Colocado debajo del soporte inferior del Bullish OB ($${formatCurrency(activeOB.bottom)}).`;
-                                    isDynamic = true;
+                                    reasonEntry = `[⚡ OB] Entrada en el límite superior del Bullish OB detectado en ${formatCurrency(activeOB.bottom)} - ${formatCurrency(activeOB.top)}.`;
+                                    reasonSL = `[🛡️ Invalidez] Colocado debajo del soporte inferior del Bullish OB (${formatCurrency(activeOB.bottom)}).`;
+                                    isEntryDynamic = true;
                                 } else {
                                     const bullFVGs = smcData?.fvgs?.bullish || [];
                                     const activeFVG = bullFVGs
@@ -335,33 +336,36 @@ export default function PlanOperativoPanel() {
                                     if (activeFVG) {
                                         entry = activeFVG.top;
                                         sl = activeFVG.bottom * 0.998;
-                                        reasonEntry = `[⚡ FVG] Entrada en el límite superior del Fair Value Gap alcista en $${formatCurrency(activeFVG.top)}.`;
-                                        reasonSL = `[🛡️ Invalidez] Debajo del soporte inferior del FVG en $${formatCurrency(activeFVG.bottom)}.`;
-                                        isDynamic = true;
+                                        reasonEntry = `[⚡ FVG] Entrada en el límite superior del Fair Value Gap alcista en ${formatCurrency(activeFVG.top)}.`;
+                                        reasonSL = `[🛡️ Invalidez] Debajo del soporte inferior del FVG en ${formatCurrency(activeFVG.bottom)}.`;
+                                        isEntryDynamic = true;
                                     }
                                 }
 
-                                // 2. TP1 en la base del Bearish OB o FVG bajista
-                                const bearOBs = smcData?.order_blocks?.bearish || [];
-                                const targetOB = bearOBs
-                                    .filter((ob: any) => ob.bottom > livePrice)
-                                    .sort((a: any, b: any) => a.bottom - b.bottom)[0]; // Más cercano por arriba
-                                
-                                if (targetOB) {
-                                    tp1 = targetOB.bottom;
-                                    reasonTP1 = `[🎯 TP] Resistencia estructural en la base del Bearish OB en $${formatCurrency(targetOB.bottom)}.`;
+                                // Solo si la entrada es dinámica recalculamos TPs dinámicos
+                                if (isEntryDynamic) {
                                     isDynamic = true;
-                                }
 
-                                // 3. TP2 en la zona de liquidación más densa de Shorts
-                                if (liquidations && liquidations.length > 0) {
-                                    const shortLiqs = liquidations
-                                        .filter((liq: any) => liq.type === 'SHORT_LIQ' && liq.price > livePrice)
-                                        .sort((a: any, b: any) => b.volume - a.volume)[0];
-                                    if (shortLiqs) {
-                                        tp2 = shortLiqs.price;
-                                        reasonTP2 = `[🔥 LIQ] Target en zona de liquidación masiva de shorts de ${shortLiqs.leverage}x ($${formatCurrency(shortLiqs.price)}).`;
-                                        isDynamic = true;
+                                    // 2. TP1 en la base del Bearish OB o FVG bajista
+                                    const bearOBs = smcData?.order_blocks?.bearish || [];
+                                    const targetOB = bearOBs
+                                        .filter((ob: any) => ob.bottom > livePrice)
+                                        .sort((a: any, b: any) => a.bottom - b.bottom)[0]; // Más cercano por arriba
+                                    
+                                    if (targetOB) {
+                                        tp1 = targetOB.bottom;
+                                        reasonTP1 = `[🎯 TP] Resistencia estructural en la base del Bearish OB en ${formatCurrency(targetOB.bottom)}.`;
+                                    }
+
+                                    // 3. TP2 en la zona de liquidación más densa de Shorts
+                                    if (liquidations && liquidations.length > 0) {
+                                        const shortLiqs = liquidations
+                                            .filter((liq: any) => liq.type === 'SHORT_LIQ' && liq.price > livePrice)
+                                            .sort((a: any, b: any) => b.volume - a.volume)[0];
+                                        if (shortLiqs) {
+                                            tp2 = shortLiqs.price;
+                                            reasonTP2 = `[🔥 LIQ] Target en zona de liquidación masiva de shorts de ${shortLiqs.leverage}x (${formatCurrency(shortLiqs.price)}).`;
+                                        }
                                     }
                                 }
                             } else {
@@ -375,9 +379,9 @@ export default function PlanOperativoPanel() {
                                 if (activeOB) {
                                     entry = activeOB.bottom;
                                     sl = activeOB.top * 1.001;
-                                    reasonEntry = `[⚡ OB] Venta corta en el límite inferior del Bearish OB detectado en $${formatCurrency(activeOB.bottom)} - $${formatCurrency(activeOB.top)}.`;
-                                    reasonSL = `[🛡️ Invalidez] Colocado arriba del límite superior del Bearish OB ($${formatCurrency(activeOB.top)}).`;
-                                    isDynamic = true;
+                                    reasonEntry = `[⚡ OB] Venta corta en el límite inferior del Bearish OB detectado en ${formatCurrency(activeOB.bottom)} - ${formatCurrency(activeOB.top)}.`;
+                                    reasonSL = `[🛡️ Invalidez] Colocado arriba del límite superior del Bearish OB (${formatCurrency(activeOB.top)}).`;
+                                    isEntryDynamic = true;
                                 } else {
                                     const bearFVGs = smcData?.fvgs?.bearish || [];
                                     const activeFVG = bearFVGs
@@ -386,33 +390,36 @@ export default function PlanOperativoPanel() {
                                     if (activeFVG) {
                                         entry = activeFVG.bottom;
                                         sl = activeFVG.top * 1.002;
-                                        reasonEntry = `[⚡ FVG] Entrada corta en la base del Fair Value Gap bajista en $${formatCurrency(activeFVG.bottom)}.`;
-                                        reasonSL = `[🛡️ Invalidez] Arriba de la invalidez del FVG bajista en $${formatCurrency(activeFVG.top)}.`;
-                                        isDynamic = true;
+                                        reasonEntry = `[⚡ FVG] Entrada corta en la base del Fair Value Gap bajista en ${formatCurrency(activeFVG.bottom)}.`;
+                                        reasonSL = `[🛡️ Invalidez] Arriba de la invalidez del FVG bajista en ${formatCurrency(activeFVG.top)}.`;
+                                        isEntryDynamic = true;
                                     }
                                 }
 
-                                // 2. TP1 en la cima del Bullish OB o FVG alcista
-                                const bullOBs = smcData?.order_blocks?.bullish || [];
-                                const targetOB = bullOBs
-                                    .filter((ob: any) => ob.top < livePrice)
-                                    .sort((a: any, b: any) => b.top - a.top)[0]; // Más cercano por debajo
-
-                                if (targetOB) {
-                                    tp1 = targetOB.top;
-                                    reasonTP1 = `[🎯 TP] Soporte estructural en el límite superior del Bullish OB en $${formatCurrency(targetOB.top)}.`;
+                                // Solo si la entrada es dinámica recalculamos TPs dinámicos
+                                if (isEntryDynamic) {
                                     isDynamic = true;
-                                }
 
-                                // 3. TP2 en la zona de liquidación más densa de Longs
-                                if (liquidations && liquidations.length > 0) {
-                                    const longLiqs = liquidations
-                                        .filter((liq: any) => liq.type === 'LONG_LIQ' && liq.price < livePrice)
-                                        .sort((a: any, b: any) => b.volume - a.volume)[0];
-                                    if (longLiqs) {
-                                        tp2 = longLiqs.price;
-                                        reasonTP2 = `[🔥 LIQ] Target en zona de liquidación masiva de longs de ${longLiqs.leverage}x ($${formatCurrency(longLiqs.price)}).`;
-                                        isDynamic = true;
+                                    // 2. TP1 en la cima del Bullish OB o FVG alcista
+                                    const bullOBs = smcData?.order_blocks?.bullish || [];
+                                    const targetOB = bullOBs
+                                        .filter((ob: any) => ob.top < livePrice)
+                                        .sort((a: any, b: any) => b.top - a.top)[0]; // Más cercano por debajo
+
+                                    if (targetOB) {
+                                        tp1 = targetOB.top;
+                                        reasonTP1 = `[🎯 TP] Soporte estructural en el límite superior del Bullish OB en ${formatCurrency(targetOB.top)}.`;
+                                    }
+
+                                    // 3. TP2 en la zona de liquidación más densa de Longs
+                                    if (liquidations && liquidations.length > 0) {
+                                        const longLiqs = liquidations
+                                            .filter((liq: any) => liq.type === 'LONG_LIQ' && liq.price < livePrice)
+                                            .sort((a: any, b: any) => b.volume - a.volume)[0];
+                                        if (longLiqs) {
+                                            tp2 = longLiqs.price;
+                                            reasonTP2 = `[🔥 LIQ] Target en zona de liquidación masiva de longs de ${longLiqs.leverage}x (${formatCurrency(longLiqs.price)}).`;
+                                        }
                                     }
                                 }
                             }
