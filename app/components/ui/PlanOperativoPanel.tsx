@@ -452,7 +452,8 @@ export default function PlanOperativoPanel() {
                         // Obtener régimen dinámico del store
                         const liveRegime = marketSummary[setup.symbol]?.regime || setup.regime;
                         const meta = REGIME_META[liveRegime] || REGIME_META[setup.regime] || REGIME_META['RANGING'];
-
+                        const liveStrategy = (marketSummary[setup.symbol]?.strategy || setup.strategy).replace(/_/g, ' ');
+ 
                         return (
                             <div 
                                 key={setup.symbol} 
@@ -474,7 +475,7 @@ export default function PlanOperativoPanel() {
                                                     </span>
                                                 )}
                                             </div>
-                                            <span className="block text-[8px] text-white/40 tracking-wider truncate uppercase">{setup.strategy}</span>
+                                            <span className="block text-[8px] text-white/40 tracking-wider truncate uppercase">{liveStrategy}</span>
                                         </div>
                                     </div>
                                     

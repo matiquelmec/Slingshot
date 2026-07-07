@@ -74,6 +74,27 @@ export const createConnectionManager = (set: any, get: any) => {
                             set({ sessionData: sessionData.data });
                         }
                     }
+
+                    // 3. [NEW] Radar Market States Recovery Path
+                    const statesRes = await fetch(`${BASE_URL}/api/v1/market-states`);
+                    if (statesRes.ok) {
+                        const statesData = await statesRes.json();
+                        if (Array.isArray(statesData)) {
+                            const newSummary: Record<string, any> = {};
+                            const newPrices: Record<string, number | null> = {};
+                            statesData.forEach((s: any) => {
+                                const asset = s.asset;
+                                newSummary[asset] = s;
+                                if (s.price) {
+                                    newPrices[asset] = s.price;
+                                }
+                            });
+                            set((state: any) => ({ 
+                                marketSummary: { ...state.marketSummary, ...newSummary },
+                                latestPrices: { ...state.latestPrices, ...newPrices }
+                            }));
+                        }
+                    }
                 } catch (err) {
                     console.error('[TELEMETRY] ❌ Error en hidratación inicial:', err);
                 }
