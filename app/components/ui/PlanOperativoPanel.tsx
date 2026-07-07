@@ -482,7 +482,6 @@ export default function PlanOperativoPanel() {
                         const rr = risk > 0 ? (reward / risk).toFixed(1) : '0';
 
                         // Obtener régimen dinámico del store
-                        const liveRegime = marketSummary[setup.symbol]?.regime || setup.regime;
                         const meta = REGIME_META[liveRegime] || REGIME_META[setup.regime] || REGIME_META['RANGING'];
                         const liveStrategy = (marketSummary[setup.symbol]?.strategy || setup.strategy).replace(/_/g, ' ');
  
