@@ -295,6 +295,18 @@ export default function PlanOperativoPanel() {
                         // Buscar precio en vivo o fallback
                         const livePrice = latestPrices[setup.symbol] || latestPrices[setup.symbol.replace('USDT', '')] || setup.refPrice;
                         const isExpanded = expandedAsset === setup.symbol;
+                        
+                        // [NIVEL INSTITUCIONAL v12.5] Dirección Dinámica basada en el Régimen del Radar
+                        const liveRegime = marketSummary[setup.symbol]?.regime || setup.regime;
+                        const isLong = (() => {
+                            if (['MARKUP', 'BULLISH_TREND', 'TRENDING_BULL', 'ACCUMULATION'].includes(liveRegime)) {
+                                return true;
+                            }
+                            if (['MARKDOWN', 'BEARISH_TREND', 'TRENDING_BEAR', 'DISTRIBUTION'].includes(liveRegime)) {
+                                return false;
+                            }
+                            return setup.isLong;
+                        })();
 
                         // [OPTIMIZACIÓN v12.2] Evitar deriva de precios (drifting) si está cerca del rango del template
                         const priceDev = Math.abs(livePrice - setup.refPrice) / setup.refPrice;
@@ -304,17 +316,37 @@ export default function PlanOperativoPanel() {
                         let tp1 = setup.refTP1 * scale;
                         let tp2 = setup.refTP2 * scale;
 
+                        // Si la dirección calculada difiere de la plantilla estática, hacemos un espejo (mirror) de los niveles
+                        if (isLong !== setup.isLong) {
+                            const riskAmt = Math.abs(setup.refEntry - setup.refSL) * scale;
+                            sl = isLong ? entry - riskAmt : entry + riskAmt;
+                            tp1 = isLong ? entry + riskAmt * 1.5 : entry - riskAmt * 1.5;
+                            tp2 = isLong ? entry + riskAmt * 3.0 : entry - riskAmt * 3.0;
+                        }
+
                         let reasonEntry = setup.reasonEntry;
                         let reasonSL = setup.reasonSL;
                         let reasonTP1 = setup.reasonTP1;
                         let reasonTP2 = setup.reasonTP2;
+
+                        if (isLong !== setup.isLong) {
+                            reasonEntry = isLong 
+                                ? `[⚡ Radar] Entrada en zona de descuento macro (${formatCurrency(entry)}).` 
+                                : `[⚡ Radar] Entrada en corto en zona de distribución macro (${formatCurrency(entry)}).`;
+                            reasonSL = isLong
+                                ? `[🛡️ Invalidez] Stop Loss colocado debajo del soporte de tendencia.`
+                                : `[🛡️ Invalidez] Stop Loss colocado arriba de la resistencia de tendencia.`;
+                            reasonTP1 = `[🎯 TP] Primer target de cobertura asimétrica a 1.5x.`;
+                            reasonTP2 = `[🔥 LIQ] Target final en busca de barrido a 3.0x de beneficio.`;
+                        }
+
                         let isDynamic = false;
                         let isEntryDynamic = false;
 
                         // [NIVEL INSTITUCIONAL v12.0] Vinculación dinámica con SMC y Liquidaciones
                         const isCurrentActive = activeSymbol === setup.symbol || activeSymbol.replace('USDT', '') === setup.symbol.replace('USDT', '');
                         if (isCurrentActive) {
-                            if (setup.isLong) {
+                            if (isLong) {
                                 // ── LONG SMC SETUP ──
                                 // 1. Entrada en Bullish OB o FVG alcista
                                 const bullOBs = smcData?.order_blocks?.bullish || [];
