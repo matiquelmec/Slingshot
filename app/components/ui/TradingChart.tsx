@@ -40,9 +40,21 @@ export default function TradingChart() {
     const fvgSeriesRef = useRef<ISeriesApi<'Baseline'>[]>([]);
     const markersDetachRef = useRef<{ detach: () => void } | null>(null);
 
-    const { candles, isConnected, smcData, liquidityHeatmap, tacticalDecision, sessionData, liquidations, latestPrice, activeSymbol, auditedSignals, signalHistory } = useTelemetryStore();
+    const { candles, isConnected, smcData, liquidityHeatmap, tacticalDecision, sessionData, liquidations, latestPrice, activeSymbol, activeTimeframe, auditedSignals, signalHistory } = useTelemetryStore();
     const { indicators } = useIndicatorsStore();
     const isEnabled = (id: string) => indicators.find(i => i.id === id)?.enabled ?? false;
+
+    const TIMEFRAME_SECONDS: Record<string, number> = {
+        '1m': 60,
+        '3m': 180,
+        '5m': 300,
+        '15m': 900,
+        '30m': 1800,
+        '1h': 3600,
+        '2h': 7200,
+        '4h': 14400,
+        '1d': 86400,
+    };
 
     // ── Chart Init ──
     useEffect(() => {
@@ -146,15 +158,21 @@ export default function TradingChart() {
         // 2. Real-time Candle Body (Lattice Scanner Style)
         const last = candles[candles.length - 1];
         if (last && last.time) {
-            try {
-                s.update({
-                    ...last,
-                    time: Math.floor(Number(last.time)) as any,
-                    close: latestPrice,
-                    high: Math.max(last.high, latestPrice),
-                    low: Math.min(last.low, latestPrice),
-                } as any);
-            } catch (e) {}
+            const timeframeDuration = TIMEFRAME_SECONDS[activeTimeframe] || 300;
+            const nowSeconds = Date.now() / 1000;
+            const isCandleActive = (nowSeconds - Number(last.time)) < timeframeDuration * 1.5;
+
+            if (isCandleActive) {
+                try {
+                    s.update({
+                        ...last,
+                        time: Math.floor(Number(last.time)) as any,
+                        close: latestPrice,
+                        high: Math.max(last.high, latestPrice),
+                        low: Math.min(last.low, latestPrice),
+                    } as any);
+                } catch (e) {}
+            }
         }
 
         // 3. Price Line
