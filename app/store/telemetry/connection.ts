@@ -96,7 +96,7 @@ export const createConnectionManager = (set: any, get: any) => {
                         }
                     }
                 } catch (err) {
-                    console.error('[TELEMETRY] ❌ Error en hidratación inicial:', err);
+                    console.warn('[TELEMETRY] ⚠️ Error en hidratación inicial:', err);
                 }
             };
 
@@ -107,7 +107,7 @@ export const createConnectionManager = (set: any, get: any) => {
                     .then(res => res.json())
                     .then(data => {
                         if (Array.isArray(data)) set({ news: data.slice(0, 15) });
-                    }).catch(e => console.error("🌐 [TELEMETRY] News fetch failed:", e));
+                    }).catch(e => console.warn("🌐 [TELEMETRY] News fetch failed:", e));
             }
 
             if (get().economicEvents.length === 0) {
