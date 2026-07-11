@@ -22,17 +22,19 @@ class RegimeDetector:
 
         df = df.copy()
 
-        # 1. Métricas de Eficiencia del Precio (Kaufman Efficiency Ratio)
+        # 1. Métricas de Eficiencia del Precio (Kaufman Efficiency Ratio Suavizado)
         # mide qué tan 'directo' es el movimiento. 1.0 = Línea recta.
         change = abs(df['close'] - df['close'].shift(self.window))
         volatility = abs(df['close'] - df['close'].shift(1)).rolling(window=self.window).sum()
-        df['efficiency'] = change / (volatility + 1e-9)
+        raw_efficiency = change / (volatility + 1e-9)
+        df['efficiency'] = raw_efficiency.ewm(span=5, adjust=False).mean()
 
-        # 2. Estructura de Tendencia (Highs/Lows)
+        # 2. Estructura de Tendencia (Highs/Lows Suavizado)
         rolling_high = df['high'].rolling(window=self.window).max()
         rolling_low = df['low'].rolling(window=self.window).min()
         range_size = rolling_high - rolling_low
-        df['pos_pct'] = (df['close'] - rolling_low) / (range_size + 1e-9)
+        raw_pos_pct = (df['close'] - rolling_low) / (range_size + 1e-9)
+        df['pos_pct'] = raw_pos_pct.ewm(span=5, adjust=False).mean()
 
         # 3. Momentum de largo plazo
         df['mom_long'] = df['close'].diff(self.window)
@@ -50,7 +52,6 @@ class RegimeDetector:
         mask_distrib = (df['efficiency'] <= 0.3) & (df['pos_pct'] > 0.7)
 
         # C. CHOPPY (El verdadero ruido: Eficiencia bajísima + volatilidad errática)
-        # Si el precio no avanza nada tras 50 velas y se mueve mucho entre medio
         mask_choppy = (df['efficiency'] < 0.1)
 
         # Aplicar máscaras en orden de prioridad
@@ -62,6 +63,26 @@ class RegimeDetector:
 
         # Fallback de seguridad
         df['market_regime'] = df['market_regime'].fillna('RANGING')
+
+        # ── 5. Filtro de Persistencia de Wyckoff (Confirmación por Ventana de 3 Velas) ──
+        regimes_list = df['market_regime'].tolist()
+        persistent_list = []
+        last_persistent = 'RANGING'
+
+        for idx in range(len(df)):
+            if idx < self.window + 2:
+                persistent_list.append(regimes_list[idx])
+                if regimes_list[idx] != 'UNKNOWN':
+                    last_persistent = regimes_list[idx]
+                continue
+
+            window_regimes = regimes_list[idx-2:idx+1]
+            if len(set(window_regimes)) == 1:
+                last_persistent = window_regimes[-1]
+
+            persistent_list.append(last_persistent)
+
+        df['market_regime'] = persistent_list
         
         return df
 
