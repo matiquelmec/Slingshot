@@ -282,22 +282,84 @@ export default function OpportunitiesScanner() {
                                             </div>
 
                                             {/* Levels */}
-                                            <div className="space-y-1 text-xs font-mono mb-4 border-t border-white/5 pt-3">
-                                                <div className="flex justify-between">
+                                            <div className="space-y-1.5 text-xs font-mono mb-4 border-t border-white/5 pt-3">
+                                                <div className="flex justify-between items-center group/level">
                                                     <span className="text-white/40">Entrada:</span>
-                                                    <span className="text-white/80 font-bold">${formatCurrency(opp.price)}</span>
+                                                    <span 
+                                                        onClick={() => {
+                                                            navigator.clipboard.writeText(opp.price.toString());
+                                                            // Efecto visual rápido
+                                                            const el = document.getElementById(`copy-entry-${assetKey}`);
+                                                            if (el) { el.innerText = "COPIADO"; setTimeout(() => el.innerText = "COPIAR", 1000); }
+                                                        }}
+                                                        className="text-white/80 font-bold cursor-pointer hover:text-neon-cyan flex items-center gap-1.5 active:scale-95 transition-all select-all"
+                                                        title="Haz clic para copiar precio"
+                                                    >
+                                                        <span>${formatCurrency(opp.price)}</span>
+                                                        <span id={`copy-entry-${assetKey}`} className="text-[7px] text-white/20 border border-white/10 px-1 py-0.5 rounded opacity-0 group-hover/level:opacity-100 transition-opacity font-sans">COPIAR</span>
+                                                    </span>
                                                 </div>
-                                                <div className="flex justify-between">
+                                                <div className="flex justify-between items-center group/level">
                                                     <span className="text-white/40">Stop Loss:</span>
-                                                    <span className="text-neon-red">${formatCurrency(opp.stop_loss)}</span>
+                                                    <span 
+                                                        onClick={() => {
+                                                            navigator.clipboard.writeText(opp.stop_loss.toString());
+                                                            const el = document.getElementById(`copy-sl-${assetKey}`);
+                                                            if (el) { el.innerText = "COPIADO"; setTimeout(() => el.innerText = "COPIAR", 1000); }
+                                                        }}
+                                                        className="text-neon-red font-bold cursor-pointer hover:text-neon-cyan flex items-center gap-1.5 active:scale-95 transition-all select-all"
+                                                        title="Haz clic para copiar Stop Loss"
+                                                    >
+                                                        <span>${formatCurrency(opp.stop_loss)}</span>
+                                                        <span id={`copy-sl-${assetKey}`} className="text-[7px] text-white/20 border border-white/10 px-1 py-0.5 rounded opacity-0 group-hover/level:opacity-100 transition-opacity font-sans">COPIAR</span>
+                                                    </span>
                                                 </div>
-                                                <div className="flex justify-between">
+                                                <div className="flex justify-between items-center group/level">
                                                     <span className="text-white/40">TP1 (Cobertura):</span>
-                                                    <span className="text-neon-cyan">${formatCurrency(opp.tp1)}</span>
+                                                    <span 
+                                                        onClick={() => {
+                                                            navigator.clipboard.writeText(opp.tp1.toString());
+                                                            const el = document.getElementById(`copy-tp1-${assetKey}`);
+                                                            if (el) { el.innerText = "COPIADO"; setTimeout(() => el.innerText = "COPIAR", 1000); }
+                                                        }}
+                                                        className="text-neon-cyan font-bold cursor-pointer hover:text-white flex items-center gap-1.5 active:scale-95 transition-all select-all"
+                                                        title="Haz clic para copiar TP1"
+                                                    >
+                                                        <span>${formatCurrency(opp.tp1)}</span>
+                                                        <span id={`copy-tp1-${assetKey}`} className="text-[7px] text-white/20 border border-white/10 px-1 py-0.5 rounded opacity-0 group-hover/level:opacity-100 transition-opacity font-sans">COPIAR</span>
+                                                    </span>
                                                 </div>
-                                                <div className="flex justify-between">
+                                                {opp.tp2 && (
+                                                    <div className="flex justify-between items-center group/level">
+                                                        <span className="text-white/40">TP2 (Equilibrio):</span>
+                                                        <span 
+                                                            onClick={() => {
+                                                                navigator.clipboard.writeText(opp.tp2.toString());
+                                                                const el = document.getElementById(`copy-tp2-${assetKey}`);
+                                                                if (el) { el.innerText = "COPIADO"; setTimeout(() => el.innerText = "COPIAR", 1000); }
+                                                            }}
+                                                            className="text-yellow-400 font-bold cursor-pointer hover:text-white flex items-center gap-1.5 active:scale-95 transition-all select-all"
+                                                            title="Haz clic para copiar TP2"
+                                                        >
+                                                            <span>${formatCurrency(opp.tp2)}</span>
+                                                            <span id={`copy-tp2-${assetKey}`} className="text-[7px] text-white/20 border border-white/10 px-1 py-0.5 rounded opacity-0 group-hover/level:opacity-100 transition-opacity font-sans">COPIAR</span>
+                                                        </span>
+                                                    </div>
+                                                )}
+                                                <div className="flex justify-between items-center group/level">
                                                     <span className="text-white/40">TP3 (Estructural):</span>
-                                                    <span className="text-neon-green">${formatCurrency(opp.tp3)}</span>
+                                                    <span 
+                                                        onClick={() => {
+                                                            navigator.clipboard.writeText(opp.tp3.toString());
+                                                            const el = document.getElementById(`copy-tp3-${assetKey}`);
+                                                            if (el) { el.innerText = "COPIADO"; setTimeout(() => el.innerText = "COPIAR", 1000); }
+                                                        }}
+                                                        className="text-neon-green font-bold cursor-pointer hover:text-neon-cyan flex items-center gap-1.5 active:scale-95 transition-all select-all"
+                                                        title="Haz clic para copiar TP3"
+                                                    >
+                                                        <span>${formatCurrency(opp.tp3)}</span>
+                                                        <span id={`copy-tp3-${assetKey}`} className="text-[7px] text-white/20 border border-white/10 px-1 py-0.5 rounded opacity-0 group-hover/level:opacity-100 transition-opacity font-sans">COPIAR</span>
+                                                    </span>
                                                 </div>
                                             </div>
                                         </div>
