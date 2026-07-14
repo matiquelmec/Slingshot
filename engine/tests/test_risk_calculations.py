@@ -59,6 +59,25 @@ def test_risk_logic():
     print("Cluster de Liquidación   : 93.5")
     print("SL Ajustado (Tras Shield):", res_shield["stop_loss"])
     print("¿Se desplazó a 93.3?     :", "SÍ" if res_shield["stop_loss"] <= 93.3 else "NO")
+    # ── ESCENARIO 4: Guardarraíl de SL Mínimo Activo (Altcoin con ATR muy comprimido) ──
+    # Si ARBUSDT cotiza a $1.00 y el ATR de 15m es absurdamente pequeño ($0.001)
+    # El SL normal de 1.8x ATR daría un stop en $0.9982 (0.18% de distancia).
+    # El guardarraíl debe forzar el SL al 1.20% de distancia ($0.9880) para absorber mechas de futures.
+    res_min_guard = rm.calculate_position(
+        current_price=1.00,
+        signal_type="LONG",
+        market_regime="BULLISH_TREND",
+        atr_value=0.001,
+        asset="ARBUSDT",
+        liquidations=[]
+    )
+    sl_dist_pct = (1.00 - res_min_guard["stop_loss"]) / 1.00 * 100
+    print("=== ESCENARIO 4 (Guardarraíl Dinámico Activo) ===")
+    print("Entrada                 : $1.00")
+    print("SL con Guardarraíl      :", res_min_guard["stop_loss"])
+    print("Distancia SL resultante :", f"{sl_dist_pct:.2f}%")
+    print("¿Forzado al 1.2% min?   :", "SÍ" if abs(sl_dist_pct - 1.20) < 0.05 else "NO")
+    print("Apalancamiento ajustado :", res_min_guard["leverage"], "x")
     print()
 
 if __name__ == "__main__":

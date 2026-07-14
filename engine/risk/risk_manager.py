@@ -231,8 +231,17 @@ class RiskManager:
         # Recálculo de riesgo inicial
         initial_risk_dist = abs(current_price - sl)
         
-        # Aplicación de límites min_sl_pct y max_sl_pct específicos por activo
-        min_sl_dist = current_price * (tuning.get("min_sl_pct", 0.0) / 100.0)
+        # ── GUARDARRAÍL DINÁMICO DE VOLATILIDAD ──
+        # Definimos una distancia mínima de Stop Loss según la clase de activo para evitar barridos de ruido:
+        # Altcoins volátiles: mínimo 1.20% del precio de entrada
+        # Criptomonedas de alta capitalización (BTC/ETH) y Oro/Plata: mínimo 0.45% del precio de entrada
+        asset_upper = asset.upper()
+        if any(core_asset in asset_upper for core_asset in ["BTC", "ETH", "PAXG", "XAG"]):
+            dynamic_min_sl_pct = 0.0045  # 0.45%
+        else:
+            dynamic_min_sl_pct = 0.0120  # 1.20% (Límite de seguridad para altcoins)
+            
+        min_sl_dist = current_price * dynamic_min_sl_pct
         max_sl_dist = current_price * (tuning.get("max_sl_pct", 100.0) / 100.0)
         
         sl_exceeded_max = False
