@@ -37,12 +37,14 @@ export default function OmegaCentinelPanel() {
             type: sig.signal_type || (sig.type?.includes('LONG') ? 'LONG' : 'SHORT'),
             status: sig.status,
             entry: sig.price,
-            sl: sig.sl_dynamic || sig.stop_loss,
+            sl: sig.stop_loss || sig.sl_dynamic,
             tp1: sig.tp1,
             tp2: sig.tp2,
             tp3: sig.tp3 || sig.take_profit_3r,
-            shield_active: sig.shield_active || false,
-            profit_locked: sig.profit_locked || false,
+            shield_active: sig.shield_active || ['BREAKEVEN', 'TRAILING'].includes(sig.trailing_phase || ''),
+            profit_locked: sig.profit_locked || sig.trailing_phase === 'TRAILING',
+            trailing_phase: sig.trailing_phase || 'ACTIVE',
+            trailing_reason: sig.trailing_reason || '',
             current_price: currentPrice
         };
     });
@@ -179,7 +181,7 @@ export default function OmegaCentinelPanel() {
                                     </div>
                                     <div className="flex flex-col gap-1">
                                         <span className="text-neon-cyan/50">TP2</span>
-                                        <span className="text-neon-cyan font-bold">{formatCurrency(order.tp2)}</span>,StartLine:188,TargetContent:
+                                        <span className="text-neon-cyan font-bold">{formatCurrency(order.tp2)}</span>
                                     </div>
                                     <div className="flex flex-col gap-1">
                                         <span className="text-neon-cyan/50">TP3</span>
@@ -187,17 +189,35 @@ export default function OmegaCentinelPanel() {
                                     </div>
                                 </div>
 
+                                {/* Trailing Stop Phase Banner */}
+                                {order.trailing_phase && (
+                                    <div className="mt-1 mb-2 flex items-center justify-between text-[8px] font-mono border-t border-white/5 pt-2">
+                                        <span className="text-white/40 uppercase">FASE TRAILING:</span>
+                                        {order.trailing_phase === 'ACTIVE' && (
+                                            <span className="text-neon-cyan bg-neon-cyan/5 border border-neon-cyan/20 px-1.5 py-0.5 rounded font-black tracking-wider">🎯 ACTIVE</span>
+                                        )}
+                                        {order.trailing_phase === 'BREAKEVEN' && (
+                                            <span className="text-yellow-400 bg-yellow-400/5 border border-yellow-400/20 px-1.5 py-0.5 rounded font-black tracking-wider">🛡️ BREAKEVEN</span>
+                                        )}
+                                        {order.trailing_phase === 'TRAILING' && (
+                                            <span className="text-neon-green bg-neon-green/5 border border-neon-green/20 px-1.5 py-0.5 rounded font-black tracking-wider animate-pulse">📈 STRUCTURAL TRAILING</span>
+                                        )}
+                                    </div>
+                                )}
+
+                                {/* Trailing Reason / Confirmations */}
+                                {order.trailing_reason && (
+                                    <div className="bg-white/[0.02] border border-white/5 rounded-lg px-2.5 py-1.5 mb-1 text-[8px] font-mono text-white/50 flex items-start gap-1.5">
+                                        <span className="text-yellow-500">⚙️</span>
+                                        <span>{order.trailing_reason}</span>
+                                    </div>
+                                )}
+
                                 {/* Shield Status Injectors */}
-                                {order.shield_active && !order.profit_locked && (
+                                {order.shield_active && order.trailing_phase === 'ACTIVE' && (
                                     <div className="mt-2 flex items-center justify-center gap-2 bg-neon-cyan/20 border border-neon-cyan/40 p-1.5 rounded uppercase tracking-widest text-[9px] font-black text-neon-cyan">
                                         <ShieldAlert size={12} />
                                         SHIELD ACTIVATED: RISK FREE
-                                    </div>
-                                )}
-                                {order.profit_locked && (
-                                    <div className="mt-2 flex items-center justify-center gap-2 bg-neon-green/20 border border-neon-green/40 p-1.5 rounded uppercase tracking-widest text-[9px] font-black text-neon-green">
-                                        <CheckCircle2 size={12} />
-                                        PROFITS LOCKED (TP1 MET)
                                     </div>
                                 )}
                             </motion.div>

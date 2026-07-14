@@ -13,6 +13,8 @@ from engine.execution.nexus import nexus
 from engine.indicators.htf_analyzer import HTFAnalyzer
 from engine.indicators.data_utils import fetch_binance_history
 from engine.core.store import store
+from engine.workers.market_scanner import MarketScanner
+from engine.workers.trade_manager import TradeManager
 import pandas as pd
 import time
 
@@ -25,12 +27,14 @@ class SlingshotOrchestrator:
     def __init__(self, radar_assets: Optional[List[str]] = None):
         # Activos dinámicos (se cargarán desde DB en start)
         self.radar_assets: set = set()
-        self.intervals = ["1m", "5m", "15m"] 
+        self.intervals = ["1m", "3m", "5m", "15m"] 
         self._tasks: Dict[str, asyncio.Task] = {}
         self._stop_event = asyncio.Event()
         self.news_worker = NewsWorker()
         self.calendar_worker = CalendarWorker()
         self.htf_analyzer = HTFAnalyzer()
+        self.market_scanner = MarketScanner()
+        self.trade_manager = TradeManager()
 
     async def start(self):
         logger.info(f"🚀 [ORCHESTRATOR] Iniciando Motor Local Master (Modo 100% Dinámico)...")
@@ -43,6 +47,10 @@ class SlingshotOrchestrator:
         asyncio.create_task(self._ghost_worker())
         # Iniciar Worker de Sesgo Fractal Centralizado (v10.0 Sovereign)
         asyncio.create_task(self._fractal_worker())
+        # Iniciar Escáner de Oportunidades Globales (Scalp & Swing)
+        self.market_scanner.start()
+        # Iniciar Gestor de Trades Activos (Trailing Stop Estructural)
+        self.trade_manager.start()
         # Iniciar Worker de Métricas On-Chain Centralizadas (v8.5.9)
         asyncio.create_task(self._onchain_worker())
         # Iniciar Worker de Sesiones Globales
@@ -285,9 +293,10 @@ class SlingshotOrchestrator:
             # Revisar cada 1 minuto (60s)
             await asyncio.sleep(60)
 
-    def stop(self):
+    async def stop(self):
         """Parada coordinada."""
         self._stop_event.set()
+        self.market_scanner.stop()
         logger.info("[ORCHESTRATOR] Deteniendo motor maestro...")
 
     async def _onchain_worker(self):
@@ -347,7 +356,7 @@ async def run_orchestrator():
     except KeyboardInterrupt:
         pass
     finally:
-        orchestrator.stop()
+        await orchestrator.stop()
 
 if __name__ == "__main__":
     asyncio.run(run_orchestrator())

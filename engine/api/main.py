@@ -46,10 +46,15 @@ WebSocket.send_json = _safe_send_json  # type: ignore[method-assign]
 async def lifespan(app: FastAPI):
     """Gestión del ciclo de vida del motor Slingshot v10.0."""
     logger.info(f"🚀 [INIT] Slingshot v{settings.VERSION} — Iniciando...")
-    
+
     # 1. Limpieza inicial del almacén de datos
     await store.clear_all()
-    
+
+    # 1.5 Inicializar Nodo Nexus de Ejecución Soberano
+    from engine.execution.nexus import nexus
+    logger.info(f"🛡️ [INIT] Nodo Nexus cargado en lifespan (Dry Run: {nexus.dry_run})")
+    nexus.start_centinels()
+
     # 2. Inicializar Ollama (Advisor Táctico) con reintentos
     ollama_ready = False
     for attempt in range(1, 4):
@@ -61,7 +66,7 @@ async def lifespan(app: FastAPI):
             logger.warning(f"[INIT] Ollama no disponible (intento {attempt}/3)...")
         if attempt < 3:
             await asyncio.sleep(3)
-    
+
     if not ollama_ready:
         logger.error("🚨 [INIT] Ollama NO disponible tras 3 intentos. El sistema funcionará sin Advisor IA.")
     else:
@@ -82,7 +87,7 @@ async def lifespan(app: FastAPI):
     logger.info(f"🏎️  [SYSTEM] Slingshot v{settings.VERSION} listo para el despliegue.")
 
     yield
-    
+
     # 🛑 Shutdown Logic
     logger.info("🛑 [SHUTDOWN] Slingshot cerrando procesos...")
     try:
@@ -188,6 +193,104 @@ async def get_signals(
     return await store.get_signals(asset=asset, status=_status_filter)
 
 
+@app.get("/api/v1/scanner/opportunities")
+async def get_scanner_opportunities(
+    category: str = Query("all", description="Filtro: scalp, swing, o all")
+):
+    """Retorna las mejores oportunidades de corto (scalp) y largo plazo (swing) del escáner."""
+    cat_lower = category.lower()
+    if cat_lower == "scalp":
+        return {"scalp": store.get_scanner_opportunities("scalp")}
+    elif cat_lower == "swing":
+        return {"swing": store.get_scanner_opportunities("swing")}
+    else:
+        return {
+            "scalp": store.get_scanner_opportunities("scalp"),
+            "swing": store.get_scanner_opportunities("swing")
+        }
+
+
+@app.get("/api/v1/trades/active")
+async def get_active_trades(asset: Optional[str] = Query(None)):
+    """
+    Retorna las señales activas con su estado de Trailing Stop Estructural.
+    Incluye la fase actual (ACTIVE/BREAKEVEN/TRAILING/CLOSED),
+    el SL dinámico actualizado y el historial de movimientos del trailing.
+    """
+    all_signals = await store.get_signals(asset=asset, status=None)
+    active = [
+        {
+            "id":              s.get("id"),
+            "asset":           s.get("asset"),
+            "direction":       s.get("signal_type", "LONG"),
+            "entry_price":     s.get("price"),
+            "stop_loss":       s.get("stop_loss"),
+            "tp1":             s.get("tp1"),
+            "tp2":             s.get("tp2"),
+            "tp3":             s.get("tp3", s.get("take_profit_3r")),
+            "status":          s.get("status"),
+            "trailing_phase":  s.get("trailing_phase", "ACTIVE"),
+            "trailing_reason": s.get("trailing_reason", "SL en posicion original"),
+            "trailing_history":s.get("trailing_history", []),
+            "confluence":      s.get("confluence", {}).get("score", 0),
+            "created_at":      s.get("created_at"),
+        }
+        for s in all_signals
+        if s.get("status") in ("ACTIVE", "APPROVED", "BREAKEVEN", "TRAILING")
+    ]
+    return {"count": len(active), "trades": active}
+
+
+@app.post("/api/v1/inject-test-signal")
+async def inject_test_signal(
+    api_key: str = Query(...),
+    symbol: str = Query("BTCUSDT"),
+    direction: str = Query("LONG"),
+    price: float = Query(50000.0)
+):
+    """Inyecta una señal de prueba de forma dinámica en la instancia en ejecución de manera segura (bypassea Bitunix)."""
+    from engine.api.signal_handler import SignalHandler
+    from datetime import datetime, timezone
+
+    if api_key != settings.SECURITY_API_KEY:
+        raise HTTPException(status_code=401, detail="API Key inválida")
+
+    tactical_mock = {
+        "market_regime": "BULLISH_TREND" if direction.upper() == "LONG" else "BEARISH_TREND",
+        "active_strategy": "SMC_APEX_SNIPER",
+        "signals": [
+            {
+                "type": direction.upper(),
+                "price": price,
+                "stop_loss": price * (0.98 if direction.upper() == "LONG" else 1.02),
+                "take_profit_3r": price * (1.05 if direction.upper() == "LONG" else 0.95),
+                "tp1": price * (1.02 if direction.upper() == "LONG" else 0.98),
+                "tp2": price * (1.035 if direction.upper() == "LONG" else 0.965),
+                "tp3": price * (1.05 if direction.upper() == "LONG" else 0.95),
+                "position_size": 5.0,
+                "position_size_usdt": 5.0,
+                "leverage": 5,
+                "risk_pct": 1.0,
+                "atr": price * 0.01,
+                "confluence": {"score": 85},
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "is_test": True  # Flag de seguridad para evitar ejecución en broker
+            }
+        ],
+        "smc": {
+            "order_blocks": {
+                "bullish": [{"bottom": price * 0.99, "top": price * 0.995}],
+                "bearish": [{"bottom": price * 1.005, "top": price * 1.01}]
+            }
+        }
+    }
+
+    handler = SignalHandler(symbol.upper(), "15m", None)
+    await handler.handle(tactical_mock)
+    return {"success": True, "message": f"Test signal for {symbol.upper()} ({direction.upper()}) injected safely (No trade executed)"}
+
+
+
 # ── REST One-Shot Analysis ────────────────────────────────────────────────────
 
 @app.get("/api/v1/analyze/{symbol}")
@@ -223,7 +326,7 @@ async def get_ws_token(api_key: str = Query(...)):
     """Emite un JWT para WebSocket, protegido por API Key interna."""
     if api_key != settings.SECURITY_API_KEY:
         raise HTTPException(status_code=401, detail="API Key inválida")
-    
+
     token = issue_token()
     return {"token": token, "expires_in": 3600}
 
@@ -242,7 +345,7 @@ async def websocket_stream_endpoint(
         registry.record_auth(success=False)
         await websocket.close(code=4001)
         return
-        
+
     is_valid, reason, _ = validate_token(token)
     if not is_valid:
         logger.error(f"[GATEWAY] 🔐 Acceso denegado ({reason}) a {symbol}:{interval}")

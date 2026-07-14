@@ -20,6 +20,7 @@ from engine.execution.bitunix_executor import BitunixExecutor
 from engine.api.config import settings
 from engine.core.memory import blackbox
 from engine.core.store import store
+from engine.workers.trade_manager import trade_manager
 
 
 class NexusNode:
@@ -131,9 +132,18 @@ class NexusNode:
                                     logger.error(f"❌ [YOSH] Error al escalar posición: {scale_err}")
 
 
-                    # 3. Verificar si la posición se ha cerrado (SL o TP3 final hit)
-                    # Esto es una simplificación; un sistema real monitorearía WebSockets de órdenes
-                    # 3. Verificar si la posición se ha cerrado (SL o TP3 final hit)
+                    # 3. [TRAILING ESTRUCTURAL] Actualizar SL con confirmaciones reales
+                    # Delegamos al TradeManager para aplicar la triple confirmacion
+                    # (cierre de vela + RVOL + BOS) antes de mover el SL.
+                    # Esto reemplaza el SL fijo por el SL dinamico estructural.
+                    try:
+                        await trade_manager._update_signal_trailing(sig)
+                        # Releer el SL del signal: puede haber sido actualizado por el TradeManager
+                        sl = float(sig.get("stop_loss", sl))
+                    except Exception as tm_err:
+                        logger.debug(f"[NEXUS] TradeManager skip para {asset}: {tm_err}")
+
+                    # 4. Verificar si la posicion se ha cerrado (SL o TP3 final hit)
                     is_sl = (current_price <= sl) if is_long else (current_price >= sl)
                     is_tp = False
                     if not is_sl:
