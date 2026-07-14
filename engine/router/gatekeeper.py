@@ -98,6 +98,72 @@ class GatekeeperResult:
     blocked: list[dict] = field(default_factory=list)
 
 
+class BayesianInferenceEngine:
+    """
+    [BAYESIAN INFERENCE ENGINE v1.0]
+    Calcula la probabilidad condicional de éxito P(Éxito | Setup) usando
+    el historial de la caja negra (BlackBox).
+    
+    Permite bypass dinámico de vetos rígidos si la probabilidad condicional
+    histórica de éxito en ese escenario es superior al 60%.
+    """
+    def __init__(self, bb):
+        self.bb = bb
+
+    def estimate_probability(self, asset: str, signal_type: str, current_fp: dict) -> tuple[float, str]:
+        """
+        Retorna (probabilidad_de_exito: float, reasoning: str)
+        """
+        memory = self.bb.memory
+        if len(memory) < 10:
+            # Fallback seguro por falta de historial suficiente (a priori neutral)
+            return 0.55, "Historial insuficiente en BlackBox (a priori 55% WR estimado)"
+
+        # 1. Filtrar trades del mismo activo
+        asset_trades = [t for t in memory if t.get("asset") == asset]
+        if not asset_trades:
+            # Si no hay trades del activo, buscamos en general por dirección
+            asset_trades = [t for t in memory if t.get("signal_type") == signal_type]
+
+        if len(asset_trades) < 5:
+            return 0.55, "Historial parcial del activo insuficiente (a priori 55%)"
+
+        # 2. Calcular probabilidades a priori
+        successful_trades = [t for t in asset_trades if t.get("result") == "TAKE_PROFIT"]
+        p_success = len(successful_trades) / len(asset_trades)
+
+        # 3. Calcular verosimilitud condicional para características clave (Regime + OTE)
+        regime_curr = current_fp.get("regime", "UNKNOWN")
+        is_ote_curr = current_fp.get("is_in_ote", False)
+
+        # Frecuencia en exitosos
+        matches_success_regime = sum(1 for t in successful_trades if t.get("fingerprint", {}).get("regime") == regime_curr)
+        matches_success_ote = sum(1 for t in successful_trades if t.get("fingerprint", {}).get("is_in_ote") == is_ote_curr)
+
+        # Verosimilitudes (con suavizado de Laplace para evitar divisiones por cero)
+        p_regime_given_success = (matches_success_regime + 1) / (len(successful_trades) + 2)
+        p_ote_given_success = (matches_success_ote + 1) / (len(successful_trades) + 2)
+
+        # Frecuencia global
+        matches_total_regime = sum(1 for t in asset_trades if t.get("fingerprint", {}).get("regime") == regime_curr)
+        matches_total_ote = sum(1 for t in asset_trades if t.get("fingerprint", {}).get("is_in_ote") == is_ote_curr)
+
+        p_regime = (matches_total_regime + 1) / (len(asset_trades) + 2)
+        p_ote = (matches_total_ote + 1) / (len(asset_trades) + 2)
+
+        # 4. Teorema de Bayes
+        # P(Éxito | Régimen, OTE) = [P(Régimen|Éxito) * P(OTE|Éxito) * P(Éxito)] / [P(Régimen) * P(OTE)]
+        numerator = p_regime_given_success * p_ote_given_success * p_success
+        denominator = p_regime * p_ote
+
+        p_posterior = min(0.99, max(0.01, numerator / (denominator if denominator > 0 else 1.0)))
+
+        # Normalización ponderada para evitar picos por Laplace
+        p_posterior_normalized = (p_posterior + p_success) / 2.0
+
+        return p_posterior_normalized, f"Bayes P(Win) = {p_posterior_normalized:.1%} | Priori P(Win) = {p_success:.1%} basado en {len(asset_trades)} trades."
+
+
 class SignalGatekeeper:
     """
     Aplica los 4 filtros institucionales en secuencia.
@@ -108,6 +174,7 @@ class SignalGatekeeper:
         self._risk = risk_manager
         # Load dynamic configuration for thresholds
         self._config = _load_gatekeeper_config()
+        self.bayes = BayesianInferenceEngine(blackbox)  # Motor Bayesiano v1.0
 
     async def process(
         self,
@@ -314,14 +381,35 @@ class SignalGatekeeper:
                         reason = f"Veto Fractal: Tendencia macro alcista. Mensual/Semanal en Markup ({m1}/{w1}) o Diario/H4 en Markup ({d1}/{h4}). Prohibido buscar Shorts."
                 
                 if fractal_veto:
-                    if conf_score >= 95:
+                    # Inferencia Bayesiana en vivo
+                    fp = blackbox.extract_fingerprint(sig)
+                    p_win, bayes_reason = self.bayes.estimate_probability(asset, sig_type, fp)
+                    
+                    if p_win >= 0.57:
+                        # [BAYESIAN BYPASS ACTIVE]
+                        if not silent:
+                            logger.info(f"🔮 [GATEKEEPER] [BAYES_BYPASS] {asset} {sig_type} ignorando Veto Fractal por probabilidad de exito favorable: {p_win:.1%}")
+                        fractal_veto = False
+                        
+                        # Agregar confirmación al checklist de confluencia
+                        checklist = sig.get("confluence", {}).get("checklist", [])
+                        checklist.append({
+                            "factor": "Bayes Shield",
+                            "status": "CONFIRMADO",
+                            "detail": f"🛡️ Bypass Probabilistico ({bayes_reason})"
+                        })
+                        
+                        # Mitigación de riesgo: reducir riesgo a la mitad para trade contra-tendencia macro
+                        sig["risk_pct"] = round(sig.get("risk_pct", 1.0) * 0.5, 2)
+                        sig["position_size_usdt"] = round(sig.get("position_size_usdt", 100) * 0.5, 2)
+                    elif conf_score >= 95:
                         if not silent:
                             logger.info(f"🚀 [GATEKEEPER] [SOVEREIGN_BYPASS] {asset} ignorando Veto Fractal por Score Extremo ({conf_score}%).")
                         fractal_veto = False
                     else:
                         if not silent:
-                            logger.warning(f"[GATEKEEPER] [FRACTAL_VETO] {asset} {sig_type} bloqueado por alineación macro negativa.")
-                        self._block(sig, "FRACTAL_VETO", reason, result)
+                            logger.warning(f"[GATEKEEPER] [FRACTAL_VETO] {asset} {sig_type} bloqueado por alineacion macro negativa.")
+                        self._block(sig, "FRACTAL_VETO", f"{reason} | {bayes_reason}", result)
                         continue
 
             # Dynamic alignment veto thresholds based on regime
@@ -589,7 +677,25 @@ class SignalGatekeeper:
         sig["status"] = status
         sig["blocked_reason"] = reason
         sig["rejection_reason"] = reason
-        result.blocked.append(sig)
+        
+        # ── DE-DUPLICADOR DE VETOS ──
+        # Evitar registrar alertas y bloqueos repetitivos en un intervalo de 15 minutos (900s)
+        asset = sig.get("asset", "UNKNOWN")
+        now = time.time()
+        
+        if asset not in SIGNALS_HISTORY:
+            SIGNALS_HISTORY[asset] = deque(maxlen=20)
+            
+        # Comprobar si hay una alerta idéntica en los últimos 15 minutos
+        duplicate = False
+        for old_time, old_status, old_type in SIGNALS_HISTORY[asset]:
+            if old_status == status and old_type == sig.get("signal_type") and (now - old_time) < 900:
+                duplicate = True
+                break
+                
+        if not duplicate:
+            SIGNALS_HISTORY[asset].append((now, status, sig.get("signal_type")))
+            result.blocked.append(sig)
 
     @staticmethod
     def _is_alive(sig: dict, df_time, df_low, df_high, now_utc) -> bool:
