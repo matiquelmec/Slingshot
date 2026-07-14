@@ -48,7 +48,9 @@ export default function SignalTerminal() {
 
         const fetchInitialHydration = async () => {
             try {
-                const res = await fetch(`http://localhost:8000/api/v1/signals?status=ALL`);
+                // Resolver el host dinámicamente para evitar bloqueos en producción/redes locales
+                const apiHost = typeof window !== 'undefined' ? `${window.location.protocol}//${window.location.hostname}:8000` : 'http://localhost:8000';
+                const res = await fetch(`${apiHost}/api/v1/signals?status=ALL`);
                 if (res.ok) {
                     const data = await res.json();
                     hydrateSignals(data);
@@ -70,12 +72,12 @@ export default function SignalTerminal() {
         Object.values(signalHistory).forEach(s => displayMap.set(s.id || `${s.timestamp}-${s.asset}`, s));
         Object.values(auditedSignals).forEach(s => displayMap.set(s.id || `${s.timestamp}-${s.asset}`, s));
         
-        // Sort descendente por tiempo + Filtrado por Activo y Estado (v5.8.0)
+        // Sort descendente por tiempo + Filtrado por Activo y Estado (v16.0)
         return Array.from(displayMap.values())
             .filter(s => viewMode === 'GLOBAL' || s.asset === activeSymbol)
             .filter(s => {
                 if (!hideBlocked) return true;
-                const validStatuses = ['ACTIVE', 'APPROVED', 'PENDING', 'FILLED', 'CLOSED_TP_MAX', 'STOPPED_OUT'];
+                const validStatuses = ['ACTIVE', 'APPROVED', 'PENDING', 'FILLED', 'BREAKEVEN', 'TRAILING', 'CLOSED_TP_MAX', 'STOPPED_OUT', 'CLOSED'];
                 return validStatuses.includes(s.status || '');
             })
             .sort((a, b) => {
@@ -206,9 +208,9 @@ export default function SignalTerminal() {
                     ) : (
                         <div className="flex flex-col gap-2 px-2">
                             <AnimatePresence>
-                                {displaySignals.map((sig, idx) => (
+                                {displaySignals.map((sig) => (
                                     <SignalCardItem
-                                        key={`audited-${sig.timestamp}-${sig.asset ?? 'any'}-${idx}`}
+                                        key={sig.id || `audited-${sig.timestamp}-${sig.asset}`}
                                         signal={sig}
                                         currentPrice={currentPrice_live}
                                     />
