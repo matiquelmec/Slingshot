@@ -72,8 +72,8 @@ export default function SignalTerminal() {
         Object.values(signalHistory).forEach(s => displayMap.set(s.id || `${s.timestamp}-${s.asset}`, s));
         Object.values(auditedSignals).forEach(s => displayMap.set(s.id || `${s.timestamp}-${s.asset}`, s));
         
-        // Sort descendente por tiempo + Filtrado por Activo y Estado (v16.0)
-        return Array.from(displayMap.values())
+        // 1. Filtrar por activo e historial de visibilidad
+        const filtered = Array.from(displayMap.values())
             .filter(s => viewMode === 'GLOBAL' || s.asset === activeSymbol)
             .filter(s => {
                 if (!hideBlocked) return true;
@@ -84,8 +84,33 @@ export default function SignalTerminal() {
                 const timeA = new Date(a.created_at || a.timestamp).getTime();
                 const timeB = new Date(b.created_at || b.timestamp).getTime();
                 return timeB - timeA;
-            })
-            .slice(0, 50);
+            });
+
+        // 2. Agrupar bloqueos/vetos consecutivos del mismo activo para evitar inundación de pantalla
+        const grouped: any[] = [];
+        const validStatuses = ['ACTIVE', 'APPROVED', 'PENDING', 'FILLED', 'BREAKEVEN', 'TRAILING', 'CLOSED_TP_MAX', 'STOPPED_OUT', 'CLOSED'];
+
+        filtered.forEach(sig => {
+            const isSigBlocked = sig.status && !validStatuses.includes(sig.status);
+
+            if (isSigBlocked && grouped.length > 0) {
+                const last = grouped[grouped.length - 1];
+                const isLastBlocked = last.status && !validStatuses.includes(last.status);
+
+                // Agrupar si es el mismo activo, la misma dirección, la misma temporalidad y ambos están bloqueados
+                if (isLastBlocked && last.asset === sig.asset && last.type === sig.type) {
+                    last.groupCount = (last.groupCount || 1) + 1;
+                    if (!last.groupTimestamps) {
+                        last.groupTimestamps = [last.created_at || last.timestamp];
+                    }
+                    last.groupTimestamps.push(sig.created_at || sig.timestamp);
+                    return; // No agregar al array final, queda absorbido
+                }
+            }
+            grouped.push({ ...sig, groupCount: 1 });
+        });
+
+        return grouped.slice(0, 50);
     }, [signalHistory, auditedSignals, viewMode, activeSymbol, hideBlocked]);
 
     const activeCount = React.useMemo(() => displaySignals.filter(s => s.status === 'ACTIVE').length, [displaySignals]);

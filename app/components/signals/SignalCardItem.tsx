@@ -42,6 +42,33 @@ const formatTime = (ts: any) => {
     }
 };
 
+const getStatusType = (status: string): 'success' | 'warning' | 'info' => {
+    if (!status) return 'info';
+    const s = status.toUpperCase();
+    if (
+        s.includes('CONFIRMADO') ||
+        s === 'ELITE' ||
+        s === 'ACTIVO' ||
+        s === 'APROBADO' ||
+        s === 'FRESCO' ||
+        s === 'FAVORABLE' ||
+        s === 'ALINEADO' ||
+        s === 'INSTITUCIONAL'
+    ) {
+        return 'success';
+    }
+    if (
+        s === 'PARCIAL' ||
+        s === 'VOLÁTIL' ||
+        s === 'DECAYENDO' ||
+        s.includes('PRECAUCIÓN') ||
+        s.includes('ALERTA')
+    ) {
+        return 'warning';
+    }
+    return 'info';
+};
+
 const SignalCardItem: React.FC<SignalCardItemProps> = ({ signal, currentPrice }) => {
     // Consumimos el mapa de precios globales para hidratación específica por activo (v5.8.0)
     const latestPrices = useTelemetryStore(state => state.latestPrices);
@@ -62,6 +89,11 @@ const SignalCardItem: React.FC<SignalCardItemProps> = ({ signal, currentPrice })
         return signal.status && !validStatuses.includes(signal.status);
     }, [signal.status]);
 
+    const isChasing = useMemo(() => {
+        // Detectar si la señal tiene alguna alerta del OTE Watchdog en el checklist
+        return signal.confluence?.checklist?.some(item => item.factor === 'OTE Watchdog') || false;
+    }, [signal.confluence]);
+
     return (
         <motion.div
             initial={{ opacity: 0, x: -20 }}
@@ -69,7 +101,7 @@ const SignalCardItem: React.FC<SignalCardItemProps> = ({ signal, currentPrice })
             transition={{ duration: 0.4 }}
             className={`flex flex-col rounded border px-4 py-3 ${lifecycle.bgColor} transition-all`}
         >
-            {/* ── Fila 1: Tiempo + Tipo + Estado ── */}
+            {/* ── Fila 1: Tiempo + Tipo + Estado + Sesión ── */}
             <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-2">
                     <span className="font-mono text-[10px] text-white/40">{formatTime(signal.created_at || signal.timestamp)}</span>
@@ -83,10 +115,33 @@ const SignalCardItem: React.FC<SignalCardItemProps> = ({ signal, currentPrice })
                             {signal.type.replace('🟢', '').replace('🔴', '').trim()}
                         </span>
                     </div>
+
+                    {/* Badge de Sesión de Origen si existe */}
+                    {signal.session && signal.session !== 'UNKNOWN' && (
+                        <span className="text-[8px] font-mono px-1.5 py-0.5 rounded border border-white/10 bg-white/5 text-white/50">
+                            🕒 {signal.session}
+                        </span>
+                    )}
+
+                    {/* Badge OTE Watchdog Alert */}
+                    {isChasing && (
+                        <span className="text-[8px] font-mono px-1.5 py-0.5 rounded border border-amber-500/20 bg-amber-500/10 text-amber-400 font-bold">
+                            ⚠️ OTE CHASING
+                        </span>
+                    )}
                 </div>
-                <span className={`text-[9px] font-bold tracking-widest ${lifecycle.color}`}>
-                    {lifecycle.label}
-                </span>
+
+                <div className="flex items-center gap-2">
+                    {/* Badge de Agrupación (Deduplicador) */}
+                    {(signal as any).groupCount > 1 && (
+                        <span className="text-[8px] font-mono bg-red-500/20 text-red-400 border border-red-500/30 px-1.5 py-0.5 rounded font-black tracking-wide animate-pulse">
+                            📂 {(signal as any).groupCount} EVENTOS SIMILARES
+                        </span>
+                    )}
+                    <span className={`text-[9px] font-bold tracking-widest ${lifecycle.color}`}>
+                        {lifecycle.label}
+                    </span>
+                </div>
             </div>
 
             {/* ── Fila 2: Estado Educativo o Reporte de Auditoría ── */}
@@ -95,9 +150,13 @@ const SignalCardItem: React.FC<SignalCardItemProps> = ({ signal, currentPrice })
                     <div className="absolute left-0 top-0 bottom-0 w-1 bg-red-500/30 group-hover:bg-red-500/60 transition-all" />
                 )}
                 <div className="flex items-start gap-2">
-                    <span className="opacity-80 font-bold uppercase tracking-widest">{lifecycle.label}:</span>
+                    <span className="opacity-80 font-bold uppercase tracking-widest">
+                        {isChasing ? 'OTE VETO' : lifecycle.label}:
+                    </span>
                     <div className="flex-1 whitespace-pre-wrap">
-                        {lifecycle.reason}
+                        {isChasing 
+                            ? "Setup rechazado por OTE Watchdog: el precio se encuentra fuera de la zona de descuento/premium ideal (Golden Pocket). Persiguiendo precio." 
+                            : lifecycle.reason}
                     </div>
                 </div>
                 {lifecycle.countdown && (
@@ -305,14 +364,18 @@ const SignalCardItem: React.FC<SignalCardItemProps> = ({ signal, currentPrice })
                         </span>
                     </div>
                     <div className="flex flex-wrap gap-1">
-                        {signal.confluence.checklist?.map((item, i) => (
-                            <span key={i} className={`px-1.5 py-0.5 text-[8px] font-bold tracking-wider rounded border ${item.status === 'CONFIRMADO' ? 'text-neon-green/90 bg-neon-green/10 border-neon-green/20' :
-                                    item.status === 'PARCIAL' ? 'text-yellow-400/90 bg-yellow-400/10 border-yellow-400/20' :
-                                        'text-white/30 bg-white/5 border-white/10'
+                        {signal.confluence.checklist?.map((item, i) => {
+                            const statusType = getStatusType(item.status);
+                            return (
+                                <span key={i} className={`px-1.5 py-0.5 text-[8px] font-bold tracking-wider rounded border ${
+                                    statusType === 'success' ? 'text-neon-green/90 bg-neon-green/10 border-neon-green/20' :
+                                    statusType === 'warning' ? 'text-yellow-400/90 bg-yellow-400/10 border-yellow-400/20' :
+                                    'text-white/30 bg-white/5 border-white/10'
                                 }`} title={item.detail}>
-                                {item.status === 'CONFIRMADO' ? '✓' : item.status === 'PARCIAL' ? '◑' : '✗'} {item.factor}
-                            </span>
-                        ))}
+                                    {statusType === 'success' ? '✓' : statusType === 'warning' ? '◑' : '✗'} {item.factor}
+                                </span>
+                            );
+                        })}
                     </div>
                     {signal.confluence.reasoning && (
                         <p className="text-[9px] text-white/40 italic font-mono leading-relaxed pl-1 border-l border-white/10">
