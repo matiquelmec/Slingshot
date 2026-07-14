@@ -30,11 +30,11 @@ class RiskManager:
             
             # [FASE 1.1] Matriz Dinámica de Riesgo (Adaptive R:R)
             if interval_mins < 15:     # Micro-Scalping (1m, 3m, 5m)
-                dynamic_min_rr = 3.0
+                dynamic_min_rr = 1.5   # R:R ágil y realizable bajo fricción
             elif interval_mins <= 60:  # Intraday (15m, 30m, 1h)
-                dynamic_min_rr = 2.0
+                dynamic_min_rr = 2.5   # Sniper clásico estándar
             else:                      # Swing/Macro (2h, 4h, 8h, 1d)
-                dynamic_min_rr = 1.5
+                dynamic_min_rr = 3.5   # R:R premium institucional por holding time
             
             # Fallback Dinámico Profesional: Si el ATR no está disponible o es absurdamente bajo
             # (menor a 0.05% del precio), aplicamos un fallback sano del 0.3% del precio de entrada
@@ -149,9 +149,14 @@ class RiskManager:
         actual_risk_pct = self._adaptive_risk(confluence_score)
         risk_amount_usdt = self.account_balance * actual_risk_pct
         
-        # 1. Aplicación de Pulmones (SIGMA ATR Mult)
+        # 1. Aplicación de Pulmones (SIGMA ATR Mult) adaptados al Régimen de Mercado
+        # En rangos sucios (CHOPPY), ampliamos el stop loss un 30% para evitar el ruido de las mechas.
+        atr_multiplier = tuning["atr_mult"]
+        if regime_upper == "CHOPPY":
+            atr_multiplier *= 1.3
+        
         fallback_atr = atr_value if atr_value > 0 else (current_price * 0.005)
-        risk_dist = fallback_atr * tuning["atr_mult"]
+        risk_dist = fallback_atr * atr_multiplier
         
         # --- [GOD MODE: SALIDAS ESTRUCTURALES v6.1] ---
         sl = current_price - risk_dist if signal_type == "LONG" else current_price + risk_dist
@@ -188,6 +193,40 @@ class RiskManager:
                     sl_candidate = best_ceiling + (fallback_atr * atr_mult)
                     if sl_candidate < (current_price + risk_dist * 3.0):
                         sl = sl_candidate
+
+        # ── PROTECCIÓN CONTRA LIQUIDACIONES (Stop Hunt Shield) ──
+        # Desplazar el SL detrás de clusters de liquidación masiva cercanos para evitar barridos
+        try:
+            if liquidations:
+                # Buscar la liquidación más grande en la zona del SL
+                if signal_type == "LONG":
+                    # Zonas de liquidación de Longs por debajo de nuestra entrada que estén cerca de nuestro SL
+                    long_liqs = [l["price"] for l in liquidations if l["type"] == "LONG_LIQ" and sl <= l["price"] < current_price]
+                    if long_liqs:
+                        # Si hay liquidaciones sobre o cerca de nuestro stop, colocamos el SL un 0.2% por DEBAJO de esa zona de liquidación
+                        max_liq_zone = min(long_liqs)
+                        candidate_sl = max_liq_zone - (current_price * 0.002)
+                        if candidate_sl < sl:
+                            sl = candidate_sl
+                else:
+                    # Zonas de liquidación de Shorts por encima de nuestra entrada que estén cerca de nuestro SL
+                    short_liqs = [l["price"] for l in liquidations if l["type"] == "SHORT_LIQ" and current_price < l["price"] <= sl]
+                    if short_liqs:
+                        # Colocamos el SL un 0.2% por ENCIMA de la zona de liquidación de shorts
+                        max_liq_zone = max(short_liqs)
+                        candidate_sl = max_liq_zone + (current_price * 0.002)
+                        if candidate_sl > sl:
+                            sl = candidate_sl
+        except Exception as liq_err:
+            pass
+
+        # ── AJUSTE DE SPREAD DINÁMICO ──
+        # Sumar/restar spread en vivo para evitar activaciones prematuras en exchanges de futuros
+        spread_buffer = current_price * tuning.get("spread_impact", 0.0010)
+        if signal_type == "LONG":
+            sl -= spread_buffer
+        else:
+            sl += spread_buffer
 
         # Recálculo de riesgo inicial
         initial_risk_dist = abs(current_price - sl)
@@ -338,13 +377,14 @@ class RiskManager:
                     # Zona de premium adaptativa
                     is_in_ote = current_price >= f_val
 
+        final_reward_tp3 = abs(tp3 - current_price)
         return {
             "entry_price": round(current_price, 5),
             "stop_loss": round(sl, 5),
             "tp1": round(tp1, 5),
             "tp2": round(tp2, 5),
             "tp3": round(tp3, 5),
-            "take_profit_3r": round(tp1, 5),  # [FIX v13.1] Alias requerido por gatekeeper.py y signalLogic.ts
+            "take_profit_3r": round(tp3, 5),  # Corregido: apunta al target final estructural tp3
             "tp1_vol_pct": tuning["tp1_vol"],
             "risk_amount_usdt": round(risk_amount_usdt, 2), # Compatibility fix
             "risk_usd": round(risk_amount_usdt, 2),
@@ -352,6 +392,7 @@ class RiskManager:
             "position_size_usdt": round(pos_size_nominal, 2),
             "leverage": leverage,
             "rr_ratio": round(final_reward / final_risk, 2) if final_risk > 0 else 0,
+            "rr_ratio_tp3": round(final_reward_tp3 / final_risk, 2) if final_risk > 0 else 0,
             "entry_zone_top": round(current_price * 1.001, 5),
             "entry_zone_bottom": round(current_price * 0.999, 5),
             "asset": asset,
