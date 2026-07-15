@@ -51,3 +51,8 @@ reports/
 crash_log*.txt
 .vault_v9_legacy/
 *.c
+
+# 🦀 Rust Sidecar Build Targets
+slingshot-core-rust/target/
+**/target/
+Cargo.lock

@@ -1,11 +1,11 @@
-# 🏗️ Estructura del Proyecto Slingshot v13.4 Fidelity Backtesting Edition
+# 🏗️ Estructura del Proyecto Slingshot v10.0 HFT Apex Edition
 
 > Guía de referencia oficial para la arquitectura, mantenimiento y evolución del sistema.
-> **Última actualización**: Mayo 20, 2026
+> **Última actualización**: Julio 15, 2026
 
 ---
 
-## 📁 Árbol de Directorios
+## 📁 Árbol de Directorios Actualizado
 
 ```text
 Slingshot_Trading/
@@ -15,7 +15,7 @@ Slingshot_Trading/
 │   │   ├── main.py                  # FastAPI entry point + lifespan
 │   │   ├── config.py                # Settings centralizadas (.env)
 │   │   ├── ws_manager.py            # WebSocket broadcaster al frontend
-│   │   ├── advisor.py               # Motor IA (Ollama/Qwen-3) + Fallback Determinístico v13.1
+│   │   ├── advisor.py               # Motor IA (Ollama/Gemma-3) + Fallback Determinístico v10.0
 │   │   ├── advisor_bridge.py        # Puente HTTP para inferencia IA
 │   │   ├── auth.py                  # Autenticación JWT
 │   │   ├── signal_handler.py        # Handler de señales HTTP/WS
@@ -23,35 +23,39 @@ Slingshot_Trading/
 │   │   ├── json_utils.py            # Sanitización JSON (numpy → python)
 │   │   └── broadcaster/             # Pipeline de broadcast asíncrono
 │   ├── core/                        # Núcleo del motor
-│   │   ├── confluence.py            # ConfluenceManager v13.1 — GP Fix + Scoring dinámico (10-25 pts)
+│   │   ├── confluence.py            # ConfluenceManager v10.0 — Parámetros unificados + GP + Liquidaciones
 │   │   ├── store.py                 # MemoryStore — Estado persistente por activo
 │   │   ├── session_manager.py       # Gestión de sesiones (Asia/London/NY)
+│   │   ├── memory.py                # BlackBox Memory — Registro e historial de trades
+│   │   ├── validator.py             # AI Validator Agent — Auditoría narrativa
 │   │   └── logger.py                # Logger institucional
 │   ├── router/                      # Pipeline de señales
 │   │   ├── analyzer.py              # MarketAnalyzer — Procesamiento de indicadores
-│   │   ├── gatekeeper.py            # SignalGatekeeper v12.0 — 8 filtros + Sovereign Bypass
+│   │   ├── gatekeeper.py            # SignalGatekeeper v10.0 — Motor Bayesiano + Sovereign Bypass
 │   │   ├── dispatcher.py            # Despacho de señales aprobadas
-│   │   └── processors.py            # Procesadores + Slow Path (Volume Profile, Trap Detection v13.1)
+│   │   └── processors.py            # Procesadores + Slow Path (Volume Profile, Trap Detection)
 │   ├── strategies/                  # Lógica táctica
-│   │   └── smc.py                   # SMCInstitutionalStrategy v13.1 (Tiers A/B con Convicción Diferenciada)
+│   │   ├── smc.py                   # SMCInstitutionalStrategy v10.0 (Tiers A/B con Convicción Diferenciada)
+│   │   └── larry_williams.py        # Estrategia auxiliar de Larry Williams
 │   ├── indicators/                  # Análisis técnico e institucional
-│   │   ├── structure.py             # Order Blocks, FVGs, S/R + Trap Detection LAF/LBF (v13.1)
-│   │   ├── fibonacci.py             # Retrocesos, Golden Pocket (Evaluación Always-On v13.1)
-│   │   ├── volume.py                # RVOL, Absorción + Volume Profile POC/VAH/VAL (v13.1)
+│   │   ├── structure.py             # Order Blocks, FVGs, S/R + Trap Detection LAF/LBF
+│   │   ├── fibonacci.py             # Retrocesos, Golden Pocket (Evaluación Always-On)
+│   │   ├── volume.py                # RVOL, Absorción + Volume Profile POC/VAH/VAL
 │   │   ├── liquidity.py             # Muros de Liquidez (Orderbook)
-│   │   ├── liquidations.py          # Clusters de Liquidación proyectados
-│   │   ├── regime.py                # Detector de Régimen de Mercado
+│   │   ├── liquidations.py          # Clusters de Liquidación proyectados en vivo
+│   │   ├── regime.py                # Detector de Régimen de Mercado (EMA + ADX)
 │   │   ├── htf_analyzer.py          # Análisis HTF (1M/1W/1D)
 │   │   ├── macro.py                 # Indicadores Macro (DXY, VIX)
 │   │   ├── onchain_provider.py      # Métricas On-Chain (OI, Funding)
 │   │   ├── ghost_data.py            # Ghost Sentinel (Macro Bias Global)
 │   │   ├── market_analyzer.py       # Análisis de mercado auxiliar
-│   │   └── data_utils.py            # Utilidades de datos
+│   │   └── data_utils.py            # Conector de datos de Binance + Inserción HFT Node.js
 │   ├── risk/                        # Gestión de riesgo
-│   │   └── risk_manager.py          # RiskManager v13.1 — Debounce v2 (Score Bucketing) + Adaptive Scaling
+│   │   └── risk_manager.py          # RiskManager v10.0 — Stop Hunt Shield + Guardarraíles Dinámicos (1.20% / 0.45%)
 │   ├── execution/                   # Ejecución de órdenes
-│   │   ├── nexus.py                 # Nexus Bridge v13.1 — Exchanges + Averaging Up Yosh
+│   │   ├── nexus.py                 # Nexus Bridge — Exchanges + Averaging Up Yosh
 │   │   ├── binance_executor.py      # Executor Binance Futures
+│   │   ├── bitunix_executor.py      # Executor Bitunix con firmas HFT y Node.js Integration
 │   │   ├── delta_executor.py        # Executor genérico
 │   │   └── omega_listener.py        # Listener de posiciones abiertas
 │   ├── ml/                          # Machine Learning
@@ -65,126 +69,81 @@ Slingshot_Trading/
 │   │   └── bridge_loader.py         # Cargador de modelos
 │   ├── workers/                     # Procesos en background
 │   │   ├── orchestrator.py          # Orquestador principal de sensores
+│   │   ├── market_scanner.py        # Scanner de oportunidades + OTE Watchdog (Radar)
+│   │   ├── trade_manager.py         # Administrador de posiciones reales en Bitunix
 │   │   ├── news_worker.py           # Scraper de noticias
 │   │   └── calendar_worker.py       # Calendario económico
 │   ├── notifications/               # Sistema de alertas
 │   │   ├── filter.py                # Filtro anti-spam de notificaciones
 │   │   └── telegram.py              # Bot de Telegram
-│   ├── backtest/                  # ═══ Ecosistema de Backtesting v13.4 (Fidelity Engine) ═══
-│   │   ├── data/                  # Datasets parquet históricos de 90 días unificados
-│   │   ├── reports/               # Reportes JSON autogenerados con timestamp
-│   │   ├── replay_engine.py       # ReplayEngine v13.4 (Event-Driven Async)
-│   │   ├── fast_audit.py          # Auditoría rápida de profit con ATR real (True Range EWM 14)
-│   │   ├── multi_asset.py         # Simulación de portafolio multi-activo
-│   │   ├── stress_audit.py        # Evaluación de precisión del Gatekeeper (asíncrono)
-│   │   └── find_signals.py        # Buscador de señales Gold (SMC)
-│   ├── tests/                       # Tests de integridad (17 tests)
+│   ├── backtest/                    # ═══ Ecosistema de Backtesting v10.0 (Fidelity Engine) ═══
+│   │   ├── data/                    # Datasets parquet históricos de 90 días unificados
+│   │   ├── reports/                 # Reportes JSON autogenerados con timestamp
+│   │   ├── replay_engine.py         # ReplayEngine v10.0 (Event-Driven Async)
+│   │   ├── fast_audit.py            # Auditoría rápida de profit con ATR real (True Range EWM 14)
+│   │   ├── multi_asset.py           # Simulación de portafolio multi-activo
+│   │   ├── multi_asset_15m.py       # Simulación de 15m multi-activo
+│   │   └── stress_audit.py          # Evaluación de precisión del Gatekeeper (asíncrono)
+│   ├── tests/                       # ═══ Tests de Integridad (23 tests verificados) ═══
 │   │   ├── test_engine.py           # Test del motor principal
 │   │   ├── test_pipeline.py         # Test del pipeline completo
 │   │   ├── test_integration_pipeline.py
-│   │   ├── test_confluence_unit.py  # Test unitario de confluencia
-│   │   ├── test_router_smoke.py     # Smoke test del router
+│   │   ├── test_confluence_unit.py  # Test unitario del ConfluenceManager
+│   │   ├── test_router_smoke.py     # Smoke test del enrutador
 │   │   ├── test_signal.py           # Test de señales
+│   │   ├── test_gatekeeper_bayes.py # Test del motor bayesiano
 │   │   ├── test_gatekeeping_live.py # Test live del gatekeeper
 │   │   ├── test_obs.py              # Test de Order Blocks
 │   │   ├── test_debug_ob.py         # Debug de OBs
-│   │   ├── test_htf_analyzer.py     # Test HTF
-│   │   ├── test_regime.py           # Test de régimen
+│   │   ├── test_htf_analyzer.py     # Test de análisis temporal superior
+│   │   ├── test_regime.py           # Test de régimen de mercado
+│   │   ├── test_regime_stabilization.py # Test de estabilidad de régimen
+│   │   ├── test_risk_calculations.py # Test del RiskManager y SL/Apalancamiento
+│   │   ├── test_router_liquidations.py # Test de liquidaciones en el router
 │   │   ├── test_liquidations_v2.py  # Test liquidaciones v2
-│   │   ├── test_fetcher.py          # Test de fetcher
-│   │   ├── test_calendar.py         # Test calendario
-│   │   ├── test_llm.py              # Test del LLM
-│   │   ├── test_macro_tickers.py    # Test tickers macro
-│   │   ├── test_nexus_apex.py       # Test Nexus
-│   │   ├── data/                    # Datasets para tests (.parquet)
-│   │   └── legacy/                  # Tests de versiones antiguas
-│   ├── tools/                       # Herramientas de diagnóstico auxiliar
-│   │   └── integrity_audit.py       # Auditoría de integridad de datos y sistemas
-│   └── data/                        # Estado de sesión (runtime)
-│       ├── session_state_*.json     # Estado por activo (gitignored)
-│       ├── macro_state.json         # Estado macro global
-│       ├── economic_calendar.json   # Calendario económico cache
-│       └── ai_cache.json            # Cache del advisor IA
-│
+│   │   ├── test_fetcher.py          # Test de descarga de datos
+│   │   ├── test_calendar.py         # Test de calendario
+│   │   ├── test_llm.py              # Test de Ollama local
+│   │   ├── test_macro_tickers.py    # Test de tickers macro
+│   │   ├── test_nexus_apex.py       # Test del Nexus Node
+│   │   ├── test_larry_williams.py   # Test de la estrategia Larry Williams
+│   │   ├── test_bitunix_executor_safety.py # Test del conector de Bitunix
+│   │   ├── test_advisor_gatekeeping.py # Test de veto por LLM
+|   │   ├── test_ws.py               # Test de WebSocket en Python
+|   │   ├── test_ws.js               # Test de WebSocket en JavaScript
+│   │   └── data/                    # Datasets para tests (.parquet)
+│   └── tools/                       # Herramientas de diagnóstico auxiliar
+│       ├── integrity_audit.py       # Auditoría de integridad de datos y sistemas
+│       └── audit_data_ingestion.py  # Auditoría de ingesta de datos
 ├── app/                             # ═══ DELTA: Terminal UI (Next.js 15) ═══
 │   ├── layout.tsx                   # Layout principal
 │   ├── globals.css                  # Estilos globales
 │   ├── (dashboard)/                 # Páginas del dashboard
-│   ├── components/                  # Componentes React (Charts, Radar, Value Area Overlay)
+│   ├── components/                  # Componentes React (TradingChart, Radar, Value Area Overlay)
 │   ├── store/                       # TelemetryStore + IndicatorsStore (Zustand 5)
 │   ├── types/                       # TypeScript interfaces
 │   └── utils/                       # Utilidades del frontend
-│
-├── data/                            # Dataset maestro
-│   └── btcusdt_15m_1YEAR.parquet    # 1 año de data BTC 15m
-│
-├── docs/                            # Documentación técnica
-│   ├── ESTRUCTURA_PROYECTO.md       # ← Este archivo
-│   ├── SLINGSHOT_BIBLE_V10.md       # Especificación técnica (Fuente de Verdad)
-│   ├── AUDIT_PLAN_V11.md            # Plan de auditoría vigente
-│   ├── TELEMETRY_RESILIENCE_V11.md  # Documentación de resiliencia
-│   ├── knowledge/                   # Base de conocimientos SMC/Wyckoff
-│   └── archive/                     # Documentos de versiones anteriores
-│
 ├── scripts/                         # DevOps y herramientas de sistema
 │   ├── deploy/                      # Dockerfile + systemd service
-│   │   ├── Dockerfile
-│   │   └── slingshot.service
 │   ├── debug_connection.py          # Diagnóstico de red (REST+WS+Bitunix)
 │   ├── doctor.py                    # Diagnóstico del sistema
 │   ├── historical_fetcher.py        # Descarga de datos históricos
 │   ├── latency_benchmark.py         # Benchmark de latencia
 │   ├── latency_breakdown.py         # Desglose de latencia por componente
 │   ├── optimize_os.ps1              # Optimizaciones de Windows
-│   └── vault_cleanup.ps1            # Limpieza de caché
-│
-├── scratch/                         # Diagnósticos puntuales (gitignored)
-│   ├── scratch_xag_audit.py         # Auditoría profunda XAGUSDT
-│   ├── audit_xag_funding.py         # Verificación de funding XAG
-│   ├── test_bitunix_depth.py        # Test de orderbook Bitunix
-│   └── test_bitunix_ticker.py       # Test de ticker Bitunix
-│
-└── tmp/                             # Logs y caché temporal (gitignored)
-    ├── data/                        # Datos de sesión temporales
-    └── logs/                        # Logs del sistema
+│   ├── vault_cleanup.ps1            # Limpieza de caché
+│   └── diagnostico_motor.py         # Herramienta de diagnóstico de motor
+└── scratch/                         # Carpeta temporal (gitignored - 100% LIMPIA)
 ```
 
 ---
 
-## 📜 Reglas de Arquitectura
+## 🔌 slingshot-hft-sidecar (Antigravity Custom Skill)
 
-### 1. Ubicación de Archivos
-| Tipo de archivo | Ubicación correcta | Regla |
-|---|---|---|
-| Script de diagnóstico temporal | `scratch/` | Gitignored. No commitear. |
-| Ecosistema de Backtesting | `engine/backtest/` | Commiteado. Motor principal, datasets y reportes JSON. |
-| Herramienta de auditoría reutilizable | `engine/tools/` | Commiteado. Debe funcionar sin errores. |
-| Script de infraestructura/DevOps | `scripts/` | Commiteado. Herramientas de sistema. |
-| Test de integridad del motor | `engine/tests/` | Commiteado. Se ejecutan con pytest. |
-| Documentación técnica vigente | `docs/` | Commiteado. Siempre actualizada. |
-| Documentación obsoleta | `docs/archive/` | Referencia histórica solamente. |
+El módulo de alto rendimiento corre de forma aislada en la carpeta de personalización global:
+`C:\Users\Matías Riquelme\.gemini\config\skills\slingshot_hft_sidecar/`
 
-### 2. Reglas de SMC (v12.1)
-- Los **Order Blocks** se invalidan SOLO cuando el precio **cierra** fuera del rango (no por mechas ni por regla del 50%)
-- Los setups válidos requieren: **OB + (Sweep O Retest) + FVG**
-- El **Sovereign Bypass** permite ignorar el Veto Fractal si `confluence_score >= 95%`
-- El **Apex Override** bonifica señales con `absorption_score >= 90%` (+20 puntos)
-
-### 3. Reglas de Order Flow Yosh (v13.1)
-- El **Volume Profile** se recalcula cada 60 segundos en el Slow Path del `StreamProcessor`.
-- El **POC** es el nivel de mayor volumen transado y actúa como imán de precio.
-- **VAH** (Value Area High) y **VAL** (Value Area Low) definen la zona donde se concentra el 70% del volumen.
-- **Look Above and Fail (LAF)**: Se detecta cuando el precio supera el PDH/Overnight High y cierra debajo. Señal bajista de alta probabilidad.
-- **Look Below and Fail (LBF)**: Inversa del LAF. Señal alcista de alta probabilidad.
-- **Averaging Up**: Solo se permite escalar cuando el SL ya está en Breakeven. Nunca se promedian posiciones perdedoras.
-- **Confluence Yosh**: Value Area (+10), Rechazo VAH/VAL (+15), Trampa confirmada (+25).
-
-### 4. Logging
-Formato institucional obligatorio: `[MODULO] Mensaje`
-```
-[GATEKEEPER] [FRACTAL_VETO] BTCUSDT SHORT bloqueado
-[CONFLUENCE] Asset: XAGUSDT | Score: 82% (Multiplier: 1.0)
-[NEXUS] Orden ejecutada: LONG BTCUSDT @ 107,250
-[🏦 YOSH] Value Area BTCUSDT: POC=70,500 | VAH=71,200 | VAL=69,800
-[🪤 YOSH] Retest de VALOR detectado en BTCUSDT. Ejecutando AVERAGING UP...
-```
+### Componentes:
+*   `SKILL.md`: Documento de definición y control de la Skill.
+*   `scripts/package.json`: Dependencias aisladas del Sidecar.
+*   `scripts/index.js`: Cliente WebSocket de 20 activos + Execution Bridge (Bitunix HMAC-SHA256).

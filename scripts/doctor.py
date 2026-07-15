@@ -79,14 +79,25 @@ async def check_backend_api():
         print(Fore.RED + f"  [ERROR] {e}")
 
 async def check_websocket():
-    print(Fore.CYAN + "\n[*] Probando túnel WebSocket Zero-Latency...")
+    print(Fore.CYAN + "\n[*] Probando túnel WebSocket Zero-Latency Autenticado...")
     try:
-        uri = "ws://localhost:8000/api/v1/ws/engine"
-        async with websockets.connect(uri, close_timeout=2) as ws:
-            print(Fore.GREEN + "  [OK] Flujo WebSocket activo y en espera de datos.")
-        # La conexión se deshará correctamente por conextro async limit
+        # 1. Obtener Token
+        async with httpx.AsyncClient(timeout=3) as client:
+            token_resp = await client.get("http://localhost:8000/api/v1/auth/token?api_key=SLINGSHOT_INTERNAL_V6")
+            if token_resp.status_code != 200:
+                print(Fore.RED + f"  [FAIL] No se pudo obtener el token de autenticación ({token_resp.status_code})")
+                return
+            token = token_resp.json().get("token")
+            if not token:
+                print(Fore.RED + "  [FAIL] Token no presente en la respuesta de autenticación.")
+                return
+
+        # 2. Conectar a la pasarela real con el token
+        uri = f"ws://localhost:8000/api/v1/stream/BTCUSDT?interval=15m&token={token}"
+        async with websockets.connect(uri, close_timeout=3) as ws:
+            print(Fore.GREEN + "  [OK] Flujo WebSocket Autenticado activo y en espera de datos.")
     except Exception as e:
-        print(Fore.RED + f"  [WARN] Conexión WebSocket rechazada. ¿Backend offline? ({type(e).__name__})")
+        print(Fore.RED + f"  [WARN] Conexión WebSocket rechazada: {type(e).__name__} - {e}")
 
 async def main():
     print(Fore.MAGENTA + "=== SLINGSHOT DOCTOR (HEALTH CHECK) ===")
