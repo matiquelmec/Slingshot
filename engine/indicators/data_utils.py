@@ -38,7 +38,8 @@ async def fetch_binance_history(symbol: str, interval: str = "15m", limit: int =
                 
                 response.raise_for_status()
                 raw = response.json()
-                return [
+                
+                candles = [
                     {"type": "candle", "data": {
                         "timestamp": k[0] / 1000,
                         "open": float(k[1]), "high": float(k[2]),
@@ -47,6 +48,30 @@ async def fetch_binance_history(symbol: str, interval: str = "15m", limit: int =
                     }}
                     for k in raw
                 ]
+                
+                # ── INTEGRACIÓN DE CO-PROCESAMIENTO HFT SIDECAR ──
+                # Hidratamos el cierre y volumen de la vela en desarrollo con la caché de Node.js
+                if candles:
+                    try:
+                        async with httpx.AsyncClient(timeout=0.08) as local_client: # Límite estricto de 80ms
+                            local_res = await local_client.get("http://127.0.0.1:8080/ticks")
+                            if local_res.status_code == 200:
+                                ticks = local_res.json()
+                                asset_tick = ticks.get(sym)
+                                if asset_tick and asset_tick.get("price", 0) > 0:
+                                    last_candle = candles[-1]["data"]
+                                    last_candle["close"] = asset_tick["price"]
+                                    # Evitar que una mecha de Binance supere el High/Low del tick HFT
+                                    last_candle["high"] = max(last_candle["high"], asset_tick["price"])
+                                    last_candle["low"] = min(last_candle["low"], asset_tick["price"])
+                                    # Loggear optimización de latencia en depuración
+                                    logger.debug(f"[SIDECAR_HFT] Vela en desarrollo de {sym} optimizada con WebSocket Local.")
+                    except Exception:
+                        # Fallback silencioso: Si el Sidecar de Node.js está apagado, 
+                        # el sistema sigue con las velas REST normales sin fallar.
+                        pass
+                
+                return candles
         except Exception as e:
             if attempt == max_retries - 1:
                 logger.error(f"[HISTORY] Error final descargando {sym}:{interval} tras {max_retries} intentos: {e}")
