@@ -33,7 +33,7 @@ class ConfluenceManager:
         ml_projection = ml_projection or {}
         session_data  = session_data  or {}
         econ_events   = kwargs.get('economic_events', [])
-        liq_clusters  = kwargs.get('liquidation_clusters', [])
+        liq_clusters  = kwargs.get('liquidation_clusters', kwargs.get('liquidations', []))
         news_items    = kwargs.get('news_items', [])
 
         try:
@@ -630,14 +630,14 @@ class ConfluenceManager:
             if onchain_bias == "BULLISH_ACCUMULATION":
                 if is_long:
                     onchain_pts = onchain_weight
-                    onchain_status = "CONFIRMADO ✅"
+                    onchain_status = "CONFIRMADO"
                     onchain_detail = "Acumulación ballena en rango (Aumento OI)"
                 else:
                     onchain_pts = -5
-                    onchain_status = "DIVERGENTE ⚠️"
+                    onchain_status = "DIVERGENTE"
                     onchain_detail = "Posible trampa de liquidez en Short"
             elif onchain_bias == "BEARISH_WARNING":
-                onchain_status = "ALERTA 🔴"
+                onchain_status = "ALERTA"
                 onchain_detail = "Alta entrada de capital a Exchanges (> $10M)"
                 if not is_long:
                     onchain_pts = onchain_weight
@@ -645,7 +645,7 @@ class ConfluenceManager:
                     onchain_pts = -15
                     multiplier *= 0.5 # Reducción drástica por flujo Bearish
             elif onchain_bias == "OVERLEVERAGED_LONGS":
-                onchain_status = "PRECAUCIÓN ⚠️"
+                onchain_status = "PRECAUCIÓN"
                 onchain_detail = "Sobreapalancamiento detectado (Funding Alto)"
                 if is_long: 
                     multiplier *= 0.7 # Riesgo de Long Squeeze
