@@ -70,53 +70,46 @@ class HTFAnalyzer:
         h4_regime = df_h4['market_regime'].iloc[-1]
         h1_regime = df_h1['market_regime'].iloc[-1]
 
-        # Lógica de Sesgo Direccional (Top-Down)
-        direction = 'NEUTRAL'
-        strength = 0.5
-        reason = "Contexto HTF indeciso o ruidoso."
+        # ⚙️ Mapeo cuantitativo de regímenes (Markup=+1.0, Accumulation=+0.5, Markdown=-1.0, Distribution=-0.5, Ranging=0.0)
+        regime_scores = {
+            'MARKUP': 1.0,
+            'ACCUMULATION': 0.5,
+            'RANGING': 0.0,
+            'DISTRIBUTION': -0.5,
+            'MARKDOWN': -1.0,
+            'UNKNOWN': 0.0
+        }
 
-        # BULLISH CONDITIONS (Guiado por D1 y 4H)
-        if d1_regime == 'MARKUP':
-            if h4_regime in ['MARKUP', 'ACCUMULATION', 'RANGING']:
-                direction = 'BULLISH'
-                strength = 1.0 if h4_regime == 'MARKUP' else 0.8
-                reason = f"1D MARKUP + {h4_regime} en 4H. Fuerte sesgo institucional alcista."
-            else:
-                direction = 'BULLISH'
-                strength = 0.6
-                reason = "1D MARKUP pero 4H en corrección."
-        
-        # BEARISH CONDITIONS
-        elif d1_regime == 'MARKDOWN':
-            if h4_regime in ['MARKDOWN', 'DISTRIBUTION', 'RANGING']:
-                direction = 'BEARISH'
-                strength = 1.0 if h4_regime == 'MARKDOWN' else 0.8
-                reason = f"1D MARKDOWN + {h4_regime} en 4H. Fuerte sesgo institucional bajista."
-            else:
-                direction = 'BEARISH'
-                strength = 0.6
-                reason = "1D MARKDOWN pero 4H en rebote."
+        # ⚖️ Ponderación de grado institucional
+        weights = {
+            'M1': 0.15,
+            'W1': 0.25,
+            'D1': 0.30,
+            'H4': 0.20,
+            'H1': 0.10
+        }
 
-        # TRANSITION / ACCUMULATION
-        elif d1_regime == 'ACCUMULATION':
-            if h4_regime in ['ACCUMULATION', 'MARKUP']:
-                direction = 'BULLISH'
-                strength = 0.7
-                reason = "1D ACCUMULATION + 4H iniciando ciclo alcista."
-            else:
-                direction = 'NEUTRAL'
-                strength = 0.4
-                reason = "1D ACCUMULATION. Aún sin confirmación en 4H."
+        # Calcular score direccional ponderado
+        score = 0.0
+        score += regime_scores.get(m1_regime, 0.0) * weights['M1']
+        score += regime_scores.get(w1_regime, 0.0) * weights['W1']
+        score += regime_scores.get(d1_regime, 0.0) * weights['D1']
+        score += regime_scores.get(h4_regime, 0.0) * weights['H4']
+        score += regime_scores.get(h1_regime, 0.0) * weights['H1']
 
-        elif d1_regime == 'DISTRIBUTION':
-            if h4_regime in ['DISTRIBUTION', 'MARKDOWN']:
-                direction = 'BEARISH'
-                strength = 0.7
-                reason = "1D DISTRIBUTION + 4H iniciando ciclo bajista."
-            else:
-                direction = 'NEUTRAL'
-                strength = 0.4
-                reason = "1D DISTRIBUTION. Aún sin confirmación en 4H."
+        # Determinar dirección, fuerza y justificación basada en el score consolidado
+        if score > 0.25:
+            direction = 'BULLISH'
+            strength = min(1.0, float(abs(score) / 0.8)) # Normalizar fuerza
+            reason = f"Sesgo institucional ALCISTA multifractal (Score: {score:+.2f}). M1={m1_regime}, W1={w1_regime}, D1={d1_regime}, H4={h4_regime}, H1={h1_regime}."
+        elif score < -0.25:
+            direction = 'BEARISH'
+            strength = min(1.0, float(abs(score) / 0.8))
+            reason = f"Sesgo institucional BAJISTA multifractal (Score: {score:+.2f}). M1={m1_regime}, W1={w1_regime}, D1={d1_regime}, H4={h4_regime}, H1={h1_regime}."
+        else:
+            direction = 'NEUTRAL'
+            strength = float(abs(score) / 0.25)
+            reason = f"Consolidación o conflicto de sesgo macro (Score: {score:+.2f}). M1={m1_regime}, W1={w1_regime}, D1={d1_regime}, H4={h4_regime}, H1={h1_regime}."
 
         return HTFBias(
             direction=direction,
