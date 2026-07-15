@@ -36,10 +36,34 @@ class BitunixExecutor:
         return signature
 
     async def _request(self, method: str, path: str, params: dict = None, json_body: dict = None) -> dict:
-        """Realiza una petición HTTP firmada a la API de Bitunix."""
+        """Realiza una petición HTTP firmada a la API de Bitunix, usando el Sidecar Node.js HFT si está activo."""
         if self.dry_run:
             return {"code": 0, "msg": "Success (DRY RUN)", "data": {}}
             
+        # Intentar ejecutar vía Sidecar HFT de Node.js en local
+        if path == "/api/v1/futures/trade/place_order" and method.upper() == "POST" and json_body:
+            try:
+                # Mapear parámetros al formato HFT del Sidecar
+                hft_payload = {
+                    "symbol": json_body.get("symbol"),
+                    "action": "BUY" if json_body.get("side") == "BUY" else "SELL",
+                    "price": json_body.get("price", "0"),
+                    "amount": json_body.get("qty", "0"),
+                    "leverage": json_body.get("leverage", 1),
+                    "dry_run": False
+                }
+                
+                async with httpx.AsyncClient(timeout=0.08) as local_client: # Límite estricto de 80ms
+                    local_res = await local_client.post("http://127.0.0.1:8080/execute", json=hft_payload)
+                    if local_res.status_code == 200:
+                        res_json = local_res.json()
+                        logger.info(f"⚡ [HFT_SIDECAR] Orden procesada en microsegundos vía Node.js: {res_json.get('data')}")
+                        return res_json
+            except Exception as sidecar_err:
+                logger.warning(f"⚠️ [HFT_SIDECAR] Fallo en Sidecar Node.js ({sidecar_err}). Aplicando Fallback nativo a Python...")
+                # Continúa con la ejecución tradicional de Python abajo
+                pass
+
         url = f"{self.base_url}{path}"
         nonce = uuid.uuid4().hex
         timestamp = str(int(time.time() * 1000))
