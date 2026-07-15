@@ -146,7 +146,7 @@ export const handleWsMessage = (
                     const pulseData = data.data || {};
                     const logObj = pulseData.log || {};
                     const newLog: NeuralLog = {
-                        id: Math.random().toString(36).substring(7),
+                        id: crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(7),
                         timestamp: new Date().toLocaleTimeString('en-US', { hour12: false }),
                         type: logObj.type || 'SYSTEM',
                         message: logObj.message || 'Heartbeat neural recibido.'
@@ -310,21 +310,20 @@ export const handleWsMessage = (
             }
 
             case 'smc_data': {
-                set((state) => {
-                    const dataAsset = data.data.asset;
-                    if (dataAsset && !isSameSymbol(dataAsset, state.activeSymbol)) return state;
-                    
-                    return { smcData: data.data };
-                });
-                set((state) => {
-                    const newLog: NeuralLog = {
-                        id: Math.random().toString(36).substring(7),
-                        timestamp: new Date().toLocaleTimeString('en-US', { hour12: false }),
-                        type: 'SENSOR',
-                        message: `[SMC] Estructura actualizada. OBs: ${data.data.order_blocks.bullish.length} Bull / ${data.data.order_blocks.bearish.length} Bear.`
-                    };
-                    return { neuralLogs: [newLog, ...state.neuralLogs].slice(0, 3) };
-                });
+                const dataAsset = data.data.asset;
+                if (dataAsset && !isSameSymbol(dataAsset, get().activeSymbol)) return;
+                
+                const newLog: NeuralLog = {
+                    id: crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(7),
+                    timestamp: new Date().toLocaleTimeString('en-US', { hour12: false }),
+                    type: 'SENSOR',
+                    message: `[SMC] Estructura actualizada. OBs: ${data.data.order_blocks.bullish.length} Bull / ${data.data.order_blocks.bearish.length} Bear.`
+                };
+
+                set((state) => ({ 
+                    smcData: data.data,
+                    neuralLogs: [newLog, ...state.neuralLogs].slice(0, 3) 
+                }));
                 break;
             }
 
@@ -350,7 +349,7 @@ export const handleWsMessage = (
                     const icon = biasIcons[g.macro_bias] ?? '⚪';
                     const fund = g.funding_rate != null ? Number(g.funding_rate).toFixed(4) : "0.0000";
                     const newLog: NeuralLog = {
-                        id: Math.random().toString(36).substring(7),
+                        id: crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(7),
                         timestamp: new Date().toLocaleTimeString('en-US', { hour12: false }),
                         type: g.block_longs || g.block_shorts ? 'ALERT' : 'SENSOR',
                         message: `[GHOST] ${icon} F&G=${g.fear_greed_value ?? '?'} (${g.fear_greed_label ?? 'N/A'}) | BTCD=${g.btc_dominance ?? '?'}% | Fund=${fund}% | Bias=${g.macro_bias ?? 'N/A'}`

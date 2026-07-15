@@ -56,8 +56,14 @@ export const mergeSignals = (
         
         if (!sig.asset || !sig.price || sig.price <= 0) return;
 
-        if (!newData[id] || JSON.stringify(newData[id]) !== JSON.stringify({ ...sig, id })) {
-            if (!newData[id]) {
+        const existing = newData[id];
+        const hasChanged = !existing ||
+            existing.status !== sig.status ||
+            existing.price !== sig.price ||
+            existing.timestamp !== sig.timestamp;
+
+        if (hasChanged) {
+            if (!existing) {
                 newIds.unshift(id);
             }
             newData[id] = { ...sig, id };
@@ -65,7 +71,9 @@ export const mergeSignals = (
         }
     });
 
-    if (!hasChanged) return { data: prevData, ids: prevIds };
+    // Filtro rápido de cambio
+    const finalHasChanged = prevIds.length !== newIds.length || hasChanged;
+    if (!finalHasChanged) return { data: prevData, ids: prevIds };
 
     const now = Date.now();
     const finalIds = newIds.filter(id => {
