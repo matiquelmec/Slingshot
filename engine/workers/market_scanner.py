@@ -177,6 +177,10 @@ class MarketScanner:
                             candidates.append(self._format_opportunity(sig, is_active=True))
                         return
                     
+                    # Calcular clusters de liquidación en vivo para el escáner
+                    from engine.indicators.liquidations import estimate_liquidation_clusters
+                    liq_clusters = estimate_liquidation_clusters(df, current_price)
+                    
                     for direction in ["LONG", "SHORT"]:
                         atr_val = float(df["atr"].iloc[-1]) if "atr" in df.columns else float(current_price * 0.002)
                         virtual_sig = {
@@ -195,7 +199,8 @@ class MarketScanner:
                             market_regime=result.get("market_regime", "RANGING"),
                             smc_data=result.get("smc", {}),
                             atr_value=atr_val,
-                            asset=symbol
+                            asset=symbol,
+                            liquidations=liq_clusters
                         )
 
                         is_chasing, chase_label = self._ote_watchdog(direction, current_price, fib_data)
@@ -207,6 +212,7 @@ class MarketScanner:
                             fib_data=fib_data,
                             session_data=session_data,
                             interval=interval,
+                            liquidations=liq_clusters
                         )
 
                         base_score = conf_res.get("score", 0)

@@ -133,12 +133,18 @@ class SlingshotRouter:
             logger.debug(f"[ROUTER] Error al ordenar oportunidades para {asset}: {e}")
 
         # ── Fase 3: Enriquecimiento de Riesgo (pre-Portero) ──────────────────
+        from engine.indicators.liquidations import estimate_liquidation_clusters
+        
         enriched: list[dict] = []
         for sig in opportunities:
             sig["asset"] = asset  # [IDENTIDAD v6.8.1] Asegura filtrado diferenciado
             try:
+                # Calcular clusters de liquidación en vivo para este activo
+                latest_price = float(sig.get("price", 0))
+                liq_clusters = estimate_liquidation_clusters(analyzed_df, latest_price)
+                
                 risk_data = self._risk.calculate_position(
-                    current_price=float(sig.get("price", 0)),
+                    current_price=latest_price,
                     signal_type=sig.get("signal_type", sig.get("type", "LONG")).upper(),
                     market_regime=market_map.diagnostic.get('regime_details', 'RANGING'),
                     smc_data=market_map.smc,
@@ -146,6 +152,7 @@ class SlingshotRouter:
                     asset=asset,
                     htf_bias=htf_bias,
                     fib_data=market_map.fibonacci,
+                    liquidations=liq_clusters,  # Pasamos los clusters calculados en vivo
                     confluence_score=float(sig.get("confluence", {}).get("score", 50))
                 )
                 enriched.append(enrich_signal(sig, risk_data, interval))
