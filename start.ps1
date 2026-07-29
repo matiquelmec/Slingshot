@@ -40,6 +40,18 @@ try {
     Start-Sleep -Seconds 2
 }
 
+# --- Sidecar HFT (Node.js en puerto 8080) ---
+Write-Host "  [0.5/2] Iniciando HFT Sidecar (http://localhost:8080)..." -ForegroundColor Yellow
+$sidecarPath = "C:\Users\Matías Riquelme\.gemini\config\skills\slingshot_hft_sidecar\scripts\index.js"
+if (Test-Path $sidecarPath) {
+    Start-Process powershell -ArgumentList `
+        "-ExecutionPolicy", "Bypass", `
+        "-NoExit", `
+        "-Command", "node '$sidecarPath'"
+} else {
+    Write-Host "  [ALERTA] No se encontro la ruta global del Sidecar HFT." -ForegroundColor DarkYellow
+}
+
 # --- Backend (FastAPI en puerto 8000) ---
 Write-Host "  [1/2] Iniciando Backend  (http://localhost:8000)..." -ForegroundColor Yellow
 Start-Process powershell -ArgumentList `
