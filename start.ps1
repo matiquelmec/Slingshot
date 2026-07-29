@@ -44,10 +44,8 @@ try {
 Write-Host "  [0.5/2] Iniciando HFT Sidecar (http://localhost:8080)..." -ForegroundColor Yellow
 $sidecarPath = "C:\Users\Matías Riquelme\.gemini\config\skills\slingshot_hft_sidecar\scripts\index.js"
 if (Test-Path $sidecarPath) {
-    Start-Process powershell -ArgumentList `
-        "-ExecutionPolicy", "Bypass", `
-        "-NoExit", `
-        "-Command", "node '$sidecarPath'"
+    # Usamos cmd /c start node para máxima compatibilidad con caracteres especiales en Windows
+    Start-Process cmd -ArgumentList "/c start /min node `"$sidecarPath`""
 } else {
     Write-Host "  [ALERTA] No se encontro la ruta global del Sidecar HFT." -ForegroundColor DarkYellow
 }
