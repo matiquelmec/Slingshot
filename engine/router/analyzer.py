@@ -57,7 +57,7 @@ class MarketAnalyzer:
     Transforma OHLCV → MarketMap institucional con métricas de absorción.
     """
 
-    def __init__(self, cache_size: int = 100):
+    def __init__(self, cache_size: int = 200):
         from engine.indicators.regime import RegimeDetector
         self._regime_detector = RegimeDetector()
         self._cache = {} # LRU Cache: (asset, interval, ts) -> MarketMap

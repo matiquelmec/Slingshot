@@ -78,14 +78,24 @@ export default function OpportunitiesScanner() {
     };
 
     const getSessionBadge = (session?: string) => {
-        switch (session) {
-            case 'LONDON':    return { label: '🇬🇧 LONDON',   color: 'text-blue-400 border-blue-400/20 bg-blue-400/5' };
-            case 'NEW_YORK':  return { label: '🗽 NEW YORK',  color: 'text-purple-400 border-purple-400/20 bg-purple-400/5' };
-            case 'ASIA':      return { label: '🌏 ASIA',      color: 'text-amber-400 border-amber-400/20 bg-amber-400/5' };
-            case 'OFF_HOURS': return { label: '🌙 OFF-HOURS', color: 'text-white/30 border-white/5 bg-white/[0.02]' };
-            case 'LIVE_SIGNAL': return { label: '🔥 TRIGGER', color: 'text-neon-green border-neon-green/20 bg-neon-green/5' };
-            default:          return null;
+        if (!session) return null;
+        const s = session.toUpperCase();
+        if (s.includes('NEW_YORK') || s.includes('NY')) {
+            return { label: '🗽 NEW YORK', color: 'text-purple-400 border-purple-400/20 bg-purple-400/5' };
         }
+        if (s.includes('LONDON')) {
+            return { label: '🇬🇧 LONDON', color: 'text-blue-400 border-blue-400/20 bg-blue-400/5' };
+        }
+        if (s.includes('ASIA')) {
+            return { label: '🌏 ASIA', color: 'text-amber-400 border-amber-400/20 bg-amber-400/5' };
+        }
+        if (s.includes('OFF_HOURS')) {
+            return { label: '🌙 OFF-HOURS', color: 'text-white/30 border-white/5 bg-white/[0.02]' };
+        }
+        if (s.includes('LIVE_SIGNAL') || s.includes('TRIGGER')) {
+            return { label: '🔥 TRIGGER', color: 'text-neon-green border-neon-green/20 bg-neon-green/5' };
+        }
+        return { label: `🌐 ${s}`, color: 'text-white/40 border-white/10 bg-white/5' };
     };
 
     const getStatusIcon = (status: string) => {

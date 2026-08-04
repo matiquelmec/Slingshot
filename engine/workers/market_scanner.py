@@ -62,24 +62,24 @@ class MarketScanner:
         """
         Detecta la sesión de trading activa según UTC:
         London:    08:00–12:00 UTC
-        New York:  12:00–17:00 UTC
+        New York:  12:00–21:00 UTC (8 AM – 5 PM EST)
         Asia:      00:00–08:00 UTC
-        Off-Hours: 17:00–00:00 UTC
+        Off-Hours: 21:00–00:00 UTC
         """
         try:
             ts = pd.to_datetime(timestamp, utc=True)
             hour = ts.hour
-            if 8 <= hour < 12:
-                session = "LONDON"
-            elif 12 <= hour < 17:
+            if 12 <= hour < 21:
                 session = "NEW_YORK"
+            elif 8 <= hour < 12:
+                session = "LONDON"
             elif 0 <= hour < 8:
                 session = "ASIA"
             else:
                 session = "OFF_HOURS"
             return {
                 "current_session": session,
-                "yosh_window": 14 <= hour < 16,  # Golden Window ~10-11:30 AM EST
+                "yosh_window": 13 <= hour < 16,  # Golden Window ~10-11:30 AM EST
             }
         except Exception:
             return {"current_session": None, "yosh_window": False}
@@ -137,83 +137,96 @@ class MarketScanner:
 
     async def _scan_timeframe(self, interval: str, store_key: str):
         candidates = []
+        dfs_dict = {}
         semaphore = asyncio.Semaphore(4)
         
-        async def process_asset(symbol: str):
+        async def fetch_and_prep(symbol: str):
             async with semaphore:
                 try:
                     history = await fetch_binance_history(symbol, interval, limit=100)
-                    if not history:
-                        return
-                    
-                    df = pd.DataFrame([h["data"] for h in history])
-                    df["timestamp"] = pd.to_datetime(df["timestamp"], unit="s")
-                    
-                    current_price  = float(df["close"].iloc[-1])
-                    last_timestamp = df["timestamp"].iloc[-1]
-                    cache_key = f"{symbol}:{interval}"
-                    
-                    # ── OPTIMIZACIÓN v16.0: Throttle por Cierre de Vela ──
-                    cached = self._tactical_cache.get(cache_key)
-                    if cached and cached["last_timestamp"] == last_timestamp:
-                        result       = cached["result"]
-                        fib_data     = cached["fib_data"]
-                        session_data = cached["session_data"]
-                    else:
-                        result = await self.router.process_market_data(df, asset=symbol, interval=interval, silent=True)
-                        fib_data     = self._calculate_ote(df)
-                        session_data = self._calculate_session(last_timestamp)
-                        
-                        self._tactical_cache[cache_key] = {
-                            "last_timestamp": last_timestamp,
-                            "result": result,
-                            "fib_data": fib_data,
-                            "session_data": session_data
-                        }
-                    
-                    active_signals = result.get("signals", [])
-                    if active_signals:
-                        for sig in active_signals:
-                            candidates.append(self._format_opportunity(sig, is_active=True))
-                        return
-                    
-                    # Calcular clusters de liquidación en vivo para el escáner
-                    from engine.indicators.liquidations import estimate_liquidation_clusters
-                    liq_clusters = estimate_liquidation_clusters(df, current_price)
-                    
-                    for direction in ["LONG", "SHORT"]:
-                        atr_val = float(df["atr"].iloc[-1]) if "atr" in df.columns else float(current_price * 0.002)
-                        virtual_sig = {
-                            "asset":       symbol,
-                            "symbol":      symbol,
-                            "type":        "Estructura Local",
-                            "signal_type": direction,
-                            "price":       current_price,
-                            "timestamp":   str(last_timestamp),
-                            "atr_value":   atr_val,
-                        }
-                        
-                        risk_data = self.router._risk.calculate_position(
-                            current_price=current_price,
-                            signal_type=direction,
-                            market_regime=result.get("market_regime", "RANGING"),
-                            smc_data=result.get("smc", {}),
-                            atr_value=atr_val,
-                            asset=symbol,
-                            liquidations=liq_clusters
-                        )
+                    if history:
+                        df = pd.DataFrame([h["data"] for h in history])
+                        df["timestamp"] = pd.to_datetime(df["timestamp"], unit="s")
+                        dfs_dict[symbol] = df
+                except Exception as e:
+                    logger.debug(f"[MARKET_SCANNER] Error descargando {symbol}: {e}")
 
-                        is_chasing, chase_label = self._ote_watchdog(direction, current_price, fib_data)
+        # Pre-descargar datos en paralelo para permitir SMT Divergence entre activos
+        await asyncio.gather(*(fetch_and_prep(sym) for sym in self.assets))
 
-                        conf_res = confluence_manager.evaluate_signal(
-                            df,
-                            virtual_sig,
-                            smc_map=result.get("smc", {}),
-                            fib_data=fib_data,
-                            session_data=session_data,
-                            interval=interval,
-                            liquidations=liq_clusters
-                        )
+        async def process_asset(symbol: str):
+            try:
+                df = dfs_dict.get(symbol)
+                if df is None or df.empty:
+                    return
+                
+                current_price  = float(df["close"].iloc[-1])
+                last_timestamp = df["timestamp"].iloc[-1]
+                cache_key = f"{symbol}:{interval}"
+                
+                # ── OPTIMIZACIÓN v16.0: Throttle por Cierre de Vela ──
+                cached = self._tactical_cache.get(cache_key)
+                if cached and cached["last_timestamp"] == last_timestamp:
+                    result       = cached["result"]
+                    fib_data     = cached["fib_data"]
+                    session_data = cached["session_data"]
+                else:
+                    result = await self.router.process_market_data(df, asset=symbol, interval=interval, silent=True)
+                    fib_data     = self._calculate_ote(df)
+                    session_data = self._calculate_session(last_timestamp)
+                    
+                    self._tactical_cache[cache_key] = {
+                        "last_timestamp": last_timestamp,
+                        "result": result,
+                        "fib_data": fib_data,
+                        "session_data": session_data
+                    }
+                
+                active_signals = result.get("signals", [])
+                if active_signals:
+                    for sig in active_signals:
+                        candidates.append(self._format_opportunity(sig, is_active=True))
+                    return
+                
+                # Calcular clusters de liquidación en vivo para el escáner
+                from engine.indicators.liquidations import estimate_liquidation_clusters
+                liq_clusters = estimate_liquidation_clusters(df, current_price)
+                correlated_df = dfs_dict.get("BTCUSDT") if symbol != "BTCUSDT" else dfs_dict.get("ETHUSDT")
+                
+                for direction in ["LONG", "SHORT"]:
+                    atr_val = float(df["atr"].iloc[-1]) if "atr" in df.columns else float(current_price * 0.002)
+                    virtual_sig = {
+                        "asset":       symbol,
+                        "symbol":      symbol,
+                        "type":        "Estructura Local",
+                        "signal_type": direction,
+                        "price":       current_price,
+                        "timestamp":   str(last_timestamp),
+                        "atr_value":   atr_val,
+                    }
+                    
+                    risk_data = self.router._risk.calculate_position(
+                        current_price=current_price,
+                        signal_type=direction,
+                        market_regime=result.get("market_regime", "RANGING"),
+                        smc_data=result.get("smc", {}),
+                        atr_value=atr_val,
+                        asset=symbol,
+                        liquidations=liq_clusters
+                    )
+
+                    is_chasing, chase_label = self._ote_watchdog(direction, current_price, fib_data)
+
+                    conf_res = confluence_manager.evaluate_signal(
+                        df,
+                        virtual_sig,
+                        smc_map=result.get("smc", {}),
+                        fib_data=fib_data,
+                        session_data=session_data,
+                        interval=interval,
+                        liquidations=liq_clusters,
+                        correlated_df=correlated_df
+                    )
 
                         base_score = conf_res.get("score", 0)
                         checklist  = conf_res.get("checklist", [])

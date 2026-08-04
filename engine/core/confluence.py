@@ -107,6 +107,20 @@ class ConfluenceManager:
         else:
             checklist.append({"factor": "Zonas POI", "status": "NEUTRAL", "detail": "Sin POI claro"})
 
+        # 2.1 YOSH LIQUIDITY TRAPS (Bono de Trampas Institucionales Yosh)
+        traps = smc_map.get("traps", {}) if isinstance(smc_map, dict) else {}
+        has_laf = traps.get("laf_bull" if is_long else "laf_bear", False)
+        has_lbf = traps.get("lbf_bull" if is_long else "lbf_bear", False)
+        
+        if has_laf:
+            score += 15
+            checklist.append({"factor": "Yosh Order Flow", "status": "ELITE", "detail": "Trampa de Absorción LAF Detectada (+15pts)"})
+        elif has_lbf:
+            score += 10
+            checklist.append({"factor": "Yosh Order Flow", "status": "CONFIRMADO", "detail": "Trampa de Impulso LBF Detectada (+10pts)"})
+        else:
+            checklist.append({"factor": "Yosh Order Flow", "status": "NEUTRAL", "detail": "Sin trampas extremas de Yosh"})
+
         # 3. LIQUIDEZ Y SWEEPS (Peso 30)
         # 3. LIQUIDEZ Y SWEEPS (Peso 30 total si hay sesiones)
         current_session = session_data.get('current_session') if session_data else None
