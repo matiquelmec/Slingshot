@@ -42,7 +42,8 @@ try {
 
 # --- Sidecar HFT (Node.js en puerto 8080) ---
 Write-Host "  [0.5/2] Iniciando HFT Sidecar (http://localhost:8080)..." -ForegroundColor Yellow
-$sidecarPath = "C:\Users\Matías Riquelme\.gemini\config\skills\slingshot_hft_sidecar\scripts\index.js"
+$userProfile = $env:USERPROFILE
+$sidecarPath = "$userProfile\.gemini\config\skills\slingshot_hft_sidecar\scripts\index.js"
 if (Test-Path $sidecarPath) {
     # Usamos cmd /c start node para máxima compatibilidad con caracteres especiales en Windows
     Start-Process cmd -ArgumentList "/c start /min node `"$sidecarPath`""

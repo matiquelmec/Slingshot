@@ -391,6 +391,23 @@ class ConfluenceManager:
             except Exception as e:
                 logger.warning(f"[CONFLUENCE] Error en SMT: {e}")
 
+        # 🚀 9.7. ORDER FLOW DELTA & TRIGGER CANDLE (Peso 15) v10.0 Sovereign Apex
+        delta_weight = 15
+        total_weight += delta_weight
+        order_flow_delta = float(current.get('order_flow_delta', 0.0))
+        
+        delta_aligned = (is_long and order_flow_delta > 0.1) or (not is_long and order_flow_delta < -0.1)
+        delta_opposed = (is_long and order_flow_delta < -0.5) or (not is_long and order_flow_delta > 0.5)
+        
+        if delta_aligned:
+            score += delta_weight
+            checklist.append({"factor": "Order Flow Delta", "status": "CONFIRMADO", "detail": f"Flujo taker a favor (Delta: {order_flow_delta:+.2f})"})
+        elif delta_opposed:
+            score -= 10
+            checklist.append({"factor": "Order Flow Delta", "status": "DIVERGENTE", "detail": f"Presión taker en contra (Delta: {order_flow_delta:+.2f})"})
+        else:
+            checklist.append({"factor": "Order Flow Delta", "status": "NEUTRAL", "detail": f"Delta equilibrado ({order_flow_delta:+.2f})"})
+
         # 🚀 10. ALINEACIÓN HTF (FRACTAL) — v10.0 Sovereign
         htf_bias = kwargs.get('htf_bias')
         multiplier = 1.0

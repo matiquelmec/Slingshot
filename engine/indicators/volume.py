@@ -77,6 +77,31 @@ def calculate_rvol(df: pd.DataFrame, window: int = 50, use_seasonality: bool = T
     
     return df
 
+def calculate_order_flow_delta(df: pd.DataFrame) -> pd.Series:
+    """
+    Order Flow Delta Ingestion Engine v10.0.
+    Calcula la fuerza neta compradora vs vendedora a nivel de mecha, cuerpo y datos del Sidecar.
+    Retorna Series con valores entre -1.0 (Venta pura) y +1.0 (Compra pura).
+    """
+    if df.empty or 'close' not in df.columns or 'open' not in df.columns:
+        return pd.Series(0.0, index=df.index if not df.empty else None)
+
+    body = df['close'] - df['open']
+    high_low = df['high'] - df['low']
+    high_low_safe = high_low.replace(0, 1e-9)
+
+    # Delta direccional basado en cuerpo y mechas
+    wick_delta = body / high_low_safe
+
+    # Si la columna delta_ratio del Sidecar está presente, combinar con mayor peso
+    if 'delta_ratio' in df.columns:
+        sidecar_delta = df['delta_ratio'].fillna(0.0)
+        combined = (sidecar_delta * 0.6) + (wick_delta * 0.4)
+    else:
+        combined = wick_delta
+
+    return combined.clip(-1.0, 1.0)
+
 def calculate_absorption_index(df: pd.DataFrame, window: int = 50, target_interval: str = None) -> pd.DataFrame:
     """
     VSA Intelligence Engine v8.0.
@@ -85,6 +110,9 @@ def calculate_absorption_index(df: pd.DataFrame, window: int = 50, target_interv
     """
     df = df.copy()
     if len(df) < 20: return df
+
+    # Inyección de Order Flow Delta
+    df['order_flow_delta'] = calculate_order_flow_delta(df)
 
     # 1. Esfuerzo (Volumen Relativo)
     vol_median = df['volume'].rolling(window=window, min_periods=20).median()
