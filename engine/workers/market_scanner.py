@@ -228,39 +228,38 @@ class MarketScanner:
                         correlated_df=correlated_df
                     )
 
-                        base_score = conf_res.get("score", 0)
-                        checklist  = conf_res.get("checklist", [])
+                    base_score = conf_res.get("score", 0)
+                    checklist  = conf_res.get("checklist", [])
 
-                        if is_chasing:
-                            base_score = max(0, base_score - 20)
-                            checklist.append({
-                                "factor": "OTE Watchdog",
-                                "status": "ALERTA",
-                                "detail": f"⚠️ PERSIGUIENDO PRECIO: {chase_label}",
-                            })
+                    if is_chasing:
+                        base_score = max(0, base_score - 20)
+                        checklist.append({
+                            "factor": "OTE Watchdog",
+                            "status": "ALERTA",
+                            "detail": f"⚠️ PERSIGUIENDO PRECIO: {chase_label}",
+                        })
 
-                        cand = {
-                            "asset":             symbol,
-                            "direction":         direction,
-                            "type":              "Virtual Setup",
-                            "price":             current_price,
-                            "stop_loss":         risk_data["stop_loss"],
-                            "tp1":               risk_data["tp1"],
-                            "tp2":               risk_data["tp2"],
-                            "tp3":               risk_data["tp3"],
-                            "rr_ratio_tp3":      risk_data.get("rr_ratio_tp3", 3.0),
-                            "confluence_score":  base_score,
-                            "checklist":         checklist,
-                            "is_active_trigger": False,
-                            "ote_chasing":       is_chasing,
-                            "session":           session_data.get("current_session", "UNKNOWN"),
-                        }
-                        candidates.append(cand)
-                    
-                    await asyncio.sleep(0.05)
-                        
-                except Exception as e:
-                    logger.debug(f"[MARKET_SCANNER] Error analizando {symbol} ({interval}): {e}")
+                    cand = {
+                        "asset":             symbol,
+                        "direction":         direction,
+                        "type":              "Virtual Setup",
+                        "price":             current_price,
+                        "stop_loss":         risk_data["stop_loss"],
+                        "tp1":               risk_data["tp1"],
+                        "tp2":               risk_data["tp2"],
+                        "tp3":               risk_data["tp3"],
+                        "rr_ratio_tp3":      risk_data.get("rr_ratio_tp3", 3.0),
+                        "confluence_score":  base_score,
+                        "checklist":         checklist,
+                        "is_active_trigger": False,
+                        "ote_chasing":       is_chasing,
+                        "session":           session_data.get("current_session", "UNKNOWN"),
+                    }
+                    candidates.append(cand)
+                
+                await asyncio.sleep(0.05)
+            except Exception as e:
+                logger.debug(f"[MARKET_SCANNER] Error analizando {symbol} ({interval}): {e}")
 
         await asyncio.gather(*(process_asset(sym) for sym in self.assets))
         
