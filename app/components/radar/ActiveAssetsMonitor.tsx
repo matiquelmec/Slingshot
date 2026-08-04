@@ -20,6 +20,7 @@ interface MarketState {
     ml_prob?: number;
     sentiment?: string;
     session?: string;
+    delta_ratio?: number;
     last_updated: string;
 }
 
@@ -154,6 +155,15 @@ export default function ActiveAssetsMonitor() {
                                     {state.liq_magnet && (
                                         <div className="px-1.5 py-0.5 rounded bg-cyan-500/10 border border-cyan-500/20 text-[8px] font-black text-cyan-400 tracking-tighter shadow-[0_0_10px_rgba(0,229,255,0.2)]">
                                             LIQ MAGNET
+                                        </div>
+                                    )}
+                                    {state.delta_ratio !== undefined && state.delta_ratio !== 0 && (
+                                        <div className={`px-1.5 py-0.5 rounded text-[8px] font-mono font-black ${
+                                            state.delta_ratio > 0 
+                                                ? 'bg-neon-green/10 border border-neon-green/20 text-neon-green' 
+                                                : 'bg-neon-red/10 border border-neon-red/20 text-neon-red'
+                                        }`}>
+                                            Δ {state.delta_ratio > 0 ? `+${state.delta_ratio.toFixed(2)}` : state.delta_ratio.toFixed(2)}
                                         </div>
                                     )}
                                     {getBiasIcon(state.bias)}
