@@ -35,6 +35,7 @@ class Settings(BaseSettings):
     # Security
     CORS_ORIGINS: list[str] = ["http://localhost:3000"]
     SECURITY_API_KEY: str = "SLINGSHOT_INTERNAL_V6"
+    JWT_SECRET: str = "slingshot_sovereign_local_jwt_secret_v11_apex"
 
     # Ollama LLM (Advisor Táctico)
     OLLAMA_MODEL: str = "gemma3:4b"        # gemma3:4b = producción | gemma4:latest = alta precisión

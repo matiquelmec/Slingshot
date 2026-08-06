@@ -56,7 +56,7 @@ Write-Host "  [1/2] Iniciando Backend  (http://localhost:8000)..." -ForegroundCo
 Start-Process powershell -ArgumentList `
     "-ExecutionPolicy", "Bypass", `
     "-NoExit", `
-    "-Command", "Set-Location -LiteralPath '$PSScriptRoot'; . .\.venv\Scripts\Activate.ps1; python -m uvicorn engine.api.main:app --host 0.0.0.0 --port 8000 --reload"
+    "-Command", "Set-Location -LiteralPath '$PSScriptRoot'; . .\.venv\Scripts\Activate.ps1; python -m uvicorn engine.api.main:app --host 0.0.0.0 --port 8000 --reload --reload-dir engine --reload-exclude '*.log' --reload-exclude 'engine/data/*' --reload-exclude 'scratch/*'"
 
 # Esperar 3s para dar tiempo al backend de levantar antes del frontend
 Start-Sleep -Seconds 3
