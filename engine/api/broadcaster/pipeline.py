@@ -178,8 +178,17 @@ class BroadcasterPipeline:
             current_candle_ts = str(candle_payload["data"]["timestamp"])
             if current_candle_ts != str(self.state.last_advisor_ts):
                 self.state.last_advisor_ts = current_candle_ts
-                from engine.core.session_manager import SessionManager
-                asyncio.create_task(self.bc._emit_advisor(final_tactical, SessionManager.get_global_session_status()))
+                
+                # 🛡️ Regla de Throttling IA v11.5: Activar LLM solo ante detonantes cuantitativos
+                conf_score = final_tactical.get("confluence_score", 0) if isinstance(final_tactical, dict) else 0
+                has_active_signal = isinstance(final_tactical, dict) and final_tactical.get("signal_type", "NONE") != "NONE"
+                
+                if conf_score >= 70 or has_active_signal:
+                    logger.info(f"[ADVISOR_TRIGGER] ⚡ Evento detonante cuantitativo para {self.state.symbol} (Score: {conf_score}%). Invocando LLM Contextual.")
+                    from engine.core.session_manager import SessionManager
+                    asyncio.create_task(self.bc._emit_advisor(final_tactical, SessionManager.get_global_session_status()))
+                else:
+                    logger.debug(f"[ADVISOR_TRIGGER] ⏸️ Gatekeeping de vela para {self.state.symbol}. Motivo: Confluencia {conf_score}% sin señal activa.")
 
         except Exception as e:
             logger.error(f"[SLOW-PATH] tactical error: {e}")
