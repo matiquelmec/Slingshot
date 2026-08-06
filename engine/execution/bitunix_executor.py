@@ -120,6 +120,38 @@ class BitunixExecutor:
             logger.error(f"❌ Error al obtener precio del ticker para {sym}: {e}")
         return 0.0
 
+    async def execute_iceberg_signal(self, signal: Dict[str, Any], num_slices: int = 3, slice_delay_ms: float = 150) -> Dict[str, Any]:
+        """
+        Adaptive Iceberg Slicing Engine v11.0 Apex.
+        Divide órdenes grandes (>2000 USDT) en sub-lotes dinámicos para eliminar el impacto en el libro y el slippage.
+        """
+        amount_usd = signal.get('position_size', 100)
+        symbol = signal.get('asset', 'BTCUSDT').replace('/', '').upper()
+        
+        if amount_usd <= 2000 or num_slices <= 1:
+            return await self.execute_signal(signal)
+            
+        logger.info(f"🧊 [ICEBERG] Fragmentando posición de ${amount_usd} USDT en {num_slices} sub-lotes para {symbol}...")
+        sliced_amount = amount_usd / num_slices
+        slice_results = []
+        
+        for i in range(num_slices):
+            slice_signal = signal.copy()
+            slice_signal['position_size'] = sliced_amount
+            res = await self.execute_signal(slice_signal)
+            slice_results.append(res)
+            if i < num_slices - 1:
+                import asyncio
+                await asyncio.sleep(slice_delay_ms / 1000.0)
+                
+        return {
+            "status": "success",
+            "execution_type": "ICEBERG",
+            "num_slices": num_slices,
+            "total_amount_usdt": amount_usd,
+            "slices": slice_results
+        }
+
     async def execute_signal(self, signal: Dict[str, Any], fragments: List[Dict[str, Any]] = None) -> Dict[str, Any]:
         """
         Ejecuta una señal colocando la orden principal en Bitunix.

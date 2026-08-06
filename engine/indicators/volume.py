@@ -102,6 +102,46 @@ def calculate_order_flow_delta(df: pd.DataFrame) -> pd.Series:
 
     return combined.clip(-1.0, 1.0)
 
+def calculate_cvd_divergence(df: pd.DataFrame, window: int = 30) -> dict:
+    """
+    Cumulative Volume Delta (CVD) Divergence & Institutional Imbalance Engine v11.0.
+    Rastrear el acumulado de volumen delta vs tendencia de precio para identificar absorciones masivas.
+    """
+    if df.empty or len(df) < window or 'close' not in df.columns:
+        return {"status": "NEUTRAL", "cvd_slope": 0.0, "price_slope": 0.0, "divergence": None}
+
+    delta_series = calculate_order_flow_delta(df)
+    volume_series = df['volume']
+    
+    # CVD en unidades de volumen delta acumulado
+    cvd_raw = (delta_series * volume_series).cumsum()
+    
+    recent_price = df['close'].iloc[-window:]
+    recent_cvd = cvd_raw.iloc[-window:]
+    
+    # Pendientes de precio y CVD (normalizados)
+    x = np.arange(window)
+    price_slope = float(np.polyfit(x, recent_price / float(recent_price.iloc[0]), 1)[0])
+    cvd_base = float(recent_cvd.iloc[0]) if float(recent_cvd.iloc[0]) != 0 else 1.0
+    cvd_slope = float(np.polyfit(x, (recent_cvd - cvd_base) / abs(cvd_base + 1e-9), 1)[0])
+    
+    # Divergencias Institucionales
+    # 1. Bullish CVD Divergence (Precio cae pero CVD sube -> Absorción Compradora)
+    if price_slope < -0.0001 and cvd_slope > 0.0001:
+        status = "BULLISH_DIVERGENCE"
+    # 2. Bearish CVD Divergence (Precio sube pero CVD cae -> Absorción Vendedora / Distribución)
+    elif price_slope > 0.0001 and cvd_slope < -0.0001:
+        status = "BEARISH_DIVERGENCE"
+    else:
+        status = "IN_SYNC"
+        
+    return {
+        "status": status,
+        "price_slope": round(price_slope, 6),
+        "cvd_slope": round(cvd_slope, 6),
+        "cvd_value": float(recent_cvd.iloc[-1])
+    }
+
 def calculate_absorption_index(df: pd.DataFrame, window: int = 50, target_interval: str = None) -> pd.DataFrame:
     """
     VSA Intelligence Engine v8.0.

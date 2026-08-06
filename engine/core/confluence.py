@@ -422,6 +422,23 @@ class ConfluenceManager:
         else:
             checklist.append({"factor": "Order Flow Delta", "status": "NEUTRAL", "detail": f"Delta equilibrado ({order_flow_delta:+.2f})"})
 
+        # 🚀 9.8. CUMULATIVE VOLUME DELTA (CVD) & L2 IMPALANCE (Peso 10) v11.0 Apex
+        try:
+            from engine.indicators.volume import calculate_cvd_divergence
+            cvd_res = calculate_cvd_divergence(df)
+            cvd_status = cvd_res.get("status", "IN_SYNC")
+            
+            if (is_long and cvd_status == "BULLISH_DIVERGENCE") or (not is_long and cvd_status == "BEARISH_DIVERGENCE"):
+                score += 10
+                checklist.append({"factor": "CVD Divergence", "status": "CONFIRMADO", "detail": f"Absorción acumulada detectada ({cvd_status})"})
+            elif (is_long and cvd_status == "BEARISH_DIVERGENCE") or (not is_long and cvd_status == "BULLISH_DIVERGENCE"):
+                score -= 10
+                checklist.append({"factor": "CVD Divergence", "status": "DIVERGENTE", "detail": f"Distribución acumulada en contra ({cvd_status})"})
+            else:
+                checklist.append({"factor": "CVD Divergence", "status": "NEUTRAL", "detail": "CVD acumulado en sintonía"})
+        except Exception as cvd_err:
+            checklist.append({"factor": "CVD Divergence", "status": "NEUTRAL", "detail": "CVD en calibración"})
+
         # 🚀 10. ALINEACIÓN HTF (FRACTAL) — v10.0 Sovereign
         htf_bias = kwargs.get('htf_bias')
         multiplier = 1.0

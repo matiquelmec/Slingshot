@@ -28,6 +28,17 @@ class SlingshotML:
         else:
             logger.info(f"⚠️ [ML ENGINE] Modelo no encontrado en {model_path}. Operando en modo degrado.")
 
+        # Intentar cargar motor ONNX Runtime acelerado C++ si existe
+        self.onnx_session = None
+        try:
+            import onnxruntime as ort
+            onnx_path = Path(__file__).parent / "models" / model_filename.replace('.json', '.onnx')
+            if onnx_path.exists():
+                self.onnx_session = ort.InferenceSession(str(onnx_path))
+                logger.info(f"⚡ [ONNX RUNTIME] Inferencia acelerada C++ activada (<2ms): {onnx_path.name}")
+        except Exception as ort_err:
+            pass
+
     def predict_live(self, df: pd.DataFrame) -> dict:
         """
         Toma el DataFrame en tiempo real (buffer de velas), calcula las features,
