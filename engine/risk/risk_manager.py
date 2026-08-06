@@ -174,7 +174,8 @@ class RiskManager:
                     best_floor = max(valid_floors)
                     # Si es contra-tendencia o picado, le damos más aire al SL (0.8 ATR en lugar de 0.5 ATR)
                     is_counter = (regime_upper in ["MARKDOWN", "BEARISH"])
-                    atr_mult = 0.8 if (regime_upper == "CHOPPY" or is_counter) else 0.5
+                    # Darle espacio amplio al SL detrás del bloque (1.2 ATR si choppy/counter, 0.8 ATR normal)
+                    atr_mult = 1.2 if (regime_upper == "CHOPPY" or is_counter) else 0.8
                     sl_candidate = best_floor - (fallback_atr * atr_mult)
                     # Límite de seguridad para no fundir la cuenta: 3x del riesgo base
                     if sl_candidate > (current_price - risk_dist * 3.0):
@@ -187,9 +188,9 @@ class RiskManager:
                 valid_ceilings = [c for c in structural_ceilings if c > current_price]
                 if valid_ceilings:
                     best_ceiling = min(valid_ceilings)
-                    # Si es contra-tendencia o picado, le damos más aire al SL (0.8 ATR en lugar de 0.5 ATR)
+                    # Si es contra-tendencia o picado, le damos más aire al SL (1.2 ATR en lugar de 0.8 ATR)
                     is_counter = (regime_upper in ["MARKUP", "BULLISH"])
-                    atr_mult = 0.8 if (regime_upper == "CHOPPY" or is_counter) else 0.5
+                    atr_mult = 1.2 if (regime_upper == "CHOPPY" or is_counter) else 0.8
                     sl_candidate = best_ceiling + (fallback_atr * atr_mult)
                     if sl_candidate < (current_price + risk_dist * 3.0):
                         sl = sl_candidate
@@ -233,13 +234,13 @@ class RiskManager:
         
         # ── GUARDARRAÍL DINÁMICO DE VOLATILIDAD ──
         # Definimos una distancia mínima de Stop Loss según la clase de activo para evitar barridos de ruido:
-        # Altcoins volátiles: mínimo 1.20% del precio de entrada
-        # Criptomonedas de alta capitalización (BTC/ETH) y Oro/Plata: mínimo 0.45% del precio de entrada
+        # Altcoins volátiles: mínimo 1.80% del precio de entrada (Protección anti-ruido de mechas)
+        # Criptomonedas de alta capitalización (BTC/ETH) y Oro/Plata: mínimo 0.60% del precio de entrada
         asset_upper = asset.upper()
         if any(core_asset in asset_upper for core_asset in ["BTC", "ETH", "PAXG", "XAG"]):
-            dynamic_min_sl_pct = 0.0045  # 0.45%
+            dynamic_min_sl_pct = 0.0060  # 0.60%
         else:
-            dynamic_min_sl_pct = 0.0120  # 1.20% (Límite de seguridad para altcoins)
+            dynamic_min_sl_pct = 0.0180  # 1.80% (Límite de seguridad anti-ruido para altcoins)
             
         min_sl_dist = current_price * dynamic_min_sl_pct
         max_sl_dist = current_price * (tuning.get("max_sl_pct", 100.0) / 100.0)

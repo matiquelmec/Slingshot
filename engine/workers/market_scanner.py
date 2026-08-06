@@ -195,18 +195,44 @@ class MarketScanner:
                 
                 for direction in ["LONG", "SHORT"]:
                     atr_val = float(df["atr"].iloc[-1]) if "atr" in df.columns else float(current_price * 0.002)
+                    
+                    # ── CÁLCULO DE ENTRADA LÍMITE OPTIMA SMC / OTE ──
+                    smc_map = result.get("smc", {})
+                    optimal_entry = current_price
+                    
+                    if direction == "LONG":
+                        bull_obs = smc_map.get("order_blocks", {}).get("bullish", []) if smc_map else []
+                        valid_obs = [ob for ob in bull_obs if ob.get("top", 0) < current_price]
+                        if valid_obs:
+                            optimal_entry = max(valid_obs, key=lambda ob: ob["top"])["top"]
+                        else:
+                            bull_fvgs = smc_map.get("fvgs", {}).get("bullish", []) if smc_map else []
+                            valid_fvgs = [fvg for fvg in bull_fvgs if fvg.get("top", 0) < current_price]
+                            if valid_fvgs:
+                                optimal_entry = max(valid_fvgs, key=lambda fvg: fvg["top"])["top"]
+                    else:
+                        bear_obs = smc_map.get("order_blocks", {}).get("bearish", []) if smc_map else []
+                        valid_obs = [ob for ob in bear_obs if ob.get("bottom", 0) > current_price]
+                        if valid_obs:
+                            optimal_entry = min(valid_obs, key=lambda ob: ob["bottom"])["bottom"]
+                        else:
+                            bear_fvgs = smc_map.get("fvgs", {}).get("bearish", []) if smc_map else []
+                            valid_fvgs = [fvg for fvg in bear_fvgs if fvg.get("bottom", 0) > current_price]
+                            if valid_fvgs:
+                                optimal_entry = min(valid_fvgs, key=lambda fvg: fvg["bottom"])["bottom"]
+
                     virtual_sig = {
                         "asset":       symbol,
                         "symbol":      symbol,
                         "type":        "Estructura Local",
                         "signal_type": direction,
-                        "price":       current_price,
+                        "price":       optimal_entry,
                         "timestamp":   str(last_timestamp),
                         "atr_value":   atr_val,
                     }
                     
                     risk_data = self.router._risk.calculate_position(
-                        current_price=current_price,
+                        current_price=optimal_entry,
                         signal_type=direction,
                         market_regime=result.get("market_regime", "RANGING"),
                         smc_data=result.get("smc", {}),
@@ -243,7 +269,7 @@ class MarketScanner:
                         "asset":             symbol,
                         "direction":         direction,
                         "type":              "Virtual Setup",
-                        "price":             current_price,
+                        "price":             optimal_entry,
                         "stop_loss":         risk_data["stop_loss"],
                         "tp1":               risk_data["tp1"],
                         "tp2":               risk_data["tp2"],
