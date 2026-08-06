@@ -17,6 +17,8 @@ interface Opportunity {
     type: string;
     price: number;
     stop_loss: number;
+    sl_dist_pct?: number;
+    position_size_usdt?: number;
     tp1: number;
     tp2: number;
     tp3: number;
@@ -320,7 +322,7 @@ export default function OpportunitiesScanner() {
                                                         className="text-neon-red font-bold cursor-pointer hover:text-neon-cyan flex items-center gap-1.5 active:scale-95 transition-all select-all"
                                                         title="Haz clic para copiar Stop Loss"
                                                     >
-                                                        <span>${formatCurrency(opp.stop_loss)}</span>
+                                                        <span>${formatCurrency(opp.stop_loss)} <span className="text-[9px] opacity-70">(-{opp.sl_dist_pct ? opp.sl_dist_pct.toFixed(2) : ((Math.abs(opp.price - opp.stop_loss)/opp.price)*100).toFixed(2)}%)</span></span>
                                                         <span id={`copy-sl-${assetKey}`} className="text-[7px] text-white/20 border border-white/10 px-1 py-0.5 rounded opacity-0 group-hover/level:opacity-100 transition-opacity font-sans">COPIAR</span>
                                                     </span>
                                                 </div>
@@ -369,6 +371,12 @@ export default function OpportunitiesScanner() {
                                                     >
                                                         <span>${formatCurrency(opp.tp3)}</span>
                                                         <span id={`copy-tp3-${assetKey}`} className="text-[7px] text-white/20 border border-white/10 px-1 py-0.5 rounded opacity-0 group-hover/level:opacity-100 transition-opacity font-sans">COPIAR</span>
+                                                    </span>
+                                                </div>
+                                                <div className="flex justify-between items-center pt-1.5 border-t border-white/5 text-[10px]">
+                                                    <span className="text-amber-400 font-mono">Lote Sugerido ($100 Risk):</span>
+                                                    <span className="text-amber-400 font-bold font-mono">
+                                                        ${formatCurrency(opp.position_size_usdt || Math.round(100 / (Math.abs(opp.price - opp.stop_loss)/opp.price)))} USDT
                                                     </span>
                                                 </div>
                                             </div>

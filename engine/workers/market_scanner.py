@@ -271,6 +271,8 @@ class MarketScanner:
                         "type":              "Virtual Setup",
                         "price":             optimal_entry,
                         "stop_loss":         risk_data["stop_loss"],
+                        "sl_dist_pct":       risk_data.get("sl_dist_pct", 1.8),
+                        "position_size_usdt": risk_data.get("position_size_usdt", 1000.0),
                         "tp1":               risk_data["tp1"],
                         "tp2":               risk_data["tp2"],
                         "tp3":               risk_data["tp3"],

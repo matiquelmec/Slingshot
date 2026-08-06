@@ -391,6 +391,7 @@ class RiskManager:
         return {
             "entry_price": round(current_price, 5),
             "stop_loss": round(sl, 5),
+            "sl_dist_pct": round(sl_dist_pct * 100, 2),
             "tp1": round(tp1, 5),
             "tp2": round(tp2, 5),
             "tp3": round(tp3, 5),
@@ -400,6 +401,7 @@ class RiskManager:
             "risk_usd": round(risk_amount_usdt, 2),
             "risk_pct": round(actual_risk_pct * 100, 2),
             "position_size_usdt": round(pos_size_nominal, 2),
+            "suggested_position_usdt": round(pos_size_nominal, 2),
             "leverage": leverage,
             "rr_ratio": round(final_reward / final_risk, 2) if final_risk > 0 else 0,
             "rr_ratio_tp3": round(final_reward_tp3 / final_risk, 2) if final_risk > 0 else 0,
