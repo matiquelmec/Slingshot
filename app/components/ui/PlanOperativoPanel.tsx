@@ -606,6 +606,22 @@ export default function PlanOperativoPanel() {
                                                     </div>
                                                 </div>
 
+                                                {/* Risk Management & Lot Size Suggestion v11.0 */}
+                                                <div className="grid grid-cols-2 gap-2 text-[9px] bg-amber-500/5 p-2 rounded-lg border border-amber-500/20">
+                                                    <div>
+                                                        <span className="block text-[7px] text-amber-400/70 font-black uppercase">Distancia SL (%)</span>
+                                                        <span className="text-xs font-black text-amber-400 font-mono">
+                                                            {((Math.abs(entry - sl) / entry) * 100).toFixed(2)}%
+                                                        </span>
+                                                    </div>
+                                                    <div>
+                                                        <span className="block text-[7px] text-amber-400/70 font-black uppercase">Lote Sugerido ($100 Risk)</span>
+                                                        <span className="text-xs font-black text-amber-400 font-mono">
+                                                            ${formatCurrency(Math.round(100 / ((Math.abs(entry - sl) / entry) || 0.01)))} USDT
+                                                        </span>
+                                                    </div>
+                                                </div>
+
                                                 {/* Summary Stats */}
                                                 <div className="flex justify-between items-center text-[9px] bg-white/[0.02] p-2 rounded-lg border border-white/5">
                                                     <span className="text-white/40 font-black">Régimen: <span className={`${meta.color} font-black`}>{meta.label}</span></span>
@@ -616,6 +632,36 @@ export default function PlanOperativoPanel() {
                                                     </span>
                                                     <span className="text-neon-cyan font-black">Ratio R:R: <span className="text-white">1:{rr}</span></span>
                                                 </div>
+
+                                                {/* Action Bar: Copiar Plan Completo */}
+                                                <button
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        const isLong = entry > sl;
+                                                        const textPlan = `📋 PLAN OPERATIVO ${setup.displayName}\n` +
+                                                            `• Dirección: ${isLong ? '🟢 LONG (COMPRA)' : '🔴 SHORT (VENTA)'}\n` +
+                                                            `• Entrada Límite: $${formatCurrency(entry)}\n` +
+                                                            `• Stop Loss: $${formatCurrency(sl)} (-${((Math.abs(entry - sl) / entry) * 100).toFixed(2)}%)\n` +
+                                                            `• TP1: $${formatCurrency(tp1)}\n` +
+                                                            `• TP2: $${formatCurrency(tp2)}\n` +
+                                                            `• Lote Sugerido ($100 Risk): $${formatCurrency(Math.round(100 / ((Math.abs(entry - sl) / entry) || 0.01)))} USDT\n` +
+                                                            `• R:R Proyectado: 1:${rr}`;
+                                                        handleCopy(textPlan, `${setup.symbol}-fullplan`);
+                                                    }}
+                                                    className="w-full py-1.5 bg-neon-cyan/10 hover:bg-neon-cyan/20 border border-neon-cyan/30 rounded-lg text-neon-cyan text-[9px] font-bold font-mono transition-all flex items-center justify-center gap-1.5 active:scale-98"
+                                                >
+                                                    {copiedId === `${setup.symbol}-fullplan` ? (
+                                                        <>
+                                                            <Check size={12} className="text-neon-green" />
+                                                            <span>¡PLAN COMPLETO COPIADO AL PORTAPAPELES!</span>
+                                                        </>
+                                                    ) : (
+                                                        <>
+                                                            <Copy size={12} />
+                                                            <span>COPIAR PLAN OPERATIVO COMPLETO PARA WHATSAPP/EXCHANGE</span>
+                                                        </>
+                                                    )}
+                                                </button>
 
                                             </div>
                                         </motion.div>
