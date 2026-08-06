@@ -228,7 +228,12 @@ const SignalCardItem: React.FC<SignalCardItemProps> = ({ signal, currentPrice })
                     )}
                 </div>
                 <div className="flex flex-col gap-0.5 bg-red-500/10 rounded px-2 py-1 border border-red-500/30">
-                    <span className="text-red-400 text-[8px] tracking-widest uppercase font-black">Stop Loss</span>
+                    <span className="text-red-400 text-[8px] tracking-widest uppercase font-black flex justify-between">
+                        <span>Stop Loss</span>
+                        <span className="text-[7px] text-red-400/80">
+                            (-{signal.sl_dist_pct ? signal.sl_dist_pct.toFixed(2) : signal.price && signal.stop_loss ? ((Math.abs(signal.price - signal.stop_loss) / signal.price) * 100).toFixed(2) : '1.80'}%)
+                        </span>
+                    </span>
                     <span className="text-red-500 font-black">{formatCurrency(signal.stop_loss)}</span>
                 </div>
                 <div className="flex flex-col gap-0.5 bg-green-500/10 rounded px-2 py-1 border border-green-500/30 col-span-2">
@@ -246,13 +251,13 @@ const SignalCardItem: React.FC<SignalCardItemProps> = ({ signal, currentPrice })
                 </div>
             </div>
 
-            {/* ── Fila 4: Matemáticas de Riesgo ── */}
+            {/* ── Fila 4: Matemáticas de Riesgo v11.0 ── */}
             <div className="flex items-center flex-wrap gap-1 mb-2">
+                <span className="px-1.5 py-0.5 text-[8px] font-bold tracking-wider text-amber-400 bg-amber-500/10 border border-amber-500/30 rounded flex items-center gap-1 font-mono">
+                    LOTE SUGERIDO ($100 RISK): ${formatCurrency(signal.position_size_usdt || signal.suggested_position_usdt || (signal.price && signal.stop_loss ? Math.round(100 / (Math.abs(signal.price - signal.stop_loss) / signal.price)) : 1000))} USDT
+                </span>
                 <span className="px-1.5 py-0.5 text-[8px] font-bold tracking-wider text-neon-cyan/80 bg-neon-cyan/10 border border-neon-cyan/20 rounded flex items-center gap-1">
-                    RISK: {signal.risk_pct ? `${signal.risk_pct}%` : 'N/A'} {signal.risk_amount_usdt || signal.risk_usd ? `($${signal.risk_amount_usdt || signal.risk_usd})` : ''}
-                    {signal.risk_pct && signal.risk_pct !== 1.0 && (
-                        <span className="text-[7px] opacity-60 ml-1 border-l border-neon-cyan/20 pl-1 uppercase">Dynamic Scale</span>
-                    )}
+                    RISK: {signal.risk_pct ? `${signal.risk_pct}%` : '1.0%'} {signal.risk_amount_usdt || signal.risk_usd ? `($${signal.risk_amount_usdt || signal.risk_usd})` : ''}
                 </span>
                 <span className="px-1.5 py-0.5 text-[8px] font-bold tracking-wider text-[#d4af37] bg-[#d4af37]/10 border border-[#d4af37]/20 rounded">
                     {signal.leverage ? `${signal.leverage}x` : '1x'} LEV
