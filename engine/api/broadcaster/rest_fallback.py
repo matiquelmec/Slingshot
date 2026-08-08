@@ -1,6 +1,6 @@
 import asyncio
 import time
-import requests
+import httpx
 from engine.core.logger import logger
 from engine.api.config import settings
 
@@ -20,6 +20,7 @@ class BitunixFallback:
         # Mapeo de intervalos Slingshot -> Bitunix
         self.interval_map = {
             "1m": "1m",
+            "3m": "3m",
             "5m": "5m",
             "15m": "15m",
             "1h": "1h",
@@ -30,6 +31,7 @@ class BitunixFallback:
         # Duración de intervalos en ms
         self.duration_map = {
             "1m": 60000,
+            "3m": 180000,
             "5m": 300000,
             "15m": 900000,
             "1h": 3600000,
@@ -41,56 +43,69 @@ class BitunixFallback:
         if self.is_running: return
         self.is_running = True
         logger.info(f"🚨 [FALLBACK] Activando Bitunix Telemetry para {self.symbol}...")
+        try:
+            await self.bc._broadcast({
+                "type": "connection_mode",
+                "data": {"symbol": self.symbol, "mode": "FALLBACK"}
+            })
+        except Exception:
+            pass
         asyncio.create_task(self._poll_loop())
 
     async def stop(self):
+        if not self.is_running: return
         self.is_running = False
         logger.info(f"🛑 [FALLBACK] Deteniendo Bitunix Telemetry para {self.symbol}")
+        try:
+            await self.bc._broadcast({
+                "type": "connection_mode",
+                "data": {"symbol": self.symbol, "mode": "WS"}
+            })
+        except Exception:
+            pass
 
     async def _poll_loop(self):
         url = "https://fapi.bitunix.com/api/v1/futures/market/kline"
+        depth_url = "https://fapi.bitunix.com/api/v1/futures/market/depth"
         bitunix_interval = self.interval_map.get(self.interval, "1m")
         
-        while self.is_running:
-            try:
-                # Usar asyncio.to_thread para no bloquear el loop con requests
-                params = {
-                    "symbol": self.symbol,
-                    "interval": bitunix_interval,
-                    "limit": 1
-                }
-                
-                # [OPTIMIZACIÓN v10.2.2] Timeout extendido para evitar ruido en logs
-                response = await asyncio.to_thread(
-                    requests.get, url, params=params, timeout=10
-                )
-                
-                if response.status_code == 200:
-                    data = response.json()
-                    if data.get("code") == 0 and data.get("data"):
-                        k = data["data"][0]
-                        await self._process_bitunix_kline(k)
-                
-                # Polling de Profundidad (Orderbook) para el Heatmap
-                depth_url = "https://fapi.bitunix.com/api/v1/futures/market/depth"
-                depth_resp = await asyncio.to_thread(
-                    requests.get, depth_url, params={"symbol": self.symbol}, timeout=10
-                )
-                if depth_resp.status_code == 200:
-                    depth_data = depth_resp.json()
-                    if depth_data.get("code") == 0 and depth_data.get("data"):
-                        await self._process_bitunix_depth(depth_data["data"])
-                
-                else:
-                    logger.warning(f"[FALLBACK] Bitunix error: {response.status_code}")
-                
-            except requests.exceptions.Timeout:
-                # Silencioso, es un fallback. No queremos asustar al usuario.
-                logger.debug(f"[FALLBACK] Bitunix timeout (10s) en {self.symbol} - Reintentando...")
-            except Exception as e:
-                logger.error(f"[FALLBACK] Error crítico en loop de Bitunix ({self.symbol}): {e}")
-            
-            await asyncio.sleep(self.poll_interval)
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                while self.is_running:
+                    try:
+                        params = {
+                            "symbol": self.symbol,
+                            "interval": bitunix_interval,
+                            "limit": 1
+                        }
+                        
+                        response = await client.get(url, params=params)
+                        
+                        if response.status_code == 200:
+                            data = response.json()
+                            if data.get("code") == 0 and data.get("data"):
+                                k = data["data"][0]
+                                await self._process_bitunix_kline(k)
+                        else:
+                            logger.warning(f"[FALLBACK] Bitunix kline error: {response.status_code}")
+                        
+                        # Polling de Profundidad (Orderbook) para el Heatmap
+                        depth_resp = await client.get(depth_url, params={"symbol": self.symbol})
+                        if depth_resp.status_code == 200:
+                            depth_data = depth_resp.json()
+                            if depth_data.get("code") == 0 and depth_data.get("data"):
+                                await self._process_bitunix_depth(depth_data["data"])
+                        else:
+                            logger.warning(f"[FALLBACK] Bitunix depth error: {depth_resp.status_code}")
+                        
+                    except httpx.TimeoutException:
+                        logger.debug(f"[FALLBACK] Bitunix timeout (10s) en {self.symbol} - Reintentando...")
+                    except Exception as e:
+                        logger.error(f"[FALLBACK] Error crítico en loop de Bitunix ({self.symbol}): {e}")
+                    
+                    await asyncio.sleep(self.poll_interval)
+        finally:
+            logger.info(f"🔌 [FALLBACK] Recursos HTTP liberados para {self.symbol}")
 
     async def _process_bitunix_kline(self, k: dict):
         """
@@ -103,7 +118,16 @@ class BitunixFallback:
             # Nota: Bitunix 'time' es el inicio de la vela
             kline_ts = int(k["time"])
             
-            # Simulamos el formato de Binance WebSocket
+            # Detectar si el timestamp de la vela cambió para emitir el cierre de la vela anterior
+            if self.last_kline and self.last_kline.get("k", {}).get("t") != kline_ts:
+                logger.info(f"📊 [FALLBACK-CLOSE] Detectado cierre de vela para {self.symbol}:{self.interval} (TS anterior: {self.last_kline['k']['t']} -> Nuevo: {kline_ts})")
+                closed_payload = self.last_kline.copy()
+                # Marcar la vela anterior como CERRADA para forzar el pipeline de estrategias
+                closed_payload["k"] = closed_payload["k"].copy()
+                closed_payload["k"]["x"] = True
+                await self.bc._process_kline_stream(closed_payload, {"data": closed_payload, "stream": "fallback_close"})
+            
+            # Simulamos el formato de Binance WebSocket (Abierto)
             binance_payload = {
                 "e": "kline",
                 "E": event_time,
@@ -119,13 +143,13 @@ class BitunixFallback:
                     "l": k["low"],
                     "v": k["quoteVol"],
                     "q": k["baseVol"],
-                    "x": False # El fallback no detecta cierre de vela tan fácil, lo dejamos en False
+                    "x": False # Se emitirá como True al detectar cambio de timestamp en la siguiente iteración
                 }
             }
             
             # Enviar directamente al procesador de klines del broadcaster
             # Esto sincroniza el latestPrice y dispara el Fast Path
-            self.last_kline = binance_payload # Guardamos para el inyector de depth
+            self.last_kline = binance_payload # Guardamos para el inyector de depth e identificar el próximo cierre
             await self.bc._process_kline_stream(binance_payload, {"data": binance_payload, "stream": "fallback"})
             
         except Exception as e:

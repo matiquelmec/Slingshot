@@ -509,7 +509,9 @@ class SignalGatekeeper:
             sig_type_spam = "LONG" if "LONG" in str(sig.get("signal_type", sig.get("type", ""))).upper() else "SHORT"
             recent_for_asset = list(SIGNALS_HISTORY[asset])
             contradictory_count = 0
-            for ts, old_type in recent_for_asset:
+            for item in recent_for_asset:
+                ts = item[0]
+                old_type = item[-1]
                 if now_ts - ts < 900 and old_type != sig_type_spam:
                     contradictory_count += 1
 
@@ -518,7 +520,7 @@ class SignalGatekeeper:
                 self._block(sig, "BLOCKED_CHOPPY", f"Filtro Anti-Spam: Demasiados cambios de dirección rápidos (Flips) en este activo.", result)
                 continue
             
-            SIGNALS_HISTORY[asset].append((now_ts, sig_type_spam))
+            SIGNALS_HISTORY[asset].append((now_ts, "APPROVED", sig_type_spam))
 
             # Conflict Manager (IA vs SMC) - DESACTIVADO A SOLICITUD DEL USUARIO
             # if context.ml_projection and "direction" in context.ml_projection:

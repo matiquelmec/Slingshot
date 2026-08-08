@@ -1,14 +1,55 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useTelemetryStore } from '../../store/telemetryStore';
-import { Shield, Zap, AlertCircle, RefreshCw } from 'lucide-react';
+import { Shield, Zap, AlertCircle, RefreshCw, Terminal, X, Globe } from 'lucide-react';
 
 export default function LatticeStatus() {
-    const { tacticalDecision, isConnected, connectionStatus } = useTelemetryStore();
+    const { tacticalDecision, isConnected, connectionStatus, connectionMode, activeSymbol, latestPrice } = useTelemetryStore();
     const d = tacticalDecision;
     const isStale = d.is_stale || connectionStatus === 'STALLED' || connectionStatus === 'DISCONNECTED' || !isConnected;
+
+    // Sandbox panel states
+    const [showPlayground, setShowPlayground] = useState(false);
+    const [testAsset, setTestAsset] = useState(activeSymbol || 'BTCUSDT');
+    const [testDir, setTestDir] = useState<'LONG' | 'SHORT'>('LONG');
+    const [testPrice, setTestPrice] = useState<number>(latestPrice || 50000.0);
+    const [isInjecting, setIsInjecting] = useState(false);
+
+    // Sync test fields when store values change
+    React.useEffect(() => {
+        if (activeSymbol) setTestAsset(activeSymbol);
+    }, [activeSymbol]);
+
+    React.useEffect(() => {
+        if (latestPrice) setTestPrice(latestPrice);
+    }, [latestPrice]);
+
+    const handleInjectSignal = async () => {
+        setIsInjecting(true);
+        try {
+            const api_key = 'SLINGSHOT_INTERNAL_V6';
+            const BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+            const endpoint = `${BASE_URL.replace(/\/$/, '')}/api/v1/inject-test-signal?api_key=${api_key}&symbol=${testAsset}&direction=${testDir}&price=${testPrice}`;
+            
+            const res = await fetch(endpoint, { method: 'POST' });
+            if (res.ok) {
+                const result = await res.json();
+                console.log("Injected signal:", result);
+                alert(`Señal inyectada con éxito para ${testAsset} (${testDir})`);
+                setShowPlayground(false);
+            } else {
+                const err = await res.json();
+                alert(`Error al inyectar señal: ${err.detail || res.statusText}`);
+            }
+        } catch (e) {
+            console.error("Failed to inject test signal:", e);
+            alert("Error de red al conectar con el backend.");
+        } finally {
+            setIsInjecting(false);
+        }
+    };
 
     return (
         <div className="flex items-center gap-4 px-6 h-14 bg-[#050B14]/80 backdrop-blur-md border-b border-white/5 relative z-50">
@@ -106,7 +147,110 @@ export default function LatticeStatus() {
                     </div>
                 </div>
 
+                {/* Connection Mode Badge */}
+                <div className="flex flex-col items-end">
+                    <span className="text-[7px] font-bold text-white/30 tracking-widest uppercase">FEED CHANNEL</span>
+                    <div className={`flex items-center gap-1.5 px-3 py-1 border rounded-lg font-mono text-[9px] font-black tracking-widest uppercase transition-all ${
+                        connectionMode === 'FALLBACK'
+                        ? 'bg-yellow-500/10 border-yellow-500/30 text-yellow-400 shadow-[0_0_10px_rgba(250,204,21,0.1)]'
+                        : connectionStatus === 'DISCONNECTED'
+                        ? 'bg-red-500/10 border-red-500/30 text-red-400'
+                        : 'bg-green-500/10 border-green-500/30 text-green-400 shadow-[0_0_10px_rgba(34,197,94,0.1)]'
+                    }`}>
+                        <Globe size={10} className={connectionMode === 'FALLBACK' ? 'animate-pulse' : ''} />
+                        {connectionMode === 'FALLBACK' ? 'BITUNIX FALLBACK' : connectionStatus === 'DISCONNECTED' ? 'OFFLINE' : 'BINANCE FUTURES WS'}
+                    </div>
+                </div>
+
+                {/* Sandbox Playground Button */}
+                <button
+                    onClick={() => setShowPlayground(!showPlayground)}
+                    className={`px-3 py-2 border rounded-lg text-[9px] font-black uppercase tracking-widest flex items-center gap-1.5 transition-all ${
+                        showPlayground 
+                        ? 'bg-neon-cyan text-black border-neon-cyan shadow-[0_0_10px_rgba(0,229,255,0.3)]' 
+                        : 'bg-white/5 border-white/10 text-white/60 hover:text-neon-cyan hover:border-neon-cyan/50 hover:bg-neon-cyan/5'
+                    }`}
+                >
+                    <Terminal size={10} />
+                    SANDBOX
+                </button>
             </div>
+
+            {/* Sandbox Playground Modal */}
+            <AnimatePresence>
+                {showPlayground && (
+                    <motion.div
+                        initial={{ opacity: 0, y: -10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -10 }}
+                        className="absolute top-16 right-6 w-80 bg-[#070e1a]/95 backdrop-blur-xl border border-white/10 rounded-xl p-4 shadow-[0_10px_30px_rgba(0,0,0,0.6)] z-50 flex flex-col gap-3"
+                    >
+                        <div className="flex items-center justify-between border-b border-white/5 pb-2">
+                            <span className="text-[10px] font-black text-white tracking-wider flex items-center gap-1.5"><Terminal size={12} className="text-neon-cyan" /> DEV SANDBOX INJECTOR</span>
+                            <button onClick={() => setShowPlayground(false)} className="text-white/40 hover:text-white"><X size={12} /></button>
+                        </div>
+                        
+                        <div className="flex flex-col gap-3 text-[10px]">
+                            {/* Asset select */}
+                            <div className="flex flex-col gap-1">
+                                <label className="text-white/40 font-bold tracking-wider">ACTIVO</label>
+                                <select 
+                                    value={testAsset} 
+                                    onChange={(e) => setTestAsset(e.target.value)}
+                                    className="bg-black/50 border border-white/10 rounded px-2.5 py-1.5 text-white font-mono outline-none focus:border-neon-cyan/50"
+                                >
+                                    <option value="BTCUSDT">BTCUSDT</option>
+                                    <option value="ETHUSDT">ETHUSDT</option>
+                                    <option value="SOLUSDT">SOLUSDT</option>
+                                    <option value="XRPUSDT">XRPUSDT</option>
+                                    <option value="PAXGUSDT">PAXGUSDT</option>
+                                    <option value="XAGUSDT">XAGUSDT</option>
+                                </select>
+                            </div>
+
+                            {/* Direction select */}
+                            <div className="flex flex-col gap-1">
+                                <label className="text-white/40 font-bold tracking-wider">DIRECCIÓN</label>
+                                <div className="grid grid-cols-2 gap-2">
+                                    <button 
+                                        type="button"
+                                        onClick={() => setTestDir('LONG')}
+                                        className={`py-1.5 rounded font-black text-center transition-all outline-none ${testDir === 'LONG' ? 'bg-green-500/20 border border-green-500/50 text-green-400 shadow-[0_0_8px_rgba(34,197,94,0.1)]' : 'bg-white/5 border border-white/10 text-white/50 hover:bg-white/10'}`}
+                                    >
+                                        LONG
+                                    </button>
+                                    <button 
+                                        type="button"
+                                        onClick={() => setTestDir('SHORT')}
+                                        className={`py-1.5 rounded font-black text-center transition-all outline-none ${testDir === 'SHORT' ? 'bg-red-500/20 border border-red-500/50 text-red-400 shadow-[0_0_8px_rgba(239,68,68,0.1)]' : 'bg-white/5 border border-white/10 text-white/50 hover:bg-white/10'}`}
+                                    >
+                                        SHORT
+                                    </button>
+                                </div>
+                            </div>
+
+                            {/* Price */}
+                            <div className="flex flex-col gap-1">
+                                <label className="text-white/40 font-bold tracking-wider">PRECIO DE REFERENCIA</label>
+                                <input 
+                                    type="number" 
+                                    value={testPrice} 
+                                    onChange={(e) => setTestPrice(Number(e.target.value))}
+                                    className="bg-black/50 border border-white/10 rounded px-2.5 py-1.5 text-white font-mono outline-none focus:border-neon-cyan/50"
+                                />
+                            </div>
+
+                            <button
+                                onClick={handleInjectSignal}
+                                disabled={isInjecting}
+                                className="mt-2 py-2 bg-gradient-to-r from-neon-cyan to-blue-600 hover:from-neon-cyan/80 hover:to-blue-600/80 text-white font-black rounded text-[10px] tracking-widest uppercase transition-all shadow-[0_0_15px_rgba(0,229,255,0.2)] disabled:opacity-50"
+                            >
+                                {isInjecting ? 'INYECTANDO...' : 'INYECTAR EN MEMORIA'}
+                            </button>
+                        </div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
 
             {/* Stale Guard Overlay - Conditional inside the component for better UX */}
             {isStale && (

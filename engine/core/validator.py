@@ -26,11 +26,12 @@ class ValidatorAgent:
         conf = signal.get("confluence", {})
         score = conf.get("score", 0)
         
-        # [PRE-FILTRO] Solo validamos señales en el rango 60-80%
-        if score < 60 or score > 80:
+        import os
+        # [PRE-FILTRO] Fast path / Backtest mode
+        if os.environ.get("DISABLE_AI_VALIDATOR") == "true" or score < 60 or score > 80:
             return {
                 "approved": True, 
-                "ai_reasoning": "Señal fuera de la zona gris. Aprobación técnica automática.",
+                "ai_reasoning": "Aprobación técnica automática (Bypass / Backtest Mode).",
                 "confidence": 1.0
             }
 

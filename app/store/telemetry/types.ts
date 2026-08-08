@@ -17,6 +17,7 @@ export interface TelemetryState {
     advisorLogs: Record<string, any>;
     isConnected: boolean;
     connectionStatus: 'CONNECTING' | 'CONNECTED' | 'STALLED' | 'DISCONNECTED';
+    connectionMode: 'WS' | 'FALLBACK' | 'DISCONNECTED';
     isCalibrating: boolean;
     activeSymbol: string;
     activeTimeframe: Timeframe;

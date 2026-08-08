@@ -102,7 +102,7 @@ async def update_macro_context():
         dxy_source = None
 
         for t in _DXY_TICKERS:
-            hist = _fetch_ticker_silent(t)
+            hist = await asyncio.to_thread(_fetch_ticker_silent, t)
             if hist is not None:
                 dxy_hist = hist
                 dxy_source = t
@@ -124,7 +124,7 @@ async def update_macro_context():
         nas_source = None
 
         for t in _NAS_TICKERS:
-            hist = _fetch_ticker_silent(t)
+            hist = await asyncio.to_thread(_fetch_ticker_silent, t)
             if hist is not None:
                 nas_hist = hist
                 nas_source = t

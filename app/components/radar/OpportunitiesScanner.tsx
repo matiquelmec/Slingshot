@@ -11,6 +11,12 @@ interface ChecklistItem {
     detail: string;
 }
 
+interface AssetHealth {
+    ker: number;
+    status: string;
+    is_quarantined: boolean;
+}
+
 interface Opportunity {
     asset: string;
     direction: string;
@@ -28,7 +34,22 @@ interface Opportunity {
     is_active_trigger: boolean;
     ote_chasing?: boolean;
     session?: string;
+    asset_health?: AssetHealth;
 }
+
+const EDUCATIONAL_NOTES: Record<string, string> = {
+    "Salud de Activo (KER)": "El indicador KER mide si el precio tiene mechas erráticas. Si es < 0.22, entra en Cuarentena y exige ≥ 65% de confluencia para proteger tu capital.",
+    "Alineación Macro BTC": "Filtro V12 Sovereign: Evita operar Altcoins si van en dirección opuesta a la tendencia macro de Bitcoin para prevenir trampas.",
+    "Narrativa SMC": "Estructura Institucional CHoCH/BOS. Valida que el impulso siga el flujo de volumen principal.",
+    "Zonas POI": "Point of Interest (Order Blocks o FVGs). Zonas con bloques de órdenes institucionales pendientes.",
+    "Yosh Order Flow": "Detección de trampas de liquidez y ventana de oro (Golden Window 10:00 - 11:30 AM EST).",
+    "Liquidez": "Barrido de liquidez (Liquidity Sweep). Los creadores de mercado sacan a los minoristas antes del movimiento verdadero.",
+    "Huella RVOL": "Volumen Relativo > 1.5x. Confirma la entrada de volumen transaccional de bancos e instituciones.",
+    "Golden Pocket": "Zona Fibonacci 61.8% - 78.6% (OTE). Área de máxima probabilidad de reacción del precio.",
+    "SMT Divergence": "Divergencia entre activos correlacionados (ej. BTC vs ETH) que revela acumulación u ocultamiento del Smart Money.",
+    "Order Flow Delta": "Presión neta de compradores agresivos (Takers) vs vendedores agresivos en el libro de órdenes.",
+    "Tendencia Macro EMA 200": "Confirma que la entrada no opere en contra de la tendencia promedio de las últimas 200 velas."
+};
 
 export default function OpportunitiesScanner() {
     const [activeTab, setActiveTab] = useState<'scalp' | 'swing'>('scalp');
@@ -36,6 +57,8 @@ export default function OpportunitiesScanner() {
         scalp: [],
         swing: []
     });
+    const [filterHighConfluence, setFilterHighConfluence] = useState(false);
+    const [filterAdaptiveKER, setFilterAdaptiveKER] = useState(true);
     const [expandedAsset, setExpandedAsset] = useState<string | null>(null);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
@@ -69,7 +92,31 @@ export default function OpportunitiesScanner() {
         fetchOpps();
     };
 
-    const currentOpps = activeTab === 'scalp' ? opportunities.scalp : opportunities.swing;
+    const currentOppsRaw = activeTab === 'scalp' ? opportunities.scalp : opportunities.swing;
+    
+    let filteredOpps = currentOppsRaw;
+    
+    if (filterHighConfluence) {
+        filteredOpps = filteredOpps.filter(o => o.confluence_score >= 50);
+    }
+    
+    if (filterAdaptiveKER) {
+        const HIGH_NOISE_ASSETS = ['BNBUSDT', 'XRPUSDT', 'SOLUSDT', 'LINKUSDT'];
+        // En modo adaptativo KER, bloquea activos ruidosos o en cuarentena a menos que alcancen confluencia ELITE (>= 65%)
+        filteredOpps = filteredOpps.filter(o => {
+            const assetUpper = (o.asset || '').toUpperCase();
+            const isQuarantined = o.asset_health?.is_quarantined || o.asset_health?.status === 'QUARANTINED';
+            const isKnownHighNoise = HIGH_NOISE_ASSETS.includes(assetUpper);
+            
+            if (isQuarantined || isKnownHighNoise) {
+                return o.confluence_score >= 65; // Exige 65%+ para salir del filtro antiruido
+            }
+            return o.confluence_score >= 45;
+        });
+    }
+    
+    // Ordenar de mayor a menor confluencia (Prioridad Máxima Primero)
+    const currentOpps = [...filteredOpps].sort((a, b) => b.confluence_score - a.confluence_score);
 
     const toggleExpand = (assetKey: string) => {
         if (expandedAsset === assetKey) {
@@ -163,6 +210,34 @@ export default function OpportunitiesScanner() {
                 </div>
 
                 <div className="flex items-center gap-3">
+                    {/* KER Adaptive Filter Toggle */}
+                    <button
+                        onClick={() => setFilterAdaptiveKER(!filterAdaptiveKER)}
+                        className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all border flex items-center gap-1.5 ${
+                            filterAdaptiveKER
+                                ? 'bg-neon-cyan/20 text-neon-cyan border-neon-cyan/40 shadow-[0_0_12px_rgba(6,182,212,0.2)]'
+                                : 'bg-[#070E18] text-white/50 border-white/5 hover:text-white hover:border-white/10'
+                        }`}
+                        title="Filtro Adaptativo Inteligente de Ruido con Kaufman Efficiency Ratio (KER)"
+                    >
+                        <Zap size={13} className={filterAdaptiveKER ? "text-neon-cyan animate-pulse" : ""} />
+                        <span>Filtro Adaptativo KER</span>
+                    </button>
+
+                    {/* High Confluence Filter Toggle */}
+                    <button
+                        onClick={() => setFilterHighConfluence(!filterHighConfluence)}
+                        className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all border flex items-center gap-1.5 ${
+                            filterHighConfluence
+                                ? 'bg-neon-green/20 text-neon-green border-neon-green/40 shadow-[0_0_12px_rgba(16,185,129,0.2)]'
+                                : 'bg-[#070E18] text-white/50 border-white/5 hover:text-white hover:border-white/10'
+                        }`}
+                        title="Filtra oportunidades con >50% confluencia alineadas a la EMA 200 (Profit Factor 3.00)"
+                    >
+                        <ShieldCheck size={13} className={filterHighConfluence ? "text-neon-green" : ""} />
+                        <span>Solo &ge; 50% Confluencia</span>
+                    </button>
+
                     {/* Timeframe Selector tabs */}
                     <div className="flex bg-[#070E18] p-1 rounded-xl border border-white/5">
                         <button
@@ -225,15 +300,40 @@ export default function OpportunitiesScanner() {
                                         animate={{ opacity: 1, y: 0 }}
                                         exit={{ opacity: 0, scale: 0.95 }}
                                         transition={{ duration: 0.2 }}
-                                        className={`bg-[#060D17]/80 border rounded-2xl p-5 hover:border-white/15 transition-all overflow-hidden flex flex-col justify-between ${
-                                            opp.is_active_trigger
+                                        className={`bg-[#060D17]/80 border rounded-2xl p-5 hover:border-white/20 transition-all flex flex-col justify-between relative ${
+                                            opp.confluence_score >= 60
+                                                ? 'border-neon-green/40 shadow-[0_0_20px_rgba(16,185,129,0.15)] ring-1 ring-neon-green/20'
+                                                : opp.confluence_score >= 50
+                                                ? 'border-neon-cyan/35 shadow-[0_0_12px_rgba(6,182,212,0.1)]'
+                                                : opp.is_active_trigger
                                                 ? 'border-neon-green/30 shadow-[0_0_15px_rgba(16,185,129,0.05)]'
                                                 : opp.ote_chasing
                                                 ? 'border-amber-500/20 shadow-[0_0_10px_rgba(245,158,11,0.04)]'
-                                                : 'border-white/5'
+                                                : 'border-white/5 opacity-80 hover:opacity-100'
                                         }`}
                                     >
                                         <div>
+                                            {/* Priority Banner for High Confluence */}
+                                            {opp.confluence_score >= 60 ? (
+                                                <div className="flex items-center justify-between bg-neon-green/10 border border-neon-green/25 rounded-xl px-3 py-1.5 mb-3">
+                                                    <span className="text-neon-green text-[9px] font-mono font-black uppercase tracking-wider flex items-center gap-1">
+                                                        <span>👑 PRIORIDAD ELITE</span>
+                                                        <span className="text-white/40">|</span>
+                                                        <span>PROFIT FACTOR 3.00</span>
+                                                    </span>
+                                                    <span className="text-neon-green text-[8px] font-mono font-bold bg-neon-green/20 px-1.5 py-0.5 rounded">R:R 1:3.0+</span>
+                                                </div>
+                                            ) : opp.confluence_score >= 50 ? (
+                                                <div className="flex items-center justify-between bg-neon-cyan/10 border border-neon-cyan/20 rounded-xl px-3 py-1.5 mb-3">
+                                                    <span className="text-neon-cyan text-[9px] font-mono font-bold uppercase tracking-wider flex items-center gap-1">
+                                                        <span>🎯 ALTA EXPECTATIVA</span>
+                                                        <span className="text-white/40">|</span>
+                                                        <span>ALINEADO EMA 200</span>
+                                                    </span>
+                                                    <span className="text-neon-cyan text-[8px] font-mono font-bold bg-neon-cyan/20 px-1.5 py-0.5 rounded">PASO 1 OK</span>
+                                                </div>
+                                            ) : null}
+
                                             {/* OTE Watchdog Alert Banner */}
                                             {opp.ote_chasing && (
                                                 <div className="flex items-center gap-2 bg-amber-500/10 border border-amber-500/20 rounded-xl px-3 py-2 mb-3">
@@ -244,7 +344,7 @@ export default function OpportunitiesScanner() {
 
                                             {/* Top Line */}
                                             <div className="flex items-center justify-between mb-4">
-                                                <div className="flex items-center gap-2">
+                                                <div className="flex items-center gap-2 flex-wrap">
                                                     <span className="text-sm font-black text-white tracking-tight">{opp.asset}</span>
                                                     <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase ${
                                                         isLong 
@@ -253,6 +353,31 @@ export default function OpportunitiesScanner() {
                                                     }`}>
                                                         {opp.direction}
                                                     </span>
+
+                                                    {/* Health KER Badge con Nota Educativa */}
+                                                    {opp.asset_health && (
+                                                        <div className="relative group/ker cursor-help">
+                                                            <span className={`text-[9px] px-2 py-0.5 rounded-md font-mono font-bold border transition-all flex items-center gap-1 ${
+                                                                opp.asset_health.is_quarantined || opp.asset_health.status === 'QUARANTINED'
+                                                                    ? 'text-rose-400 bg-rose-500/15 border-rose-500/30'
+                                                                    : opp.asset_health.status === 'OPTIMAL'
+                                                                    ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20'
+                                                                    : 'text-amber-400 bg-amber-500/10 border-amber-500/20'
+                                                            }`}>
+                                                                {opp.asset_health.is_quarantined || opp.asset_health.status === 'QUARANTINED'
+                                                                    ? `🔴 CUARENTENA (KER ${opp.asset_health.ker})`
+                                                                    : opp.asset_health.status === 'OPTIMAL'
+                                                                    ? `🟢 KER ${opp.asset_health.ker}`
+                                                                    : `🟡 KER ${opp.asset_health.ker}`}
+                                                            </span>
+                                                            <div className="absolute left-0 bottom-full mb-1 hidden group-hover/ker:block z-50 w-64 p-2 bg-neutral-900/95 backdrop-blur-md border border-rose-500/30 rounded-lg shadow-xl text-[9px] text-white/90 font-mono leading-relaxed">
+                                                                <span className="font-bold text-rose-400 block mb-0.5">📚 Nota Educativa (KER):</span>
+                                                                {opp.asset_health.is_quarantined 
+                                                                    ? "Activo con alto ruido y mechas erráticas. Se exige confluencia ≥ 65% para filtrar falsas rupturas de mercado."
+                                                                    : "Estructura de precio limpia con baja mecha de ruido. Operativa ideal."}
+                                                            </div>
+                                                        </div>
+                                                    )}
                                                 </div>
 
                                                 <div className="flex items-center gap-1.5">
@@ -402,20 +527,31 @@ export default function OpportunitiesScanner() {
                                                         initial={{ height: 0, opacity: 0 }}
                                                         animate={{ height: 'auto', opacity: 1 }}
                                                         exit={{ height: 0, opacity: 0 }}
-                                                        className="overflow-hidden mt-3 space-y-1.5"
+                                                        className="mt-3 space-y-2"
                                                     >
-                                                        {opp.checklist.map((item, cIdx) => (
-                                                            <div 
-                                                                key={cIdx} 
-                                                                className={`flex items-start justify-between p-2 rounded border text-[10px] font-mono leading-tight ${getStatusColor(item.status)}`}
-                                                            >
-                                                                <div className="flex-1 pr-2">
-                                                                    <span className="block font-bold">{item.factor}</span>
-                                                                    <span className="opacity-70 text-[9px]">{item.detail}</span>
+                                                        {opp.checklist.map((item, cIdx) => {
+                                                            const eduNote = EDUCATIONAL_NOTES[item.factor];
+                                                            return (
+                                                                <div 
+                                                                    key={cIdx} 
+                                                                    className={`flex flex-col p-2.5 rounded-xl border text-[10px] font-mono leading-tight space-y-1 ${getStatusColor(item.status)}`}
+                                                                >
+                                                                    <div className="flex items-start justify-between">
+                                                                        <div className="flex-1 pr-2">
+                                                                            <span className="block font-bold text-white/90">{item.factor}</span>
+                                                                            <span className="opacity-80 text-[9px]">{item.detail}</span>
+                                                                        </div>
+                                                                        <span className="font-bold">{getStatusIcon(item.status)}</span>
+                                                                    </div>
+                                                                    {eduNote && (
+                                                                        <div className="bg-[#02060D] border border-cyan-500/25 rounded-lg p-2 mt-1 text-[9px] text-cyan-200/90 leading-relaxed font-sans shadow-inner">
+                                                                            <span className="font-bold text-cyan-400 block mb-0.5 font-mono text-[8.5px] uppercase tracking-wider">📚 Nota Educativa:</span>
+                                                                            <span className="text-white/80">{eduNote}</span>
+                                                                        </div>
+                                                                    )}
                                                                 </div>
-                                                                <span className="font-bold">{getStatusIcon(item.status)}</span>
-                                                            </div>
-                                                        ))}
+                                                            );
+                                                        })}
                                                     </motion.div>
                                                 )}
                                             </AnimatePresence>

@@ -39,6 +39,9 @@ class MemoryStore:
         # Caché de Análisis del Advisor (LLM)
         self._advisor_advice: Dict[str, Dict[str, Any]] = {}
         
+        # Oportunidades del Escáner de Mercado (Corto y Largo plazo)
+        self._scanner_opportunities: Dict[str, List[Dict[str, Any]]] = {"scalp": [], "swing": []}
+        
         # Lock de concurrencia para evitar condiciones de carrera
         self._lock = asyncio.Lock()
 
@@ -223,6 +226,15 @@ class MemoryStore:
         """Recupera el sesgo HTF centralizado."""
         async with self._lock:
             return self._htf_biases.get(asset)
+
+    async def save_scanner_opportunities(self, timeframe_type: str, opportunities: List[Dict[str, Any]]):
+        """Guarda las mejores oportunidades del escáner para un tipo (scalp/swing)."""
+        async with self._lock:
+            self._scanner_opportunities[timeframe_type] = opportunities
+
+    def get_scanner_opportunities(self, timeframe_type: str) -> List[Dict[str, Any]]:
+        """Recupera de forma rápida y sincrónica las mejores oportunidades del escáner."""
+        return self._scanner_opportunities.get(timeframe_type, [])
 
     async def clear_all(self):
         """Wipe total (Reseteo de sistema)."""

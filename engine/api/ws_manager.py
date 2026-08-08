@@ -151,7 +151,7 @@ class SymbolBroadcaster:
         logger.info(f"[BROADCASTER] {self._key} → +cliente {client_id[:6]}")
 
         # Hidratación inicial
-        history_to_send = list(self.state.live_buffer) if self.state.live_buffer else self.state.history
+        history_to_send = list(self.state.live_buffer) if self.state.live_buffer else list(self.state.history)
         if history_to_send:
             await queue.put({"type": "history", "data": history_to_send})
         
@@ -169,6 +169,15 @@ class SymbolBroadcaster:
                          self.state.last_session, self.state.last_advisor, self.state.last_liquidations, 
                          self.state.last_onchain, self.state.last_htf_bias_msg]:
             if state_msg: await queue.put(state_msg)
+
+        # Enviar estado de conexión inicial
+        await queue.put({
+            "type": "connection_mode",
+            "data": {
+                "symbol": self.symbol,
+                "mode": "FALLBACK" if self.fallback.is_running else "WS"
+            }
+        })
 
         return queue
 
@@ -221,12 +230,13 @@ class SymbolBroadcaster:
         try:
             history = await fetch_binance_history(self.symbol, self.interval, limit=500)
             if history:
-                self.state.history = history
+                self.state.history.clear()
+                self.state.history.extend(history)
                 self.state.live_buffer.extend(history[-500:])
                 await self._broadcast({
                     "type": "history", 
                     "asset": self.symbol,
-                    "data": history
+                    "data": list(self.state.history)
                 })
                 
                 # 4. Bootstrap de Indicadores Estructurales
@@ -352,10 +362,8 @@ class SymbolBroadcaster:
             async with await asyncio.wait_for(ws_client.connect(binance_url, ping_interval=30), timeout=15.0) as binance_ws:
                 self.state.is_connected = True
                 logger.info(f"[BROADCASTER] {self._key} → Stream Conectado 🟢")
-                # Mantenemos el fallback encendido para todos los activos de Futuros (Redundancia v10.2)
-                # Si es SPOT, lo apagamos para ahorrar recursos
-                if not is_futures:
-                    await self.fallback.stop()
+                # Apagamos el fallback en cuanto conectamos con éxito a Binance WS
+                await self.fallback.stop()
                 self._last_tick_ts = time.time()
 
                 while self.state.is_connected:

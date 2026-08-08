@@ -243,6 +243,16 @@ class MarketScanner:
 
                     is_chasing, chase_label = self._ote_watchdog(direction, current_price, fib_data)
 
+                    # Cálculo de alineación macro con BTC
+                    btc_aligned = None
+                    btc_df = dfs_dict.get("BTCUSDT") if isinstance(dfs_dict, dict) else None
+                    if btc_df is not None and len(btc_df) > 0 and symbol != "BTCUSDT":
+                        if "ema200" not in btc_df.columns:
+                            btc_df["ema200"] = btc_df["close"].ewm(span=200, adjust=False).mean()
+                        btc_price = float(btc_df["close"].iloc[-1])
+                        btc_ema200 = float(btc_df["ema200"].iloc[-1])
+                        btc_aligned = (direction == "LONG" and btc_price > btc_ema200) or (direction == "SHORT" and btc_price < btc_ema200)
+
                     conf_res = confluence_manager.evaluate_signal(
                         df,
                         virtual_sig,
@@ -251,11 +261,34 @@ class MarketScanner:
                         session_data=session_data,
                         interval=interval,
                         liquidations=liq_clusters,
-                        correlated_df=correlated_df
+                        correlated_df=correlated_df,
+                        btc_aligned=btc_aligned
                     )
 
                     base_score = conf_res.get("score", 0)
                     checklist  = conf_res.get("checklist", [])
+
+                    # ── FILTRO DE TENDENCIA INSTITUCIONAL EMA 200 ──
+                    if "ema200" not in df.columns:
+                        df["ema200"] = df["close"].ewm(span=200, adjust=False).mean()
+                    
+                    ema200_val = float(df["ema200"].iloc[-1])
+                    is_trend_aligned = (direction == "LONG" and current_price > ema200_val) or (direction == "SHORT" and current_price < ema200_val)
+
+                    if is_trend_aligned:
+                        base_score = min(100, base_score + 10)
+                        checklist.append({
+                            "factor": "Tendencia Macro EMA 200",
+                            "status": "CUMPLIDO",
+                            "detail": f"✅ ALINEADO A TENDENCIA (Precio ${current_price:,.2f} vs EMA200 ${ema200_val:,.2f})",
+                        })
+                    else:
+                        base_score = max(0, base_score - 15)
+                        checklist.append({
+                            "factor": "Tendencia Macro EMA 200",
+                            "status": "ALERTA",
+                            "detail": f"⚠️ CONTRA TENDENCIA EMA 200 (Precio ${current_price:,.2f} vs EMA200 ${ema200_val:,.2f})",
+                        })
 
                     if is_chasing:
                         base_score = max(0, base_score - 20)
@@ -282,6 +315,7 @@ class MarketScanner:
                         "is_active_trigger": False,
                         "ote_chasing":       is_chasing,
                         "session":           session_data.get("current_session", "UNKNOWN"),
+                        "asset_health":      conf_res.get("asset_health", {}),
                     }
                     candidates.append(cand)
                 
@@ -322,4 +356,5 @@ class MarketScanner:
             "is_active_trigger": is_active,
             "ote_chasing":       False,
             "session":           "LIVE_SIGNAL",
+            "asset_health":      sig.get("confluence", {}).get("asset_health", {}),
         }

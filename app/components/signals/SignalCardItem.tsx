@@ -96,11 +96,39 @@ const SignalCardItem: React.FC<SignalCardItemProps> = ({ signal, currentPrice })
 
     return (
         <motion.div
-            initial={{ opacity: 0, x: -20 }}
+            layout
+            initial={{ opacity: 0, x: -10 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ duration: 0.4 }}
-            className={`flex flex-col rounded border px-4 py-3 ${lifecycle.bgColor} transition-all`}
+            className={`flex flex-col rounded-xl border px-4 py-3 ${lifecycle.bgColor} transition-all relative ${
+                (signal.confluence_score || 0) >= 70
+                    ? 'border-neon-green/40 shadow-[0_0_20px_rgba(16,185,129,0.15)] ring-1 ring-neon-green/20'
+                    : (signal.confluence_score || 0) >= 50
+                    ? 'border-neon-cyan/35 shadow-[0_0_12px_rgba(6,182,212,0.1)]'
+                    : ''
+            }`}
         >
+            {/* Priority Banner if High Confluence */}
+            {(signal.confluence_score || 0) >= 70 ? (
+                <div className="flex items-center justify-between bg-neon-green/10 border border-neon-green/25 rounded-lg px-2.5 py-1 mb-2">
+                    <span className="text-neon-green text-[9px] font-mono font-black uppercase tracking-wider flex items-center gap-1.5">
+                        <span>👑 PRIORIDAD ELITE</span>
+                        <span className="text-white/40">|</span>
+                        <span>CONFLUENCIA {signal.confluence_score}%</span>
+                    </span>
+                    <span className="text-neon-green text-[8px] font-mono font-bold bg-neon-green/20 px-1.5 py-0.5 rounded">PASO 1 + 2 OK</span>
+                </div>
+            ) : (signal.confluence_score || 0) >= 50 ? (
+                <div className="flex items-center justify-between bg-neon-cyan/10 border border-neon-cyan/20 rounded-lg px-2.5 py-1 mb-2">
+                    <span className="text-neon-cyan text-[9px] font-mono font-bold uppercase tracking-wider flex items-center gap-1.5">
+                        <span>🎯 ALTA EXPECTATIVA</span>
+                        <span className="text-white/40">|</span>
+                        <span>CONFLUENCIA {signal.confluence_score}%</span>
+                    </span>
+                    <span className="text-neon-cyan text-[8px] font-mono font-bold bg-neon-cyan/20 px-1.5 py-0.5 rounded">ALINEADO EMA 200</span>
+                </div>
+            ) : null}
+
             {/* ── Fila 1: Tiempo + Tipo + Estado + Sesión ── */}
             <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-2">

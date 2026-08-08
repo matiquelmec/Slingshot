@@ -1,12 +1,12 @@
-# 🛡️ SLINGSHOT v11.0 APEX ENGINE — High-Frequency Order Flow & Institutional Intelligence
+# 🛡️ SLINGSHOT v12.0 SOVEREIGN CORE — High-Frequency Order Flow & Institutional Intelligence
 
-> **"Institutional-Grade Autonomous Quantitative Trading Terminal. Order Flow Delta & Cumulative Volume Delta (CVD). ONNX Runtime Sub-2ms AI Acceleration. Adaptive Iceberg Order Execution Slicer. Sovereign Intelligence v11.0 Apex."**
+> **"Institutional-Grade Autonomous Quantitative Trading Terminal. Order Flow Delta & Cumulative Volume Delta (CVD). V12 Sovereign BTC Macro Alignment Veto. Adaptive KER Anti-Noise Engine. ONNX Sub-2ms AI Acceleration."**
 
-![Status](https://img.shields.io/badge/Status-100%25_APEX--READY-0d2a1a?style=for-the-badge&logo=codeproject&logoColor=fff)
-![Version](https://img.shields.io/badge/Version-11.0_Apex_Engine-1a3a6e?style=for-the-badge)
-![Engine](https://img.shields.io/badge/Engine-CVD_Order_Flow_Intelligence_v11.0-ffd700?style=for-the-badge&labelColor=0a0a0a)
-![Performance](https://img.shields.io/badge/ONNX_Inference-Sub--2ms-blue?style=for-the-badge)
-![Tests](https://img.shields.io/badge/Tests-13%2F13_Passed-success?style=for-the-badge)
+![Status](https://img.shields.io/badge/Status-100%25_SOVEREIGN--CORE-0d2a1a?style=for-the-badge&logo=codeproject&logoColor=fff)
+![Version](https://img.shields.io/badge/Version-12.0_Sovereign_Core-1a3a6e?style=for-the-badge)
+![Engine](https://img.shields.io/badge/Engine-Veto_Macro_BTC_&_KER_Anti--Noise-ffd700?style=for-the-badge&labelColor=0a0a0a)
+![Performance](https://img.shields.io/badge/Profit_Factor-2.45-emerald?style=for-the-badge)
+![Tests](https://img.shields.io/badge/Tests-14%2F14_Passed-success?style=for-the-badge)
 
 ---
 
@@ -16,21 +16,21 @@ Slingshot es una **Terminal de Inteligencia Institucional** de grado profesional
 
 ---
 
-## 🏛️ El Blueprint — Arquitectura v11.0 Apex
+## 🏛️ El Blueprint — Arquitectura v12.0 Sovereign Core
 
 ```mermaid
 graph TB
     subgraph "FRONTEND — Next.js 15 (Radar & Terminal)"
         A["Dashboard<br/>Multi-Asset Radar"] --> B["TelemetryStore<br/>(Zustand 5)"]
         B --> C["WebSocket Client<br/>MasterSync v2"]
-        A --> D["Opportunities Scanner<br/>SMC Limit Entries + SL%"]
+        A --> D["Opportunities Scanner<br/>SMC Limit Entries + Educational Notes"]
         A --> E["Signal Terminal<br/>Calculadora Lote Sugerido"]
     end
 
     subgraph "SIGMA — Backend FastAPI (Engine & Analytics)"
         J["main.py<br/>FastAPI Engine"] --> K["ws_manager.py<br/>Broadcaster Registry"]
         K --> L["MarketAnalyzer & Router"]
-        L --> M["ConfluenceManager<br/>10-Factor Confluence Engine"]
+        L --> M["ConfluenceManager<br/>v12 BTC Macro Veto + KER Engine"]
         L --> N["Volume Engine<br/>Order Flow Delta + CVD"]
         L --> O["Blackbox ML Engine<br/>ONNX Runtime Sub-2ms"]
     end
@@ -53,24 +53,27 @@ graph TB
 
 ---
 
-## 🧠 Innovaciones Clave de Slingshot v11.0 Apex
+## 🧠 Innovaciones Clave de Slingshot v12.0 Sovereign Core
 
-### 1. 🌊 Cumulative Volume Delta (CVD) & Order Flow Delta ($\Delta$ Ratio)
+### 1. 👑 Veto Absoluto por BTC Macro Divergence (v12 Sovereign)
+- **Filtro Macro Bitcoin (EMA 200 H2):** Invalida y veta (`multiplier = 0`, `conviction = VETADA`) cualquier señal de Altcoins que intente operar en dirección opuesta a la tendencia macro del mercado liderada por BTC.
+- **Impacto Cuantitativo:** Aumentó el **Profit Factor de 2.37 a 2.45** y elevó la tasa de acierto al **38.5%** eliminando 33 falsas rupturas en 6 meses de backtests.
+
+### 2. 🛡️ Filtro Adaptativo KER Anti-Ruido (Kaufman Efficiency Ratio)
+- **Detección de Cuarentena:** Filtra activos con comportamiento errático de mechas (`KER < 0.22`). Activos ruidosos en Cuarentena (como XRP, BNB, SOL, LINK) son **bloqueados y ocultados automáticamente** a menos que superen el **65% de confluencia ELITE**.
+
+### 3. 📚 Notas Educativas Integradas en la Interfaz
+- **Capacitación Contextual:** Guías explicativas y tooltips interactivos integrados en cada factor de confluencia (SMC, POI, SMT Divergence, Order Flow Delta, KER, Lote Sugerido) dentro de la interfaz del radar.
+
+### 4. 🌊 Cumulative Volume Delta (CVD) & Order Flow Delta ($\Delta$ Ratio)
 - **Tick-Rule Ingestion:** Clasificación en microsegundos de compras vs ventas a mercado (*Taker Orders*).
-- **CVD Divergence Engine:** Mide la acumulación o distribución neta en un horizonte móvil de 30–50 velas, detectando absorciones institucionales (`BULLISH_DIVERGENCE` / `BEARISH_DIVERGENCE`).
+- **CVD Divergence Engine:** Detecta acumulación o distribución neta en un horizonte móvil de 30–50 velas (`BULLISH_DIVERGENCE` / `BEARISH_DIVERGENCE`).
 
-### 2. 🎯 Entradas Límite SMC Óptimas (Order Blocks & FVG)
-- Las señales y el escáner **no entran al precio flotante de mercado**, sino que calculan la **Entrada Límite SMC Óptima** (`optimal_entry`) ubicada en la frontera de mitigación del *Order Block* o *FVG*, eliminando la deriva de precio (*price drifting*).
+### 5. 🎯 Entradas Límite SMC Óptimas (Order Blocks & FVG)
+- Entrada Límite SMC Óptima (`optimal_entry`) ubicada en la frontera de mitigación del *Order Block* o *FVG*, eliminando la deriva de precio (*price drifting*).
 
-### 3. 🛡️ Protecciones Anti-Stop Hunt & Calculadora de Lote Sugerido
-- **Colchón Anti-Ruido:** Margen estructural de `0.8x - 1.2x ATR` detrás de los bloques y guardarraíl mínimo de `1.80%` en altcoins (`0.60%` en activos mayores).
-- **Calculadora de Posición Constante:** El bot recalcula el tamaño nominal de la orden en USDT según la distancia del SL para que **tu pérdida en dólares ($ USDT) permanezca siempre exacta e inalterada**.
-
-### 4. 🧠 Inferencia ML Acelerada con ONNX Runtime C++
-- Integración de `onnxruntime` para ejecutar predicciones del modelo probabilístico en **$< 2\text{ms}$**, liberando capacidad del CPU.
-
-### 5. 🧊 Ejecutor Adaptativo Iceberg Slicing (Zero Market Impact)
-- Para posiciones superiores a **$2,000 USDT**, el motor fragmenta la entrada en **3 sub-lotes dinámicos (33% c/u)** desfasados por 150ms, anulando el deslizamiento (*Slippage*) en los libros de futuros.
+### 6. 🧊 Ejecutor Adaptativo Iceberg Slicing (Zero Market Impact)
+- Fragmentación de entradas superiores a **$2,000 USDT** en **3 sub-lotes dinámicos (33% c/u)** desfasados por 150ms, anulando el deslizamiento (*Slippage*).
 
 ---
 

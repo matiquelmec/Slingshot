@@ -5,6 +5,7 @@ import { motion } from 'framer-motion';
 import { Activity, ShieldCheck, Cpu } from 'lucide-react';
 import ActiveAssetsMonitor from '../../components/radar/ActiveAssetsMonitor';
 import RadarFeed from '../../components/radar/RadarFeed';
+import OpportunitiesScanner from '../../components/radar/OpportunitiesScanner';
 
 export default function RadarPage() {
     return (
@@ -55,6 +56,15 @@ export default function RadarPage() {
                 transition={{ delay: 0.2 }}
             >
                 <ActiveAssetsMonitor />
+            </motion.section>
+
+            {/* Opportunities Scanner Section */}
+            <motion.section
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.3 }}
+            >
+                <OpportunitiesScanner />
             </motion.section>
 
             {/* Signal Feed / Terminal Integration */}

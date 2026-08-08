@@ -30,5 +30,205 @@
   "f9a6e6a7fee58686fae98336801fa183": {
     "price": 0.0,
     "advice": "{\"verdict\": \"SIDEWAYS\", \"threat\": \"LOW\", \"logic\": \"Neutral SMC, low RVOL\"}"
+  },
+  "2577358ca263f7619738639459bbe958": {
+    "price": 0.0,
+    "advice": "{\n  \"verdict\": \"SIDEWAYS\",\n   \"threat\": \"LOW\",\n   \"logic\": \"Rango en 1m\"\n}"
+  },
+  "6d8d516db8f57d8fb29f521e124d0764": {
+    "price": 0.0,
+    "advice": "{\n  \"verdict\": \"SIDEWAYS\",\n   \"threat\": \"LOW\",\n   \"logic\": \"Rango Neutral\"\n}"
+  },
+  "c6ebd8dca3544995d6b95d6f83c67225": {
+    "price": 0.0,
+    "advice": "{\n  \"verdict\": \"SIDEWAYS\",\n   \"threat\": \"LOW\",\n   \"logic\": \"Rango en 1m\"\n}"
+  },
+  "305bced5afc484c750fc56de683b1d09": {
+    "price": 0.0,
+    "advice": "{\n  \"verdict\": \"SIDEWAYS\",\n   \"threat\": \"LOW\",\n   \"logic\": \"Rango en 15m\"\n}"
+  },
+  "f7cef25d4d26c7356ebbaa7edb86e653": {
+    "price": 0.0,
+    "advice": "{\n  \"verdict\": \"SIDEWAYS\",\n   \"threat\": \"LOW\",\n   \"logic\": \"Rango en 1m\"\n}"
+  },
+  "cf894a2072f0440ae097bede306ab6a5": {
+    "price": 0.0,
+    "advice": "{\n  \"verdict\": \"AVOID\",\n   \"threat\": \"MEDIUM\",\n   \"logic\": \"Rvol Bajo\"\n}"
+  },
+  "4948a5e5e3ee340de93ea62c95e4fc80": {
+    "price": 0.0,
+    "advice": "{\n  \"verdict\": \"AVOID\",\n   \"threat\": \"MEDIUM\",\n   \"logic\": \"Rvol alto\"\n}"
+  },
+  "7b0f7bb4b9e7205a0272cc22da68f110": {
+    "price": 0.0,
+    "advice": "{\n  \"verdict\": \"AVOID\",\n   \"threat\": \"MEDIUM\",\n   \"logic\": \"Rvol alto\"\n}"
+  },
+  "9cf0bd75731a60a53688b0d5090a2d4d": {
+    "price": 0.0,
+    "advice": "{\n  \"verdict\": \"AVOID\",\n   \"threat\": \"MEDIUM\",\n   \"logic\": \"Rvol alto\"\n}"
+  },
+  "ccd8713b5490dc6fbb662449f94b735b": {
+    "price": 0.0,
+    "advice": "{\n  \"verdict\": \"SIDEWAYS\",\n   \"threat\": \"LOW\",\n   \"logic\": \"Neutral en 1m\"\n}"
+  },
+  "d9f56761834c44467f6cb41ead594625": {
+    "price": 0.0,
+    "advice": "{\n  \"verdict\": \"SIDEWAYS\",\n   \"threat\": \"LOW\",\n   \"logic\": \"Neutral en todos\"\n}"
+  },
+  "1dc5397f44fd529fa713c090dc1e0cbe": {
+    "price": 0.0,
+    "advice": "{\n  \"verdict\": \"SIDEWAYS\",\n   \"threat\": \"LOW\",\n   \"logic\": \"Neutral en todos\"\n}"
+  },
+  "342f3530221b8120dde905cfe03a2eda": {
+    "price": 0.0,
+    "advice": "{\n  \"verdict\": \"SIDEWAYS\",\n   \"threat\": \"LOW\",\n   \"logic\": \"Rango en 1m\"\n}"
+  },
+  "3be18aef2ae9d517bdd09681572bda70": {
+    "price": 0.0,
+    "advice": "{\n  \"verdict\": \"SIDEWAYS\",\n   \"threat\": \"LOW\",\n   \"logic\": \"Rango en 15m\"\n}"
+  },
+  "85903eea7fcbdf5ceab5a26170e24310": {
+    "price": 0.0,
+    "advice": "{\n  \"verdict\": \"SIDEWAYS\",\n   \"threat\": \"LOW\",\n   \"logic\": \"Rango en 15m\"\n}"
+  },
+  "14ffc043d13c459a586309a2838e9246": {
+    "price": 0.0,
+    "advice": "{\n  \"verdict\": \"SIDEWAYS\",\n   \"threat\": \"LOW\",\n   \"logic\": \"Neutral en todos\"\n}"
+  },
+  "40fcb8132ea9aef9fe4fdf5d83013bb6": {
+    "price": 0.0,
+    "advice": "{\n  \"verdict\": \"SIDEWAYS\",\n   \"threat\": \"LOW\",\n   \"logic\": \"Rango en 1m\"\n}"
+  },
+  "70efec0547aa59c17628c08d3428a9b3": {
+    "price": 0.0,
+    "advice": "{\n  \"verdict\": \"SIDEWAYS\",\n   \"threat\": \"LOW\",\n   \"logic\": \"Neutral en todos\"\n}"
+  },
+  "1d0246753ad863da63fb1a8e9969ebd9": {
+    "price": 0.0,
+    "advice": "{\n  \"verdict\": \"SIDEWAYS\",\n   \"threat\": \"LOW\",\n   \"logic\": \"Neutral en todos\"\n}"
+  },
+  "14a74d3ef91ce7addefd413b3f2ae026": {
+    "price": 0.0,
+    "advice": "{\n  \"verdict\": \"SIDEWAYS\",\n   \"threat\": \"LOW\",\n   \"logic\": \"Neutral en todos\"\n}"
+  },
+  "d39d35ad11973bb323064ebe60a481db": {
+    "price": 0.0,
+    "advice": "{\n  \"verdict\": \"SIDEWAYS\",\n   \"threat\": \"LOW\",\n   \"logic\": \"Rango en 15m\"\n}"
+  },
+  "4429193d5f42904c05a5d2aec019fe67": {
+    "price": 0.0,
+    "advice": "{\n  \"verdict\": \"AVOID\",\n   \"threat\": \"MEDIUM\",\n   \"logic\": \"Falta confluencia\"\n}"
+  },
+  "8abbc9cd968c135635b4435a4165495b": {
+    "price": 0.0,
+    "advice": "{\n  \"verdict\": \"SIDEWAYS\",\n   \"threat\": \"LOW\",\n   \"logic\": \"Rango Neutral\"\n}"
+  },
+  "b54cecae58d93fa60d35113afa4140cd": {
+    "price": 0.0,
+    "advice": "{\n  \"verdict\": \"SIDEWAYS\",\n   \"threat\": \"LOW\",\n   \"logic\": \"Rango en 1m\"\n}"
+  },
+  "4c8ec6d1db57942856b53e41f7763a3b": {
+    "price": 0.0,
+    "advice": "{\n  \"verdict\": \"SIDEWAYS\",\n   \"threat\": \"LOW\",\n   \"logic\": \"No confluencia clara\"\n}"
+  },
+  "b5b21075ca81fe5c7d474faddf0e3782": {
+    "price": 0.0,
+    "advice": "{\n  \"verdict\": \"SIDEWAYS\",\n   \"threat\": \"LOW\",\n   \"logic\": \"Rango Neutral\"\n}"
+  },
+  "0b5a46ca37eee6122316158017ca66ce": {
+    "price": 0.0,
+    "advice": "{\n  \"verdict\": \"SIDEWAYS\",\n   \"threat\": \"LOW\",\n   \"logic\": \"Rango en 1m\"\n}"
+  },
+  "9ae73aff574cc4598acbc7dc9933f0d2": {
+    "price": 0.0,
+    "advice": "{\n  \"verdict\": \"AVOID\",\n   \"threat\": \"MEDIUM\",\n   \"logic\": \"Rvol alto\"\n}"
+  },
+  "8b26c6dbae0337501e42ce4d092328df": {
+    "price": 0.0,
+    "advice": "{\n  \"verdict\": \"SIDEWAYS\",\n   \"threat\": \"LOW\",\n   \"logic\": \"Neutral en todos\"\n}"
+  },
+  "37804983b2c04637449cbca6b5aeda12": {
+    "price": 0.0,
+    "advice": "{\n  \"verdict\": \"AVOID\",\n   \"threat\": \"MEDIUM\",\n   \"logic\": \"Rvol alto\"\n}"
+  },
+  "5a4f9783b5158c7f8842a71c1c79aea6": {
+    "price": 0.0,
+    "advice": "{\n  \"verdict\": \"AVOID\",\n   \"threat\": \"MEDIUM\",\n   \"logic\": \"Rvol Bajo\"\n}"
+  },
+  "5b16d2de1ea55ebc5b10aee5f112b298": {
+    "price": 0.0,
+    "advice": "{\n  \"verdict\": \"SIDEWAYS\",\n   \"threat\": \"MEDIUM\",\n   \"logic\": \"Rango en 15m\"\n}"
+  },
+  "f33b8f70a70a3cd91421e902fb6702df": {
+    "price": 0.0,
+    "advice": "{\n  \"verdict\": \"AVOID\",\n   \"threat\": \"MEDIUM\",\n   \"logic\": \"Rvol Bajo\"\n}"
+  },
+  "c3a9fc1bd0825c49de3872c71ab4ae38": {
+    "price": 0.0,
+    "advice": "{\n  \"verdict\": \"SIDEWAYS\",\n   \"threat\": \"MEDIUM\",\n   \"logic\": \"Rango en 15m\"\n}"
+  },
+  "930089411d466d00b12a5e060dc175ea": {
+    "price": 0.0,
+    "advice": "{\n  \"verdict\": \"SIDEWAYS\",\n   \"threat\": \"LOW\",\n   \"logic\": \"Neutral en todos\"\n}"
+  },
+  "51e9b85415c1878827e4be274cb2e9e9": {
+    "price": 0.0,
+    "advice": "{\n  \"verdict\": \"AVOID\",\n   \"threat\": \"MEDIUM\",\n   \"logic\": \"Bajo RVOL\"\n}"
+  },
+  "2d4dcb5321bdbab8346374976e74d55e": {
+    "price": 0.0,
+    "advice": "{\n  \"verdict\": \"SIDEWAYS\",\n   \"threat\": \"LOW\",\n   \"logic\": \"Rango Neutral\"\n}"
+  },
+  "56f8b950f0c2321e16471341a507a4c0": {
+    "price": 0.0,
+    "advice": "{\n  \"verdict\": \"SIDEWAYS\",\n   \"threat\": \"MEDIUM\",\n   \"logic\": \"Rango sin tendencia\"\n}"
+  },
+  "0bf753382767026d19de6870c883d518": {
+    "price": 0.0,
+    "advice": "{\n  \"verdict\": \"AVOID\",\n   \"threat\": \"MEDIUM\",\n   \"logic\": \"Falta confluencia\"\n}"
+  },
+  "47ca3ff9f3ebd36ade891ca36113ac6a": {
+    "price": 0.0,
+    "advice": "{\n  \"verdict\": \"SIDEWAYS\",\n   \"threat\": \"LOW\",\n   \"logic\": \"Rango en 15m\"\n}"
+  },
+  "95579761688f51d6ef0ff1569db1c680": {
+    "price": 0.0,
+    "advice": "{\n  \"verdict\": \"SIDEWAYS\",\n   \"threat\": \"LOW\",\n   \"logic\": \"Neutral en todos\"\n}"
+  },
+  "477eac4b89c744beac65039bc4fe71c2": {
+    "price": 0.0,
+    "advice": "{\n  \"verdict\": \"SIDEWAYS\",\n   \"threat\": \"LOW\",\n   \"logic\": \"Rango en 1m\"\n}"
+  },
+  "63551ccc966bf477aafc0a66feff6600": {
+    "price": 0.0,
+    "advice": "{\n  \"verdict\": \"AVOID\",\n   \"threat\": \"MEDIUM\",\n   \"logic\": \"Falta confluencia\"\n}"
+  },
+  "a24b0fb591fc9497cf9590328772e3dc": {
+    "price": 0.0,
+    "advice": "{\n  \"verdict\": \"AVOID\",\n   \"threat\": \"MEDIUM\",\n   \"logic\": \"Rvol Bajo\"\n}"
+  },
+  "68581068cd146b5c5a253ad3561d764b": {
+    "price": 0.0,
+    "advice": "{\n  \"verdict\": \"AVOID\",\n   \"threat\": \"MEDIUM\",\n   \"logic\": \"Rvol Bajo\"\n}"
+  },
+  "139ddd410f3dd39a29f9f3dc1b41a628": {
+    "price": 0.0,
+    "advice": "{\n  \"verdict\": \"SIDEWAYS\",\n   \"threat\": \"LOW\",\n   \"logic\": \"Rango en 15m\"\n}"
+  },
+  "85c68cab545bdb2c9bfccfc4350f6020": {
+    "price": 0.0,
+    "advice": "{\n  \"verdict\": \"SIDEWAYS\",\n   \"threat\": \"LOW\",\n   \"logic\": \"Rango Neutral\"\n}"
+  },
+  "9522bc3bada9b48dacdf01a43b942280": {
+    "price": 0.0,
+    "advice": "{\n  \"verdict\": \"SIDEWAYS\",\n   \"threat\": \"LOW\",\n   \"logic\": \"Rango en 15m\"\n}"
+  },
+  "042bf8437e11a708df93e6232cf2ed27": {
+    "price": 0.0,
+    "advice": "{\n  \"verdict\": \"SIDEWAYS\",\n   \"threat\": \"MEDIUM\",\n   \"logic\": \"Neutral en todos\"\n}"
+  },
+  "c44483f2dc244b751411fc70c95487f7": {
+    "price": 0.0,
+    "advice": "{\n  \"verdict\": \"SIDEWAYS\",\n   \"threat\": \"LOW\",\n   \"logic\": \"Neutral en todos\"\n}"
   }
 }

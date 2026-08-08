@@ -603,6 +603,99 @@ class ConfluenceManager:
                 total_weight += 5
                 checklist.append({"factor": "Risk Appetite", "status": "FAVORABLE", "detail": f"{risk_appetite} (+5 pts)"})
 
+        # 🚀 11.6. GOLDEN RULES QUANT (v11.2 APEX GOLDEN RULES)
+        # Rule 1: Bono por Activos Majores de Liquidez Profunda (BTC, ETH, SOL)
+        asset_name = str(signal.get('asset', signal.get('symbol', ''))).upper()
+        if any(m in asset_name for m in ["BTC", "ETH", "SOL"]):
+            majors_pts = 10
+            score += majors_pts
+            total_weight += majors_pts
+            checklist.append({"factor": "Tier-1 VIP Asset", "status": "CONFIRMADO", "detail": f"Activo Líder de Alta Liquidez ({asset_name}) (+10pts)"})
+
+        # Rule 2: Alineación con Tendencia de Alto Timeframe (HTF 4H Trend Alignment)
+        try:
+            price_curr = float(current.get('close', 0))
+            if 'ema800' not in df.columns and len(df) >= 200:
+                df['ema800'] = df['close'].ewm(span=min(800, len(df)), adjust=False).mean()
+            
+            ema800_val = float(df['ema800'].iloc[-1]) if 'ema800' in df.columns else None
+            if ema800_val and ema800_val > 0:
+                is_htf_aligned = (is_long and price_curr > ema800_val) or (not is_long and price_curr < ema800_val)
+                htf_weight = 15
+                total_weight += htf_weight
+                if is_htf_aligned:
+                    score += htf_weight
+                    checklist.append({"factor": "Tendencia 4H HTF", "status": "CONFIRMADO", "detail": "Alineado con la Tendencia Institucional 4H (+15pts)"})
+                else:
+                    score -= 10
+                    checklist.append({"factor": "Tendencia 4H HTF", "status": "DIVERGENTE", "detail": "Operando contra la Tendencia Institucional 4H (-10pts)"})
+        except Exception as htf_err:
+            logger.debug(f"[CONFLUENCE] Bypass HTF 4H check: {htf_err}")
+
+        # Rule 3: Filtro Temporal de Días de Alta Probabilidad (Exclusión Lunes Pre-NY)
+        try:
+            now_dt = pd.to_datetime(current.get('timestamp', pd.Timestamp.now(tz=timezone.utc)), utc=True)
+            day_wk = now_dt.strftime('%A')
+            hr_utc = now_dt.hour
+            
+            day_weight = 5
+            total_weight += day_weight
+            if day_wk in ["Tuesday", "Thursday", "Friday"]:
+                score += day_weight
+                checklist.append({"factor": "Día Institucional", "status": "CONFIRMADO", "detail": f"{day_wk}: Día de Alta Expansión de Tendencia (+5pts)"})
+            elif day_wk == "Monday" and hr_utc < 13:
+                score -= 5
+                checklist.append({"factor": "Día Institucional", "status": "PRECAUCIÓN", "detail": "Lunes Pre-NY Open: Riesgo de Manipulación / Rango Inicial (-5pts)"})
+            else:
+                checklist.append({"factor": "Día Institucional", "status": "NEUTRAL", "detail": f"Sesión en {day_wk}"})
+        except Exception as day_err:
+            logger.debug(f"[CONFLUENCE] Bypass Day Check: {day_err}")
+
+        # 🚀 11.7. KAUFMAN EFFICIENCY RATIO (KER) & DYNAMIC NOISE QUARANTINE (v11.3 Apex)
+        ker_value = 0.50
+        is_quarantined = False
+        health_status = "OPTIMAL"
+        try:
+            if len(df) >= 20:
+                period_ker = 20
+                change_ker = abs(float(df['close'].iloc[-1]) - float(df['close'].iloc[-period_ker]))
+                volatility_ker = float(df['close'].diff().abs().tail(period_ker).sum())
+                if volatility_ker > 0:
+                    ker_value = float(change_ker / volatility_ker)
+
+            if ker_value >= 0.40:
+                health_status = "OPTIMAL"
+                checklist.append({"factor": "Salud de Activo (KER)", "status": "CONFIRMADO", "detail": f"Estructura Limpia (KER: {ker_value:.2f})"})
+            elif ker_value >= 0.22:
+                health_status = "MODERATE_NOISE"
+                checklist.append({"factor": "Salud de Activo (KER)", "status": "NEUTRAL", "detail": f"Volatilidad Normal (KER: {ker_value:.2f})"})
+            else:
+                health_status = "QUARANTINED"
+                is_quarantined = True
+                if score < 65:
+                    multiplier *= 0.5
+                checklist.append({"factor": "Salud de Activo (KER)", "status": "PRECAUCIÓN", "detail": f"Cuarentena por Mechas (KER: {ker_value:.2f}). Se exige Confluencia ≥ 65%"})
+        except Exception as ker_err:
+            logger.debug(f"[CONFLUENCE] Bypass KER check: {ker_err}")
+
+        # 🚀 11.8. BTC MACRO ALIGNMENT VETO (v12 Sovereign Core)
+        btc_aligned = kwargs.get('btc_aligned', None)
+        asset_name = str(signal.get('asset', signal.get('symbol', ''))).upper()
+        if btc_aligned is False and asset_name and "BTC" not in asset_name:
+            multiplier = 0
+            checklist.append({
+                "factor": "Alineación Macro BTC",
+                "status": "DENEGADO",
+                "detail": "Veto V12 Sovereign: Altcoin operando contra tendencia macro de BTC"
+            })
+        elif btc_aligned is True and asset_name and "BTC" not in asset_name:
+            score += 10
+            checklist.append({
+                "factor": "Alineación Macro BTC",
+                "status": "CONFIRMADO",
+                "detail": "Alineación Macro con Bitcoin validada (+10pts)"
+            })
+
         # 🚀 12. VETO DE VOLATILIDAD MACRO (EVENTOS ECONÓMICOS) v5.7.155 Master Gold Titanium
         if high_impact_near:
             # Si el evento es en menos de 30 min (0.5 horas), Veto Total
@@ -727,7 +820,12 @@ class ConfluenceManager:
             "reasoning": self._build_reasoning(final_score, conviction, is_long, regime, has_ob, rvol, high_impact_near, event_name, cluster_hit, v_reason),
             "rvol": round(rvol, 2),
             "smt_strength": smt_strength,
-            "veto_reason": v_reason
+            "veto_reason": v_reason,
+            "asset_health": {
+                "ker": round(ker_value, 2),
+                "status": health_status,
+                "is_quarantined": is_quarantined
+            }
         }
 
     def _build_reasoning(self, score: int, conviction: str, is_long: bool, regime: str, ob: bool, rvol: float, high_impact: bool, event: str, cluster: bool, veto: str = None) -> str:

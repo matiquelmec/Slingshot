@@ -21,7 +21,7 @@ class BroadcasterState:
         self.last_onchain: Optional[dict] = None
         
         # Métricas y Buffers
-        self.history: List[dict] = []
+        self.history: deque = deque(maxlen=1000)
         self.live_buffer: deque = deque(maxlen=300)
         self.ml_projection = {"direction": "CALIBRANDO", "probability": 50, "status": "warmup"}
         self.ema_ml_prob = 50.0
@@ -62,7 +62,7 @@ class BroadcasterState:
         if self.live_buffer:
             return float(self.live_buffer[-1]["data"].get("close", 0.0))
         if self.history:
-            return float(self.history[-1]["data"].get("close", 0.0))
+            return float(list(self.history)[-1]["data"].get("close", 0.0))
         return 0.0
 
     @latest_price.setter

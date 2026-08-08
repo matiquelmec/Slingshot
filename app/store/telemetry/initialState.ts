@@ -7,6 +7,7 @@ export const initialState: Omit<TelemetryState, 'connect' | 'disconnect' | 'setT
     advisorLogs: {},
     isConnected: false,
     connectionStatus: 'DISCONNECTED',
+    connectionMode: 'WS',
     isCalibrating: true,
     activeSymbol: 'BTCUSDT',
     activeTimeframe: '15m',

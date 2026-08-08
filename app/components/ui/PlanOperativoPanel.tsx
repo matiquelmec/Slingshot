@@ -500,13 +500,17 @@ export default function PlanOperativoPanel() {
                                     <div className="flex items-center gap-2.5 min-w-0">
                                         <span className="text-sm shrink-0">{setup.icon}</span>
                                         <div className="min-w-0">
-                                            <div className="flex items-center gap-1.5">
+                                            <div className="flex items-center gap-1.5 flex-wrap">
                                                 <span className="block text-xs font-black text-white/90 truncate">{setup.displayName}</span>
-                                                {isDynamic && (
-                                                    <span className="text-[7px] text-[#00e5ff] bg-[#00e5ff]/10 border border-[#00e5ff]/35 font-bold px-1 rounded uppercase tracking-wider shrink-0">
-                                                        ✨ SMC DYNAMIC
+                                                {Number(rr) >= 2.5 ? (
+                                                    <span className="text-[7px] text-neon-green bg-neon-green/10 border border-neon-green/30 font-black px-1.5 py-0.5 rounded uppercase tracking-wider shrink-0 flex items-center gap-1 shadow-[0_0_8px_rgba(16,185,129,0.15)]">
+                                                        👑 PRIORIDAD ELITE
                                                     </span>
-                                                )}
+                                                ) : isDynamic ? (
+                                                    <span className="text-[7px] text-neon-cyan bg-neon-cyan/10 border border-neon-cyan/30 font-bold px-1.5 py-0.5 rounded uppercase tracking-wider shrink-0 shadow-[0_0_8px_rgba(6,182,212,0.1)]">
+                                                        🎯 ALTA EXPECTATIVA
+                                                    </span>
+                                                ) : null}
                                             </div>
                                             <span className="block text-[8px] text-white/40 tracking-wider truncate uppercase">{liveStrategy}</span>
                                         </div>
