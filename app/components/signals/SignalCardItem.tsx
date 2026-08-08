@@ -129,6 +129,14 @@ const SignalCardItem: React.FC<SignalCardItemProps> = ({ signal, currentPrice })
                 </div>
             ) : null}
 
+            {/* Insignia de Categoría de Trade en Vivo */}
+            <div className="flex items-center justify-between bg-amber-500/10 border border-amber-500/25 rounded-xl px-3 py-1 mb-2.5">
+                <span className="text-amber-400 text-[8.5px] font-mono font-bold uppercase tracking-wider flex items-center gap-1.5">
+                    <span>🔥 TRADE EN EJECUCIÓN EN VIVO</span>
+                </span>
+                <span className="text-white/40 text-[8px] font-mono">SEÑAL EN TIEMPO REAL</span>
+            </div>
+
             {/* ── Fila 1: Tiempo + Tipo + Estado + Sesión ── */}
             <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-2">

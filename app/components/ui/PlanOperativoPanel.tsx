@@ -273,9 +273,14 @@ export default function PlanOperativoPanel() {
             <div className="p-4 border-b border-white/5 flex items-center bg-gradient-to-r from-neon-cyan/15 to-transparent">
                 <div className="flex items-center gap-2.5 pr-44">
                     <Compass size={16} className="text-neon-cyan animate-spin-slow" />
-                    <h2 className="text-xs font-bold text-white/90 tracking-widest drop-shadow-[0_0_8px_rgba(0,229,255,0.4)]">
-                        PLAN OPERATIVO
-                    </h2>
+                    <div className="flex items-center gap-2">
+                        <h2 className="text-xs font-bold text-white/90 tracking-widest drop-shadow-[0_0_8px_rgba(0,229,255,0.4)]">
+                            PLAN OPERATIVO
+                        </h2>
+                        <span className="text-[8.5px] font-mono text-neon-cyan bg-neon-cyan/10 border border-neon-cyan/25 px-2 py-0.5 rounded font-bold uppercase tracking-wider">
+                            📋 HOJA DE RUTA TÁCTICA 1-CLICK
+                        </span>
+                    </div>
                 </div>
             </div>
 

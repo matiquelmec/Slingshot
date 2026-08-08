@@ -313,6 +313,13 @@ export default function OpportunitiesScanner() {
                                         }`}
                                     >
                                         <div>
+                                            {/* Insignia de Categoría Institucional */}
+                                            <div className="flex items-center justify-between bg-cyan-500/10 border border-cyan-500/25 rounded-xl px-3 py-1 mb-2.5">
+                                                <span className="text-neon-cyan text-[8.5px] font-mono font-bold uppercase tracking-wider flex items-center gap-1.5">
+                                                    <span>🎯 ORDEN LÍMITE PENDIENTE (ENTRADA SMC)</span>
+                                                </span>
+                                                <span className="text-white/40 text-[8px] font-mono">COPIAR AL EXCHANGE</span>
+                                            </div>
                                             {/* Priority Banner for High Confluence */}
                                             {opp.confluence_score >= 60 ? (
                                                 <div className="flex items-center justify-between bg-neon-green/10 border border-neon-green/25 rounded-xl px-3 py-1.5 mb-3">
