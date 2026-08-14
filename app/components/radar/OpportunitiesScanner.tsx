@@ -4,6 +4,9 @@ import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Activity, ShieldCheck, Zap, ArrowUpRight, ArrowDownRight, RefreshCw, Layers } from 'lucide-react';
 import { formatCurrency } from '../../utils/formatters';
+import { AccountProfileSelector, PROFILES_CONFIG } from '../signals/AccountProfileSelector';
+import { FtmoShieldWidget } from '../signals/FtmoShieldWidget';
+import { AccountProfileType, FtmoPhase } from '../../types/signal';
 
 interface ChecklistItem {
     factor: string;
@@ -62,6 +65,11 @@ export default function OpportunitiesScanner() {
     const [expandedAsset, setExpandedAsset] = useState<string | null>(null);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
+    const [accountProfile, setAccountProfile] = useState<AccountProfileType>('FTMO_100K');
+    const [ftmoPhase, setFtmoPhase] = useState<FtmoPhase>('PHASE_1');
+    const [copiedAsset, setCopiedAsset] = useState<string | null>(null);
+
+    const activeProfileConfig = PROFILES_CONFIG[accountProfile](ftmoPhase);
 
     const fetchOpps = async () => {
         try {
@@ -270,6 +278,23 @@ export default function OpportunitiesScanner() {
                         <RefreshCw size={14} className={refreshing ? "animate-spin text-neon-cyan" : ""} />
                     </button>
                 </div>
+            </div>
+
+            {/* Selector de Perfil de Cuenta & Escudo FTMO en el Escáner */}
+            <div className="px-6 py-4 border-b border-white/5 bg-black/40 flex flex-col gap-2.5">
+                <AccountProfileSelector
+                    currentProfile={accountProfile}
+                    currentPhase={ftmoPhase}
+                    onProfileChange={(p) => setAccountProfile(p)}
+                    onPhaseChange={(ph) => setFtmoPhase(ph)}
+                />
+                {activeProfileConfig.isFtmo && (
+                    <FtmoShieldWidget
+                        config={activeProfileConfig}
+                        currentProfitUsd={0}
+                        dailyLossUsd={0}
+                    />
+                )}
             </div>
 
             {/* List / Cards Container */}
@@ -505,11 +530,45 @@ export default function OpportunitiesScanner() {
                                                         <span id={`copy-tp3-${assetKey}`} className="text-[7px] text-white/20 border border-white/10 px-1 py-0.5 rounded opacity-0 group-hover/level:opacity-100 transition-opacity font-sans">COPIAR</span>
                                                     </span>
                                                 </div>
-                                                <div className="flex justify-between items-center pt-1.5 border-t border-white/5 text-[10px]">
-                                                    <span className="text-amber-400 font-mono">Lote Sugerido ($100 Risk):</span>
-                                                    <span className="text-amber-400 font-bold font-mono">
-                                                        ${formatCurrency(opp.position_size_usdt || Math.round(100 / (Math.abs(opp.price - opp.stop_loss)/opp.price)))} USDT
-                                                    </span>
+                                                {/* Dynamic MT5 / Account Lot Size & 1-Click Copy */}
+                                                <div className="flex flex-col gap-1.5 pt-2 border-t border-white/5 font-mono">
+                                                    <div className="flex justify-between items-center text-[10px]">
+                                                        <span className="text-neon-cyan/80 font-bold">
+                                                            {activeProfileConfig.isFtmo ? `🎯 Lotes MT5 (${activeProfileConfig.name.split(' ')[0]}):` : 'Pos Size Bitunix:'}
+                                                        </span>
+                                                        <span className="text-neon-green font-black text-[12px]">
+                                                            {(() => {
+                                                                const risk = activeProfileConfig.riskUsd;
+                                                                const dist = Math.abs(opp.price - opp.stop_loss);
+                                                                const lots = dist > 0 ? (risk / dist).toFixed(2) : '1.00';
+                                                                return activeProfileConfig.isFtmo ? `${lots} Lots` : `$${formatCurrency(opp.position_size_usdt || 12500)} USDT`;
+                                                            })()}
+                                                        </span>
+                                                    </div>
+                                                    <div className="flex justify-between items-center text-[9px] text-white/40">
+                                                        <span>Riesgo en Cuenta:</span>
+                                                        <span className="text-neon-cyan font-bold">${activeProfileConfig.riskUsd} USD ({activeProfileConfig.riskPct}%)</span>
+                                                    </div>
+                                                    <button
+                                                        onClick={() => {
+                                                            const action = opp.direction.toUpperCase() === 'LONG' ? 'BUY LIMIT' : 'SELL LIMIT';
+                                                            const sym = opp.asset.replace('USDT', 'USD');
+                                                            const risk = activeProfileConfig.riskUsd;
+                                                            const dist = Math.abs(opp.price - opp.stop_loss);
+                                                            const lots = dist > 0 ? (risk / dist).toFixed(2) : '1.00';
+                                                            const text = `[${activeProfileConfig.isFtmo ? 'FTMO MT5' : 'BITUNIX'}] ${action} ${sym} @ ${opp.price} | LOTES: ${lots} | SL: ${opp.stop_loss} | TP1: ${opp.tp1} | TP3: ${opp.tp3}`;
+                                                            navigator.clipboard.writeText(text);
+                                                            setCopiedAsset(assetKey);
+                                                            setTimeout(() => setCopiedAsset(null), 2000);
+                                                        }}
+                                                        className={`w-full py-1.5 rounded-lg text-[9px] font-mono font-black transition-all flex items-center justify-center gap-1 cursor-pointer border ${
+                                                            copiedAsset === assetKey
+                                                                ? 'bg-neon-green text-black border-neon-green shadow-[0_0_10px_rgba(16,185,129,0.5)]'
+                                                                : 'bg-neon-green/15 hover:bg-neon-green/25 text-neon-green border-neon-green/30'
+                                                        }`}
+                                                    >
+                                                        {copiedAsset === assetKey ? '✅ ¡ORDEN COPIADA!' : '📋 COPIAR ORDEN MT5'}
+                                                    </button>
                                                 </div>
                                             </div>
                                         </div>
