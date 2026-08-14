@@ -77,7 +77,9 @@ const SignalCardItem: React.FC<SignalCardItemProps> = ({ signal, currentPrice, p
         return latestPrices[signal.asset || ''] || currentPrice;
     }, [latestPrices, signal.asset, currentPrice]);
 
-    // Memoizamos fuertemente el ciclo de vida. Solo recalcula si el effectivePrice hace que evalúe distinto,
+    const [isCopied, setIsCopied] = React.useState(false);
+
+    // Memoizamos fuertemente el ciclo de vida. Solo recalcula si el effectivePrice hace que evalúe distinto
     const { lifecycle, style } = useMemo(() => {
         const now = Date.now();
         const lc = getSignalLifecycle(signal, effectivePrice, now);
@@ -342,11 +344,16 @@ const SignalCardItem: React.FC<SignalCardItemProps> = ({ signal, currentPrice, p
                                     const lots = dist > 0 ? (riskAmt / dist) : 1.0;
                                     const text = `[FTMO MT5] ${action} ${sym} @ ${signal.price} | LOTES: ${lots.toFixed(2)} | SL: ${signal.stop_loss} | TP1: ${signal.tp1 || '---'} | TP3: ${signal.tp3 || signal.take_profit_3r || '---'}`;
                                     navigator.clipboard.writeText(text);
-                                    alert(`✅ Orden FTMO MT5 copiada:\n${text}`);
+                                    setIsCopied(true);
+                                    setTimeout(() => setIsCopied(false), 2000);
                                 }}
-                                className="px-2 py-0.5 rounded bg-neon-green/20 hover:bg-neon-green/30 text-neon-green border border-neon-green/40 text-[8px] font-mono font-black transition-all flex items-center gap-1 cursor-pointer"
+                                className={`px-2 py-0.5 rounded text-[8px] font-mono font-black transition-all flex items-center gap-1 cursor-pointer ${
+                                    isCopied 
+                                        ? 'bg-neon-green text-black shadow-[0_0_10px_rgba(16,185,129,0.5)]' 
+                                        : 'bg-neon-green/20 hover:bg-neon-green/30 text-neon-green border border-neon-green/40'
+                                }`}
                             >
-                                📋 COPIAR ORDEN MT5
+                                {isCopied ? '✅ ¡ORDEN COPIADA!' : '📋 COPIAR ORDEN MT5'}
                             </button>
                         </div>
                         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 bg-black/40 p-1.5 rounded border border-white/5">

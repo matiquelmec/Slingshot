@@ -246,5 +246,9 @@
   "1d471ec0104dde27549a56e4d1f5223f": {
     "price": 0.0,
     "advice": "{\n  \"verdict\": \"SIDEWAYS\",\n   \"threat\": \"LOW\",\n   \"logic\": \"Rango Neutral\"\n}"
+  },
+  "4876ac8d74e41a170a160d76999e04fa": {
+    "price": 0.0,
+    "advice": "{\n  \"verdict\": \"SIDEWAYS\",\n   \"threat\": \"LOW\",\n   \"logic\": \"Rango en 1m\"\n}"
   }
 }
