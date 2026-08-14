@@ -40,9 +40,9 @@ export const FTMO_CONTRACT_SIZES: Record<string, number> = {
     'TIA': 10,
     'TIAUSD': 10,
     'TIAUSDT': 10,
-    'ATOM': 10,
-    'ATOMUSD': 10,
-    'ATOMUSDT': 10,
+    'ATOM': 100,
+    'ATOMUSD': 100,
+    'ATOMUSDT': 100,
 };
 
 /**
