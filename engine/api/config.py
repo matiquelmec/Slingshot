@@ -41,22 +41,26 @@ class Settings(BaseSettings):
     OLLAMA_MODEL: str = "gemma3:4b"        # gemma3:4b = producción | gemma4:latest = alta precisión
     OLLAMA_URL: str = "http://localhost:11434"
 
-    # Strategy Delta Δ: Tiered Priority (v6.0 Trident Audit)
-    RADAR_ASSETS: str = "BTCUSDT,ETHUSDT,SOLUSDT,PAXGUSDT,XRPUSDT,XAGUSDT"
+    # Strategy Delta Δ: Tiered Priority (Top 10 High-Performance Assets)
+    RADAR_ASSETS: str = "BTCUSDT,ETHUSDT,INJUSDT,SUIUSDT,AVAXUSDT,RENDERUSDT,NEARUSDT,FETUSDT,ATOMUSDT,TIAUSDT"
     
     @property
     def MASTER_WATCHLIST(self) -> list[str]:
         return [s.strip() for s in self.RADAR_ASSETS.split(",") if s.strip()]
 
     PRIORITY_TIERS: dict[str, float] = {
-        "BTCUSDT": 0.5,   # Tier 1: Alta Volatilidad (0.5s)
-        "SOLUSDT": 0.5,   # Tier 1
-        "XRPUSDT": 0.5,   # Tier 1
-        "ETHUSDT": 1.5,   # Tier 2: Media Volatilidad (1.5s)
-        "XAGUSDT": 1.5,   # Tier 2: Silver
-        "PAXGUSDT": 5.0,  # Tier 3: Commodities tokenizados (5.0s)
+        "BTCUSDT": 0.5,     # Tier 1: Líder Macro (0.5s)
+        "ETHUSDT": 0.5,     # Tier 1: Líder Altcoins (0.5s)
+        "INJUSDT": 0.8,     # Tier 1: Máxima Expansión (0.8s)
+        "SUIUSDT": 0.8,     # Tier 1: Máxima Expansión (0.8s)
+        "AVAXUSDT": 1.2,    # Tier 2: Media Volatilidad (1.2s)
+        "RENDERUSDT": 1.2,  # Tier 2: Media Volatilidad (1.2s)
+        "NEARUSDT": 1.5,    # Tier 2: Estructura (1.5s)
+        "FETUSDT": 1.5,     # Tier 2: Momentum (1.5s)
+        "ATOMUSDT": 2.0,    # Tier 3: Rango Limpio (2.0s)
+        "TIAUSDT": 2.0,     # Tier 3: Rango Limpio (2.0s)
     }
-    DEFAULT_PULSE_INTERVAL: float = 2.0
+    DEFAULT_PULSE_INTERVAL: float = 1.5
 
     # Activos SPOT-only: no existen en Binance Futures (fstream).
     # Usar wss://stream.binance.com:9443 para estos símbolos.

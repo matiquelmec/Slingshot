@@ -71,14 +71,18 @@ export default function OverviewPage() {
                 console.error("Error parsing local watchlist");
             }
         } else {
-            // Default watchlist (VIP Assets)
+            // Default watchlist (Top 10 High-Performance Assets)
             const defaultWatchlist: WatchlistEntry[] = [
                 { id: '1', asset: 'BTCUSDT', interval: '15m', alerts_enabled: true },
                 { id: '2', asset: 'ETHUSDT', interval: '15m', alerts_enabled: true },
-                { id: '3', asset: 'SOLUSDT', interval: '15m', alerts_enabled: true },
-                { id: '4', asset: 'XRPUSDT', interval: '15m', alerts_enabled: true },
-                { id: '5', asset: 'XAGUSDT', interval: '15m', alerts_enabled: true },
-                { id: '7', asset: 'PAXGUSDT', interval: '15m', alerts_enabled: true }
+                { id: '3', asset: 'INJUSDT', interval: '15m', alerts_enabled: true },
+                { id: '4', asset: 'SUIUSDT', interval: '15m', alerts_enabled: true },
+                { id: '5', asset: 'AVAXUSDT', interval: '15m', alerts_enabled: true },
+                { id: '6', asset: 'RENDERUSDT', interval: '15m', alerts_enabled: true },
+                { id: '7', asset: 'NEARUSDT', interval: '15m', alerts_enabled: true },
+                { id: '8', asset: 'FETUSDT', interval: '15m', alerts_enabled: true },
+                { id: '9', asset: 'ATOMUSDT', interval: '15m', alerts_enabled: true },
+                { id: '10', asset: 'TIAUSDT', interval: '15m', alerts_enabled: true }
             ];
             setWatchlist(defaultWatchlist);
             localStorage.setItem('slingshot_watchlist', JSON.stringify(defaultWatchlist));

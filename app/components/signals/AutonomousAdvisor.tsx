@@ -44,7 +44,7 @@ function TypewriterText({ text, speed = 30 }: { text: string; speed?: number }) 
 }
 
 interface AutonomousAdvisorProps {
-    advisorLog: string | null;
+    advisorLog: any;
     strategy: string | null;
 }
 
@@ -60,7 +60,7 @@ const AutonomousAdvisor: React.FC<AutonomousAdvisorProps> = ({ advisorLog, strat
         } catch (e) {
             // Ignorar y usar texto crudo
         }
-    } else if (typeof advisorLog === 'object' && advisorLog !== null && 'verdict' in advisorLog) {
+    } else if (advisorLog && typeof advisorLog === 'object' && 'verdict' in advisorLog) {
         parsedAdvisor = advisorLog;
         displayText = parsedAdvisor.logic || 'Analizando...';
     }

@@ -57,12 +57,12 @@ export const mergeSignals = (
         if (!sig.asset || !sig.price || sig.price <= 0) return;
 
         const existing = newData[id];
-        const hasChanged = !existing ||
+        const itemChanged = !existing ||
             existing.status !== sig.status ||
             existing.price !== sig.price ||
             existing.timestamp !== sig.timestamp;
 
-        if (hasChanged) {
+        if (itemChanged) {
             if (!existing) {
                 newIds.unshift(id);
             }

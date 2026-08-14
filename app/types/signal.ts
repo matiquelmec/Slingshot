@@ -39,6 +39,14 @@ export interface Signal {
     price: number;
     stop_loss: number;
     take_profit_3r: number;
+    tp1?: number;
+    tp2?: number;
+    tp3?: number;
+    trailing_phase?: string;
+    trailing_reason?: string;
+    session?: string;
+    sl_dist_pct?: number;
+    suggested_position_usdt?: number;
     entry_zone_bottom?: number;
     entry_zone_top?: number;
     risk_pct?: number;
@@ -242,6 +250,7 @@ export interface TacticalDecision {
     nearest_support: number | null;
     nearest_resistance: number | null;
     htf_bias?: HTFBias;
+    htfBias?: HTFBias;
     diagnostic?: QuantDiagnostic;
     strategy?: string;
     reasoning?: string;
@@ -265,6 +274,7 @@ export interface TacticalDecision {
 }
 
 export interface NewsItem {
+    id?: string;
     title: string;
     url: string;
     source: string;

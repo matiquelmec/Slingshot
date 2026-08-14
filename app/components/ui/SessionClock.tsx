@@ -63,7 +63,7 @@ function SweepBadge({ swept, label }: { swept: boolean; label: string }) {
     );
 }
 
-function SessionRow({ id, info }: { id: string; info: SessionInfo & { prev_high?: number | null; prev_low?: number | null } }) {
+function SessionRow({ id, info, active }: { id: string; info: SessionInfo & { prev_high?: number | null; prev_low?: number | null }; active?: boolean }) {
     const meta = SESSION_META[id];
     const isPending = info.status === 'PENDING';
     const isClosed = info.status === 'CLOSED';

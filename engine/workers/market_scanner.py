@@ -1,10 +1,13 @@
 import asyncio
+import time
+from datetime import datetime, timezone
 import pandas as pd
 from engine.core.logger import logger
 from engine.main_router import SlingshotRouter
 from engine.indicators.data_utils import fetch_binance_history
 from engine.core.store import store
 from engine.core.confluence import confluence_manager
+from engine.api.registry import registry
 
 class MarketScanner:
     """
@@ -19,10 +22,8 @@ class MarketScanner:
     def __init__(self):
         self.router = SlingshotRouter()
         self.assets = [
-            "BTCUSDT", "ETHUSDT", "SOLUSDT", "XRPUSDT", "LTCUSDT", 
-            "LINKUSDT", "ADAUSDT", "DOTUSDT", "AVAXUSDT", "NEARUSDT", 
-            "FTMUSDT", "ATOMUSDT", "UNIUSDT", "OPUSDT", "ARBUSDT", 
-            "INJUSDT", "WIFUSDT", "DOGEUSDT", "APTUSDT", "SUIUSDT"
+            "BTCUSDT", "ETHUSDT", "INJUSDT", "SUIUSDT", "AVAXUSDT", 
+            "RENDERUSDT", "NEARUSDT", "FETUSDT", "ATOMUSDT", "TIAUSDT"
         ]
         self._stop_event = asyncio.Event()
         self._task = None
@@ -338,7 +339,45 @@ class MarketScanner:
         
         top_candidates = sorted_candidates[:6]
         await store.save_scanner_opportunities(store_key, top_candidates)
-        logger.info(f"🔍 [MARKET_SCANNER v15] Guardados {len(top_candidates)} setups de {store_key} (OTE Watchdog activo)")
+        logger.info(f"🔍 [MARKET_SCANNER v16] Guardados {len(top_candidates)} setups de {store_key} (Top 10 Assets)")
+
+        # ── [APEX UNIFIED DISPATCHER] ──
+        # Si un setup de 15m alcanza grado ELITE (>=60%), no está en cuarentena y está alineado a BTC,
+        # lo despachamos al store de señales para que el SignalTerminal y Bitunix Nexus lo aprovechen.
+        if interval == "15m":
+            for top_c in top_candidates:
+                if (top_c.get("confluence_score", 0) >= 60 
+                    and not top_c.get("ote_chasing", False)
+                    and not (top_c.get("asset_health", {}).get("is_quarantined", False))):
+                    
+                    elite_sig = {
+                        "id": f"scanner_{top_c['asset']}_{int(time.time())}",
+                        "asset": top_c["asset"],
+                        "symbol": top_c["asset"],
+                        "interval": "15m",
+                        "signal_type": top_c["direction"],
+                        "type": "SMC Sniper",
+                        "entry_price": float(top_c["price"]),
+                        "price": float(top_c["price"]),
+                        "stop_loss": float(top_c["stop_loss"]),
+                        "tp1": float(top_c["tp1"]),
+                        "tp2": float(top_c["tp2"]),
+                        "tp3": float(top_c["tp3"]),
+                        "take_profit_3r": float(top_c["tp3"]),
+                        "rr_ratio": float(top_c.get("rr_ratio_tp3", 3.0)),
+                        "status": "PENDING",
+                        "position_size": float(top_c.get("position_size_usdt", 1000.0)),
+                        "position_size_usdt": float(top_c.get("position_size_usdt", 1000.0)),
+                        "leverage": 20,
+                        "timestamp": datetime.now(timezone.utc).isoformat(),
+                        "confluence": {
+                            "score": top_c["confluence_score"],
+                            "checklist": top_c.get("checklist", [])
+                        }
+                    }
+                    await store.save_signal(elite_sig)
+                    await registry.broadcast_global({"type": "signal_auditor_update", "data": elite_sig})
+                    logger.info(f"💎 [MARKET_SCANNER] Setup ELITE {top_c['asset']} ({top_c['confluence_score']}%) sincronizado con Signal Terminal")
 
     def _format_opportunity(self, sig: dict, is_active: bool) -> dict:
         return {

@@ -85,7 +85,7 @@ export default function TradingChart() {
         williamsRRef.current = chart.addSeries(LineSeries, {
             priceScaleId: 'williams_r',
             color: '#8B5CF6',
-            lineWidth: 1.5,
+            lineWidth: 1,
             priceLineVisible: false,
             lastValueVisible: false,
         });

@@ -3,7 +3,7 @@ import { TelemetryState, Timeframe } from './types';
 import { initialState } from './initialState';
 import { mergeSignals } from './storage';
 import { createConnectionManager } from './connection';
-import { Signal, NewsItem } from '../types/signal';
+import { Signal, NewsItem } from '../../types/signal';
 
 export const useTelemetryStore = create<TelemetryState>((set, get) => {
     const connectionManager = createConnectionManager(set, get);

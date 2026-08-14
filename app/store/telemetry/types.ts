@@ -34,7 +34,7 @@ export interface TelemetryState {
     htfBias: HTFBias | null;
     news: NewsItem[];
     liquidations: LiquidationCluster[];
-    marketSummary: Record<string, { asset: string, price: number | null, regime: string, strategy: string, bias: string, trend: number }>;
+    marketSummary: Record<string, { asset: string, price: number | null, regime: string, strategy: string, bias: string, trend: number, funding?: number, oi?: number }>;
     economicEvents: EconomicEvent[];
     onchainMetrics: OnChainMetrics | null;
     signalHistory: Record<string, Signal>;

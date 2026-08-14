@@ -1,5 +1,5 @@
-import { TelemetryState, CandleData, NeuralLog } from './types';
-import { Signal, OnChainMetrics, NewsItem, LiquidationCluster } from '../../types/signal';
+import { TelemetryState, CandleData } from './types';
+import { Signal, OnChainMetrics, NewsItem, LiquidationCluster, NeuralLog } from '../../types/signal';
 import { mergeSignals } from './storage';
 
 // 🛡️ [INSTITUTIONAL ISOLATION] Utilidad de limpieza y comparación de símbolos
