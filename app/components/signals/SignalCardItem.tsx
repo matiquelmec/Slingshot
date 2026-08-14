@@ -129,10 +129,19 @@ const SignalCardItem: React.FC<SignalCardItemProps> = ({ signal, currentPrice })
                 </div>
             ) : null}
 
-            {/* Insignia de Categoría de Trade en Vivo */}
+            {/* Insignia de Categoría de Trade en Vivo y Trailing Stop */}
             <div className="flex items-center justify-between bg-amber-500/10 border border-amber-500/25 rounded-xl px-3 py-1 mb-2.5">
                 <span className="text-amber-400 text-[8.5px] font-mono font-bold uppercase tracking-wider flex items-center gap-1.5">
                     <span>🔥 TRADE EN EJECUCIÓN EN VIVO</span>
+                    {signal.trailing_phase === 'BREAKEVEN' || signal.profit_locked ? (
+                        <span className="bg-neon-green/20 text-neon-green border border-neon-green/40 px-1.5 py-0.2 rounded text-[7.5px] font-black">
+                            🛡️ BREAKEVEN PROTEGIDO (0 RIESGO)
+                        </span>
+                    ) : signal.trailing_phase === 'TRAILING_TP1' ? (
+                        <span className="bg-neon-cyan/20 text-neon-cyan border border-neon-cyan/40 px-1.5 py-0.2 rounded text-[7.5px] font-black">
+                            💎 TRAILING TP1 (+1.5R LOCK)
+                        </span>
+                    ) : null}
                 </span>
                 <span className="text-white/40 text-[8px] font-mono">SEÑAL EN TIEMPO REAL</span>
             </div>

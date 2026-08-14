@@ -21,6 +21,7 @@ from engine.api.config import settings
 from engine.core.memory import blackbox
 from engine.core.store import store
 from engine.workers.trade_manager import trade_manager
+from engine.api.registry import registry
 
 
 class NexusNode:
@@ -58,17 +59,18 @@ class NexusNode:
                     sl = sig['stop_loss']
                     is_long = sig['type'] == "LONG"
 
-                    # 2. Verificar si se ha alcanzado el TP1 para mover a BE
+                    # 2. 🛡️ [SMART TRAILING 2-FASES] (Fase 1: BE en TP1 | Fase 2: Lock en TP2)
                     be_active = pos.get("smart_trailing", {}).get("be_active", False)
+                    tp2 = sig.get('tp2')
+                    tp2_locked = pos.get("smart_trailing", {}).get("tp2_locked", False)
 
+                    # Fase 1: TP1 alcanzado -> Mover SL a Breakeven + Buffer de Comisiones
                     if not be_active:
                         target_hit = (current_price >= tp1) if is_long else (current_price <= tp1)
                         if target_hit:
-                            logger.info(f"🎯 [OMEGA] {asset} alcanzó TP1. Activando SMART TRAILING (Mover a BE)...")
-                            # Mover SL a Entry + Pequeño buffer para comisiones
-                            new_sl = entry * 1.0005 if is_long else entry * 0.9995
+                            logger.info(f"🎯 [OMEGA FASE 1] {asset} alcanzó TP1. Moviendo SL a BREAKEVEN (+0.1% fee buffer)...")
+                            new_sl = entry * 1.001 if is_long else entry * 0.999
 
-                            # Cancelar SL antiguo y colocar nuevo en vivo
                             old_sl_id = None
                             protection_orders = pos.get("execution", {}).get("protection_orders", [])
                             if protection_orders:
@@ -87,12 +89,59 @@ class NexusNode:
                                 tp_price=None
                             )
 
-                            if new_sl_id:
+                            if new_sl_id or self.dry_run:
                                 if protection_orders:
                                     pos["execution"]["protection_orders"][0] = new_sl_id
                                 pos["signal"]["stop_loss"] = new_sl
-                                pos["smart_trailing"] = {"be_active": True, "trailing_active": True}
-                                logger.info(f"🛡️ [OMEGA] SL de {asset} movido a BE de forma real: ${new_sl:.2f}")
+                                pos["signal"]["trailing_phase"] = "BREAKEVEN"
+                                pos["signal"]["profit_locked"] = True
+                                pos["smart_trailing"] = {"be_active": True, "trailing_active": True, "phase": "BREAKEVEN"}
+                                
+                                # Broadcast actualización a la UI
+                                await registry.broadcast_global({
+                                    "type": "signal_auditor_update",
+                                    "data": {**pos["signal"], "trailing_phase": "BREAKEVEN", "profit_locked": True, "status": "ACTIVE_PROTECTED"}
+                                })
+                                logger.info(f"🛡️ [OMEGA FASE 1] SL de {asset} movido a BE de forma real: ${new_sl:.2f} (Trade 100% Risk-Free)")
+
+                    # Fase 2: TP2 alcanzado -> Mover SL a TP1 (Bloquear ganancia +1.5R)
+                    elif be_active and tp2 and not tp2_locked:
+                        tp2_hit = (current_price >= tp2) if is_long else (current_price <= tp2)
+                        if tp2_hit:
+                            logger.info(f"🎯 [OMEGA FASE 2] {asset} alcanzó TP2. Moviendo SL a TP1 (${tp1:.2f}) para bloquear +1.5R...")
+                            new_sl = tp1
+
+                            old_sl_id = None
+                            protection_orders = pos.get("execution", {}).get("protection_orders", [])
+                            if protection_orders:
+                                old_sl_id = protection_orders[0]
+
+                            sl_side = 'sell' if is_long else 'buy'
+                            amount = pos.get("execution", {}).get("amount", 0.0)
+
+                            new_sl_id = await self.executor.update_stop_loss(
+                                symbol=asset,
+                                old_order_id=old_sl_id,
+                                new_stop_price=new_sl,
+                                amount=amount,
+                                side=sl_side,
+                                position_id=pos.get("execution", {}).get("main_order_id"),
+                                tp_price=None
+                            )
+
+                            if new_sl_id or self.dry_run:
+                                if protection_orders:
+                                    pos["execution"]["protection_orders"][0] = new_sl_id
+                                pos["signal"]["stop_loss"] = new_sl
+                                pos["signal"]["trailing_phase"] = "TRAILING_TP1"
+                                pos["smart_trailing"]["tp2_locked"] = True
+                                pos["smart_trailing"]["phase"] = "TRAILING_TP1"
+
+                                await registry.broadcast_global({
+                                    "type": "signal_auditor_update",
+                                    "data": {**pos["signal"], "trailing_phase": "TRAILING_TP1", "stop_loss": new_sl}
+                                })
+                                logger.info(f"💎 [OMEGA FASE 2] Ganancia asegurada en {asset}: SL en ${new_sl:.2f} (+1.5R garantizado)")
 
                     # 4. 🚀 [YOSH v13.1] AVERAGING UP (Escalado en Ganancia)
                     # Si ya estamos en BE y el precio retrocede a una zona de VALOR, añadir contratos.

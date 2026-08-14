@@ -220,11 +220,15 @@ class SignalHandler:
         # ── Persistencia en RAM ───────────────────────────────────────────────
         asyncio.create_task(store.save_signal(realtime_data))
 
-        # ── [APEX NEXUS] — Disparar Ejecución Real/Dry-Run ─────────────────────
+        # ── [APEX NEXUS] — Disparar Ejecución Real/Dry-Run (Compuerta ELITE >= 60%) ──
+        conf_score = (realtime_data.get("confluence") or {}).get("score", 0)
         if status == "ACTIVE":
-            from engine.execution.nexus import nexus
-            # Lo lanzamos como tarea para no bloquear el flujo de persistencia
-            asyncio.create_task(nexus.process_signal(realtime_data))
+            if conf_score >= 60:
+                from engine.execution.nexus import nexus
+                asyncio.create_task(nexus.process_signal(realtime_data))
+                logger.info(f"💎 [NEXUS GATEWAY] Señal ELITE ({conf_score}%) enviada a Bitunix: {realtime_data['signal_type']} {self._symbol}")
+            else:
+                logger.info(f"🛡️ [NEXUS GATEWAY] Señal descartada de auto-ejecución Bitunix por confluencia insuficiente ({conf_score}% < 60%): {self._symbol}")
 
         # ── Broadcast Global al Radar (v8.6.5) ────────────────────────────────
         # [COHERENCIA TOTAL] Emitimos todos los estados (PENDING, ACTIVE, FILLED)
