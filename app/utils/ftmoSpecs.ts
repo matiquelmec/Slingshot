@@ -1,15 +1,59 @@
 // app/utils/ftmoSpecs.ts
 
 /**
+ * Categorías de Mercado disponibles en Slingshot Trading
+ */
+export type MarketCategory = 'ALL' | 'FTMO_INSTITUTIONAL' | 'CRYPTO_ALTCOINS';
+
+/**
  * Especificaciones de contrato oficiales de FTMO MetaTrader 5 (MT5 / cTrader).
- * En MT5 para Crypto, brokers como FTMO usan tamaños de contrato específicos por lote:
- * - BTCUSD: 1 Lote = 1 BTC (Contract Size: 1)
- * - ETHUSD: 1 Lote = 10 ETH (Contract Size: 10)
- * - SOLUSD: 1 Lote = 10 SOL (Contract Size: 10)
- * - AVAXUSD: 1 Lote = 10 AVAX (Contract Size: 10)
- * - NEARUSD / INJUSD / TIAUSD: 1 Lote = 10 o 100 Contratos
+ * 
+ * - METALES:
+ *   - XAUUSD (Oro): 1 Lote = 100 Onzas troy (Contract Size: 100).
+ *   - XAGUSD (Plata): 1 Lote = 5000 Onzas (Contract Size: 5000).
+ * 
+ * - ÍNDICES:
+ *   - US100 / NAS100 (Nasdaq): 1 Lote = 1 Contrato (Contract Size: 1).
+ *   - US30 (Dow Jones): 1 Lote = 1 Contrato (Contract Size: 1).
+ *   - US500 (S&P 500): 1 Lote = 1 Contrato (Contract Size: 1).
+ * 
+ * - FOREX:
+ *   - EURUSD, GBPUSD, USDJPY, AUDUSD: 1 Lote = 100,000 Unidades base (Contract Size: 100,000).
+ * 
+ * - CRIPTO FTMO:
+ *   - BTCUSD: 1 Lote = 1 BTC (Contract Size: 1).
+ *   - ETHUSD: 1 Lote = 10 ETH (Contract Size: 10).
+ *   - SOLUSD: 1 Lote = 10 SOL (Contract Size: 10).
+ *   - AVAXUSD: 1 Lote = 10 AVAX (Contract Size: 10).
  */
 export const FTMO_CONTRACT_SIZES: Record<string, number> = {
+    // Metales
+    'XAU': 100,
+    'XAUUSD': 100,
+    'GOLD': 100,
+    'PAXG': 1,      // Tokenized Gold 1:1 on Binance/Bitunix
+    'PAXGUSDT': 1,
+    'XAG': 5000,
+    'XAGUSD': 5000,
+    'SILVER': 5000,
+
+    // Índices
+    'US100': 1,
+    'NAS100': 1,
+    'USTEC': 1,
+    'US30': 1,
+    'DJ30': 1,
+    'US500': 1,
+    'SPX500': 1,
+
+    // Forex Majors
+    'EURUSD': 100000,
+    'GBPUSD': 100000,
+    'USDJPY': 100000,
+    'AUDUSD': 100000,
+    'USDCAD': 100000,
+
+    // Cripto FTMO & Exchange
     'BTC': 1,
     'BTCUSD': 1,
     'BTCUSDT': 1,
@@ -46,8 +90,29 @@ export const FTMO_CONTRACT_SIZES: Record<string, number> = {
 };
 
 /**
+ * Lista de activos institucionales soportados en FTMO MT5
+ */
+export const FTMO_INSTITUTIONAL_SYMBOLS = new Set([
+    'XAUUSD', 'GOLD', 'PAXGUSDT', 'XAGUSD',
+    'US100', 'NAS100', 'US30', 'US500',
+    'EURUSD', 'GBPUSD', 'USDJPY', 'AUDUSD', 'USDCAD',
+    'BTCUSD', 'BTCUSDT', 'ETHUSD', 'ETHUSDT', 'SOLUSD', 'SOLUSDT', 'AVAXUSD', 'AVAXUSDT'
+]);
+
+/**
+ * Identifica la categoría de mercado de un símbolo
+ */
+export function getAssetMarketCategory(symbol: string): 'FTMO_INSTITUTIONAL' | 'CRYPTO_ALTCOINS' {
+    const cleanSym = symbol.toUpperCase().replace('.S', '').replace('.P', '');
+    if (FTMO_INSTITUTIONAL_SYMBOLS.has(cleanSym) || cleanSym.startsWith('XAU') || cleanSym.startsWith('US100') || cleanSym.startsWith('EUR')) {
+        return 'FTMO_INSTITUTIONAL';
+    }
+    return 'CRYPTO_ALTCOINS';
+}
+
+/**
  * Calcula los lotes exactos y listos para colocar en la casilla "Volumen" de MetaTrader 5.
- * @param symbol Par de trading (ej. BTCUSDT, ETHUSD)
+ * @param symbol Par de trading (ej. XAUUSD, BTCUSDT, EURUSD, US100)
  * @param riskUsd Riesgo fijo en dólares (ej. $750 para $100k, $1,500 para $200k)
  * @param slDist Distancia en dólares del Stop Loss (|Entrada - SL|)
  * @returns Número de lotes exactos redondeados a 2 decimales para MT5
@@ -56,14 +121,15 @@ export function calculateMt5Lots(symbol: string, riskUsd: number, slDist: number
     if (!slDist || slDist <= 0 || !riskUsd || riskUsd <= 0) return 0.01;
     
     // Normalizar símbolo
-    const cleanSym = symbol.toUpperCase().replace('USDT', '').replace('USD', '');
-    const contractSize = FTMO_CONTRACT_SIZES[cleanSym] || 1;
+    const rawSym = symbol.toUpperCase().replace('.S', '').replace('.P', '');
+    const cleanSym = rawSym.replace('USDT', '').replace('USD', '');
     
-    // Monedas necesarias = Riesgo / Distancia SL
-    const coinsNeeded = riskUsd / slDist;
+    const contractSize = FTMO_CONTRACT_SIZES[rawSym] || FTMO_CONTRACT_SIZES[cleanSym] || 1;
     
-    // Lotes MT5 = Monedas / Contract Size
-    const rawLots = coinsNeeded / contractSize;
+    // Para Forex: SL Distancia en pips/precio (ej. 0.0015) -> Riesgo / (Dist * 100,000)
+    // Para Metales: SL Distancia en dólares (ej. $5.00) -> Riesgo / (Dist * 100 onzas)
+    // Para Cripto/Índices: Riesgo / (Dist * Contract Size)
+    const rawLots = riskUsd / (slDist * contractSize);
     
     // Redondear a 2 decimales y asegurar mínimo 0.01 lote
     const finalLots = Math.max(0.01, Math.round(rawLots * 100) / 100);

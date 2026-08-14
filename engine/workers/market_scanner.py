@@ -22,8 +22,9 @@ class MarketScanner:
     def __init__(self):
         self.router = SlingshotRouter()
         self.assets = [
-            "BTCUSDT", "ETHUSDT", "INJUSDT", "SUIUSDT", "AVAXUSDT", 
-            "RENDERUSDT", "NEARUSDT", "FETUSDT", "ATOMUSDT", "TIAUSDT"
+            "PAXGUSDT", "BTCUSDT", "ETHUSDT", "SOLUSDT", "INJUSDT", 
+            "SUIUSDT", "AVAXUSDT", "RENDERUSDT", "NEARUSDT", "FETUSDT", 
+            "ATOMUSDT", "TIAUSDT"
         ]
         self._stop_event = asyncio.Event()
         self._task = None

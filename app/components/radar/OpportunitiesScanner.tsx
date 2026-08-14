@@ -7,7 +7,7 @@ import { formatCurrency } from '../../utils/formatters';
 import { AccountProfileSelector, PROFILES_CONFIG } from '../signals/AccountProfileSelector';
 import { FtmoShieldWidget } from '../signals/FtmoShieldWidget';
 import { AccountProfileType, FtmoPhase } from '../../types/signal';
-import { calculateMt5Lots } from '../../utils/ftmoSpecs';
+import { calculateMt5Lots, MarketCategory, getAssetMarketCategory } from '../../utils/ftmoSpecs';
 
 interface ChecklistItem {
     factor: string;
@@ -63,6 +63,7 @@ export default function OpportunitiesScanner() {
     });
     const [filterHighConfluence, setFilterHighConfluence] = useState(false);
     const [filterAdaptiveKER, setFilterAdaptiveKER] = useState(true);
+    const [marketCategoryFilter, setMarketCategoryFilter] = useState<MarketCategory>('ALL');
     const [expandedAsset, setExpandedAsset] = useState<string | null>(null);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
@@ -105,6 +106,13 @@ export default function OpportunitiesScanner() {
     
     let filteredOpps = currentOppsRaw;
     
+    // Filtro por Categoría de Mercado (FTMO Institucional vs Altcoins)
+    if (marketCategoryFilter === 'FTMO_INSTITUTIONAL') {
+        filteredOpps = filteredOpps.filter(o => getAssetMarketCategory(o.asset) === 'FTMO_INSTITUTIONAL');
+    } else if (marketCategoryFilter === 'CRYPTO_ALTCOINS') {
+        filteredOpps = filteredOpps.filter(o => getAssetMarketCategory(o.asset) === 'CRYPTO_ALTCOINS');
+    }
+
     if (filterHighConfluence) {
         filteredOpps = filteredOpps.filter(o => o.confluence_score >= 50);
     }
@@ -246,6 +254,40 @@ export default function OpportunitiesScanner() {
                         <ShieldCheck size={13} className={filterHighConfluence ? "text-neon-green" : ""} />
                         <span>Solo &ge; 50% Confluencia</span>
                     </button>
+
+                    {/* Market Category Selector Tabs (FTMO vs Altcoins) */}
+                    <div className="flex bg-[#070E18] p-1 rounded-xl border border-white/5 text-xs font-mono">
+                        <button
+                            onClick={() => setMarketCategoryFilter('ALL')}
+                            className={`px-3 py-1.5 rounded-lg font-bold transition-all ${
+                                marketCategoryFilter === 'ALL'
+                                    ? 'bg-white/15 text-white border border-white/20'
+                                    : 'text-white/40 hover:text-white border border-transparent'
+                            }`}
+                        >
+                            🌐 Todos
+                        </button>
+                        <button
+                            onClick={() => setMarketCategoryFilter('FTMO_INSTITUTIONAL')}
+                            className={`px-3 py-1.5 rounded-lg font-bold transition-all flex items-center gap-1.5 ${
+                                marketCategoryFilter === 'FTMO_INSTITUTIONAL'
+                                    ? 'bg-neon-green/20 text-neon-green border border-neon-green/40 shadow-[0_0_10px_rgba(16,185,129,0.2)]'
+                                    : 'text-white/40 hover:text-neon-green border border-transparent'
+                            }`}
+                        >
+                            🏛️ FTMO (Oro, BTC, ETH)
+                        </button>
+                        <button
+                            onClick={() => setMarketCategoryFilter('CRYPTO_ALTCOINS')}
+                            className={`px-3 py-1.5 rounded-lg font-bold transition-all flex items-center gap-1.5 ${
+                                marketCategoryFilter === 'CRYPTO_ALTCOINS'
+                                    ? 'bg-neon-cyan/20 text-neon-cyan border border-neon-cyan/40 shadow-[0_0_10px_rgba(6,182,212,0.2)]'
+                                    : 'text-white/40 hover:text-neon-cyan border border-transparent'
+                            }`}
+                        >
+                            ⚡ Altcoins (Bitunix)
+                        </button>
+                    </div>
 
                     {/* Timeframe Selector tabs */}
                     <div className="flex bg-[#070E18] p-1 rounded-xl border border-white/5">
