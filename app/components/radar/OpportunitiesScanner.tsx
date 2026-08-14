@@ -465,7 +465,7 @@ export default function OpportunitiesScanner() {
                                                         className="text-white/80 font-bold cursor-pointer hover:text-neon-cyan flex items-center gap-1.5 active:scale-95 transition-all select-all"
                                                         title="Haz clic para copiar precio"
                                                     >
-                                                        <span>${formatCurrency(opp.price)}</span>
+                                                        <span>{formatCurrency(opp.price)}</span>
                                                         <span id={`copy-entry-${assetKey}`} className="text-[7px] text-white/20 border border-white/10 px-1 py-0.5 rounded opacity-0 group-hover/level:opacity-100 transition-opacity font-sans">COPIAR</span>
                                                     </span>
                                                 </div>
@@ -480,7 +480,7 @@ export default function OpportunitiesScanner() {
                                                         className="text-neon-red font-bold cursor-pointer hover:text-neon-cyan flex items-center gap-1.5 active:scale-95 transition-all select-all"
                                                         title="Haz clic para copiar Stop Loss"
                                                     >
-                                                        <span>${formatCurrency(opp.stop_loss)} <span className="text-[9px] opacity-70">(-{opp.sl_dist_pct ? opp.sl_dist_pct.toFixed(2) : ((Math.abs(opp.price - opp.stop_loss)/opp.price)*100).toFixed(2)}%)</span></span>
+                                                        <span>{formatCurrency(opp.stop_loss)} <span className="text-[9px] opacity-70">(-{opp.sl_dist_pct ? opp.sl_dist_pct.toFixed(2) : ((Math.abs(opp.price - opp.stop_loss)/opp.price)*100).toFixed(2)}%)</span></span>
                                                         <span id={`copy-sl-${assetKey}`} className="text-[7px] text-white/20 border border-white/10 px-1 py-0.5 rounded opacity-0 group-hover/level:opacity-100 transition-opacity font-sans">COPIAR</span>
                                                     </span>
                                                 </div>
@@ -495,7 +495,7 @@ export default function OpportunitiesScanner() {
                                                         className="text-neon-cyan font-bold cursor-pointer hover:text-white flex items-center gap-1.5 active:scale-95 transition-all select-all"
                                                         title="Haz clic para copiar TP1"
                                                     >
-                                                        <span>${formatCurrency(opp.tp1)}</span>
+                                                        <span>{formatCurrency(opp.tp1)}</span>
                                                         <span id={`copy-tp1-${assetKey}`} className="text-[7px] text-white/20 border border-white/10 px-1 py-0.5 rounded opacity-0 group-hover/level:opacity-100 transition-opacity font-sans">COPIAR</span>
                                                     </span>
                                                 </div>
@@ -511,7 +511,7 @@ export default function OpportunitiesScanner() {
                                                             className="text-yellow-400 font-bold cursor-pointer hover:text-white flex items-center gap-1.5 active:scale-95 transition-all select-all"
                                                             title="Haz clic para copiar TP2"
                                                         >
-                                                            <span>${formatCurrency(opp.tp2)}</span>
+                                                            <span>{formatCurrency(opp.tp2)}</span>
                                                             <span id={`copy-tp2-${assetKey}`} className="text-[7px] text-white/20 border border-white/10 px-1 py-0.5 rounded opacity-0 group-hover/level:opacity-100 transition-opacity font-sans">COPIAR</span>
                                                         </span>
                                                     </div>
@@ -527,7 +527,7 @@ export default function OpportunitiesScanner() {
                                                         className="text-neon-green font-bold cursor-pointer hover:text-neon-cyan flex items-center gap-1.5 active:scale-95 transition-all select-all"
                                                         title="Haz clic para copiar TP3"
                                                     >
-                                                        <span>${formatCurrency(opp.tp3)}</span>
+                                                        <span>{formatCurrency(opp.tp3)}</span>
                                                         <span id={`copy-tp3-${assetKey}`} className="text-[7px] text-white/20 border border-white/10 px-1 py-0.5 rounded opacity-0 group-hover/level:opacity-100 transition-opacity font-sans">COPIAR</span>
                                                     </span>
                                                 </div>
