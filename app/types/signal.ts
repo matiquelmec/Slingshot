@@ -1,5 +1,25 @@
 // app/types/signal.ts
 
+export type AccountProfileType = 'PERSONAL_250K' | 'FTMO_100K' | 'FTMO_200K' | 'CUSTOM';
+export type FtmoPhase = 'PHASE_1' | 'PHASE_2' | 'FUNDED';
+
+export interface AccountProfileConfig {
+    id: AccountProfileType;
+    name: string;
+    accountSize: number;
+    riskPct: number;
+    riskUsd: number;
+    platform: 'BITUNIX' | 'MT5';
+    isFtmo: boolean;
+    phase?: FtmoPhase;
+    targetProfitPct?: number;
+    targetProfitUsd?: number;
+    maxDailyLossPct?: number;
+    maxDailyLossUsd?: number;
+    maxTotalLossPct?: number;
+    maxTotalLossUsd?: number;
+}
+
 export interface AIAudit {
     approved: boolean;
     ai_reasoning: string;

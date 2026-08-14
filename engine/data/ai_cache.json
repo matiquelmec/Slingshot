@@ -238,5 +238,13 @@
   "a4a076fcb0d49c36e042fe64bbe97622": {
     "price": 0.0,
     "advice": "{\n  \"verdict\": \"SIDEWAYS\",\n   \"threat\": \"LOW\",\n   \"logic\": \"Neutral en 1m\"\n}"
+  },
+  "2795278a10a0c2b53101c864fffd0100": {
+    "price": 0.0,
+    "advice": "{\n  \"verdict\": \"SIDEWAYS\",\n   \"threat\": \"LOW\",\n   \"logic\": \"Rango Neutral\"\n}"
+  },
+  "1d471ec0104dde27549a56e4d1f5223f": {
+    "price": 0.0,
+    "advice": "{\n  \"verdict\": \"SIDEWAYS\",\n   \"threat\": \"LOW\",\n   \"logic\": \"Rango Neutral\"\n}"
   }
 }

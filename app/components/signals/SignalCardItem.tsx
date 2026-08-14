@@ -2,7 +2,7 @@
 
 import React, { useMemo } from 'react';
 import { motion } from 'framer-motion';
-import { Signal } from '../../types/signal';
+import { Signal, AccountProfileConfig } from '../../types/signal';
 import { useTelemetryStore } from '../../store/telemetryStore';
 import { getSignalLifecycle, getSignalStyle } from '../../utils/signalLogic';
 import { formatCurrency } from '../../utils/formatters';
@@ -10,6 +10,7 @@ import { formatCurrency } from '../../utils/formatters';
 interface SignalCardItemProps {
     signal: Signal;
     currentPrice: number | null;
+    profileConfig?: AccountProfileConfig;
 }
 
 const formatTime = (ts: any) => {
@@ -69,11 +70,11 @@ const getStatusType = (status: string): 'success' | 'warning' | 'info' => {
     return 'info';
 };
 
-const SignalCardItem: React.FC<SignalCardItemProps> = ({ signal, currentPrice }) => {
+const SignalCardItem: React.FC<SignalCardItemProps> = ({ signal, currentPrice, profileConfig }) => {
     // Consumimos el mapa de precios globales para hidratación específica por activo (v5.8.0)
     const latestPrices = useTelemetryStore(state => state.latestPrices);
     const effectivePrice = useMemo(() => {
-        return latestPrices[signal.asset] || currentPrice;
+        return latestPrices[signal.asset || ''] || currentPrice;
     }, [latestPrices, signal.asset, currentPrice]);
 
     // Memoizamos fuertemente el ciclo de vida. Solo recalcula si el effectivePrice hace que evalúe distinto,
@@ -322,38 +323,58 @@ const SignalCardItem: React.FC<SignalCardItemProps> = ({ signal, currentPrice })
                 ))}
             </div>
 
-            {/* ── Fila 5: Ejecución Institucional (MT5 / Bitunix) ── */}
+            {/* ── Fila 5: Ejecución Institucional Dinámica (MT5 / Bitunix) ── */}
             <div className="flex flex-col gap-2 mb-2">
-                {/* Panel FTMO */}
-                {signal.ftmo_order && (
-                    <div className="px-2 py-2 bg-gradient-to-r from-neon-cyan/10 to-transparent rounded border border-neon-cyan/20 text-[9px] font-mono shadow-[inset_0_0_10px_rgba(0,229,255,0.05)]">
+                {/* Panel FTMO Dinámico */}
+                {(profileConfig?.isFtmo || signal.ftmo_order) && (
+                    <div className="px-2.5 py-2 bg-gradient-to-r from-neon-green/10 via-neon-cyan/5 to-transparent rounded-lg border border-neon-green/30 text-[9px] font-mono shadow-[inset_0_0_12px_rgba(16,185,129,0.08)]">
                         <div className="flex items-center justify-between mb-1.5">
-                            <span className="text-neon-cyan font-black tracking-widest uppercase flex items-center gap-1.5">
-                            <span className="w-1.5 h-1.5 bg-neon-cyan rounded-full animate-pulse" />
-                            EJECUCIÓN FTMO (MT5)
+                            <span className="text-neon-green font-black tracking-widest uppercase flex items-center gap-1.5">
+                                <span className="w-1.5 h-1.5 bg-neon-green rounded-full animate-pulse" />
+                                🎯 EJECUCIÓN FTMO (MT5 / cTrader)
                             </span>
-                            <span className="text-white/40 text-[7px]">$100K FUNDING</span>
+                            <button
+                                onClick={() => {
+                                    const action = signal.type.toLowerCase().includes('long') ? 'BUY LIMIT' : 'SELL LIMIT';
+                                    const sym = (signal.asset || 'BTCUSDT').replace('USDT', 'USD');
+                                    const riskAmt = profileConfig?.riskUsd || 750;
+                                    const dist = Math.abs((signal.price || 0) - (signal.stop_loss || 0));
+                                    const lots = dist > 0 ? (riskAmt / dist) : 1.0;
+                                    const text = `[FTMO MT5] ${action} ${sym} @ ${signal.price} | LOTES: ${lots.toFixed(2)} | SL: ${signal.stop_loss} | TP1: ${signal.tp1 || '---'} | TP3: ${signal.tp3 || signal.take_profit_3r || '---'}`;
+                                    navigator.clipboard.writeText(text);
+                                    alert(`✅ Orden FTMO MT5 copiada:\n${text}`);
+                                }}
+                                className="px-2 py-0.5 rounded bg-neon-green/20 hover:bg-neon-green/30 text-neon-green border border-neon-green/40 text-[8px] font-mono font-black transition-all flex items-center gap-1 cursor-pointer"
+                            >
+                                📋 COPIAR ORDEN MT5
+                            </button>
                         </div>
-                        <div className="grid grid-cols-2 gap-x-4 gap-y-1.5">
-                            <div className="flex justify-between items-center border-b border-white/5 pb-1">
-                                <span className="text-white/30 uppercase text-[7.5px]">Symbol:</span>
-                                <span className="text-white font-bold">{signal.ftmo_order.symbol}</span>
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 bg-black/40 p-1.5 rounded border border-white/5">
+                            <div className="flex flex-col">
+                                <span className="text-white/40 uppercase text-[7px]">Símbolo MT5:</span>
+                                <span className="text-white font-bold">{(signal.asset || 'BTCUSDT').replace('USDT', 'USD')}</span>
                             </div>
-                            <div className="flex justify-between items-center border-b border-white/5 pb-1">
-                                <span className="text-white/30 uppercase text-[7.5px]">Volume:</span>
-                                <span className="text-neon-cyan font-black tracking-tighter text-[11px] bg-neon-cyan/10 px-1 rounded">
-                                    {signal.ftmo_order.volume.toFixed(2)} Lots
+                            <div className="flex flex-col">
+                                <span className="text-white/40 uppercase text-[7px]">Lotes Sugeridos:</span>
+                                <span className="text-neon-green font-black text-[12px]">
+                                    {(() => {
+                                        const riskAmt = profileConfig?.riskUsd || 750;
+                                        const dist = Math.abs((signal.price || 0) - (signal.stop_loss || 0));
+                                        return dist > 0 ? (riskAmt / dist).toFixed(2) : '1.00';
+                                    })()} Lots
                                 </span>
                             </div>
-                            <div className="flex justify-between items-center border-b border-white/5 pb-1">
-                                <span className="text-white/30 uppercase text-[7.5px]">Mode:</span>
-                                <span className={signal.ftmo_order.action === 'BUY' ? 'text-neon-green font-bold' : 'text-neon-red font-bold'}>
-                                    {signal.ftmo_order.action} LIMIT
+                            <div className="flex flex-col">
+                                <span className="text-white/40 uppercase text-[7px]">Riesgo en Cuenta:</span>
+                                <span className="text-neon-cyan font-bold">
+                                    ${profileConfig?.riskUsd || 750} USD ({profileConfig?.riskPct || 0.75}%)
                                 </span>
                             </div>
-                            <div className="flex justify-between items-center border-b border-white/5 pb-1">
-                                <span className="text-white/30 uppercase text-[7.5px]">Magic ID:</span>
-                                <span className="text-white/60">{signal.ftmo_order.magic}</span>
+                            <div className="flex flex-col">
+                                <span className="text-white/40 uppercase text-[7px]">Tipo de Orden:</span>
+                                <span className={signal.type.toLowerCase().includes('long') ? 'text-neon-green font-black' : 'text-red-400 font-black'}>
+                                    {signal.type.toLowerCase().includes('long') ? 'BUY LIMIT' : 'SELL LIMIT'}
+                                </span>
                             </div>
                         </div>
                     </div>

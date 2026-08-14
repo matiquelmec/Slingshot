@@ -15,6 +15,9 @@ import MarketContextPanel from './MarketContextPanel';
 import AutonomousAdvisor from './AutonomousAdvisor';
 import SignalCardItem from './SignalCardItem';
 import OnChainMetricsPanel from './OnChainMetricsPanel';
+import { AccountProfileSelector, PROFILES_CONFIG } from './AccountProfileSelector';
+import { FtmoShieldWidget } from './FtmoShieldWidget';
+import { AccountProfileType, FtmoPhase } from '../../types/signal';
 
 export default function SignalTerminal() {
     const searchParams = useSearchParams();
@@ -39,6 +42,10 @@ export default function SignalTerminal() {
 
     const [isLoadingSignals, setIsLoadingSignals] = React.useState(true);
     const [hideBlocked, setHideBlocked] = React.useState(true);
+    const [accountProfile, setAccountProfile] = React.useState<AccountProfileType>('FTMO_100K');
+    const [ftmoPhase, setFtmoPhase] = React.useState<FtmoPhase>('PHASE_1');
+
+    const activeProfileConfig = PROFILES_CONFIG[accountProfile](ftmoPhase);
 
     useEffect(() => {
         const symbol = searchParams.get('symbol');
@@ -217,7 +224,24 @@ export default function SignalTerminal() {
                     />
                 </div>
 
-                {/* 4. SIGNAL AUDIT FEED (Aprobadas + Bloqueadas en tiempo real) */}
+                {/* 4. SELECTOR DE PERFIL DE CUENTA & ESCUDO FTMO */}
+                <div className="flex-none p-2 flex flex-col gap-2 border-b border-white/5 bg-black/30">
+                    <AccountProfileSelector
+                        currentProfile={accountProfile}
+                        currentPhase={ftmoPhase}
+                        onProfileChange={(p) => setAccountProfile(p)}
+                        onPhaseChange={(ph) => setFtmoPhase(ph)}
+                    />
+                    {activeProfileConfig.isFtmo && (
+                        <FtmoShieldWidget
+                            config={activeProfileConfig}
+                            currentProfitUsd={0}
+                            dailyLossUsd={0}
+                        />
+                    )}
+                </div>
+
+                {/* 5. SIGNAL AUDIT FEED (Aprobadas + Bloqueadas en tiempo real) */}
                 <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar p-2">
                     {isLoadingSignals && displaySignals.length === 0 ? (
                         <div className="h-full flex items-center justify-center text-neon-cyan/20 animate-pulse text-[10px] font-mono tracking-widest">
@@ -238,6 +262,7 @@ export default function SignalTerminal() {
                                         key={sig.id || `audited-${sig.timestamp}-${sig.asset}`}
                                         signal={sig}
                                         currentPrice={currentPrice_live}
+                                        profileConfig={activeProfileConfig}
                                     />
                                 ))}
                             </AnimatePresence>
