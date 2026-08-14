@@ -6,6 +6,7 @@ import { Signal, AccountProfileConfig } from '../../types/signal';
 import { useTelemetryStore } from '../../store/telemetryStore';
 import { getSignalLifecycle, getSignalStyle } from '../../utils/signalLogic';
 import { formatCurrency } from '../../utils/formatters';
+import { calculateMt5Lots } from '../../utils/ftmoSpecs';
 
 interface SignalCardItemProps {
     signal: Signal;
@@ -341,7 +342,7 @@ const SignalCardItem: React.FC<SignalCardItemProps> = ({ signal, currentPrice, p
                                     const sym = (signal.asset || 'BTCUSDT').replace('USDT', 'USD');
                                     const riskAmt = profileConfig?.riskUsd || 750;
                                     const dist = Math.abs((signal.price || 0) - (signal.stop_loss || 0));
-                                    const lots = dist > 0 ? (riskAmt / dist) : 1.0;
+                                    const lots = calculateMt5Lots(signal.asset || 'BTCUSDT', riskAmt, dist);
                                     const text = `[FTMO MT5] ${action} ${sym} @ ${signal.price} | LOTES: ${lots.toFixed(2)} | SL: ${signal.stop_loss} | TP1: ${signal.tp1 || '---'} | TP3: ${signal.tp3 || signal.take_profit_3r || '---'}`;
                                     navigator.clipboard.writeText(text);
                                     setIsCopied(true);
@@ -367,7 +368,7 @@ const SignalCardItem: React.FC<SignalCardItemProps> = ({ signal, currentPrice, p
                                     {(() => {
                                         const riskAmt = profileConfig?.riskUsd || 750;
                                         const dist = Math.abs((signal.price || 0) - (signal.stop_loss || 0));
-                                        return dist > 0 ? (riskAmt / dist).toFixed(2) : '1.00';
+                                        return calculateMt5Lots(signal.asset || 'BTCUSDT', riskAmt, dist).toFixed(2);
                                     })()} Lots
                                 </span>
                             </div>

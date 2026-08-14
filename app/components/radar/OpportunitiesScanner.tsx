@@ -7,6 +7,7 @@ import { formatCurrency } from '../../utils/formatters';
 import { AccountProfileSelector, PROFILES_CONFIG } from '../signals/AccountProfileSelector';
 import { FtmoShieldWidget } from '../signals/FtmoShieldWidget';
 import { AccountProfileType, FtmoPhase } from '../../types/signal';
+import { calculateMt5Lots } from '../../utils/ftmoSpecs';
 
 interface ChecklistItem {
     factor: string;
@@ -540,8 +541,8 @@ export default function OpportunitiesScanner() {
                                                             {(() => {
                                                                 const risk = activeProfileConfig.riskUsd;
                                                                 const dist = Math.abs(opp.price - opp.stop_loss);
-                                                                const lots = dist > 0 ? (risk / dist).toFixed(2) : '1.00';
-                                                                return activeProfileConfig.isFtmo ? `${lots} Lots` : `$${formatCurrency(opp.position_size_usdt || 12500)} USDT`;
+                                                                const lots = calculateMt5Lots(opp.asset, risk, dist);
+                                                                return activeProfileConfig.isFtmo ? `${lots.toFixed(2)} Lots` : `$${formatCurrency(opp.position_size_usdt || 12500)} USDT`;
                                                             })()}
                                                         </span>
                                                     </div>
@@ -555,8 +556,8 @@ export default function OpportunitiesScanner() {
                                                             const sym = opp.asset.replace('USDT', 'USD');
                                                             const risk = activeProfileConfig.riskUsd;
                                                             const dist = Math.abs(opp.price - opp.stop_loss);
-                                                            const lots = dist > 0 ? (risk / dist).toFixed(2) : '1.00';
-                                                            const text = `[${activeProfileConfig.isFtmo ? 'FTMO MT5' : 'BITUNIX'}] ${action} ${sym} @ ${opp.price} | LOTES: ${lots} | SL: ${opp.stop_loss} | TP1: ${opp.tp1} | TP3: ${opp.tp3}`;
+                                                            const lots = calculateMt5Lots(opp.asset, risk, dist);
+                                                            const text = `[${activeProfileConfig.isFtmo ? 'FTMO MT5' : 'BITUNIX'}] ${action} ${sym} @ ${opp.price} | LOTES: ${lots.toFixed(2)} | SL: ${opp.stop_loss} | TP1: ${opp.tp1} | TP3: ${opp.tp3}`;
                                                             navigator.clipboard.writeText(text);
                                                             setCopiedAsset(assetKey);
                                                             setTimeout(() => setCopiedAsset(null), 2000);

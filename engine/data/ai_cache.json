@@ -250,5 +250,9 @@
   "4876ac8d74e41a170a160d76999e04fa": {
     "price": 0.0,
     "advice": "{\n  \"verdict\": \"SIDEWAYS\",\n   \"threat\": \"LOW\",\n   \"logic\": \"Rango en 1m\"\n}"
+  },
+  "ec522b4b0c5832fd546136b365240fc4": {
+    "price": 0.0,
+    "advice": "{\n  \"verdict\": \"SIDEWAYS\",\n   \"threat\": \"LOW\",\n   \"logic\": \"Rango en 15m\"\n}"
   }
 }
