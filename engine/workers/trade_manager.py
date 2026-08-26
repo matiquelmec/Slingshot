@@ -426,9 +426,9 @@ class TradeManager:
         for pos in positions:
             sym = pos.get("symbol", "UNKNOWN")
             side = "LONG" if pos.get("side") in ("BUY", "LONG", "1") else "SHORT"
-            entry_price = float(pos.get("entryPrice") or pos.get("avgPrice") or 0.0)
-            cur_price = float(pos.get("lastPrice") or pos.get("markPrice") or await bitunix.get_ticker_price(sym))
-            cur_sl = float(pos.get("slPrice") or 0.0)
+            entry_price = float(pos.get("avgOpenPrice") or pos.get("entryPrice") or pos.get("avgPrice") or 0.0)
+            cur_price = float(pos.get("lastPrice") or pos.get("markPrice") or (await bitunix.get_ticker_price(sym)))
+            cur_sl = float(pos.get("slPrice") or pos.get("stopLoss") or 0.0)
             pos_id = str(pos.get("positionId") or pos.get("id") or "")
             
             if entry_price <= 0 or cur_price <= 0:
@@ -451,8 +451,12 @@ class TradeManager:
                 # Disparar Fast BE
                 new_sl = round(entry_price, 4)
                 cur_tp = float(pos.get("tpPrice") or 0.0)
-                if cur_tp <= 0:
-                    cur_tp = round(entry_price + (sl_dist * 1.3) if side == "LONG" else entry_price - (sl_dist * 1.3), 2)
+                if side == "LONG":
+                    if cur_tp <= cur_price:
+                        cur_tp = round(max(cur_price * 1.02, entry_price + (sl_dist * 2.5)), 4)
+                else:  # SHORT
+                    if cur_tp <= 0 or cur_tp >= cur_price:
+                        cur_tp = round(min(cur_price * 0.98, entry_price - (sl_dist * 2.5)), 4)
                 
                 await bitunix.modify_position_tpsl(symbol=sym, position_id=pos_id, sl_price=new_sl, tp_price=cur_tp)
                 action_taken = f"SL_MOVIDO_A_BE (${new_sl})"
