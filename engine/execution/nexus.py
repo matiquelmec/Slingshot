@@ -373,19 +373,30 @@ class NexusNode:
                             existing_close_orders = []
 
                         if not existing_close_orders:
-                            f1 = round(qty * 0.60, 4)
-                            f2 = round(qty * 0.20, 4)
-                            f3 = round(qty - f1 - f2, 4)
-                            tps = [(tp1, f1, "TP1"), (tp2, f2, "TP2"), (tp3, f3, "TP3")]
+                            # Formatear decimales según activo
+                            p_dec = 4 if tp1 < 10 else 2
+                            q_dec = 0 if qty >= 10 else (2 if qty >= 1 else 4)
+                            
+                            if q_dec == 0:
+                                f1 = int(round(qty * 0.60))
+                                f2 = int(round(qty * 0.20))
+                                f3 = int(qty - f1 - f2)
+                            else:
+                                f1 = round(qty * 0.60, q_dec)
+                                f2 = round(qty * 0.20, q_dec)
+                                f3 = round(qty - f1 - f2, q_dec)
+
+                            tps = [(tp1, f1, "TP1 (60%)"), (tp2, f2, "TP2 (20%)"), (tp3, f3, "TP3 (20%)")]
+                            close_side = "SELL" if side == "LONG" else "BUY"
 
                             for tp_val, tp_qty, label in tps:
-                                if tp_qty <= 0:
+                                if tp_qty <= 0 or tp_val <= 0:
                                     continue
                                 tp_payload = {
                                     "symbol": symbol,
-                                    "qty": str(tp_qty),
-                                    "price": str(round(tp_val, 2)),
-                                    "side": "BUY" if side == "LONG" else "SELL",
+                                    "qty": str(int(tp_qty) if q_dec == 0 else tp_qty),
+                                    "price": str(round(tp_val, p_dec)),
+                                    "side": close_side,
                                     "tradeSide": "CLOSE",
                                     "orderType": "LIMIT",
                                     "effect": "GTC",
@@ -394,7 +405,7 @@ class NexusNode:
                                 tp_res = await self.executor._request("POST", "/api/v1/futures/trade/place_order", json_body=tp_payload)
                                 if tp_res.get("code") == 0:
                                     tp_order_id = tp_res.get("data", {}).get("orderId")
-                                    logger.info(f"🎯 [NEXUS SYNC] Orden de {label} límite colocada a ${tp_val:.2f} | ID: {tp_order_id}")
+                                    logger.info(f"🎯 [NEXUS SYNC] Orden de {label} límite colocada a ${tp_val:.{p_dec}f} ({tp_qty} unidades) | ID: {tp_order_id}")
                                     protection_ids.append(tp_order_id)
                                 else:
                                     logger.error(f"❌ [NEXUS SYNC] Error al colocar {label}: {tp_res.get('msg')}")
