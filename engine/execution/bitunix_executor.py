@@ -249,7 +249,8 @@ class BitunixExecutor:
         Usado por el Escáner SMC para programar entradas pasivas OTE (61.8% / Golden Pocket).
         """
         symbol = signal.get('asset', signal.get('symbol', 'BTCUSDT')).replace('/', '').upper()
-        side = 'BUY' if 'LONG' in str(signal.get('type', signal.get('direction', 'LONG'))).upper() else 'SELL'
+        raw_side = str(signal.get('signal_type', signal.get('direction', signal.get('type', 'LONG')))).upper()
+        side = 'BUY' if 'LONG' in raw_side or 'BUY' in raw_side else 'SELL'
         entry_price = float(signal.get('price', 0.0))
         stop_loss = float(signal.get('stop_loss', 0.0))
         amount_usd = float(signal.get('position_size', signal.get('position_size_usdt', 10.0)))
@@ -270,11 +271,14 @@ class BitunixExecutor:
                 "marginCoin": "USDT"
             })
 
-            # 2. Calcular cantidad nominal ajustada
+            # 2. Calcular cantidad nominal ajustada y precisión dinámica
             nominal_usd = amount_usd * leverage
-            decimals = 4 if entry_price < 10.0 else 2
-            qty = str(round(nominal_usd / entry_price, 4))
-            price_str = f"{entry_price:.{decimals}f}"
+            raw_qty = nominal_usd / entry_price
+            qty_decimals = 0 if raw_qty >= 100 else 2
+            price_decimals = 4 if entry_price < 10.0 else 2
+
+            qty = str(int(raw_qty)) if qty_decimals == 0 else str(round(raw_qty, 2))
+            price_str = f"{entry_price:.{price_decimals}f}"
 
             # 3. Payload orden límite en Bitunix
             order_payload = {
@@ -287,7 +291,7 @@ class BitunixExecutor:
                 "effect": "GTC"
             }
             if stop_loss > 0:
-                order_payload["slPrice"] = f"{stop_loss:.{decimals}f}"
+                order_payload["slPrice"] = f"{stop_loss:.{price_decimals}f}"
                 order_payload["slStopType"] = "LAST_PRICE"
                 order_payload["slOrderType"] = "MARKET"
 
