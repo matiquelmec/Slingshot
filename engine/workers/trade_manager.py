@@ -441,15 +441,30 @@ class TradeManager:
             # Ganancia en unidades R
             r_profit = (cur_price - entry_price) / sl_dist if side == "LONG" else (entry_price - cur_price) / sl_dist
             
-            # ¿Avanzó >= +1.0R y SL aún no está protegido a entrada?
             sl_at_be = (side == "LONG" and cur_sl >= entry_price * 0.999) or (side == "SHORT" and cur_sl > 0 and cur_sl <= entry_price * 1.001)
-            
             status_msg = "EN_CURSO"
             action_taken = "NINGUNA"
 
-            if r_profit >= 1.0 and not sl_at_be:
-                # Disparar Fast BE
-                new_sl = round(entry_price, 4)
+            # Determinar nivel de protección según R alcanzado
+            target_sl = None
+            if r_profit >= 2.0:
+                # Tier 2 (Trailing Profit Lock): asegurar +1.2R de ganancia garantizada en verde
+                profit_buffer = sl_dist * 1.2
+                target_sl = round(entry_price + profit_buffer, 4) if side == "LONG" else round(entry_price - profit_buffer, 4)
+                status_msg = "PROTEGIDO_TRAILING"
+            elif r_profit >= 1.0:
+                # Tier 1 (Fast Breakeven): asegurar $0.00 de pérdida
+                target_sl = round(entry_price, 4)
+                status_msg = "PROTEGIDO_FAST_BE"
+
+            should_update_sl = False
+            if target_sl is not None:
+                if side == "LONG" and (cur_sl <= 0 or target_sl > cur_sl * 1.0005):
+                    should_update_sl = True
+                elif side == "SHORT" and (cur_sl <= 0 or target_sl < cur_sl * 0.9995):
+                    should_update_sl = True
+
+            if should_update_sl:
                 cur_tp = float(pos.get("tpPrice") or 0.0)
                 if side == "LONG":
                     if cur_tp <= cur_price:
@@ -458,12 +473,11 @@ class TradeManager:
                     if cur_tp <= 0 or cur_tp >= cur_price:
                         cur_tp = round(min(cur_price * 0.98, entry_price - (sl_dist * 2.5)), 4)
                 
-                await bitunix.modify_position_tpsl(symbol=sym, position_id=pos_id, sl_price=new_sl, tp_price=cur_tp)
-                action_taken = f"SL_MOVIDO_A_BE (${new_sl})"
-                status_msg = "PROTEGIDO_FAST_BE"
-                logger.info(f"🛡️ [TRADE_MANAGER] Posición {sym} {side} (+{r_profit:.2f}R) protegida a Breakeven (${new_sl}) con TP (${cur_tp}).")
+                await bitunix.modify_position_tpsl(symbol=sym, position_id=pos_id, sl_price=target_sl, tp_price=cur_tp)
+                action_taken = f"SL_ACTUALIZADO (${target_sl})"
+                logger.info(f"🛡️ [TRADE_MANAGER] Posición {sym} {side} (+{r_profit:.2f}R) protegida con SL=${target_sl} (TP=${cur_tp}).")
             elif sl_at_be:
-                status_msg = "YA_EN_BREAKEVEN"
+                status_msg = "YA_PROTEGIDO"
 
             managed_results.append({
                 "symbol": sym,
