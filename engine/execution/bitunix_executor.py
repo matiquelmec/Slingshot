@@ -484,8 +484,12 @@ class BitunixExecutor:
             if symbol:
                 params["symbol"] = symbol.replace('/', '').upper()
             res = await self._request("GET", "/api/v1/futures/trade/get_pending_orders", params=params)
-            if res.get("code") == 0 and isinstance(res.get("data"), list):
-                return res["data"]
+            if res.get("code") == 0 and res.get("data"):
+                data = res["data"]
+                if isinstance(data, list):
+                    return data
+                elif isinstance(data, dict) and "orderList" in data:
+                    return data["orderList"] or []
         except Exception as e:
             logger.debug(f"[BITUNIX] No se pudieron obtener órdenes pendientes: {e}")
         return []

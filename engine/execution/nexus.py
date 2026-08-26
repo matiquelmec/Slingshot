@@ -281,7 +281,6 @@ class NexusNode:
                         sig = pos_data.get("signal", {})
                         sig["status"] = "CLOSED"
                         await store.save_signal(sig)
-                        from engine.api.registry import registry
                         await registry.broadcast_global({"type": "signal_auditor_update", "data": sig})
 
                 for asset in closed_assets:
