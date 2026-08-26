@@ -211,7 +211,6 @@ class NexusNode:
                         # Actualizar estado e informar al frontend y base de datos
                         sig["status"] = result_str
                         await store.save_signal(sig)
-                        from engine.api.registry import registry
                         await registry.broadcast_global({"type": "signal_auditor_update", "data": sig})
 
                         assets_to_remove.append(asset)
