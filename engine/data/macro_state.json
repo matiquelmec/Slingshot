@@ -10,12 +10,12 @@
   "reason": "Sin datos macro disponibles.",
   "oi_delta_pct": 0.0,
   "dxy_trend": "BULLISH",
-  "dxy_price": 99.04,
+  "dxy_price": 99.01,
   "nasdaq_trend": "BULLISH",
   "nasdaq_change_pct": 0.4,
   "risk_appetite": "RISK_ON",
   "news_sentiment": 0.5,
-  "active_event": "Core PCE Price Index m/m",
-  "last_updated": 1787742465.1160848,
+  "active_event": "",
+  "last_updated": 1787742998.041031,
   "is_stale": false
 }

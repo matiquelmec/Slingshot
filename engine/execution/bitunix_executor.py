@@ -195,10 +195,16 @@ class BitunixExecutor:
                 tp3 = signal.get("tp3") or signal.get("take_profit_3r")
                 
                 if tp1 and tp2 and tp3:
-                    f1 = round(qty_float * 0.60, 4)
-                    f2 = round(qty_float * 0.20, 4)
-                    f3 = round(qty_float - f1 - f2, 4)
-                    
+                    # Determinar precisión de cantidad y precio dinámicamente
+                    qty_decimals = 0 if qty_float >= 100 or "." not in str(qty) else 2
+                    price_decimals = 4 if float(entry_price) < 10.0 else 2
+
+                    f1 = round(qty_float * 0.60, qty_decimals)
+                    f2 = round(qty_float * 0.20, qty_decimals)
+                    f3 = round(qty_float - f1 - f2, qty_decimals)
+                    if qty_decimals == 0:
+                        f1, f2, f3 = int(f1), int(f2), int(f3)
+
                     tps = [(tp1, f1, "TP1"), (tp2, f2, "TP2"), (tp3, f3, "TP3")]
                     for tp_price, tp_qty, label in tps:
                         if tp_qty <= 0:
@@ -206,8 +212,8 @@ class BitunixExecutor:
                         tp_payload = {
                             "symbol": symbol,
                             "qty": str(tp_qty),
-                            "price": str(round(float(tp_price), 2)),
-                            "side": "BUY" if side == "BUY" else "SELL",
+                            "price": f"{float(tp_price):.{price_decimals}f}",
+                            "side": close_side,
                             "tradeSide": "CLOSE",
                             "orderType": "LIMIT",
                             "effect": "GTC",
