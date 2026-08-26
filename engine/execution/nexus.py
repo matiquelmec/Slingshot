@@ -531,6 +531,35 @@ class NexusNode:
         except Exception as e:
             logger.error(f"❌ [NEXUS AUTO-LIMIT] Error colocando orden en {asset}: {e}")
 
+    def remove_pending_limit_symbol(self, symbol: str):
+        """Libera el activo del conjunto de órdenes pendientes en memoria."""
+        sym_clean = symbol.replace('/', '').upper()
+        self._pending_limit_symbols.discard(sym_clean)
+
+    async def purge_all_pending_limit_orders(self, reason: str = "SLOT_OVERLOAD"):
+        """
+        [SAFETY PURGE] Cancela todas las órdenes límite pendientes en Bitunix
+        cuando se alcanza el límite de riesgo o por invalidación global.
+        """
+        logger.warning(f"🛡️ [NEXUS PURGE] Iniciando purga de órdenes límite pendientes. Razón: {reason}")
+        try:
+            pending_orders = await self.executor.get_pending_orders()
+            # Filtrar solo órdenes que abren posiciones (tradeSide == 'OPEN' o reduceOnly == False)
+            open_limits = [
+                o for o in pending_orders 
+                if (o.get("tradeSide") == "OPEN" or not o.get("reduceOnly")) and o.get("orderType") == "LIMIT"
+            ]
+            
+            for o in open_limits:
+                sym = o.get("symbol")
+                oid = o.get("orderId")
+                if sym and oid:
+                    await self.executor.cancel_limit_order(sym, oid)
+                    self.remove_pending_limit_symbol(sym)
+                    logger.info(f"🧹 [NEXUS PURGE] Orden límite sobrante {oid} ({sym}) cancelada por seguridad ({reason}).")
+        except Exception as e:
+            logger.error(f"❌ [NEXUS PURGE] Error en purga de órdenes límite: {e}")
+
     def get_active_positions(self):
         return self._active_positions
 

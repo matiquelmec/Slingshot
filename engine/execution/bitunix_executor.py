@@ -84,16 +84,31 @@ class BitunixExecutor:
             return {"code": -1, "msg": str(e), "data": {}}
 
     async def get_ticker_price(self, symbol: str) -> float:
-        """Obtiene el último precio de mercado para un símbolo en Bitunix."""
+        """Obtiene el último precio de mercado para un símbolo en Bitunix (con fallback institucional)."""
         sym = symbol.replace('/', '').upper()
         try:
             ticker_res = await self._request("GET", "/api/v1/futures/market/tickers", params={"symbols": sym})
             if ticker_res.get("code") == 0 and ticker_res.get("data"):
                 data = ticker_res.get("data")
                 if isinstance(data, list) and len(data) > 0:
-                    return float(data[0].get("lastPrice", 0.0))
+                    p = float(data[0].get("lastPrice", 0.0))
+                    if p > 0: return p
+            # Fallback 1: ticker individual Bitunix
+            ticker_single = await self._request("GET", "/api/v1/futures/market/ticker", params={"symbol": sym})
+            if ticker_single.get("code") == 0 and ticker_single.get("data"):
+                p = float(ticker_single["data"].get("lastPrice", 0.0))
+                if p > 0: return p
         except Exception as e:
-            logger.error(f"❌ Error al obtener precio del ticker para {sym}: {e}")
+            logger.debug(f"⚠️ Error consultando precio Bitunix para {sym}: {e}")
+        
+        # Fallback 2: Binance market data para cero latencia
+        try:
+            from engine.indicators.data_utils import fetch_binance_history
+            candles = await fetch_binance_history(sym, "1m", limit=2)
+            if candles:
+                return float(candles[-1]["data"]["close"])
+        except Exception:
+            pass
         return 0.0
 
     async def execute_iceberg_signal(self, signal: Dict[str, Any], num_slices: int = 3, slice_delay_ms: float = 150) -> Dict[str, Any]:
@@ -494,6 +509,27 @@ class BitunixExecutor:
             logger.debug(f"[BITUNIX] No se pudieron obtener órdenes pendientes: {e}")
         return []
 
+    async def cancel_limit_order(self, symbol: str, order_id: str) -> bool:
+        """Cancela una orden límite específica en Bitunix."""
+        if self.dry_run:
+            logger.info(f"🧪 [BITUNIX DRY RUN] Cancelando orden límite {order_id} en {symbol}")
+            return True
+        try:
+            sym = symbol.replace('/', '').upper()
+            res = await self._request("POST", "/api/v1/futures/trade/cancel_orders", json_body={
+                "symbol": sym,
+                "orderList": [{"orderId": str(order_id)}]
+            })
+            if res.get("code") == 0:
+                logger.info(f"🗑️ [BITUNIX] Orden límite {order_id} cancelada exitosamente en {sym}.")
+                return True
+            else:
+                logger.warning(f"⚠️ [BITUNIX] No se pudo cancelar orden {order_id} en {sym}: {res.get('msg')}")
+                return False
+        except Exception as e:
+            logger.error(f"❌ [BITUNIX] Error cancelando orden {order_id} en {sym}: {e}")
+            return False
+
     async def get_balance(self) -> float:
         """Obtiene el balance disponible real en USDT de la cuenta."""
         if self.dry_run:
@@ -509,4 +545,5 @@ class BitunixExecutor:
         except Exception as e:
             logger.error(f"❌ Error al obtener balance de Bitunix: {e}")
         return 1000.0
+
 

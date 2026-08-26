@@ -15,6 +15,7 @@ Fases del ciclo de vida de una señal:
 """
 
 import asyncio
+import time
 from typing import List, Dict, Any, Optional
 from engine.core.logger import logger
 from engine.core.store import store
@@ -57,6 +58,8 @@ class TradeManager:
                 await self._process_active_signals()
                 # 2. Sincronizar y proteger posiciones reales en vivo en Bitunix
                 await self.sync_live_bitunix_positions()
+                # 3. Auditar e invalidar órdenes límite huérfanas/riesgosas en Bitunix
+                await self.sync_live_bitunix_pending_orders()
             except Exception as e:
                 logger.error(f"[TRADE_MANAGER] Error en loop: {e}")
             await asyncio.sleep(self.POLL_INTERVAL_SECONDS)
@@ -134,6 +137,8 @@ class TradeManager:
             signal["status"] = "EXPIRED_MISSED"
             signal["rejection_reason"] = f"El precio alcanzó TP1 (${tp1_price:.4f}) sin retroceder al nivel de entrada (${entry_price:.4f}). Setup descartado."
             await store.save_signal(signal)
+            from engine.execution.nexus import nexus
+            nexus.remove_pending_limit_symbol(asset)
             logger.info(f"⏱️ [TRADE_MANAGER] Orden PENDING {asset} EXPIRADA (Objetivo alcanzado sin dar entrada).")
             return
 
@@ -143,6 +148,8 @@ class TradeManager:
             signal["status"] = "INVALIDATED_BROKEN"
             signal["rejection_reason"] = f"Estructura invalidada antes de la activación (SL ${sl_price:.4f} perforado)."
             await store.save_signal(signal)
+            from engine.execution.nexus import nexus
+            nexus.remove_pending_limit_symbol(asset)
             logger.info(f"🛑 [TRADE_MANAGER] Orden PENDING {asset} INVALIDADA (SL roto previo a entrada).")
 
     # ─────────────────────────────────────────────
@@ -484,7 +491,110 @@ class TradeManager:
 
         return managed_results
 
+    async def sync_live_bitunix_pending_orders(self) -> List[Dict[str, Any]]:
+        """
+        [APEX LIMIT SENTINEL v22.0]
+        Audita de forma autónoma todas las órdenes límite pendientes en Bitunix.
+        Ejecuta auto-cancelación inteligente por:
+          1. Objetivo alcanzado sin activación (Missed Target Kill-Switch: precio >= TP1)
+          2. Invalidación previa de estructura (Pre-Entry SL Breach: precio <= SL)
+          3. Expiración de tiempo de vida (TTL > 3h / 10800s desfasado)
+          4. Capacidad máxima de riesgo (Auto-Purge si 4 posiciones en riesgo)
+        """
+        try:
+            from engine.execution.bitunix_executor import BitunixExecutor
+            from engine.execution.nexus import nexus
+            bitunix = BitunixExecutor()
+            
+            # 1. Regla D: Si ya hay 4 posiciones vivas con riesgo, purgar todas las órdenes límite
+            unprotected_risk = nexus.get_unprotected_risk_count()
+            if unprotected_risk >= nexus.MAX_CONCURRENT_POSITIONS:
+                logger.info(f"🛑 [LIMIT SENTINEL] Máximo de {nexus.MAX_CONCURRENT_POSITIONS} operaciones con riesgo alcanzado ({unprotected_risk} en riesgo). Purgando límites sobrantes.")
+                await nexus.purge_all_pending_limit_orders(reason="MAX_4_RISK_SLOTS_REACHED")
+                return []
+
+            pending_orders = await bitunix.get_pending_orders()
+            if not pending_orders:
+                return []
+
+            # Filtrar solo órdenes que abren posiciones (tradeSide == 'OPEN' o reduceOnly == False)
+            open_limits = [
+                o for o in pending_orders 
+                if (o.get("tradeSide") == "OPEN" or not o.get("reduceOnly")) and o.get("orderType") == "LIMIT"
+            ]
+
+            all_opps = store.get_scanner_opportunities("scalp") + store.get_scanner_opportunities("swing")
+            now_ms = time.time() * 1000
+            cancelled_results = []
+
+            for ord_item in open_limits:
+                sym = ord_item.get("symbol", "UNKNOWN")
+                oid = ord_item.get("orderId")
+                side_raw = ord_item.get("side", "BUY").upper()
+                is_long = side_raw in ("BUY", "LONG")
+                entry_price = float(ord_item.get("price") or 0.0)
+                sl_price = float(ord_item.get("slPrice") or 0.0)
+                ctime = float(ord_item.get("ctime") or now_ms)
+                
+                if entry_price <= 0 or not oid:
+                    continue
+
+                cur_price = await bitunix.get_ticker_price(sym)
+                if cur_price <= 0:
+                    continue
+
+                # Buscar TP1 proyectado en el escáner o calcularlo por defecto
+                matching_setup = next((o for o in all_opps if o.get("asset") == sym and ("LONG" if is_long else "SHORT") in str(o.get("direction", "")).upper()), None)
+                if matching_setup:
+                    tp1_target = float(matching_setup.get("tp1") or 0.0)
+                    if sl_price <= 0:
+                        sl_price = float(matching_setup.get("stop_loss") or 0.0)
+                else:
+                    dist_sl = abs(entry_price - sl_price) if sl_price > 0 else entry_price * 0.015
+                    tp1_target = entry_price + (dist_sl * 1.3) if is_long else entry_price - (dist_sl * 1.3)
+
+                cancel_reason = None
+
+                # ── Chequeo 1: Missed Target (El precio tocó TP1 sin llenar la entrada) ──
+                if tp1_target > 0:
+                    if is_long and cur_price >= tp1_target:
+                        cancel_reason = f"MISSED_TARGET (Precio actual ${cur_price:.4f} superó TP1 ${tp1_target:.4f} sin retroceder a entrada ${entry_price:.4f})"
+                    elif not is_long and cur_price <= tp1_target:
+                        cancel_reason = f"MISSED_TARGET (Precio actual ${cur_price:.4f} perforó TP1 ${tp1_target:.4f} sin retroceder a entrada ${entry_price:.4f})"
+
+                # ── Chequeo 2: Pre-Entry SL Breach (El precio rompió el SL antes de llenarse) ──
+                if not cancel_reason and sl_price > 0:
+                    if is_long and cur_price <= (sl_price * 0.9995):
+                        cancel_reason = f"PRE_ENTRY_SL_BREACH (Precio actual ${cur_price:.4f} perforó el Stop Loss ${sl_price:.4f} antes de activar entrada)"
+                    elif not is_long and cur_price >= (sl_price * 1.0005):
+                        cancel_reason = f"PRE_ENTRY_SL_BREACH (Precio actual ${cur_price:.4f} superó el Stop Loss ${sl_price:.4f} antes de activar entrada)"
+
+                # ── Chequeo 3: Expiración TTL (> 3 horas y precio desfasado > 1.5%) ──
+                if not cancel_reason:
+                    age_seconds = (now_ms - ctime) / 1000
+                    price_drift_pct = abs(cur_price - entry_price) / entry_price
+                    if age_seconds > 10800 and price_drift_pct > 0.015:
+                        cancel_reason = f"TTL_EXPIRED (Orden con {age_seconds/3600:.1f}h de antigüedad y precio desfasado {price_drift_pct*100:.1f}%)"
+
+                # Ejecutar auto-cancelación si se disparó alguna regla
+                if cancel_reason:
+                    logger.warning(f"🚫 [LIMIT SENTINEL] Auto-cancelando orden límite {oid} en {sym}: {cancel_reason}")
+                    success = await bitunix.cancel_limit_order(sym, oid)
+                    if success:
+                        nexus.remove_pending_limit_symbol(sym)
+                        cancelled_results.append({
+                            "symbol": sym,
+                            "order_id": oid,
+                            "reason": cancel_reason
+                        })
+
+            return cancelled_results
+        except Exception as e:
+            logger.error(f"❌ [LIMIT SENTINEL] Error en auditoría de órdenes límite: {e}")
+            return []
+
 
 # Singleton Global
 trade_manager = TradeManager()
+
 

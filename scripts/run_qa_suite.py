@@ -16,6 +16,7 @@ ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 MODERN_TEST_FILES = [
     "engine/tests/test_full_engine_autonomy_audit.py",
     "engine/tests/test_live_trade_management.py",
+    "engine/tests/test_intelligent_limit_order_sentinel.py",
     "engine/tests/test_sqlite_vault.py",
     "engine/tests/test_mt5_bridge.py",
     "engine/tests/test_deterministic_pipeline_isolation.py",
@@ -36,7 +37,7 @@ def main():
     
     if result.returncode == 0:
         print("\n" + "="*80)
-        print("✅ CERTIFICACIÓN QA EXITOSA: 26/26 PRUEBAS APROBADAS AL 100%")
+        print("✅ CERTIFICACIÓN QA EXITOSA: 35/35 PRUEBAS APROBADAS AL 100%")
         print("="*80 + "\n")
     else:
         print("\n" + "="*80)
