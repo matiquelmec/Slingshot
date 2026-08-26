@@ -306,33 +306,59 @@ class BitunixExecutor:
     async def modify_position_tpsl(self, symbol: str, position_id: str, sl_price: Optional[float] = None, tp_price: Optional[float] = None) -> bool:
         """
         Modifica el Stop Loss y/o Take Profit de una posicion abierta en Bitunix.
-        Usa el endpoint oficial POST /api/v1/futures/tpsl/position/modify_order.
+        Consulta las órdenes TPSL existentes para pasar el orderId correspondiente de forma atómica.
         """
         sym = symbol.replace('/', '').upper()
         if self.dry_run or (position_id and str(position_id).startswith("dry_")):
             logger.info(f"🧪 [BITUNIX DRY RUN] Modificando TP/SL de posicion para {sym} (PosId: {position_id}) -> TP: {tp_price}, SL: {sl_price}")
             return True
 
-        payload = {
-            "symbol": sym,
-            "positionId": str(position_id)
-        }
-        if sl_price is not None:
-            payload["slPrice"] = str(round(float(sl_price), 2))
-            payload["slStopType"] = "LAST_PRICE"
-        if tp_price is not None:
-            payload["tpPrice"] = str(round(float(tp_price), 2))
-            payload["tpStopType"] = "LAST_PRICE"
+        # 1. Obtener órdenes TPSL existentes para extraer orderId
+        existing_orders = []
+        try:
+            res_orders = await self._request("GET", "/api/v1/futures/tpsl/get_pending_orders", params={"symbol": sym})
+            existing_orders = res_orders.get("data", []) or []
+        except Exception as e:
+            logger.debug(f"[BITUNIX] Error consultando TPSL pendientes: {e}")
 
-        res = await self._request("POST", "/api/v1/futures/tpsl/position/modify_order", json_body=payload)
-        if res.get("code") == 0:
-            logger.info(f"✅ [BITUNIX] TP/SL de posición {sym} modificado con éxito en el exchange. Nuevo SL: ${sl_price}")
-            return True
+        decimals = 4 if sl_price and float(sl_price) < 10.0 else 2
+
+        if existing_orders and isinstance(existing_orders, list):
+            success_any = False
+            for ord_item in existing_orders:
+                order_id = str(ord_item.get("id"))
+                payload = {
+                    "orderId": order_id,
+                    "positionId": str(position_id),
+                    "symbol": sym,
+                }
+                if sl_price is not None:
+                    payload["slPrice"] = f"{float(sl_price):.{decimals}f}"
+                    payload["slStopType"] = "LAST_PRICE"
+                if tp_price is not None:
+                    payload["tpPrice"] = f"{float(tp_price):.{decimals}f}"
+                    payload["tpStopType"] = "LAST_PRICE"
+
+                res = await self._request("POST", "/api/v1/futures/tpsl/position/modify_order", json_body=payload)
+                if res.get("code") == 0:
+                    success_any = True
+                    logger.info(f"✅ [BITUNIX] TP/SL orden {order_id} ({sym}) modificado a SL: ${sl_price}")
+            return success_any
         else:
-            # Fallback a place_order si no existía orden previa
-            logger.warning(f"⚠️ [BITUNIX] modify_order devolvió {res.get('msg')}. Intentando place_position_tpsl...")
-            placed_id = await self.place_position_tpsl(sym, position_id, sl_price, tp_price)
-            return placed_id is not None
+            # Colocar nueva orden de posición
+            payload_new = {
+                "positionId": str(position_id),
+                "symbol": sym,
+            }
+            if sl_price is not None:
+                payload_new["slPrice"] = f"{float(sl_price):.{decimals}f}"
+                payload_new["slStopType"] = "LAST_PRICE"
+            if tp_price is not None:
+                payload_new["tpPrice"] = f"{float(tp_price):.{decimals}f}"
+                payload_new["tpStopType"] = "LAST_PRICE"
+
+            res_plc = await self._request("POST", "/api/v1/futures/tpsl/position/place_order", json_body=payload_new)
+            return res_plc.get("code") == 0
 
     async def update_stop_loss(self, symbol: str, old_order_id: str, new_stop_price: float, amount: float, side: str, position_id: Optional[str] = None, tp_price: Optional[float] = None) -> Optional[str]:
         """
