@@ -313,52 +313,38 @@ class BitunixExecutor:
             logger.info(f"🧪 [BITUNIX DRY RUN] Modificando TP/SL de posicion para {sym} (PosId: {position_id}) -> TP: {tp_price}, SL: {sl_price}")
             return True
 
-        # 1. Obtener órdenes TPSL existentes para extraer orderId
-        existing_orders = []
+        # 1. Obtener y purgar órdenes TPSL desfasadas para evitar desajustes de cantidad
         try:
             res_orders = await self._request("GET", "/api/v1/futures/tpsl/get_pending_orders", params={"symbol": sym})
             existing_orders = res_orders.get("data", []) or []
+            if existing_orders and isinstance(existing_orders, list):
+                for ord_item in existing_orders:
+                    o_id = str(ord_item.get("id"))
+                    await self._request("POST", "/api/v1/futures/tpsl/cancel_order", json_body={"orderId": o_id, "symbol": sym})
         except Exception as e:
-            logger.debug(f"[BITUNIX] Error consultando TPSL pendientes: {e}")
+            logger.debug(f"[BITUNIX] Error purgando TPSL desfasados: {e}")
 
         decimals = 4 if sl_price and float(sl_price) < 10.0 else 2
 
-        if existing_orders and isinstance(existing_orders, list):
-            success_any = False
-            for ord_item in existing_orders:
-                order_id = str(ord_item.get("id"))
-                payload = {
-                    "orderId": order_id,
-                    "positionId": str(position_id),
-                    "symbol": sym,
-                }
-                if sl_price is not None:
-                    payload["slPrice"] = f"{float(sl_price):.{decimals}f}"
-                    payload["slStopType"] = "LAST_PRICE"
-                if tp_price is not None:
-                    payload["tpPrice"] = f"{float(tp_price):.{decimals}f}"
-                    payload["tpStopType"] = "LAST_PRICE"
+        # 2. Colocar orden de posición 100% limpia y sincronizada con el tamaño actual
+        payload_new = {
+            "positionId": str(position_id),
+            "symbol": sym,
+        }
+        if sl_price is not None:
+            payload_new["slPrice"] = f"{float(sl_price):.{decimals}f}"
+            payload_new["slStopType"] = "LAST_PRICE"
+        if tp_price is not None:
+            payload_new["tpPrice"] = f"{float(tp_price):.{decimals}f}"
+            payload_new["tpStopType"] = "LAST_PRICE"
 
-                res = await self._request("POST", "/api/v1/futures/tpsl/position/modify_order", json_body=payload)
-                if res.get("code") == 0:
-                    success_any = True
-                    logger.info(f"✅ [BITUNIX] TP/SL orden {order_id} ({sym}) modificado a SL: ${sl_price}")
-            return success_any
+        res_plc = await self._request("POST", "/api/v1/futures/tpsl/position/place_order", json_body=payload_new)
+        if res_plc.get("code") == 0:
+            logger.info(f"✅ [BITUNIX] Stop Loss de posición {sym} fijado y blindado en ${sl_price}")
+            return True
         else:
-            # Colocar nueva orden de posición
-            payload_new = {
-                "positionId": str(position_id),
-                "symbol": sym,
-            }
-            if sl_price is not None:
-                payload_new["slPrice"] = f"{float(sl_price):.{decimals}f}"
-                payload_new["slStopType"] = "LAST_PRICE"
-            if tp_price is not None:
-                payload_new["tpPrice"] = f"{float(tp_price):.{decimals}f}"
-                payload_new["tpStopType"] = "LAST_PRICE"
-
-            res_plc = await self._request("POST", "/api/v1/futures/tpsl/position/place_order", json_body=payload_new)
-            return res_plc.get("code") == 0
+            logger.warning(f"⚠️ [BITUNIX] Error al colocar TPSL de posición {sym}: {res_plc.get('msg')}")
+            return False
 
     async def update_stop_loss(self, symbol: str, old_order_id: str, new_stop_price: float, amount: float, side: str, position_id: Optional[str] = None, tp_price: Optional[float] = None) -> Optional[str]:
         """
