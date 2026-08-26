@@ -14,10 +14,29 @@ export function getSignalLifecycle(sig: Signal, currentPrice: number | null, now
     const signalType = sig.signal_type || (sig.type?.includes('LONG') ? 'LONG' : 'SHORT');
     const expiryTs = sig.expiry_timestamp ? new Date(sig.expiry_timestamp).getTime() : null;
 
-    // 0. BLOQUEADA POR AUDITORÍA (Risk Manager / Macro / HTF / v13 Intelligence)
-    const validStatuses = ['ACTIVE', 'APPROVED', 'PENDING', 'FILLED', 'CLOSED_TP_MAX', 'STOPPED_OUT'];
+    // 0. BLOQUEADA POR AUDITORÍA / EXPIRACIÓN TÉCNICA
+    const validStatuses = ['ACTIVE', 'APPROVED', 'PENDING', 'FILLED', 'BREAKEVEN', 'TRAILING', 'CLOSED_TP_MAX', 'STOPPED_OUT', 'CLOSED'];
     const isBlocked = sig.status && !validStatuses.includes(sig.status as string);
     if (isBlocked) {
+        if (sig.status === 'EXPIRED_MISSED') {
+            return {
+                status: 'EXPIRADA',
+                label: '⏱️ SETUP EXPIRADO',
+                reason: sig.rejection_reason || 'El precio alcanzó el objetivo sin retroceder al nivel de entrada límite. Setup descartado para evitar persecución.',
+                color: 'text-white/50',
+                bgColor: 'bg-white/[0.03] border-white/10 opacity-70',
+            };
+        }
+        if (sig.status === 'INVALIDATED_BROKEN') {
+            return {
+                status: 'INVALIDADA',
+                label: '🛑 SETUP INVALIDADO',
+                reason: sig.rejection_reason || 'El precio rompió la zona de Stop Loss antes de activar la orden. Tesis cancelada.',
+                color: 'text-rose-400',
+                bgColor: 'bg-rose-500/10 border-rose-500/20 opacity-70',
+            };
+        }
+
         const typeStr = sig.status === 'BLOCKED_BY_MACRO' ? 'MACRO' : 
                         sig.status === 'BLOCKED_BY_HTF' ? 'HTF' : 
                         (sig.status === 'BLOCKED_BY_CONFIDENCE' || sig.status === 'LOW_CONFLUENCE') ? 'Score' :

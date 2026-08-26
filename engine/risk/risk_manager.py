@@ -89,16 +89,29 @@ class RiskManager:
         take_profit = current_price + (risk_dist * 2.0) if signal_type == "LONG" else current_price - (risk_dist * 2.0)
         return stop_loss, take_profit, 2.0
 
-    # --- MÓDULO SIGMA: SINTONIZADOR DE ACTIVOS --------------------------------
+    # --- MÓDULO SIGMA: SINTONIZADOR DE ACTIVOS INSTITUCIONAL v17.0 ---
+    # Mega-Caps (BTC, ETH, SOL, XRP, AVAX, LINK): 1H OTE Swing -> Colchón SL amplio (0.60x - 2.5x ATR)
+    # High-Beta Alts (RENDER, SUI, INJ, NEAR, FET, PAXG): 15M Scalp -> SL Ágil (0.30x - 1.8x ATR)
     ASSET_TUNING = {
-        "BTCUSDT":  {"atr_mult": 1.5, "tp1_ratio": 2.5, "tp1_vol": 0.60, "spread_impact": 0.0002, "min_sl_pct": 0.0, "max_sl_pct": 100.0}, # 0.02% (Alta Liquidez)
-        "ETHUSDT":  {"atr_mult": 3.0, "tp1_ratio": 2.5, "tp1_vol": 0.80, "spread_impact": 0.0003, "min_sl_pct": 1.4, "max_sl_pct": 100.0}, # 0.03% (Sweeps profundos)
-        "SOLUSDT":  {"atr_mult": 3.5, "tp1_ratio": 2.5, "tp1_vol": 0.80, "spread_impact": 0.0008, "min_sl_pct": 0.8, "max_sl_pct": 2.2},  # 0.08% (Volátil - mechas)
-        "XRPUSDT":  {"atr_mult": 2.5, "tp1_ratio": 1.8, "tp1_vol": 0.75, "spread_impact": 0.0005, "min_sl_pct": 0.0, "max_sl_pct": 0.7},  # 0.05% (Precisión quirúrgica)
-        "PAXGUSDT": {"atr_mult": 2.5, "tp1_ratio": 2.5, "tp1_vol": 0.80, "spread_impact": 0.0015, "min_sl_pct": 0.0, "max_sl_pct": 100.0}, # 0.15% (Baja Liquidez/Oro)
-        "XAGUSDT":  {"atr_mult": 2.5, "tp1_ratio": 2.5, "tp1_vol": 0.80, "spread_impact": 0.0015, "min_sl_pct": 0.0, "max_sl_pct": 100.0}, # 0.15% (Plata)
+        # 🏛️ MEGA-CAPS (Intraday Swing 1H - Colchón de Liquidez Institucional)
+        "BTCUSDT":  {"atr_mult": 2.5, "tp1_ratio": 1.3, "tp1_vol": 0.70, "spread_impact": 0.0002, "min_sl_pct": 0.50, "max_sl_pct": 100.0},
+        "ETHUSDT":  {"atr_mult": 2.8, "tp1_ratio": 1.3, "tp1_vol": 0.70, "spread_impact": 0.0003, "min_sl_pct": 0.60, "max_sl_pct": 100.0},
+        "SOLUSDT":  {"atr_mult": 2.8, "tp1_ratio": 1.3, "tp1_vol": 0.70, "spread_impact": 0.0006, "min_sl_pct": 0.70, "max_sl_pct": 100.0},
+        "XRPUSDT":  {"atr_mult": 2.5, "tp1_ratio": 1.3, "tp1_vol": 0.70, "spread_impact": 0.0004, "min_sl_pct": 0.60, "max_sl_pct": 100.0},
+        "AVAXUSDT": {"atr_mult": 2.6, "tp1_ratio": 1.3, "tp1_vol": 0.70, "spread_impact": 0.0005, "min_sl_pct": 0.60, "max_sl_pct": 100.0},
+        "LINKUSDT": {"atr_mult": 2.5, "tp1_ratio": 1.3, "tp1_vol": 0.70, "spread_impact": 0.0005, "min_sl_pct": 0.60, "max_sl_pct": 100.0},
+        
+        # 🚀 HIGH-BETA ALTCOINS & DEFENSIVE (Hyper-Scalp 15M / Momentum Expansivo)
+        "RENDERUSDT":{"atr_mult": 1.8, "tp1_ratio": 1.3, "tp1_vol": 0.70, "spread_impact": 0.0008, "min_sl_pct": 0.35, "max_sl_pct": 100.0},
+        "SUIUSDT":   {"atr_mult": 1.8, "tp1_ratio": 1.3, "tp1_vol": 0.70, "spread_impact": 0.0008, "min_sl_pct": 0.35, "max_sl_pct": 100.0},
+        "INJUSDT":   {"atr_mult": 1.8, "tp1_ratio": 1.3, "tp1_vol": 0.70, "spread_impact": 0.0008, "min_sl_pct": 0.35, "max_sl_pct": 100.0},
+        "NEARUSDT":  {"atr_mult": 1.8, "tp1_ratio": 1.3, "tp1_vol": 0.70, "spread_impact": 0.0008, "min_sl_pct": 0.35, "max_sl_pct": 100.0},
+        "FETUSDT":   {"atr_mult": 1.8, "tp1_ratio": 1.3, "tp1_vol": 0.70, "spread_impact": 0.0008, "min_sl_pct": 0.35, "max_sl_pct": 100.0},
+        "ATOMUSDT":  {"atr_mult": 1.8, "tp1_ratio": 1.3, "tp1_vol": 0.70, "spread_impact": 0.0008, "min_sl_pct": 0.35, "max_sl_pct": 100.0},
+        "BNBUSDT":   {"atr_mult": 2.0, "tp1_ratio": 1.3, "tp1_vol": 0.70, "spread_impact": 0.0004, "min_sl_pct": 0.40, "max_sl_pct": 100.0},
+        "PAXGUSDT":  {"atr_mult": 2.0, "tp1_ratio": 1.3, "tp1_vol": 0.70, "spread_impact": 0.0012, "min_sl_pct": 0.30, "max_sl_pct": 100.0}, # Oro
     }
-    DEFAULT_TUNING = {"atr_mult": 1.8, "tp1_ratio": 1.5, "tp1_vol": 0.50, "spread_impact": 0.0010, "min_sl_pct": 0.0, "max_sl_pct": 100.0} # Default 0.1%
+    DEFAULT_TUNING = {"atr_mult": 2.0, "tp1_ratio": 1.3, "tp1_vol": 0.70, "spread_impact": 0.0008, "min_sl_pct": 0.40, "max_sl_pct": 100.0}
 
     def _adaptive_risk(self, confluence_score: int) -> float:
         """
@@ -336,15 +349,30 @@ class RiskManager:
                 if mid_targets: tp2 = mid_targets[0]
                 else: tp2 = tp1 - (final_risk * 1.5)
                 
-                tp3 = all_targets[-1]
-                if tp3 >= tp2: tp3 = tp2 - (final_risk * 2.0)
+        # Red de Seguridad y Garantía Geométrica Estricta de R:R
+        # LONG:  Entry < BE (+1.0R) < TP1 (+1.3R) < TP2 (+2.2R) < TP3 (+3.5R)
+        # SHORT: Entry > BE (+1.0R) > TP1 (+1.3R) > TP2 (+2.2R) > TP3 (+3.5R)
+        if signal_type == "LONG":
+            calc_tp1 = current_price + (final_risk * 1.3)
+            calc_tp2 = current_price + (final_risk * 2.2)
+            calc_tp3 = current_price + (final_risk * 3.5)
+            
+            # Si el target magnético no respeta la jerarquía matemática, aplicamos los niveles R:R geométricos
+            if tp1 <= current_price or tp1 < calc_tp1: tp1 = calc_tp1
+            if tp2 <= tp1 or tp2 < calc_tp2: tp2 = max(tp2, calc_tp2)
+            if tp3 <= tp2 or tp3 < calc_tp3: tp3 = max(tp3, calc_tp3)
+        else: # SHORT
+            calc_tp1 = current_price - (final_risk * 1.3)
+            calc_tp2 = current_price - (final_risk * 2.2)
+            calc_tp3 = current_price - (final_risk * 3.5)
+            
+            # Si el target magnético no respeta la jerarquía matemática, aplicamos los niveles R:R geométricos
+            if tp1 >= current_price or tp1 > calc_tp1: tp1 = calc_tp1
+            if tp2 >= tp1 or tp2 > calc_tp2: tp2 = min(tp2, calc_tp2)
+            if tp3 >= tp2 or tp3 > calc_tp3: tp3 = min(tp3, calc_tp3)
 
-        # Red de Seguridad Final (Garantizar RR mínimo)
         final_reward = abs(tp1 - current_price)
-        if final_risk > 0 and (final_reward / final_risk) < self.min_rr:
-            tp1 = current_price + (final_risk * self.min_rr) if signal_type == "LONG" else current_price - (final_risk * self.min_rr)
-            tp2 = tp1 + (final_risk * 1.0) if signal_type == "LONG" else tp1 - (final_risk * 1.0)
-            tp3 = tp2 + (final_risk * 2.0) if signal_type == "LONG" else tp2 - (final_risk * 2.0)
+        final_reward_tp3 = abs(tp3 - current_price)
 
         sl_dist_pct = final_risk / current_price if current_price > 0 else 0.01
         pos_size_nominal = risk_amount_usdt / max(0.001, sl_dist_pct)
@@ -388,10 +416,14 @@ class RiskManager:
                     is_in_ote = current_price >= f_val
 
         final_reward_tp3 = abs(tp3 - current_price)
+        # [FAST BREAKEVEN LOCK v17.2] Nivel exacto a +1.0R para blindar la operación a $0 riesgo
+        be_price = current_price + (final_risk * 1.0) if signal_type == "LONG" else current_price - (final_risk * 1.0)
+
         return {
             "entry_price": round(current_price, 5),
             "stop_loss": round(sl, 5),
             "sl_dist_pct": round(sl_dist_pct * 100, 2),
+            "be_price": round(be_price, 5), # Nivel de activación de Breakeven (+1.0R)
             "tp1": round(tp1, 5),
             "tp2": round(tp2, 5),
             "tp3": round(tp3, 5),

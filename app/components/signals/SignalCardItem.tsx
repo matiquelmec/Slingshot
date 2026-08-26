@@ -133,22 +133,88 @@ const SignalCardItem: React.FC<SignalCardItemProps> = ({ signal, currentPrice, p
                 </div>
             ) : null}
 
-            {/* Insignia de Categoría de Trade en Vivo y Trailing Stop */}
-            <div className="flex items-center justify-between bg-amber-500/10 border border-amber-500/25 rounded-xl px-3 py-1 mb-2.5">
-                <span className="text-amber-400 text-[8.5px] font-mono font-bold uppercase tracking-wider flex items-center gap-1.5">
-                    <span>🔥 TRADE EN EJECUCIÓN EN VIVO</span>
-                    {signal.trailing_phase === 'BREAKEVEN' || signal.profit_locked ? (
-                        <span className="bg-neon-green/20 text-neon-green border border-neon-green/40 px-1.5 py-0.2 rounded text-[7.5px] font-black">
-                            🛡️ BREAKEVEN PROTEGIDO (0 RIESGO)
+            {/* Insignia Dinámica y Veraz de Categoría de Trade */}
+            {(() => {
+                const sStatus = signal.status || 'PENDING';
+                const isTradeActive = sStatus === 'ACTIVE' || sStatus === 'FILLED';
+                const isPending = sStatus === 'PENDING';
+                const isBe = sStatus === 'BREAKEVEN' || signal.trailing_phase === 'BREAKEVEN' || signal.profit_locked;
+                const isTpMax = sStatus === 'CLOSED_TP_MAX' || sStatus === 'CLOSED';
+                const isStopped = sStatus === 'STOPPED_OUT';
+                const isExpired = sStatus === 'EXPIRED' || sStatus === 'EXPIRED_MISSED' || sStatus === 'INVALIDATED_BROKEN';
+
+                if (isTradeActive) {
+                    return (
+                        <div className="flex items-center justify-between bg-emerald-500/10 border border-emerald-500/30 rounded-xl px-3 py-1 mb-2.5 shadow-[0_0_12px_rgba(16,185,129,0.15)]">
+                            <span className="text-emerald-400 text-[8.5px] font-mono font-black uppercase tracking-wider flex items-center gap-1.5">
+                                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping inline-block" />
+                                <span>🔥 TRADE EN EJECUCIÓN EN VIVO</span>
+                                {isBe && (
+                                    <span className="bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 px-1.5 py-0.2 rounded text-[7.5px] font-black">
+                                        🛡️ FAST BE (+1.0R LOCK)
+                                    </span>
+                                )}
+                            </span>
+                            <span className="text-emerald-400/60 text-[8px] font-mono font-bold">POSICIÓN ABIERTA</span>
+                        </div>
+                    );
+                }
+
+                if (isPending) {
+                    return (
+                        <div className="flex items-center justify-between bg-cyan-500/10 border border-cyan-500/30 rounded-xl px-3 py-1 mb-2.5 shadow-[0_0_12px_rgba(6,182,212,0.1)]">
+                            <span className="text-neon-cyan text-[8.5px] font-mono font-black uppercase tracking-wider flex items-center gap-1.5">
+                                <span>⏳ ORDEN LÍMITE PENDIENTE</span>
+                                <span className="text-white/40">|</span>
+                                <span className="text-white/70">ESPERANDO RETROCESO A ENTRADA</span>
+                            </span>
+                            <span className="text-neon-cyan/60 text-[8px] font-mono font-bold">SETUP LÍMITE</span>
+                        </div>
+                    );
+                }
+
+                if (isTpMax) {
+                    return (
+                        <div className="flex items-center justify-between bg-emerald-500/10 border border-emerald-500/25 rounded-xl px-3 py-1 mb-2.5">
+                            <span className="text-emerald-400 text-[8.5px] font-mono font-bold uppercase tracking-wider flex items-center gap-1.5">
+                                <span>✅ TAKE PROFIT COMPLETADO</span>
+                            </span>
+                            <span className="text-emerald-400/60 text-[8px] font-mono">TRADE CERRADO</span>
+                        </div>
+                    );
+                }
+
+                if (isStopped) {
+                    return (
+                        <div className="flex items-center justify-between bg-rose-500/10 border border-rose-500/25 rounded-xl px-3 py-1 mb-2.5">
+                            <span className="text-rose-400 text-[8.5px] font-mono font-bold uppercase tracking-wider flex items-center gap-1.5">
+                                <span>🛑 STOP LOSS HIT</span>
+                            </span>
+                            <span className="text-rose-400/60 text-[8px] font-mono">RIESGO CONTROLADO</span>
+                        </div>
+                    );
+                }
+
+                if (isExpired) {
+                    return (
+                        <div className="flex items-center justify-between bg-white/5 border border-white/10 rounded-xl px-3 py-1 mb-2.5 opacity-60">
+                            <span className="text-white/50 text-[8.5px] font-mono font-bold uppercase tracking-wider flex items-center gap-1.5">
+                                <span>⏱️ SETUP EXPIRADO (PRECIO SE ALEJÓ)</span>
+                            </span>
+                            <span className="text-white/30 text-[8px] font-mono">DESCARTADO</span>
+                        </div>
+                    );
+                }
+
+                return (
+                    <div className="flex items-center justify-between bg-white/5 border border-white/10 rounded-xl px-3 py-1 mb-2.5">
+                        <span className="text-white/50 text-[8.5px] font-mono font-bold uppercase tracking-wider flex items-center gap-1.5">
+                            <span>🛡️ SEÑAL AUDITADA ({sStatus})</span>
                         </span>
-                    ) : signal.trailing_phase === 'TRAILING_TP1' ? (
-                        <span className="bg-neon-cyan/20 text-neon-cyan border border-neon-cyan/40 px-1.5 py-0.2 rounded text-[7.5px] font-black">
-                            💎 TRAILING TP1 (+1.5R LOCK)
-                        </span>
-                    ) : null}
-                </span>
-                <span className="text-white/40 text-[8px] font-mono">SEÑAL EN TIEMPO REAL</span>
-            </div>
+                        <span className="text-white/30 text-[8px] font-mono">AUDIT FEED</span>
+                    </div>
+                );
+            })()}
 
             {/* ── Fila 1: Tiempo + Tipo + Estado + Sesión ── */}
             <div className="flex items-center justify-between mb-2">
@@ -164,6 +230,18 @@ const SignalCardItem: React.FC<SignalCardItemProps> = ({ signal, currentPrice, p
                             {signal.type.replace('🟢', '').replace('🔴', '').trim()}
                         </span>
                     </div>
+
+                    {/* Badge de Dirección LONG / SHORT Explícito */}
+                    {(() => {
+                        const isLong = ((signal.signal_type?.toUpperCase().includes('LONG')) || (signal.type?.toUpperCase().includes('LONG')) || ((signal as any).direction?.toUpperCase().includes('LONG')));
+                        return (
+                            <span className={`text-[9px] font-mono font-black px-2 py-0.5 rounded-md border uppercase ${
+                                isLong ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/30' : 'text-rose-400 bg-rose-500/10 border-rose-500/30'
+                            }`}>
+                                {isLong ? '🟢 LONG' : '🔴 SHORT'}
+                            </span>
+                        );
+                    })()}
 
                     {/* Badge de Sesión de Origen si existe */}
                     {signal.session && signal.session !== 'UNKNOWN' && (
@@ -265,40 +343,63 @@ const SignalCardItem: React.FC<SignalCardItemProps> = ({ signal, currentPrice, p
             )}
 
             {/* ── Fila 3: Zonas y Target ── */}
-            <div className="grid grid-cols-4 gap-2 text-[9px] font-mono mb-2">
-                <div className="flex flex-col gap-0.5 bg-white/[0.02] rounded px-2 py-1 border border-white/5">
-                    <span className="text-white/30 text-[8px] tracking-widest uppercase">Entry</span>
-                    {signal.entry_zone_top && signal.entry_zone_bottom ? (
-                        <span className="text-white/80 font-bold">
-                            {formatCurrency(signal.entry_zone_bottom)} – {formatCurrency(signal.entry_zone_top)}
-                        </span>
-                    ) : (
-                        <span className="text-white/60 font-bold">{formatCurrency(signal.price)}</span>
-                    )}
-                </div>
-                <div className="flex flex-col gap-0.5 bg-red-500/10 rounded px-2 py-1 border border-red-500/30">
-                    <span className="text-red-400 text-[8px] tracking-widest uppercase font-black flex justify-between">
-                        <span>Stop Loss</span>
-                        <span className="text-[7px] text-red-400/80">
-                            (-{signal.sl_dist_pct ? signal.sl_dist_pct.toFixed(2) : signal.price && signal.stop_loss ? ((Math.abs(signal.price - signal.stop_loss) / signal.price) * 100).toFixed(2) : '1.80'}%)
-                        </span>
-                    </span>
-                    <span className="text-red-500 font-black">{formatCurrency(signal.stop_loss)}</span>
-                </div>
-                <div className="flex flex-col gap-0.5 bg-green-500/10 rounded px-2 py-1 border border-green-500/30 col-span-2">
-                    <div className="flex justify-between items-center mb-0.5">
-                        <span className="text-green-400 text-[8px] tracking-widest uppercase font-black">Take Profit Targets (1,2,3)</span>
+            {(() => {
+                const isLong = signal.type?.toLowerCase().includes('long') || signal.signal_type?.toLowerCase().includes('long');
+                const entryP = signal.price || 0;
+                const slP = signal.stop_loss || 0;
+                const riskDist = Math.abs(entryP - slP);
+                const bePrice = signal.be_price || (isLong ? entryP + (riskDist * 1.0) : entryP - (riskDist * 1.0));
+
+                return (
+                    <div className="flex flex-col gap-2 mb-2 font-mono">
+                        <div className="grid grid-cols-4 gap-2 text-[9px]">
+                            <div className="flex flex-col gap-0.5 bg-white/[0.02] rounded-xl px-2.5 py-1.5 border border-white/10 hover:border-white/20 transition-all">
+                                <span className="text-white/40 text-[8px] tracking-widest uppercase font-bold">Entry Price</span>
+                                {signal.entry_zone_top && signal.entry_zone_bottom ? (
+                                    <span className="text-white font-bold">
+                                        {formatCurrency(signal.entry_zone_bottom)} – {formatCurrency(signal.entry_zone_top)}
+                                    </span>
+                                ) : (
+                                    <span className="text-white font-bold">{formatCurrency(signal.price)}</span>
+                                )}
+                            </div>
+                            <div className="flex flex-col gap-0.5 bg-rose-500/10 rounded-xl px-2.5 py-1.5 border border-rose-500/30 hover:border-rose-500/50 transition-all">
+                                <span className="text-rose-400 text-[8px] tracking-widest uppercase font-black flex justify-between">
+                                    <span>Stop Loss</span>
+                                    <span className="text-[7px] text-rose-400/80 font-mono">
+                                        (-{signal.sl_dist_pct ? signal.sl_dist_pct.toFixed(2) : signal.price && signal.stop_loss ? ((Math.abs(signal.price - signal.stop_loss) / signal.price) * 100).toFixed(2) : '1.80'}%)
+                                    </span>
+                                </span>
+                                <span className="text-rose-400 font-black">{formatCurrency(signal.stop_loss)}</span>
+                            </div>
+                            <div className="flex flex-col gap-0.5 bg-emerald-500/10 rounded-xl px-2.5 py-1.5 border border-emerald-500/30 hover:border-emerald-500/50 transition-all col-span-2">
+                                <div className="flex justify-between items-center mb-0.5">
+                                    <span className="text-emerald-400 text-[8px] tracking-widest uppercase font-black">TP Targets (70% / 15% / 15%)</span>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <span className="text-emerald-300 text-[8px] font-bold">TP1 (+1.3R):</span>
+                                    <span className="text-emerald-400 font-black">{formatCurrency(signal.tp1) || '---'}</span>
+                                    <span className="text-emerald-300 text-[8px] font-bold ml-1">TP2:</span>
+                                    <span className="text-emerald-400 font-black">{formatCurrency(signal.tp2) || '---'}</span>
+                                    <span className="text-emerald-500 text-[10px]">⚡</span>
+                                    <span className="text-emerald-300 font-black">{formatCurrency(signal.tp3 || signal.take_profit_3r) || '---'}</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Fast BE Banner (+1.0R Trigger) */}
+                        <div className="flex items-center justify-between px-3 py-1.5 bg-neon-cyan/10 border border-neon-cyan/30 rounded-xl text-[9px] shadow-[0_0_15px_rgba(6,182,212,0.1)]">
+                            <span className="text-neon-cyan font-bold flex items-center gap-1.5 font-mono">
+                                🛡️ Fast BE (+1.0R):
+                                <span className="text-white font-black text-[10px]">{formatCurrency(bePrice)}</span>
+                            </span>
+                            <span className="text-white/50 text-[8px] font-sans font-medium">
+                                Al alcanzar este nivel 👉 Mover SL a Entrada ($0.00 Riesgo)
+                            </span>
+                        </div>
                     </div>
-                    <div className="flex items-center gap-2">
-                        <span className="text-green-300 text-[8px] font-bold">T1:</span>
-                        <span className="text-green-400 font-black">{formatCurrency(signal.tp1) || '---'}</span>
-                        <span className="text-green-300 text-[8px] font-bold ml-1">T2:</span>
-                        <span className="text-green-400 font-black">{formatCurrency(signal.tp2) || '---'}</span>
-                        <span className="text-green-500 text-[10px]">⚡</span>
-                        <span className="text-green-300 font-black">{formatCurrency(signal.tp3 || signal.take_profit_3r) || '---'}</span>
-                    </div>
-                </div>
-            </div>
+                );
+            })()}
 
             {/* ── Fila 4: Matemáticas de Riesgo v11.0 ── */}
             <div className="flex items-center flex-wrap gap-1 mb-2">
@@ -343,7 +444,9 @@ const SignalCardItem: React.FC<SignalCardItemProps> = ({ signal, currentPrice, p
                                     const riskAmt = profileConfig?.riskUsd || 750;
                                     const dist = Math.abs((signal.price || 0) - (signal.stop_loss || 0));
                                     const lots = calculateMt5Lots(signal.asset || 'BTCUSDT', riskAmt, dist);
-                                    const text = `[FTMO MT5] ${action} ${sym} @ ${signal.price} | LOTES: ${lots.toFixed(2)} | SL: ${signal.stop_loss} | TP1: ${signal.tp1 || '---'} | TP3: ${signal.tp3 || signal.take_profit_3r || '---'}`;
+                                    const isL = signal.type.toLowerCase().includes('long');
+                                    const beP = signal.be_price || (isL ? (signal.price || 0) + (dist * 1.2) : (signal.price || 0) - (dist * 1.2));
+                                    const text = `[FTMO MT5] ${action} ${sym} @ ${signal.price} | LOTES: ${lots.toFixed(2)} | SL: ${signal.stop_loss} | 🛡️ MOVER A BE: ${formatCurrency(beP)} (+1.2R) | 🎯 TP3: ${signal.tp3 || signal.take_profit_3r || '---'} (+3.5R)`;
                                     navigator.clipboard.writeText(text);
                                     setIsCopied(true);
                                     setTimeout(() => setIsCopied(false), 2000);
@@ -380,8 +483,12 @@ const SignalCardItem: React.FC<SignalCardItemProps> = ({ signal, currentPrice, p
                             </div>
                             <div className="flex flex-col">
                                 <span className="text-white/40 uppercase text-[7px]">Tipo de Orden:</span>
-                                <span className={signal.type.toLowerCase().includes('long') ? 'text-neon-green font-black' : 'text-red-400 font-black'}>
-                                    {signal.type.toLowerCase().includes('long') ? 'BUY LIMIT' : 'SELL LIMIT'}
+                                <span className={
+                                    ((signal.signal_type?.toUpperCase().includes('LONG')) || (signal.type?.toUpperCase().includes('LONG')) || ((signal as any).direction?.toUpperCase().includes('LONG')))
+                                        ? 'text-emerald-400 font-black' 
+                                        : 'text-rose-400 font-black'
+                                }>
+                                    {((signal.signal_type?.toUpperCase().includes('LONG')) || (signal.type?.toUpperCase().includes('LONG')) || ((signal as any).direction?.toUpperCase().includes('LONG'))) ? 'BUY LIMIT' : 'SELL LIMIT'}
                                 </span>
                             </div>
                         </div>

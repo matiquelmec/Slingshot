@@ -122,6 +122,8 @@ export default function HistoryPage() {
                 <div className="flex items-center gap-2">
                     <span className="text-[10px] text-white/40 font-bold tracking-widest">FILTER ASSET:</span>
                     <select
+                        id="history-filter-asset"
+                        name="historyFilterAsset"
                         value={filterAsset}
                         onChange={(e) => setFilterAsset(e.target.value)}
                         className="bg-black/50 border border-white/10 rounded px-2 py-1 text-xs text-white/70 outline-none focus:border-neon-cyan/50"

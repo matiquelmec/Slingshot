@@ -36,33 +36,9 @@ class BitunixExecutor:
         return signature
 
     async def _request(self, method: str, path: str, params: dict = None, json_body: dict = None) -> dict:
-        """Realiza una petición HTTP firmada a la API de Bitunix, usando el Sidecar Node.js HFT si está activo."""
+        """Realiza una petición HTTP firmada con doble SHA-256 a la API oficial de Bitunix Futures."""
         if self.dry_run:
             return {"code": 0, "msg": "Success (DRY RUN)", "data": {}}
-            
-        # Intentar ejecutar vía Sidecar HFT de Node.js en local
-        if path == "/api/v1/futures/trade/place_order" and method.upper() == "POST" and json_body:
-            try:
-                # Mapear parámetros al formato HFT del Sidecar
-                hft_payload = {
-                    "symbol": json_body.get("symbol"),
-                    "action": "BUY" if json_body.get("side") == "BUY" else "SELL",
-                    "price": json_body.get("price", "0"),
-                    "amount": json_body.get("qty", "0"),
-                    "leverage": json_body.get("leverage", 1),
-                    "dry_run": False
-                }
-                
-                async with httpx.AsyncClient(timeout=0.08) as local_client: # Límite estricto de 80ms
-                    local_res = await local_client.post("http://127.0.0.1:8080/execute", json=hft_payload)
-                    if local_res.status_code == 200:
-                        res_json = local_res.json()
-                        logger.info(f"⚡ [HFT_SIDECAR] Orden procesada en microsegundos vía Node.js: {res_json.get('data')}")
-                        return res_json
-            except Exception as sidecar_err:
-                logger.warning(f"⚠️ [HFT_SIDECAR] Fallo en Sidecar Node.js ({sidecar_err}). Aplicando Fallback nativo a Python...")
-                # Continúa con la ejecución tradicional de Python abajo
-                pass
 
         url = f"{self.base_url}{path}"
         nonce = uuid.uuid4().hex
@@ -182,10 +158,11 @@ class BitunixExecutor:
                 "marginCoin": "USDT"
             })
 
-            # 2. Calcular cantidad ajustada
-            qty = str(round(amount_usd / entry_price, 4))
+            # 2. Calcular cantidad nominal ajustada (Margen * Apalancamiento)
+            nominal_usd = amount_usd * leverage
+            qty = str(round(nominal_usd / entry_price, 4))
             
-            logger.info(f"🚀 [BITUNIX] Enviando orden {side} para {symbol} de {qty} unidades.")
+            logger.info(f"🚀 [BITUNIX] Enviando orden {side} para {symbol} de {qty} unidades (Margen: ${amount_usd} USDT @ {leverage}x).")
             
             # 3. Colocar orden de mercado principal con SL integrado para máxima seguridad
             order_payload = {
@@ -230,10 +207,11 @@ class BitunixExecutor:
                             "symbol": symbol,
                             "qty": str(tp_qty),
                             "price": str(round(float(tp_price), 2)),
-                            "side": close_side,
+                            "side": "BUY" if side == "BUY" else "SELL",
                             "tradeSide": "CLOSE",
                             "orderType": "LIMIT",
-                            "effect": "GTC"
+                            "effect": "GTC",
+                            "positionId": str(order_id)
                         }
                         tp_res = await self._request("POST", "/api/v1/futures/trade/place_order", json_body=tp_payload)
                         if tp_res.get("code") == 0:
@@ -259,10 +237,101 @@ class BitunixExecutor:
             logger.error(f"❌ [BITUNIX] Error crítico en execute_signal: {e}")
             return {"status": "error", "message": str(e)}
 
+    async def place_limit_signal(self, signal: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Coloca una orden LÍMITE (Limit Order) pendiente en Bitunix con SL integrado.
+        Usado por el Escáner SMC para programar entradas pasivas OTE (61.8% / Golden Pocket).
+        """
+        symbol = signal.get('asset', signal.get('symbol', 'BTCUSDT')).replace('/', '').upper()
+        side = 'BUY' if 'LONG' in str(signal.get('type', signal.get('direction', 'LONG'))).upper() else 'SELL'
+        entry_price = float(signal.get('price', 0.0))
+        stop_loss = float(signal.get('stop_loss', 0.0))
+        amount_usd = float(signal.get('position_size', signal.get('position_size_usdt', 10.0)))
+        leverage = int(signal.get('leverage', 20))
+
+        if self.dry_run or signal.get("is_test", False):
+            logger.info(f"🧪 [BITUNIX DRY RUN] Orden LÍMITE {side} para {symbol} @ ${entry_price:.2f}")
+            return {"status": "success", "order_id": f"dry_limit_{uuid.uuid4().hex[:8]}"}
+
+        if entry_price <= 0:
+            return {"status": "error", "message": "Invalid entry price"}
+
+        try:
+            # 1. Configurar apalancamiento
+            await self._request("POST", "/api/v1/futures/account/change_leverage", json_body={
+                "symbol": symbol,
+                "leverage": leverage,
+                "marginCoin": "USDT"
+            })
+
+            # 2. Calcular cantidad nominal ajustada
+            nominal_usd = amount_usd * leverage
+            decimals = 4 if entry_price < 10.0 else 2
+            qty = str(round(nominal_usd / entry_price, 4))
+            price_str = f"{entry_price:.{decimals}f}"
+
+            # 3. Payload orden límite en Bitunix
+            order_payload = {
+                "symbol": symbol,
+                "qty": qty,
+                "price": price_str,
+                "side": side,
+                "tradeSide": "OPEN",
+                "orderType": "LIMIT",
+                "effect": "GTC"
+            }
+            if stop_loss > 0:
+                order_payload["slPrice"] = f"{stop_loss:.{decimals}f}"
+                order_payload["slStopType"] = "LAST_PRICE"
+                order_payload["slOrderType"] = "MARKET"
+
+            res = await self._request("POST", "/api/v1/futures/trade/place_order", json_body=order_payload)
+            if res.get("code") == 0 and res.get("data"):
+                order_id = res["data"].get("orderId")
+                logger.info(f"🎯 [BITUNIX AUTO-LIMIT] Orden Límite {side} colocada para {symbol} ({qty} units @ ${price_str}) | ID: {order_id}")
+                return {"status": "success", "order_id": order_id, "symbol": symbol, "price": entry_price}
+            else:
+                logger.error(f"❌ [BITUNIX AUTO-LIMIT] Error al colocar orden límite en {symbol}: {res.get('msg')}")
+                return {"status": "error", "message": res.get("msg")}
+        except Exception as e:
+            logger.error(f"💥 [BITUNIX AUTO-LIMIT] Excepción: {e}")
+            return {"status": "error", "message": str(e)}
+
+    async def modify_position_tpsl(self, symbol: str, position_id: str, sl_price: Optional[float] = None, tp_price: Optional[float] = None) -> bool:
+        """
+        Modifica el Stop Loss y/o Take Profit de una posicion abierta en Bitunix.
+        Usa el endpoint oficial POST /api/v1/futures/tpsl/position/modify_order.
+        """
+        sym = symbol.replace('/', '').upper()
+        if self.dry_run or (position_id and str(position_id).startswith("dry_")):
+            logger.info(f"🧪 [BITUNIX DRY RUN] Modificando TP/SL de posicion para {sym} (PosId: {position_id}) -> TP: {tp_price}, SL: {sl_price}")
+            return True
+
+        payload = {
+            "symbol": sym,
+            "positionId": str(position_id)
+        }
+        if sl_price is not None:
+            payload["slPrice"] = str(round(float(sl_price), 2))
+            payload["slStopType"] = "LAST_PRICE"
+        if tp_price is not None:
+            payload["tpPrice"] = str(round(float(tp_price), 2))
+            payload["tpStopType"] = "LAST_PRICE"
+
+        res = await self._request("POST", "/api/v1/futures/tpsl/position/modify_order", json_body=payload)
+        if res.get("code") == 0:
+            logger.info(f"✅ [BITUNIX] TP/SL de posición {sym} modificado con éxito en el exchange. Nuevo SL: ${sl_price}")
+            return True
+        else:
+            # Fallback a place_order si no existía orden previa
+            logger.warning(f"⚠️ [BITUNIX] modify_order devolvió {res.get('msg')}. Intentando place_position_tpsl...")
+            placed_id = await self.place_position_tpsl(sym, position_id, sl_price, tp_price)
+            return placed_id is not None
+
     async def update_stop_loss(self, symbol: str, old_order_id: str, new_stop_price: float, amount: float, side: str, position_id: Optional[str] = None, tp_price: Optional[float] = None) -> Optional[str]:
         """
-        Cancela el Stop Loss anterior y coloca uno nuevo en Bitunix.
-        Si se provee position_id, se actualiza el TP/SL de la posicion entera de forma dinamica.
+        Actualiza el Stop Loss para una posicion abierta en Bitunix (Breakeven / Trailing).
+        Si se provee position_id, modifica el TP/SL de la posicion entera de forma nativa en Bitunix.
         """
         sym = symbol.replace('/', '').upper()
         if self.dry_run or (position_id and str(position_id).startswith("dry_")):
@@ -271,9 +340,9 @@ class BitunixExecutor:
 
         try:
             if position_id:
-                logger.info(f"🛡️ [BITUNIX] Actualizando TP/SL de posicion de forma dinamica (PosId: {position_id}) -> Nuevo SL: {new_stop_price}, TP: {tp_price}")
-                # El endpoint place_position_tpsl pisa/actualiza la configuracion previa de la posicion
-                return await self.place_position_tpsl(symbol=sym, position_id=position_id, sl_price=new_stop_price, tp_price=tp_price)
+                logger.info(f"🛡️ [BITUNIX] Actualizando TP/SL de posicion de forma dinámica (PosId: {position_id}) -> Nuevo SL: {new_stop_price}, TP: {tp_price}")
+                success = await self.modify_position_tpsl(symbol=sym, position_id=position_id, sl_price=new_stop_price, tp_price=tp_price)
+                return "position_tpsl_updated" if success else None
 
             # 1. Cancelar orden antigua si se provee
             if old_order_id:
@@ -382,6 +451,21 @@ class BitunixExecutor:
                 logger.error(f"❌ Error al obtener posiciones de Bitunix: {res.get('msg')}")
         except Exception as e:
             logger.error(f"❌ Error al conectar con endpoint de posiciones: {e}")
+        return []
+
+    async def get_pending_orders(self, symbol: Optional[str] = None) -> List[Dict[str, Any]]:
+        """Obtiene las órdenes límite pendientes activas en Bitunix."""
+        if self.dry_run:
+            return []
+        try:
+            params = {}
+            if symbol:
+                params["symbol"] = symbol.replace('/', '').upper()
+            res = await self._request("GET", "/api/v1/futures/trade/get_pending_orders", params=params)
+            if res.get("code") == 0 and isinstance(res.get("data"), list):
+                return res["data"]
+        except Exception as e:
+            logger.debug(f"[BITUNIX] No se pudieron obtener órdenes pendientes: {e}")
         return []
 
     async def get_balance(self) -> float:

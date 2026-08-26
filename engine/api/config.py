@@ -27,6 +27,15 @@ class Settings(BaseSettings):
     # Groq Cloud AI (LLM Advisor)
     GROQ_API_KEY: Optional[str] = None
 
+    # OpenRouter Cloud AI (DeepSeek R1 / NVIDIA Nemotron Reasoning)
+    OPENROUTER_API_KEY: Optional[str] = None
+    OPENROUTER_MODEL: str = "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free"
+
+    # Telegram Institutional Dispatcher (Mobile MT5 Alerts)
+    TELEGRAM_BOT_TOKEN: Optional[str] = None
+    TELEGRAM_CHAT_ID: Optional[str] = None
+    ENABLE_TELEGRAM_ALERTS: bool = True
+
     # Whale Alert
     WHALE_ALERT_API_KEY: Optional[str] = None
 
@@ -41,8 +50,15 @@ class Settings(BaseSettings):
     OLLAMA_MODEL: str = "gemma3:4b"        # gemma3:4b = producción | gemma4:latest = alta precisión
     OLLAMA_URL: str = "http://localhost:11434"
 
-    # Strategy Delta Δ: Tiered Priority (Top 10 High-Performance Assets)
-    RADAR_ASSETS: str = "BTCUSDT,ETHUSDT,INJUSDT,SUIUSDT,AVAXUSDT,RENDERUSDT,NEARUSDT,FETUSDT,ATOMUSDT,TIAUSDT"
+    # Strategy Delta Δ: Tiered Priority (14 Curated Institutional Assets)
+    RADAR_ASSETS: str = "BTCUSDT,ETHUSDT,SOLUSDT,AVAXUSDT,LINKUSDT,XRPUSDT,PAXGUSDT,RENDERUSDT,SUIUSDT,INJUSDT,NEARUSDT,FETUSDT,ATOMUSDT,TIAUSDT"
+    
+    # Universo Dinámico Cuantitativo v21.0
+    ENABLE_DYNAMIC_WATCHLIST: bool = True
+    DYNAMIC_MIN_24H_VOL_USDT: float = 30_000_000.0  # Mínimo $30M de volumen 24h
+    DYNAMIC_MIN_RVOL: float = 1.25                 # Mínimo 1.25x volumen relativo
+    DYNAMIC_MIN_KER: float = 0.25                  # Mínimo 0.25 eficiencia de tendencia
+    DYNAMIC_MAX_ROTATING_ASSETS: int = 6           # Máximo 6 activos rotativos
     
     @property
     def MASTER_WATCHLIST(self) -> list[str]:
@@ -51,12 +67,16 @@ class Settings(BaseSettings):
     PRIORITY_TIERS: dict[str, float] = {
         "BTCUSDT": 0.5,     # Tier 1: Líder Macro (0.5s)
         "ETHUSDT": 0.5,     # Tier 1: Líder Altcoins (0.5s)
+        "SOLUSDT": 0.5,     # Tier 1: Liquidez Institucional (0.5s)
+        "PAXGUSDT": 0.8,    # Tier 1: Oro Refugio Institucional (0.8s)
         "INJUSDT": 0.8,     # Tier 1: Máxima Expansión (0.8s)
         "SUIUSDT": 0.8,     # Tier 1: Máxima Expansión (0.8s)
-        "AVAXUSDT": 1.2,    # Tier 2: Media Volatilidad (1.2s)
+        "AVAXUSDT": 1.0,    # Tier 2: Media Volatilidad (1.0s)
+        "LINKUSDT": 1.0,    # Tier 2: Oráculos / Estructura (1.0s)
+        "XRPUSDT": 1.0,     # Tier 2: Liquidez Mayor (1.0s)
         "RENDERUSDT": 1.2,  # Tier 2: Media Volatilidad (1.2s)
         "NEARUSDT": 1.5,    # Tier 2: Estructura (1.5s)
-        "FETUSDT": 1.5,     # Tier 2: Momentum (1.5s)
+        "FETUSDT": 1.5,     # Tier 2: Momentum IA (1.5s)
         "ATOMUSDT": 2.0,    # Tier 3: Rango Limpio (2.0s)
         "TIAUSDT": 2.0,     # Tier 3: Rango Limpio (2.0s)
     }

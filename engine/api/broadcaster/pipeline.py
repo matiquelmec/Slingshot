@@ -179,16 +179,17 @@ class BroadcasterPipeline:
             if current_candle_ts != str(self.state.last_advisor_ts):
                 self.state.last_advisor_ts = current_candle_ts
                 
-                # 🛡️ Regla de Throttling IA v11.5: Activar LLM solo ante detonantes cuantitativos
-                conf_score = final_tactical.get("confluence_score", 0) if isinstance(final_tactical, dict) else 0
-                has_active_signal = isinstance(final_tactical, dict) and final_tactical.get("signal_type", "NONE") != "NONE"
+                # 🛡️ Regla de Throttling IA: En la nube (OpenRouter/Groq/NVIDIA) o temporalidades mayores (1h, 4h, 1d)
+                # se despacha siempre el briefing táctico para mantener informada la terminal.
+                is_cloud = bool(settings.OPENROUTER_API_KEY or settings.GROQ_API_KEY or settings.GEMINI_API_KEY)
+                is_htf = self.state.interval in ["1h", "4h", "1d"]
                 
-                if conf_score >= 70 or has_active_signal:
-                    logger.info(f"[ADVISOR_TRIGGER] ⚡ Evento detonante cuantitativo para {self.state.symbol} (Score: {conf_score}%). Invocando LLM Contextual.")
+                if is_cloud or is_htf or conf_score >= 50 or has_active_signal:
+                    logger.info(f"[ADVISOR_TRIGGER] ⚡ Disparando análisis táctico ({self.state.interval}) para {self.state.symbol}...")
                     from engine.core.session_manager import SessionManager
                     asyncio.create_task(self.bc._emit_advisor(final_tactical, SessionManager.get_global_session_status()))
                 else:
-                    logger.debug(f"[ADVISOR_TRIGGER] ⏸️ Gatekeeping de vela para {self.state.symbol}. Motivo: Confluencia {conf_score}% sin señal activa.")
+                    logger.debug(f"[ADVISOR_TRIGGER] ⏸️ Standby local para {self.state.symbol}.")
 
         except Exception as e:
             logger.error(f"[SLOW-PATH] tactical error: {e}")

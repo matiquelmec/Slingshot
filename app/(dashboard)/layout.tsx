@@ -31,6 +31,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         { name: 'Overview', href: '/', icon: LayoutDashboard },
         { name: 'Radar Center', href: '/radar', icon: Radio },
         { name: 'Signal Terminal', href: '/signals', icon: Terminal },
+        { name: 'FTMO MT5', href: '/ftmo', icon: ShieldCheck },
         { name: 'Trading Chart', href: '/chart', icon: BarChart2 },
         { name: 'Liquidity Heatmap', href: '/heatmap', icon: Activity },
         { name: 'Session Log', href: '/history', icon: Database },

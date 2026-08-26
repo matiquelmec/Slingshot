@@ -696,6 +696,17 @@ class ConfluenceManager:
                 "detail": "Alineación Macro con Bitcoin validada (+10pts)"
             })
 
+        # 🚀 11.9. GOLD ATH LONG-ONLY VETO (v13.7 Sovereign Gold Titanium)
+        # El oro en régimen alcista secular rompiendo máximos prohíbe ventas institucionales
+        if ("XAU" in asset_name or "PAXG" in asset_name or "GOLD" in asset_name) and not is_long:
+            multiplier = 0.0
+            logger.info(f"[CONFLUENCE] 🔴 Veto Macro Oro: Prohibido operar Shorts en Oro durante régimen ATH")
+            checklist.append({
+                "factor": "Veto Oro en Máximos Históricos",
+                "status": "DENEGADO",
+                "detail": "Veto Cuantitativo: Prohibido vender Oro (XAUUSD) en tendencia macro alcista histórica (Solo Longs)"
+            })
+
         # 🚀 12. VETO DE VOLATILIDAD MACRO (EVENTOS ECONÓMICOS) v5.7.155 Master Gold Titanium
         if high_impact_near:
             # Si el evento es en menos de 30 min (0.5 horas), Veto Total

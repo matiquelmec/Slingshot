@@ -29,6 +29,7 @@ class NexusNode:
         self.dry_run = dry_run
         self.executor = BitunixExecutor(dry_run=dry_run)
         self._active_positions = {}
+        self._pending_limit_symbols = set()
         logger.info(f"🛡️ [NEXUS] Nodo de Ejecución inicializado (Dry Run: {dry_run})")
 
     def start_centinels(self):
@@ -59,17 +60,18 @@ class NexusNode:
                     sl = sig['stop_loss']
                     is_long = sig['type'] == "LONG"
 
-                    # 2. 🛡️ [SMART TRAILING 2-FASES] (Fase 1: BE en TP1 | Fase 2: Lock en TP2)
+                    # 2. 🛡️ [SMART TRAILING 2-FASES] (Fase 1: Fast BE +1.0R / $0.00 Riesgo | Fase 2: Lock en TP2)
                     be_active = pos.get("smart_trailing", {}).get("be_active", False)
                     tp2 = sig.get('tp2')
                     tp2_locked = pos.get("smart_trailing", {}).get("tp2_locked", False)
 
-                    # Fase 1: TP1 alcanzado -> Mover SL a Breakeven + Buffer de Comisiones
+                    # Fase 1: Fast BE (+1.0R) alcanzado -> Mover SL a Breakeven + Buffer de Comisiones
+                    be_target = float(sig.get('be_price', 0)) or (entry + abs(entry - sl) if is_long else entry - abs(entry - sl))
                     if not be_active:
-                        target_hit = (current_price >= tp1) if is_long else (current_price <= tp1)
+                        target_hit = (current_price >= be_target) if is_long else (current_price <= be_target)
                         if target_hit:
-                            logger.info(f"🎯 [OMEGA FASE 1] {asset} alcanzó TP1. Moviendo SL a BREAKEVEN (+0.1% fee buffer)...")
-                            new_sl = entry * 1.001 if is_long else entry * 0.999
+                            logger.info(f"🎯 [OMEGA FASE 1] {asset} alcanzó Fast BE (+1.0R / ${be_target:.2f}). Moviendo SL a BREAKEVEN en Bitunix...")
+                            new_sl = entry * 1.0005 if is_long else entry * 0.9995
 
                             old_sl_id = None
                             protection_orders = pos.get("execution", {}).get("protection_orders", [])
@@ -102,7 +104,7 @@ class NexusNode:
                                     "type": "signal_auditor_update",
                                     "data": {**pos["signal"], "trailing_phase": "BREAKEVEN", "profit_locked": True, "status": "ACTIVE_PROTECTED"}
                                 })
-                                logger.info(f"🛡️ [OMEGA FASE 1] SL de {asset} movido a BE de forma real: ${new_sl:.2f} (Trade 100% Risk-Free)")
+                                logger.info(f"🛡️ [OMEGA FASE 1] SL de {asset} movido a BE de forma real en Bitunix: ${new_sl:.2f} (Trade 100% Risk-Free)")
 
                     # Fase 2: TP2 alcanzado -> Mover SL a TP1 (Bloquear ganancia +1.5R)
                     elif be_active and tp2 and not tp2_locked:
@@ -298,10 +300,25 @@ class NexusNode:
                         position_id = p.get("positionId", f"manual_{int(time.time())}")
 
                         logger.info(f"📈 [NEXUS SYNC] Sincronizando posicion externa Bitunix: {symbol} ({side})")
-                        sl_price = entry_price * 0.98 if side == "LONG" else entry_price * 1.02
-                        tp1 = entry_price * 1.02 if side == "LONG" else entry_price * 0.98
-                        tp2 = entry_price * 1.04 if side == "LONG" else entry_price * 0.96
-                        tp3 = entry_price * 1.06 if side == "LONG" else entry_price * 0.94
+
+                        # Buscar si existe un setup SMC institucional activo para este activo en el escáner
+                        all_opps = store.get_scanner_opportunities("scalp") + store.get_scanner_opportunities("swing")
+                        matching_setup = next((o for o in all_opps if o.get("asset") == symbol and side in str(o.get("direction", "")).upper()), None)
+
+                        if matching_setup:
+                            sl_price = float(matching_setup.get("stop_loss", 0))
+                            be_price = float(matching_setup.get("be_price", 0))
+                            tp1 = float(matching_setup.get("tp1", 0))
+                            tp2 = float(matching_setup.get("tp2", 0))
+                            tp3 = float(matching_setup.get("tp3", 0))
+                            logger.info(f"💎 [NEXUS SYNC] Setup institucional SMC emparejado para {symbol}: SL: ${sl_price} | BE: ${be_price} | TP1: ${tp1}")
+                        else:
+                            dist = entry_price * 0.02
+                            sl_price = entry_price * 0.98 if side == "LONG" else entry_price * 1.02
+                            be_price = entry_price + (dist * 1.0) if side == "LONG" else entry_price - (dist * 1.0)
+                            tp1 = entry_price + (dist * 1.3) if side == "LONG" else entry_price - (dist * 1.3)
+                            tp2 = entry_price + (dist * 2.2) if side == "LONG" else entry_price - (dist * 2.2)
+                            tp3 = entry_price + (dist * 3.5) if side == "LONG" else entry_price - (dist * 3.5)
 
                         reconstructed_signal = {
                             "asset": symbol,
@@ -311,6 +328,7 @@ class NexusNode:
                             "entry_price": entry_price,
                             "price": entry_price,
                             "stop_loss": sl_price,
+                            "be_price": be_price,
                             "tp1": tp1,
                             "tp2": tp2,
                             "tp3": tp3,
@@ -323,9 +341,9 @@ class NexusNode:
                             "id": position_id
                         }
 
-                        # 1. Colocar orden de proteccion de posicion (Solo SL) en Bitunix
+                        # 1. Colocar o actualizar orden de protección de posición (Solo SL) en Bitunix
                         protection_ids = []
-                        logger.info(f"🛡️ [NEXUS SYNC] Colocando Stop Loss de posicion en Bitunix (SL: ${sl_price:.2f}) para posicion manual de {symbol}...")
+                        logger.info(f"🛡️ [NEXUS SYNC] Configurando Stop Loss institucional en Bitunix (SL: ${sl_price:.2f}) para {symbol}...")
                         tpsl_order_id = await self.executor.place_position_tpsl(
                             symbol=symbol,
                             position_id=position_id,
@@ -335,33 +353,57 @@ class NexusNode:
                         if tpsl_order_id:
                             protection_ids.append(tpsl_order_id)
 
-                        # 2. Colocar Take Profits limites fragmentados (60% / 20% / 20%)
-                        close_side = "SELL" if side == "LONG" else "BUY"
-                        f1 = round(qty * 0.60, 4)
-                        f2 = round(qty * 0.20, 4)
-                        f3 = round(qty - f1 - f2, 4)
-                        tps = [(tp1, f1, "TP1"), (tp2, f2, "TP2"), (tp3, f3, "TP3")]
+                        # Limpieza de cualquier SL huérfano/antiguo previo en Bitunix
+                        try:
+                            tpsl_orders = await self.executor._request("GET", "/api/v1/futures/tpsl/get_pending_orders", params={"symbol": symbol})
+                            if tpsl_orders.get("code") == 0 and isinstance(tpsl_orders.get("data"), list):
+                                for o in tpsl_orders["data"]:
+                                    oid = o.get("id")
+                                    o_sl = o.get("slPrice")
+                                    if o_sl and oid != tpsl_order_id and round(float(o_sl), 2) != round(sl_price, 2):
+                                        logger.info(f"🧹 [NEXUS SYNC] Limpiando SL huérfano {oid} (${o_sl}) en {symbol}...")
+                                        await self.executor._request("POST", "/api/v1/futures/tpsl/cancel_order", json_body={"symbol": symbol, "orderId": str(oid)})
+                        except Exception as clean_err:
+                            logger.debug(f"[NEXUS SYNC] Limpieza de órdenes ignorada: {clean_err}")
 
-                        for tp_val, tp_qty, label in tps:
-                            if tp_qty <= 0:
-                                continue
-                            tp_payload = {
-                                "symbol": symbol,
-                                "qty": str(tp_qty),
-                                "price": str(round(tp_val, 2)),
-                                "side": close_side,
-                                "tradeSide": "CLOSE",
-                                "orderType": "LIMIT",
-                                "effect": "GTC",
-                                "positionId": position_id
-                            }
-                            tp_res = await self.executor._request("POST", "/api/v1/futures/trade/place_order", json_body=tp_payload)
-                            if tp_res.get("code") == 0:
-                                tp_order_id = tp_res.get("data", {}).get("orderId")
-                                logger.info(f"🎯 [NEXUS SYNC] Orden de {label} limite colocada a ${tp_val:.2f} | ID: {tp_order_id}")
-                                protection_ids.append(tp_order_id)
-                            else:
-                                logger.error(f"❌ [NEXUS SYNC] Error al colocar {label}: {tp_res.get('msg')}")
+                        # 2. Colocar Take Profits límites fragmentados (60% / 20% / 20%) si no existen previamente
+                        try:
+                            existing_orders_res = await self.executor._request("GET", "/api/v1/futures/trade/get_pending_orders", params={"symbol": symbol})
+                            existing_orders = existing_orders_res.get("data", {}).get("orderList", []) if existing_orders_res.get("code") == 0 else []
+                            existing_close_orders = [o for o in existing_orders if o.get("reduceOnly") or o.get("tradeSide") == "CLOSE"]
+                        except Exception:
+                            existing_close_orders = []
+
+                        if not existing_close_orders:
+                            f1 = round(qty * 0.60, 4)
+                            f2 = round(qty * 0.20, 4)
+                            f3 = round(qty - f1 - f2, 4)
+                            tps = [(tp1, f1, "TP1"), (tp2, f2, "TP2"), (tp3, f3, "TP3")]
+
+                            for tp_val, tp_qty, label in tps:
+                                if tp_qty <= 0:
+                                    continue
+                                tp_payload = {
+                                    "symbol": symbol,
+                                    "qty": str(tp_qty),
+                                    "price": str(round(tp_val, 2)),
+                                    "side": "BUY" if side == "LONG" else "SELL",
+                                    "tradeSide": "CLOSE",
+                                    "orderType": "LIMIT",
+                                    "effect": "GTC",
+                                    "positionId": str(position_id)
+                                }
+                                tp_res = await self.executor._request("POST", "/api/v1/futures/trade/place_order", json_body=tp_payload)
+                                if tp_res.get("code") == 0:
+                                    tp_order_id = tp_res.get("data", {}).get("orderId")
+                                    logger.info(f"🎯 [NEXUS SYNC] Orden de {label} límite colocada a ${tp_val:.2f} | ID: {tp_order_id}")
+                                    protection_ids.append(tp_order_id)
+                                else:
+                                    logger.error(f"❌ [NEXUS SYNC] Error al colocar {label}: {tp_res.get('msg')}")
+                        else:
+                            logger.info(f"🛡️ [NEXUS SYNC] {symbol} ya cuenta con {len(existing_close_orders)} órdenes límite de Take Profit activas en Bitunix.")
+                            for eo in existing_close_orders:
+                                protection_ids.append(eo.get("orderId"))
 
                         await store.save_signal(reconstructed_signal)
                         self._active_positions[symbol] = {
@@ -383,14 +425,48 @@ class NexusNode:
 
             await asyncio.sleep(10)
 
+    MAX_CONCURRENT_POSITIONS = 4
+    DEFAULT_MARGIN_USDT = 8.50 # ~5% del capital ($170 USDT) a 20x apalancamiento aislado
+
+    def get_unprotected_risk_count(self) -> int:
+        """
+        Calcula cuántas posiciones abiertas tienen riesgo real flotante.
+        Las posiciones en Breakeven (Fast BE / $0.00 riesgo) LIBERAN su slot de riesgo.
+        """
+        unprotected = 0
+        for asset, pos in self._active_positions.items():
+            sig = pos.get("signal", {})
+            be_active = pos.get("smart_trailing", {}).get("be_active", False)
+            is_long = "LONG" in str(sig.get("type", sig.get("signal_type", "LONG"))).upper()
+            entry = float(sig.get("price", 0))
+            sl = float(sig.get("stop_loss", 0))
+            
+            # Si el SL ya está en la entrada (o mejor), no hay riesgo de capital
+            sl_at_be = (is_long and entry > 0 and sl >= entry * 0.999) or (not is_long and entry > 0 and sl > 0 and sl <= entry * 1.001)
+            if not (be_active or sl_at_be):
+                unprotected += 1
+        return unprotected
+
     async def process_signal(self, signal: Dict[str, Any]):
         """
-        Punto de entrada para señales reales.
+        Punto de entrada para señales de ejecución directa a mercado.
         """
         asset = signal.get("asset")
         sig_type = signal.get("type", "LONG")
 
+        # ── REGLA INSTITUCIONAL DE RIESGO: MÁXIMO 4 OPERACIONES EN RIESGO (SLOT RECYCLING) ──
+        unprotected_count = self.get_unprotected_risk_count()
+        if unprotected_count >= self.MAX_CONCURRENT_POSITIONS:
+            logger.warning(f"🛑 [NEXUS RIESGO] Límite de {self.MAX_CONCURRENT_POSITIONS} operaciones en riesgo alcanzado ({unprotected_count} activas con riesgo). Rechazando entrada en {asset}.")
+            return
+
         logger.info(f"⚡ [NEXUS] Recibida señal de alta fidelidad: {asset} {sig_type}")
+
+        # Garantizar tamaño del 5% del capital ($8.50 USDT margen a 20x)
+        if not signal.get("position_size") or float(signal.get("position_size", 0)) > 20.0:
+            signal["position_size"] = self.DEFAULT_MARGIN_USDT
+            signal["position_size_usdt"] = self.DEFAULT_MARGIN_USDT
+        signal["leverage"] = signal.get("leverage", 20)
 
         # 1. Fragmentación Apex (Delta 60/20/20)
         fragments = DeltaOrchestrator.fragment_order(signal)
@@ -412,6 +488,50 @@ class NexusNode:
 
         except Exception as e:
             logger.error(f"💥 [NEXUS] Error crítico procesando señal: {e}")
+
+    async def process_limit_setup(self, signal: Dict[str, Any]):
+        """
+        [NEXUS AUTO-LIMIT]
+        Coloca automáticamente una orden LÍMITE en Bitunix para oportunidades institucionales del escáner.
+        Evita duplicar órdenes si ya existe una posición o una orden límite activa para ese activo.
+        """
+        asset = signal.get("asset", signal.get("symbol", "")).upper()
+        if not asset or self.dry_run:
+            return
+
+        # ── REGLA INSTITUCIONAL DE RIESGO: MÁXIMO 4 OPERACIONES EN RIESGO (SLOT RECYCLING) ──
+        unprotected_count = self.get_unprotected_risk_count()
+        if unprotected_count >= self.MAX_CONCURRENT_POSITIONS:
+            logger.info(f"🛑 [NEXUS RIESGO] Máximo de {self.MAX_CONCURRENT_POSITIONS} operaciones con riesgo alcanzado ({unprotected_count} en riesgo / {len(self._active_positions)} totales). Pausando nuevas órdenes.")
+            return
+
+        # Si ya tenemos una posición abierta o una orden pendiente registrada en este activo, no duplicar
+        if asset in self._active_positions or asset in self._pending_limit_symbols:
+            return
+
+        try:
+            # Verificar órdenes pendientes en Bitunix para no saturar el libro
+            pending_orders = await self.executor.get_pending_orders(asset)
+            if pending_orders:
+                logger.debug(f"[NEXUS AUTO-LIMIT] Ya existe orden límite pendiente en Bitunix para {asset}.")
+                self._pending_limit_symbols.add(asset)
+                return
+
+            # Asignar 5% de margen y 20x de apalancamiento
+            signal["position_size"] = self.DEFAULT_MARGIN_USDT
+            signal["position_size_usdt"] = self.DEFAULT_MARGIN_USDT
+            signal["leverage"] = 20
+
+            entry_p = float(signal.get('price', 0))
+            logger.info(f"🎯 [NEXUS AUTO-LIMIT] Enviando orden límite institucional automática a Bitunix para {asset} @ ${entry_p:.2f} (Margen: ${self.DEFAULT_MARGIN_USDT} USDT [5%] @ 20x)")
+            res = await self.executor.place_limit_signal(signal)
+            if res.get("status") == "success":
+                self._pending_limit_symbols.add(asset)
+                logger.info(f"✅ [NEXUS AUTO-LIMIT] Orden límite para {asset} colocada exitosamente en Bitunix! ID: {res.get('order_id')}")
+            else:
+                logger.warning(f"⚠️ [NEXUS AUTO-LIMIT] No se pudo colocar orden límite en {asset}: {res.get('message')}")
+        except Exception as e:
+            logger.error(f"❌ [NEXUS AUTO-LIMIT] Error colocando orden en {asset}: {e}")
 
     def get_active_positions(self):
         return self._active_positions

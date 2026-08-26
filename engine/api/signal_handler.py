@@ -87,10 +87,10 @@ class SignalHandler:
         for sig in approved:
             ok_to_send, reason = signal_filter.should_send(self._symbol, sig)
             if ok_to_send:
-                asyncio.create_task(send_signal_async(
-                    signal=sig, asset=self._symbol,
-                    regime=tactical.get("market_regime", "UNKNOWN"),
-                    strategy=tactical.get("active_strategy", "N/A")
+                from engine.router.telegram_dispatcher import telegram_dispatcher
+                asyncio.create_task(telegram_dispatcher.send_signal_alert(
+                    signal=sig,
+                    account_profile="FTMO_100K"
                 ))
                 final_approved.append(sig)
             else:

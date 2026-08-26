@@ -66,79 +66,58 @@ export default function MacroRadar() {
                 </motion.div>
             </div>
 
-            {/* Fila 1: Global Context (DXY / NASDAQ) */}
-            <div className="p-4 grid grid-cols-2 gap-3 border-b border-white/5 bg-white/[0.02]">
-                <div className="flex flex-col gap-1 boder border-white/5 bg-black/20 p-2 rounded-xl">
+            {/* Fila 1: Global Macro Cross-Assets (DXY & NASDAQ) */}
+            <div className="p-3.5 grid grid-cols-3 gap-2.5">
+                {/* DXY Index */}
+                <div className="flex flex-col gap-1 border border-white/5 bg-black/30 p-2 rounded-xl">
                     <div className="flex items-center justify-between">
-                        <span className="text-[9px] font-bold text-white/30 uppercase tracking-tighter flex items-center gap-1">
-                            <DollarSign size={10} className="text-neon-cyan" /> DXY Index
+                        <span className="text-[8px] font-bold text-white/40 uppercase tracking-tight flex items-center gap-1">
+                            <DollarSign size={10} className="text-neon-cyan" /> DXY (Dólar)
                         </span>
                         {getTrendIcon(dxy_trend)}
                     </div>
-                    <div className="flex items-baseline gap-2">
-                        <span className={`text-[11px] font-black ${dxy_trend === 'BULLISH' ? 'text-neon-green' : dxy_trend === 'BEARISH' ? 'text-neon-red' : 'text-white/40'}`}>
+                    <div className="flex items-baseline gap-1.5 mt-0.5">
+                        <span className={`text-[10px] font-black font-mono ${dxy_trend === 'BULLISH' ? 'text-neon-green' : dxy_trend === 'BEARISH' ? 'text-neon-red' : 'text-white/40'}`}>
                             {dxy_trend || 'NEUTRAL'}
                         </span>
                         {typeof dxy_price === 'number' && dxy_price > 0 && (
-                            <span className="text-[10px] text-white/40 font-mono">
+                            <span className="text-[9px] text-white/40 font-mono">
                                 {dxy_price.toFixed(2)}
                             </span>
                         )}
                     </div>
                 </div>
-                <div className="flex flex-col gap-1 border border-white/5 bg-black/20 p-2 rounded-xl">
+
+                {/* NASDAQ Futures */}
+                <div className="flex flex-col gap-1 border border-white/5 bg-black/30 p-2 rounded-xl">
                     <div className="flex items-center justify-between">
-                        <span className="text-[9px] font-bold text-white/30 uppercase tracking-tighter flex items-center gap-1">
-                            <BarChart size={10} className="text-orange-400" /> NASDAQ
+                        <span className="text-[8px] font-bold text-white/40 uppercase tracking-tight flex items-center gap-1">
+                            <BarChart size={10} className="text-amber-400" /> NASDAQ
                         </span>
                         {getTrendIcon(nasdaq_trend)}
                     </div>
-                    <div className="flex items-baseline gap-2">
-                        <span className={`text-[11px] font-black ${nasdaq_trend === 'BULLISH' ? 'text-neon-green' : nasdaq_trend === 'BEARISH' ? 'text-neon-red' : 'text-white/40'}`}>
+                    <div className="flex items-baseline gap-1.5 mt-0.5">
+                        <span className={`text-[10px] font-black font-mono ${nasdaq_trend === 'BULLISH' ? 'text-neon-green' : nasdaq_trend === 'BEARISH' ? 'text-neon-red' : 'text-white/40'}`}>
                             {nasdaq_trend || 'NEUTRAL'}
                         </span>
                         {typeof nasdaq_change_pct === 'number' && (
-                            <span className="text-[10px] text-white/40 font-mono">
+                            <span className="text-[9px] text-white/40 font-mono">
                                 {nasdaq_change_pct > 0 ? '+' : ''}{nasdaq_change_pct.toFixed(2)}%
                             </span>
                         )}
                     </div>
                 </div>
-            </div>
 
-            {/* Fila 2: Crypto Metrics */}
-            <div className="p-4 grid grid-cols-3 gap-3">
-                {/* Fear & Greed */}
-                <div className="flex flex-col gap-1">
-                    <span className="text-[9px] font-bold text-white/30 tracking-wider">FEAR & GREED</span>
-                    <div className="flex items-baseline gap-1">
-                        <span className="text-lg font-black text-white/90">{fear_greed_value}</span>
-                    </div>
-                    <span className={`text-[8px] font-bold uppercase ${fear_greed_value > 50 ? 'text-neon-green/60' : 'text-neon-red/60'}`}>
-                        {fear_greed_label}
+                {/* Risk Appetite */}
+                <div className="flex flex-col gap-1 border border-white/5 bg-black/30 p-2 rounded-xl">
+                    <span className="text-[8px] font-bold text-white/40 uppercase tracking-tight flex items-center gap-1">
+                        <Zap size={10} className="text-purple-400" /> APETITO RIESGO
                     </span>
-                </div>
-
-                {/* BTC Dominance */}
-                <div className="flex flex-col gap-1">
-                    <span className="text-[9px] font-bold text-white/30 tracking-wider">DOMINANCIA</span>
-                    <div className="flex items-baseline gap-1">
-                        <span className="text-lg font-black text-white/90">{btc_dominance?.toFixed(1)}%</span>
-                    </div>
-                    <span className="text-[8px] font-bold text-blue-400/60 uppercase">Market Weight</span>
-                </div>
-
-                {/* Funding Rate */}
-                <div className="flex flex-col gap-1 relative group">
-                    <span className="text-[9px] font-bold text-white/30 tracking-wider flex items-center gap-1">
-                        FUNDING
-                    </span>
-                    <div className="flex items-baseline gap-1">
-                        <span className={`text-lg font-black tabular-nums ${funding_rate > 0 ? 'text-neon-red' : 'text-neon-green'}`}>
-                            {funding_rate?.toFixed(4)}%
+                    <div className="flex items-baseline gap-1.5 mt-0.5">
+                        <span className={`text-[10px] font-black font-mono ${risk_appetite === 'RISK_ON' ? 'text-neon-green' : risk_appetite === 'RISK_OFF' ? 'text-neon-red' : 'text-yellow-400'}`}>
+                            {risk_appetite || 'NEUTRAL'}
                         </span>
                     </div>
-                    <span className="text-[8px] font-bold text-white/20 uppercase">8h Average</span>
                 </div>
             </div>
 

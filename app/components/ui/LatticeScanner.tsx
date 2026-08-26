@@ -85,6 +85,8 @@ export default function LatticeScanner() {
                 <div className="relative">
                     <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-white/20" />
                     <input
+                        id="lattice-search-input"
+                        name="latticeSearch"
                         placeholder="Buscar par..."
                         className="w-full bg-white/[0.03] border border-white/5 rounded-lg py-1.5 pl-8 pr-3 text-[9px] font-mono font-bold text-white/70 focus:border-neon-cyan/30 outline-none transition-all uppercase placeholder:normal-case placeholder:text-white/15"
                         value={filter}
@@ -134,10 +136,10 @@ export default function LatticeScanner() {
                                 <div 
                                     key={pair.asset}
                                     onClick={() => handlePairClick(pair.asset)}
-                                    className={`absolute left-0 w-full grid grid-cols-12 px-4 items-center cursor-pointer transition-all duration-150 ${
+                                    className={`absolute left-0 w-full grid grid-cols-12 px-4 items-center cursor-pointer transition-all duration-200 select-none ${
                                         isActive 
-                                            ? 'bg-neon-cyan/10 border-l-2 border-neon-cyan' 
-                                            : 'border-b border-white/[0.02] hover:bg-white/[0.04]'
+                                            ? 'bg-gradient-to-r from-neon-cyan/25 via-neon-cyan/10 to-transparent border-l-4 border-neon-cyan shadow-[inset_0_0_20px_rgba(6,182,212,0.15)] ring-1 ring-neon-cyan/30' 
+                                            : 'border-b border-white/[0.03] hover:bg-white/[0.05]'
                                     }`}
                                     style={{ 
                                         height: ROW_HEIGHT, 
@@ -146,10 +148,15 @@ export default function LatticeScanner() {
                                 >
                                     {/* Symbol */}
                                     <div className="col-span-3 flex items-center gap-1.5">
-                                        <span className={`text-[10px] font-black font-mono ${isActive ? 'text-neon-cyan' : 'text-white/60'}`}>
+                                        <span className={`text-[11px] font-black font-mono tracking-tight flex items-center gap-1.5 ${isActive ? 'text-white drop-shadow-[0_0_8px_rgba(6,182,212,0.8)]' : 'text-white/70'}`}>
                                             {pair.asset.replace('USDT', '')}
+                                            {isActive && (
+                                                <span className="text-[7px] font-sans font-black bg-neon-cyan text-black px-1.5 py-0.2 rounded-full uppercase tracking-tighter shadow-[0_0_8px_rgba(6,182,212,0.8)] animate-pulse">
+                                                    ACTIVO
+                                                </span>
+                                            )}
                                         </span>
-                                        <span className="text-[7px] text-white/15 font-bold">/USDT</span>
+                                        {!isActive && <span className="text-[7px] text-white/20 font-bold">/USDT</span>}
                                     </div>
 
                                     {/* Regime */}

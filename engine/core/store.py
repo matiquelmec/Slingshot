@@ -108,31 +108,36 @@ class MemoryStore:
     async def save_signal(self, signal_data: Dict[str, Any]):
         """
         Persiste una señal o la evoluciona si ya existe.
-        Mantiene el buffer circular de 200 señales para evitar saturación.
+        Mantiene el buffer circular de 200 señales con deduplicación estricta por activo y sentido.
         """
         async with self._lock:
+            asset = signal_data.get("asset") or signal_data.get("symbol")
+            sig_type = (signal_data.get("signal_type") or signal_data.get("type") or "LONG").upper()
+            is_long = "LONG" in sig_type
+
             if "id" not in signal_data:
                 signal_data["id"] = str(uuid.uuid4())
-                if "created_at" not in signal_data:
-                    signal_data["created_at"] = datetime.now(timezone.utc).isoformat()
+            if "created_at" not in signal_data:
+                signal_data["created_at"] = datetime.now(timezone.utc).isoformat()
             
-            # Evolución de señal: Desduplicación por "Punto de Interés" (POI)
+            # Evolución de señal: Desduplicación por Activo + Dirección
             existing = None
-            new_price = float(signal_data.get("price", 0))
             for s in self._signal_events:
-                old_price = float(s.get("price", 0))
-                # Consideramos que es la misma señal si es el mismo activo, dirección y el precio de entrada es idéntico o casi idéntico
-                if (s["asset"] == signal_data["asset"] and 
-                    s.get("signal_type") == signal_data.get("signal_type") and 
-                    abs(old_price - new_price) < 0.000001):
+                s_asset = s.get("asset") or s.get("symbol")
+                s_type = (s.get("signal_type") or s.get("type") or "LONG").upper()
+                s_is_long = "LONG" in s_type
+                
+                # Si es el mismo activo y el mismo sentido, se actualiza el estado en lugar de duplicar
+                if s_asset == asset and s_is_long == is_long:
                     existing = s
                     break
             
             if existing:
                 existing.update(signal_data)
+                return existing
             else:
                 self._signal_events.append(signal_data)
-        return signal_data
+                return signal_data
 
     async def get_signals(self, asset: Optional[str] = None, status: Optional[str] = None) -> List[Dict[str, Any]]:
         """Busca señales en el buffer circular con filtros."""

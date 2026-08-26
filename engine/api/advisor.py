@@ -40,8 +40,8 @@ async def check_ollama_status(force_recheck=False) -> bool:
     """v5.9.4-Resilience: Salto agresivo si ya está confirmado online en la sesión o si se usa Gemini API."""
     global _ollama_cache
     
-    # Si tenemos configurado Gemini o Groq, la IA está activa (cloud)
-    if settings.GEMINI_API_KEY or settings.GROQ_API_KEY:
+    # Si tenemos configurado OpenRouter, Groq o Gemini, la IA está activa (cloud)
+    if settings.OPENROUTER_API_KEY or settings.GEMINI_API_KEY or settings.GROQ_API_KEY:
         return True
         
     # 1. Bypass total: si ya se confirmó una vez, no volver a preguntar al servidor tags (que se bloquea en heavy load)
@@ -386,6 +386,86 @@ Estructura:
         return fallback_list
 
 
+async def generate_scanner_hypotheses_batch(opportunities: list[dict]) -> list[dict]:
+    """
+    v20.0-Apex: Genera hipótesis narrativas institucionales para el Top 3 de oportunidades
+    del escáner en una sola inferencia de alto rendimiento.
+    """
+    if not opportunities:
+        return []
+
+    top_opps = opportunities[:3]
+    opp_summaries = []
+    for i, o in enumerate(top_opps):
+        opp_summaries.append(
+            f"{i+1}. {o.get('asset')} ({o.get('direction')}) @ ${o.get('price')} | Score: {o.get('confluence_score')}% | R:R: {o.get('rr_ratio_tp3')}:1 | SL: ${o.get('stop_loss')} | TP1: ${o.get('tp1')}"
+        )
+
+    prompt = f"""Eres el Asesor Cuántico Senior de Slingshot Trading.
+Analiza las siguientes oportunidades institucionales y genera una hipótesis concisa para cada una.
+
+OPORTUNIDADES DETECTADAS:
+{chr(10).join(opp_summaries)}
+
+REGLAS:
+1. Genera para cada oportunidad una 'hypothesis' técnica (máximo 2 oraciones) explicando la confluencia institucional.
+2. Define un 'verdict' ("GO", "AVOID" o "SIDEWAYS").
+3. Define un 'threat' ("LOW", "MEDIUM", "HIGH").
+
+Responde ÚNICAMENTE con un array JSON de objetos:
+[
+  {{"asset": "...", "hypothesis": "...", "verdict": "GO", "threat": "LOW"}}
+]"""
+
+    try:
+        if not await check_ollama_status():
+            return [
+                {
+                    "asset": o.get("asset"),
+                    "hypothesis": f"Estructura técnica {o.get('direction')} con confluencia {o.get('confluence_score')}%. Soporte en zona OTE institucional.",
+                    "verdict": "GO" if o.get("confluence_score", 0) >= 65 else "SIDEWAYS",
+                    "threat": "LOW" if o.get("confluence_score", 0) >= 70 else "MEDIUM"
+                }
+                for o in top_opps
+            ]
+
+        loop = asyncio.get_running_loop()
+        future = loop.create_future()
+        global _ai_task_counter
+        _ai_task_counter += 1
+
+        await _ai_queue.put((2, _ai_task_counter, {
+            'asset': 'SCANNER_HYPOTHESIS_BATCH',
+            'prompt': prompt,
+            'future': future,
+            'format': 'json'
+        }))
+
+        raw_content = await future
+        clean_content = extract_json_from_llm(raw_content)
+        parsed = json.loads(clean_content)
+
+        if isinstance(parsed, dict):
+            for k in ["hypotheses", "results", "opportunities", "data"]:
+                if k in parsed and isinstance(parsed[k], list):
+                    parsed = parsed[k]
+                    break
+        if not isinstance(parsed, list):
+            parsed = [parsed] if isinstance(parsed, dict) else []
+
+        return parsed
+    except Exception as e:
+        logger.warning(f"[ADVISOR] Fallback en Scanner Hypotheses Batch: {e}")
+        return [
+            {
+                "asset": o.get("asset"),
+                "hypothesis": f"Setup {o.get('direction')} validado por confluencia cuantitativa ({o.get('confluence_score')}%).",
+                "verdict": "GO" if o.get("confluence_score", 0) >= 60 else "SIDEWAYS",
+                "threat": "LOW"
+            }
+            for o in top_opps
+        ]
+
 async def generate_news_sentiment(headline: str) -> dict:
     """Wrapper para compatibilidad."""
     batch = await generate_news_sentiment_batch([headline])
@@ -401,7 +481,62 @@ async def ai_worker():
                 continue
 
             try:
-                if settings.GROQ_API_KEY:
+                if settings.OPENROUTER_API_KEY:
+                    # RUTA CLOUD DEEP REASONING: OpenRouter (NVIDIA Nemotron / DeepSeek R1)
+                    url = "https://openrouter.ai/api/v1/chat/completions"
+                    headers = {
+                        "Authorization": f"Bearer {settings.OPENROUTER_API_KEY}",
+                        "HTTP-Referer": "https://slingshot-trading.local",
+                        "X-Title": "Slingshot Institutional Trading",
+                        "Content-Type": "application/json"
+                    }
+                    openrouter_payload = {
+                        "model": settings.OPENROUTER_MODEL or "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
+                        "messages": [
+                            {"role": "user", "content": task['prompt']}
+                        ],
+                        "temperature": 0.2
+                    }
+                    if task.get('format') == 'json':
+                        openrouter_payload["response_format"] = {"type": "json_object"}
+                    
+                    response = None
+                    for attempt in range(3):
+                        response = await client.post(url, json=openrouter_payload, headers=headers)
+                        if response.status_code == 429:
+                            try:
+                                retry_after = float(response.headers.get("retry-after", 2.0))
+                            except (TypeError, ValueError):
+                                retry_after = 2.0
+                            logger.warning(f"[AI_WORKER] ⚠️ Rate limit (429) en OpenRouter. Esperando {retry_after}s...")
+                            await asyncio.sleep(retry_after)
+                            continue
+                        break
+                    
+                    if task['future'].cancelled():
+                        _ai_queue.task_done()
+                        continue
+                        
+                    if response and response.status_code == 200:
+                        result = response.json()
+                        if "choices" in result and len(result["choices"]) > 0:
+                            content = result["choices"][0]["message"]["content"].strip()
+                            logger.info(f"[AI_WORKER] 🧠 Respuesta de OpenRouter ({settings.OPENROUTER_MODEL}) para {task.get('asset')} ({len(content)} bytes)")
+                            if not task['future'].done():
+                                task['future'].set_result(content)
+                        else:
+                            logger.warning(f"[AI_WORKER] ⚠️ Respuesta inesperada de OpenRouter: {result}")
+                            fallback_content = _deterministic_verdict(task.get('asset'), {})
+                            if not task['future'].done():
+                                task['future'].set_result(fallback_content)
+                    else:
+                        status_code = response.status_code if response else "Unknown"
+                        logger.error(f"[AI_WORKER] ❌ Error OpenRouter: {status_code} para {task.get('asset')}. Probando fallback...")
+                        fallback_content = _deterministic_verdict(task.get('asset'), {})
+                        if not task['future'].done():
+                            task['future'].set_result(fallback_content)
+
+                elif settings.GROQ_API_KEY:
                     # RUTA CLOUD: Groq API (Inferencia hiper-rápida y de alta calidad Llama-3.3-70B)
                     url = "https://api.groq.com/openai/v1/chat/completions"
                     headers = {

@@ -32,6 +32,8 @@ export default function TradingChart() {
     const valueAreaSeriesRef = useRef<ISeriesApi<'Baseline'> | null>(null);
     const priceLineRef = useRef<any>(null);
     const pocLineRef = useRef<any>(null);
+    const vahLineRef = useRef<any>(null);
+    const valLineRef = useRef<any>(null);
     const srLinesRef = useRef<{ line: any; series: any }[]>([]);
     const liquidityLinesRef = useRef<any[]>([]);
     const liquidationLinesRef = useRef<any[]>([]);
@@ -297,24 +299,75 @@ export default function TradingChart() {
 
     // ── YOSH Value Area ──
     useEffect(() => {
-        const chart = chartRef.current; const s = candleSeriesRef.current;
+        const chart = chartRef.current; 
+        const s = candleSeriesRef.current;
         if (!chart || !s || !smcData?.volume_profile || candles.length === 0) return;
+        
         const vp = smcData.volume_profile;
         const times = candles.map(c => Number(c.time)).sort((a, b) => a - b);
+        
+        // Limpiar elementos previos
         if (valueAreaSeriesRef.current) { try { chart.removeSeries(valueAreaSeriesRef.current); } catch(e){} }
         if (pocLineRef.current) { try { s.removePriceLine(pocLineRef.current); } catch(e){} }
-        valueAreaSeriesRef.current = null; pocLineRef.current = null;
-        if (isEnabled('value_area') && vp.vah && vp.val) {
+        if (vahLineRef.current) { try { s.removePriceLine(vahLineRef.current); } catch(e){} }
+        if (valLineRef.current) { try { s.removePriceLine(valLineRef.current); } catch(e){} }
+        
+        valueAreaSeriesRef.current = null; 
+        pocLineRef.current = null;
+        vahLineRef.current = null;
+        valLineRef.current = null;
+
+        if (isEnabled('value_area') && vp.vah && vp.val && vp.poc) {
+            // 1. Área sombreada entre VAL y VAH
             try {
                 const va = chart.addSeries(BaselineSeries, {
                     baseValue: { type: 'price', price: vp.val },
-                    topFillColor1: 'rgba(255,215,0,0.15)', topFillColor2: 'rgba(255,215,0,0.05)', topLineColor: 'rgba(255,215,0,0.8)',
-                    bottomFillColor1: 'transparent', lineWidth: 1, priceLineVisible: false, lastValueVisible: false,
+                    topFillColor1: 'rgba(255, 215, 0, 0.20)', 
+                    topFillColor2: 'rgba(255, 215, 0, 0.05)', 
+                    topLineColor: 'rgba(255, 215, 0, 0.90)',
+                    bottomFillColor1: 'transparent', 
+                    lineWidth: 1, 
+                    priceLineVisible: false, 
+                    lastValueVisible: false,
                 });
-                va.setData(times.slice(-Math.min(times.length, 50)).map(time => ({ time, value: vp.vah })) as any);
+                const recentTimes = times.slice(-Math.min(times.length, 60));
+                va.setData(recentTimes.map(time => ({ time, value: vp.vah })) as any);
                 valueAreaSeriesRef.current = va;
             } catch(e){}
-            try { pocLineRef.current = s.createPriceLine({ price: vp.poc, color: '#FFD700', lineWidth: 3, lineStyle: LineStyle.Solid, axisLabelVisible: true, title: '🏦 YOSH POC' }); } catch(e){}
+
+            // 2. Líneas de Precio Institucionales en el Eje Y
+            try { 
+                vahLineRef.current = s.createPriceLine({ 
+                    price: vp.vah, 
+                    color: '#FFD700', 
+                    lineWidth: 2, 
+                    lineStyle: LineStyle.Dashed, 
+                    axisLabelVisible: true, 
+                    title: '🏛️ YOSH VAH (70%)' 
+                }); 
+            } catch(e){}
+
+            try { 
+                pocLineRef.current = s.createPriceLine({ 
+                    price: vp.poc, 
+                    color: '#FFCC00', 
+                    lineWidth: 3, 
+                    lineStyle: LineStyle.Solid, 
+                    axisLabelVisible: true, 
+                    title: '🏦 YOSH POC (Max Vol)' 
+                }); 
+            } catch(e){}
+
+            try { 
+                valLineRef.current = s.createPriceLine({ 
+                    price: vp.val, 
+                    color: '#EAB308', 
+                    lineWidth: 2, 
+                    lineStyle: LineStyle.Dashed, 
+                    axisLabelVisible: true, 
+                    title: '🏛️ YOSH VAL (70%)' 
+                }); 
+            } catch(e){}
         }
     }, [smcData, indicators, candles.length]);
 
@@ -327,12 +380,46 @@ export default function TradingChart() {
 
         const markers: any[] = [];
 
-        // 1. Traps Markers
-        if (isEnabled('traps') && smcData?.traps) {
+        // 1. Traps Markers (Look Above/Below and Fail)
+        if (isEnabled('traps')) {
+            // Traps en velas históricas si vienen en smcData o calculadas
             const last = candles[candles.length - 1];
-            if (last) {
-                if (smcData.traps.laf_bull) { markers.push({ time: last.time, position: 'belowBar', color: '#FF00FF', shape: 'arrowUp', text: 'LBF 🪤' }); }
-                if (smcData.traps.laf_bear) { markers.push({ time: last.time, position: 'aboveBar', color: '#FF00FF', shape: 'arrowDown', text: 'LAF 🪤' }); }
+            if (last && smcData?.traps) {
+                if (smcData.traps.laf_bull) { 
+                    markers.push({ 
+                        time: Number(last.time), 
+                        position: 'belowBar', 
+                        color: '#00E5FF', 
+                        shape: 'arrowUp', 
+                        text: '🪤 LBF Bull Trap' 
+                    }); 
+                }
+                if (smcData.traps.laf_bear) { 
+                    markers.push({ 
+                        time: Number(last.time), 
+                        position: 'aboveBar', 
+                        color: '#FF007A', 
+                        shape: 'arrowDown', 
+                        text: '🪤 LAF Bear Trap' 
+                    }); 
+                }
+            }
+
+            // También revisamos si hay barridos de liquidez en las últimas velas
+            const sweeps = (smcData as any)?.liquidity_sweeps;
+            if (candles.length >= 5 && sweeps && Array.isArray(sweeps)) {
+                sweeps.forEach((sw: any) => {
+                    const swTime = Number(sw.timestamp || sw.time);
+                    if (swTime) {
+                        markers.push({
+                            time: swTime,
+                            position: sw.type === 'BULLISH_SWEEP' ? 'belowBar' : 'aboveBar',
+                            color: '#FF00FF',
+                            shape: sw.type === 'BULLISH_SWEEP' ? 'arrowUp' : 'arrowDown',
+                            text: `🪤 ${sw.type === 'BULLISH_SWEEP' ? 'Sweep Low' : 'Sweep High'}`
+                        });
+                    }
+                });
             }
         }
 
@@ -375,7 +462,7 @@ export default function TradingChart() {
                 console.warn("[Chart] createSeriesMarkers failed:", e);
             }
         }
-    }, [smcData, auditedSignals, signalHistory, indicators, candles.length, activeSymbol]);
+    }, [smcData, indicators, candles.length, auditedSignals, signalHistory, activeSymbol]);
 
     // ── Key Levels, Sessions & Fibonacci ──
     const killzoneSeriesRef = useRef<ISeriesApi<'Baseline'>[]>([]);

@@ -199,7 +199,11 @@ export default function RadarFeed() {
                                         <div className="flex flex-col gap-1 items-end ml-auto max-w-[200px]">
                                             <div className="flex items-center gap-1.5 text-[10px] text-white/30 font-mono mb-1">
                                                 <Clock size={10} />
-                                                {new Date(signal.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                                {(() => {
+                                                    const rawTime = signal.created_at || signal.timestamp;
+                                                    const d = rawTime ? new Date(isNaN(Number(rawTime)) ? rawTime : Number(rawTime) * (Number(rawTime) < 1e11 ? 1000 : 1)) : new Date();
+                                                    return isNaN(d.getTime()) ? '--:--' : d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                                                })()}
                                             </div>
                                             
                                             {isBlocked ? (

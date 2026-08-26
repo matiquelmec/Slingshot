@@ -8,27 +8,61 @@ from engine.indicators.data_utils import fetch_binance_history
 from engine.core.store import store
 from engine.core.confluence import confluence_manager
 from engine.api.registry import registry
+from engine.indicators.polars_engine import polars_engine
+
+from engine.api.config import settings
+from engine.indicators.data_utils import fetch_binance_history, fetch_top_liquid_tickers
 
 class MarketScanner:
     """
-    [APEX MULTI-TEMPORAL SCANNER v15.0 — OTE WATCHDOG]
+    [APEX MULTI-TEMPORAL SCANNER v21.0 — DYNAMIC RVOL & KER WATCHLIST]
     Escáner profesional de mercado en segundo plano.
-    Analiza 20 activos líderes en temporalidades de Corto Plazo (15m) y Largo Plazo (4h).
-    Usa el motor real de SlingshotRouter y ConfluenceManager con contexto enriquecido:
-      - Golden Pocket / OTE (Fibonacci 61.8%-78.6%)
-      - Sesión de Trading activa (London / New York / Asia / Off-Hours)
-      - Filtro OTE Watchdog: penaliza setups que persiguen el precio
+    Combina Núcleo Fijo Institucional (Tier 1) con Rotación Dinámica por Volumen y KER (Tier 2).
     """
     def __init__(self):
         self.router = SlingshotRouter()
-        self.assets = [
-            "PAXGUSDT", "BTCUSDT", "ETHUSDT", "SOLUSDT", "INJUSDT", 
-            "SUIUSDT", "AVAXUSDT", "RENDERUSDT", "NEARUSDT", "FETUSDT", 
-            "ATOMUSDT", "TIAUSDT"
-        ]
+        # 🚀 Tier 1: Núcleo Fijo Especializado por Perfil de Activo
+        self.core_scalp_assets = ["RENDERUSDT", "SUIUSDT", "INJUSDT", "NEARUSDT", "FETUSDT", "ATOMUSDT", "PAXGUSDT", "TIAUSDT"]
+        self.core_swing_1h_assets = ["BTCUSDT", "ETHUSDT", "SOLUSDT", "AVAXUSDT", "LINKUSDT", "XRPUSDT", "PAXGUSDT"]
+        self.daily_assets = ["BTCUSDT", "ETHUSDT", "SOLUSDT", "PAXGUSDT", "RENDERUSDT", "NEARUSDT"]
+        
+        self.scalp_assets = list(self.core_scalp_assets)
+        self.swing_1h_assets = list(self.core_swing_1h_assets)
+        self.assets = list(set(self.scalp_assets + self.swing_1h_assets + self.daily_assets))
+        
+        self._dynamic_last_refresh = 0
         self._stop_event = asyncio.Event()
         self._task = None
         self._tactical_cache = {}  # Cache táctica en memoria para optimización v16.0
+
+    async def _refresh_dynamic_assets(self):
+        """
+        [DYNAMIC WATCHLIST ENGINE v21.0]
+        Descubre y rota activos líquidos con RVOL >= 1.25 y KER >= 0.25 en tiempo real.
+        """
+        if not getattr(settings, "ENABLE_DYNAMIC_WATCHLIST", True):
+            return
+            
+        now = time.time()
+        if now - self._dynamic_last_refresh < 1800: # Refresco cada 30 minutos
+            return
+            
+        try:
+            min_vol = getattr(settings, "DYNAMIC_MIN_24H_VOL_USDT", 30_000_000.0)
+            max_dynamic = getattr(settings, "DYNAMIC_MAX_ROTATING_ASSETS", 6)
+            
+            liquid_candidates = await fetch_top_liquid_tickers(min_volume_usdt=min_vol, limit=25)
+            new_dynamic = [sym for sym in liquid_candidates if sym not in self.core_scalp_assets and sym not in self.core_swing_1h_assets]
+            
+            # Tomar los top N candidatos adicionales más líquidos
+            selected_dynamic = new_dynamic[:max_dynamic]
+            
+            self.scalp_assets = list(set(self.core_scalp_assets + selected_dynamic))
+            self.assets = list(set(self.scalp_assets + self.swing_1h_assets + self.daily_assets))
+            self._dynamic_last_refresh = now
+            logger.info(f"✨ [DYNAMIC SCREENER] Universo actualizado: {len(self.core_scalp_assets)} Core + {len(selected_dynamic)} Dinámicos ({', '.join(selected_dynamic)}). Total: {len(self.assets)} activos.")
+        except Exception as e:
+            logger.debug(f"[DYNAMIC SCREENER] Error actualizando candidatos dinámicos: {e}")
 
     # ─────────────────────────────────────────────
     # HELPERS DE CONTEXTO
@@ -36,55 +70,54 @@ class MarketScanner:
 
     def _calculate_ote(self, df: pd.DataFrame) -> dict:
         """
-        Calcula el Golden Pocket (OTE) del último swing mayor usando Fibonacci.
-        Usa ventana de 50 velas para detectar swing high/low.
-        Retorna los niveles 0.5, 0.618 y 0.786 requeridos por ConfluenceManager.
+        Calcula el Golden Pocket (OTE) del último swing mayor usando el motor Polars en Rust.
+        Usa ventana de 50 velas para detectar swing high/low en microsegundos.
         """
         try:
-            window = min(50, len(df))
-            swing_high = float(df['high'].iloc[-window:].max())
-            swing_low  = float(df['low'].iloc[-window:].min())
-            leg = swing_high - swing_low
-            if leg == 0:
-                return {}
-            return {
-                "levels": {
-                    "0.5":   round(swing_high - leg * 0.5,   8),
-                    "0.618": round(swing_high - leg * 0.618, 8),
-                    "0.786": round(swing_high - leg * 0.786, 8),
-                },
-                "swing_high": swing_high,
-                "swing_low":  swing_low,
-                "is_whale_leg": (leg / swing_low) > 0.05,  # >5% = movimiento de ballena
-            }
+            from engine.indicators.polars_engine import polars_engine
+            return polars_engine.compute_swings_and_ote(df, window=min(50, len(df)))
         except Exception:
             return {}
 
-    def _calculate_session(self, timestamp) -> dict:
+    def _calculate_session(self, timestamp=None) -> dict:
         """
-        Detecta la sesión de trading activa según UTC:
-        London:    08:00–12:00 UTC
-        New York:  12:00–21:00 UTC (8 AM – 5 PM EST)
-        Asia:      00:00–08:00 UTC
-        Off-Hours: 21:00–00:00 UTC
+        Calcula el estado de sesión y ventanas institucionales utilizando
+        la Fuente Única de Verdad (SSoT) con soporte DST exacto (SessionManager).
         """
         try:
-            ts = pd.to_datetime(timestamp, utc=True)
-            hour = ts.hour
-            if 12 <= hour < 21:
-                session = "NEW_YORK"
-            elif 8 <= hour < 12:
-                session = "LONDON"
-            elif 0 <= hour < 8:
-                session = "ASIA"
-            else:
-                session = "OFF_HOURS"
+            from engine.core.session_manager import session_manager
+            state = session_manager.get_current_state()
+            data = state.get("data", {})
             return {
-                "current_session": session,
-                "yosh_window": 13 <= hour < 16,  # Golden Window ~10-11:30 AM EST
+                "current_session": data.get("current_session", "UNKNOWN"),
+                "is_killzone": data.get("is_killzone", False),
+                "is_silver_bullet": data.get("is_silver_bullet", False),
+                "is_overlap": data.get("is_overlap", False),
+                "yosh_window": data.get("yosh_window", False),
+                "pdh": data.get("pdh"),
+                "pdl": data.get("pdl"),
             }
+        except Exception as e:
+            logger.debug(f"[MARKET_SCANNER] Error obteniendo session_manager: {e}")
+            return {"current_session": "OFF_HOURS", "yosh_window": False}
+
+    async def _get_hft_order_flow(self, symbol: str) -> dict:
+        """
+        Consulta la caché local del Sidecar Node.js HFT (http://127.0.0.1:8080/ticks)
+        para inyectar el Order Flow Delta y Taker Volume en tiempo real.
+        """
+        try:
+            import httpx
+            async with httpx.AsyncClient(timeout=0.25) as client:
+                res = await client.get("http://127.0.0.1:8080/ticks")
+                if res.status_code == 200:
+                    ticks = res.json()
+                    sym_upper = symbol.upper()
+                    if sym_upper in ticks:
+                        return ticks[sym_upper]
         except Exception:
-            return {"current_session": None, "yosh_window": False}
+            pass
+        return {}
 
     def _ote_watchdog(self, direction: str, price: float, fib_data: dict) -> tuple:
         """
@@ -120,7 +153,6 @@ class MarketScanner:
         self._stop_event.set()
 
     async def _scan_loop(self):
-        await asyncio.sleep(10)
         while not self._stop_event.is_set():
             try:
                 logger.info("🔍 [MARKET_SCANNER] Iniciando ciclo de escaneo global (Scalp & Swing)...")
@@ -128,12 +160,16 @@ class MarketScanner:
                 logger.info("🔍 [MARKET_SCANNER] Ciclo de escaneo completado.")
             except Exception as e:
                 logger.error(f"❌ [MARKET_SCANNER] Error en loop de escaneo: {e}")
-            await asyncio.sleep(300)
+            await asyncio.sleep(60) # Refresco cada 60s en vez de 300s para tener datos frescos siempre
 
     async def _perform_scan(self):
+        # Refrescar candidatos dinámicos por volumen 24h
+        await self._refresh_dynamic_assets()
+        
         tasks = [
             self._scan_timeframe("15m", "scalp"),
-            self._scan_timeframe("4h",  "swing")
+            self._scan_timeframe("1h",  "swing"),
+            self._scan_timeframe("1d",  "daily")
         ]
         await asyncio.gather(*tasks)
 
@@ -142,6 +178,14 @@ class MarketScanner:
         dfs_dict = {}
         semaphore = asyncio.Semaphore(4)
         
+        # Seleccionar la lista especializada de activos según el timeframe
+        if store_key == "scalp":
+            target_assets = self.scalp_assets
+        elif store_key == "swing":
+            target_assets = self.swing_1h_assets
+        else:
+            target_assets = self.daily_assets
+        
         async def fetch_and_prep(symbol: str):
             async with semaphore:
                 try:
@@ -149,12 +193,14 @@ class MarketScanner:
                     if history:
                         df = pd.DataFrame([h["data"] for h in history])
                         df["timestamp"] = pd.to_datetime(df["timestamp"], unit="s")
+                        # 🦀 POLARS ACCELERATION: Cálculo vectorizado de ATR, EMAs y FVGs según el timeframe real
+                        df = polars_engine.compute_indicators(df)
                         dfs_dict[symbol] = df
                 except Exception as e:
                     logger.debug(f"[MARKET_SCANNER] Error descargando {symbol}: {e}")
 
         # Pre-descargar datos en paralelo para permitir SMT Divergence entre activos
-        await asyncio.gather(*(fetch_and_prep(sym) for sym in self.assets))
+        await asyncio.gather(*(fetch_and_prep(sym) for sym in target_assets))
 
         async def process_asset(symbol: str):
             try:
@@ -223,14 +269,19 @@ class MarketScanner:
                             if valid_fvgs:
                                 optimal_entry = min(valid_fvgs, key=lambda fvg: fvg["bottom"])["bottom"]
 
+                    # Consulta HFT Sidecar para inyectar Order Flow Delta
+                    hft_tick = await self._get_hft_order_flow(symbol)
+                    order_flow_delta = float(hft_tick.get("delta_ratio", 0.0))
+
                     virtual_sig = {
-                        "asset":       symbol,
-                        "symbol":      symbol,
-                        "type":        "Estructura Local",
-                        "signal_type": direction,
-                        "price":       optimal_entry,
-                        "timestamp":   str(last_timestamp),
-                        "atr_value":   atr_val,
+                        "asset":             symbol,
+                        "symbol":            symbol,
+                        "type":              "Estructura Local",
+                        "signal_type":       direction,
+                        "price":             optimal_entry,
+                        "timestamp":         str(last_timestamp),
+                        "atr_value":         atr_val,
+                        "order_flow_delta":  order_flow_delta,
                     }
                     
                     risk_data = self.router._risk.calculate_position(
@@ -323,9 +374,9 @@ class MarketScanner:
                 
                 await asyncio.sleep(0.05)
             except Exception as e:
-                logger.debug(f"[MARKET_SCANNER] Error analizando {symbol} ({interval}): {e}")
+                logger.error(f"[MARKET_SCANNER] Error procesando {symbol} en {interval}: {e}")
 
-        await asyncio.gather(*(process_asset(sym) for sym in self.assets))
+        await asyncio.gather(*(process_asset(sym) for sym in target_assets))
         
         sorted_candidates = sorted(
             candidates,
@@ -338,47 +389,66 @@ class MarketScanner:
             reverse=True
         )
         
-        top_candidates = sorted_candidates[:6]
-        await store.save_scanner_opportunities(store_key, top_candidates)
-        logger.info(f"🔍 [MARKET_SCANNER v16] Guardados {len(top_candidates)} setups de {store_key} (Top 10 Assets)")
+        # 🧠 [AI HYPOTHESIS ENRICHMENT v20.0]
+        # Generar hipótesis para el Top-3 de oportunidades válidas
+        try:
+            from engine.api.advisor import generate_scanner_hypotheses_batch
+            eligible_for_ai = [c for c in sorted_candidates if c["confluence_score"] >= 60 and not c.get("ote_chasing")]
+            if eligible_for_ai:
+                hypotheses = await generate_scanner_hypotheses_batch(eligible_for_ai[:3])
+                hyp_by_asset = {h.get("asset"): h for h in hypotheses if isinstance(h, dict) and h.get("asset")}
+                for cand in sorted_candidates:
+                    if cand["asset"] in hyp_by_asset:
+                        h_data = hyp_by_asset[cand["asset"]]
+                        cand["ai_hypothesis"] = h_data.get("hypothesis", "")
+                        cand["ai_verdict"] = h_data.get("verdict", "GO")
+                        cand["ai_threat"] = h_data.get("threat", "LOW")
+        except Exception as ai_err:
+            logger.debug(f"[MARKET_SCANNER] Bypass enriquecimiento IA: {ai_err}")
 
-        # ── [APEX UNIFIED DISPATCHER] ──
-        # Si un setup de 15m alcanza grado ELITE (>=60%), no está en cuarentena y está alineado a BTC,
-        # lo despachamos al store de señales para que el SignalTerminal y Bitunix Nexus lo aprovechen.
-        if interval == "15m":
-            for top_c in top_candidates:
-                if (top_c.get("confluence_score", 0) >= 60 
-                    and not top_c.get("ote_chasing", False)
-                    and not (top_c.get("asset_health", {}).get("is_quarantined", False))):
-                    
-                    elite_sig = {
-                        "id": f"scanner_{top_c['asset']}_{int(time.time())}",
-                        "asset": top_c["asset"],
-                        "symbol": top_c["asset"],
-                        "interval": "15m",
-                        "signal_type": top_c["direction"],
-                        "type": "SMC Sniper",
-                        "entry_price": float(top_c["price"]),
-                        "price": float(top_c["price"]),
-                        "stop_loss": float(top_c["stop_loss"]),
-                        "tp1": float(top_c["tp1"]),
-                        "tp2": float(top_c["tp2"]),
-                        "tp3": float(top_c["tp3"]),
-                        "take_profit_3r": float(top_c["tp3"]),
-                        "rr_ratio": float(top_c.get("rr_ratio_tp3", 3.0)),
-                        "status": "PENDING",
-                        "position_size": float(top_c.get("position_size_usdt", 1000.0)),
-                        "position_size_usdt": float(top_c.get("position_size_usdt", 1000.0)),
-                        "leverage": 20,
-                        "timestamp": datetime.now(timezone.utc).isoformat(),
-                        "confluence": {
-                            "score": top_c["confluence_score"],
-                            "checklist": top_c.get("checklist", [])
-                        }
-                    }
-                    await store.save_signal(elite_sig)
-                    await registry.broadcast_global({"type": "signal_auditor_update", "data": elite_sig})
-                    logger.info(f"💎 [MARKET_SCANNER] Setup ELITE {top_c['asset']} ({top_c['confluence_score']}%) sincronizado con Signal Terminal")
+        # 💎 [PARIDAD TOTAL 1-a-1 v19.1] Guardamos todas las oportunidades válidas
+        await store.save_scanner_opportunities(store_key, sorted_candidates)
+        logger.info(f"🔍 [MARKET_SCANNER v19.1] Guardados {len(sorted_candidates)} setups de {store_key} en el Escáner de Oportunidades.")
+
+        # 🚀 [TELEGRAM APEX SNIPER DISPATCHER] ──
+        # Despacho automático de oportunidades con confluencia >= 60% sin persecución de precio ni cuarentena
+        from engine.router.telegram_dispatcher import telegram_dispatcher
+        for top_c in sorted_candidates:
+            score = top_c.get("confluence_score", 0)
+            is_chasing = top_c.get("ote_chasing", False)
+            is_quarantined = top_c.get("asset_health", {}).get("is_quarantined", False)
+
+            if score >= 60 and not is_chasing and not is_quarantined:
+                dist_sl = abs(float(top_c["price"]) - float(top_c["stop_loss"]))
+                is_long = "LONG" in top_c["direction"].upper()
+                be_val = top_c.get("be_price") or (float(top_c["price"]) + (dist_sl * 1.0) if is_long else float(top_c["price"]) - (dist_sl * 1.0))
+
+                tele_sig = {
+                    "asset": top_c["asset"],
+                    "symbol": top_c["asset"],
+                    "interval": interval,
+                    "timeframe": interval,
+                    "signal_type": top_c["direction"],
+                    "direction": top_c["direction"],
+                    "type": "SMC Sniper",
+                    "price": float(top_c["price"]),
+                    "stop_loss": float(top_c["stop_loss"]),
+                    "be_price": round(be_val, 5),
+                    "tp1": float(top_c["tp1"]),
+                    "tp2": float(top_c["tp2"]),
+                    "tp3": float(top_c["tp3"]),
+                    "take_profit_3r": float(top_c["tp3"]),
+                    "confluence_score": score,
+                    "score": score,
+                    "session": top_c.get("session", "NEW_YORK"),
+                    "asset_health": top_c.get("asset_health", {})
+                }
+                asyncio.create_task(telegram_dispatcher.send_signal_alert(tele_sig))
+
+                # Auto-colocación automática de la orden límite en Bitunix si el Live Trading está habilitado
+                if settings.ENABLE_LIVE_TRADING:
+                    from engine.execution.nexus import nexus
+                    asyncio.create_task(nexus.process_limit_setup(tele_sig))
 
     def _format_opportunity(self, sig: dict, is_active: bool) -> dict:
         return {

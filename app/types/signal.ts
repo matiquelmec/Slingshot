@@ -58,6 +58,7 @@ export interface Signal {
     created_at?: string;
     price: number;
     stop_loss: number;
+    be_price?: number;
     take_profit_3r: number;
     tp1?: number;
     tp2?: number;

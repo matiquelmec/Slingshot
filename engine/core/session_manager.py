@@ -81,32 +81,59 @@ class SessionManager:
         self._state: dict = self._load_or_init()
 
     # ──────────────────────────────────────────────────────────────────────
-    # PERSISTENCIA
+    # PERSISTENCIA TRANSACCIONAL (SQLite WAL v21.0)
     # ──────────────────────────────────────────────────────────────────────
-    @property
-    def _state_file(self) -> Path:
-        return _STATE_FILE.parent / f"session_state_{self._symbol}.json"
-
     def _load_or_init(self) -> dict:
-        """Carga el estado desde JSON o crea uno nuevo limpio."""
-        if self._state_file.exists():
-            try:
-                with open(self._state_file, "r", encoding="utf-8") as f:
-                    data = json.load(f)
-                logger.info(f"[SessionManager:{self._symbol}] 📂 Estado cargado: día={data.get('trading_day')}")
-                return data
-            except Exception as e:
-                logger.info(f"[SessionManager:{self._symbol}] ⚠️  No se pudo leer JSON: {e}. Nuevo estado.")
-        return _empty_state()
+        """Carga el estado desde SQLite Vault o crea uno nuevo limpio asegurando integridad de esquema."""
+        base_state = _empty_state()
+        try:
+            from engine.core.vault import vault
+            loaded = vault.load_session_state(self._symbol)
+            if loaded and isinstance(loaded, dict):
+                # Mezclar sobre base_state para garantizar que existan asia, london, ny
+                for k, v in loaded.items():
+                    if k in ("asia", "london", "ny") and isinstance(v, dict):
+                        base_state[k].update(v)
+                    else:
+                        base_state[k] = v
+                logger.info(f"[SessionManager:{self._symbol}] 📂 Estado SQLite cargado: día={base_state.get('trading_day')}")
+                return base_state
+        except Exception as e:
+            logger.debug(f"[SessionManager:{self._symbol}] ⚠️ Fallback en SQLite Vault load: {e}")
+
+        # Fallback legacy a JSON si existe
+        if _STATE_FILE.parent.exists():
+            legacy_file = _STATE_FILE.parent / f"session_state_{self._symbol}.json"
+            if legacy_file.exists():
+                try:
+                    with open(legacy_file, "r", encoding="utf-8") as f:
+                        data = json.load(f)
+                    for k, v in data.items():
+                        if k in ("asia", "london", "ny") and isinstance(v, dict):
+                            base_state[k].update(v)
+                        else:
+                            base_state[k] = v
+                    logger.info(f"[SessionManager:{self._symbol}] 📂 Estado Legacy JSON cargado: día={base_state.get('trading_day')}")
+                    return base_state
+                except Exception:
+                    pass
+        return base_state
 
     def _save(self):
-        """Persiste el estado actual a disco."""
+        """Persiste el estado actual a SQLite Vault."""
         try:
-            self._state_file.parent.mkdir(parents=True, exist_ok=True)
-            with open(self._state_file, "w", encoding="utf-8") as f:
-                json.dump(self._state, f, indent=2, default=str)
+            from engine.core.vault import vault
+            vault.save_session_state(
+                symbol=self._symbol,
+                trading_day=self._state.get("trading_day", ""),
+                pdh=self._state.get("pdh"),
+                pdl=self._state.get("pdl"),
+                onh=self._state.get("onh"),
+                onl=self._state.get("onl"),
+                state_dict=self._state
+            )
         except Exception as e:
-            logger.error(f"[SessionManager:{self._symbol}] ⚠️  Error guardando: {e}")
+            logger.error(f"[SessionManager:{self._symbol}] ⚠️  Error guardando en Vault: {e}")
 
 
     # ──────────────────────────────────────────────────────────────────────
@@ -405,10 +432,10 @@ class SessionManager:
 
         sessions_info = {
             "asia": {
-                "high":        float(self._state["asia"]["high"]) if self._state["asia"]["high"] is not None else None,
-                "low":         float(self._state["asia"]["low"]) if self._state["asia"]["low"] is not None else None,
-                "prev_high":   float(self._state["asia"]["prev_high"]) if self._state["asia"]["prev_high"] is not None else None,
-                "prev_low":    float(self._state["asia"]["prev_low"]) if self._state["asia"]["prev_low"] is not None else None,
+                "high":        float(self._state["asia"].get("high")) if self._state["asia"].get("high") is not None else None,
+                "low":         float(self._state["asia"].get("low")) if self._state["asia"].get("low") is not None else None,
+                "prev_high":   float(self._state["asia"].get("prev_high")) if self._state["asia"].get("prev_high") is not None else None,
+                "prev_low":    float(self._state["asia"].get("prev_low")) if self._state["asia"].get("prev_low") is not None else None,
                 "start_utc":   int(asia_start_utc),
                 "end_utc":     int(asia_end_utc),
                 "open_chile":  _to_chile_str(asia_start_utc),
@@ -416,10 +443,10 @@ class SessionManager:
                 "status":      "ACTIVE" if 9 <= tokyo_hour < 15 else ("PENDING" if tokyo_hour < 9 else "CLOSED"),
             },
             "london": {
-                "high":        float(self._state["london"]["high"]) if self._state["london"]["high"] is not None else None,
-                "low":         float(self._state["london"]["low"]) if self._state["london"]["low"] is not None else None,
-                "prev_high":   float(self._state["london"]["prev_high"]) if self._state["london"]["prev_high"] is not None else None,
-                "prev_low":    float(self._state["london"]["prev_low"]) if self._state["london"]["prev_low"] is not None else None,
+                "high":        float(self._state["london"].get("high")) if self._state["london"].get("high") is not None else None,
+                "low":         float(self._state["london"].get("low")) if self._state["london"].get("low") is not None else None,
+                "prev_high":   float(self._state["london"].get("prev_high")) if self._state["london"].get("prev_high") is not None else None,
+                "prev_low":    float(self._state["london"].get("prev_low")) if self._state["london"].get("prev_low") is not None else None,
                 "start_utc":   int(lon_start_utc),
                 "end_utc":     int(lon_end_utc),
                 "open_chile":  _to_chile_str(lon_start_utc),
@@ -427,10 +454,10 @@ class SessionManager:
                 "status":      "ACTIVE" if 8 <= lon_hour < 16 else ("PENDING" if lon_hour < 8 else "CLOSED"),
             },
             "ny": {
-                "high":        float(self._state["ny"]["high"]) if self._state["ny"]["high"] is not None else None,
-                "low":         float(self._state["ny"]["low"]) if self._state["ny"]["low"] is not None else None,
-                "prev_high":   float(self._state["ny"]["prev_high"]) if self._state["ny"]["prev_high"] is not None else None,
-                "prev_low":    float(self._state["ny"]["prev_low"]) if self._state["ny"]["prev_low"] is not None else None,
+                "high":        float(self._state["ny"].get("high")) if self._state["ny"].get("high") is not None else None,
+                "low":         float(self._state["ny"].get("low")) if self._state["ny"].get("low") is not None else None,
+                "prev_high":   float(self._state["ny"].get("prev_high")) if self._state["ny"].get("prev_high") is not None else None,
+                "prev_low":    float(self._state["ny"].get("prev_low")) if self._state["ny"].get("prev_low") is not None else None,
                 "start_utc":   int(ny_start_utc),
                 "end_utc":     int(ny_end_utc),
                 "open_chile":  _to_chile_str(ny_start_utc),

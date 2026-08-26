@@ -208,20 +208,11 @@ class AdvisorBridge:
         if live_overrides:
             tactical = {**tactical, **live_overrides}
 
-        # ── 2. MTF: Guardar snapshot + lógica Capitán ─────────────────────────
+        # ── 2. MTF: Guardar snapshot ─────────────────────────────────────────
         sanitized_current = sanitize_for_json(tactical)
         await bc._store.save_tactical_snapshot(self._symbol, self._interval, sanitized_current)
 
-        IS_LEAD = (self._interval == "15m")
-        if not IS_LEAD:
-            existing = await bc._store.get_advisor_advice(self._symbol)
-            if existing:
-                await self._broadcast_advisor(bc, existing)
-                return
-            if not is_absorption_alert:
-                return  # Esperamos al 15m
-
-        # ── 3. Caché de candle (evita re-llamar a Ollama en la misma vela) ────
+        # ── 3. Caché de candle (evita re-llamar a IA en la misma vela si no hay cambio) ────
         current_candle_ts = (
             tactical.get("candles", [{}])[-1].get("timestamp", 0)
             if tactical.get("candles") else 0
@@ -303,9 +294,9 @@ class AdvisorBridge:
                 f"Signals: {len(approved_signals)}A/{len(blocked_signals)}B"
             )
 
-            # Si tenemos APIs en la nube (Groq/Gemini), desactivamos el gatekeeping para ofrecer
+            # Si tenemos APIs en la nube (OpenRouter/Groq/Gemini), desactivamos el gatekeeping para ofrecer
             # análisis multi-temporal general constante. Si es local, mantenemos el ahorro de CPU.
-            is_cloud_active = bool(settings.GROQ_API_KEY or settings.GEMINI_API_KEY)
+            is_cloud_active = bool(settings.OPENROUTER_API_KEY or settings.GROQ_API_KEY or settings.GEMINI_API_KEY)
             
             if not is_cloud_active and not is_active_signal and not is_trending and conf_score < 40:
                 # Bypass total — mercado en standby

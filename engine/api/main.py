@@ -195,19 +195,39 @@ async def get_signals(
 
 @app.get("/api/v1/scanner/opportunities")
 async def get_scanner_opportunities(
-    category: str = Query("all", description="Filtro: scalp, swing, o all")
+    category: str = Query("all", description="Filtro: scalp, swing, daily, tradfi o all")
 ):
-    """Retorna las mejores oportunidades de corto (scalp) y largo plazo (swing) del escáner."""
+    """Retorna las mejores oportunidades de corto (scalp), swing (4h), macro diario (1d) y TradFi (FTMO)."""
     cat_lower = category.lower()
     if cat_lower == "scalp":
         return {"scalp": store.get_scanner_opportunities("scalp")}
     elif cat_lower == "swing":
         return {"swing": store.get_scanner_opportunities("swing")}
+    elif cat_lower == "daily":
+        return {"daily": store.get_scanner_opportunities("daily")}
+    elif cat_lower == "tradfi":
+        return {"tradfi": store.get_scanner_opportunities("tradfi")}
     else:
         return {
             "scalp": store.get_scanner_opportunities("scalp"),
-            "swing": store.get_scanner_opportunities("swing")
+            "swing": store.get_scanner_opportunities("swing"),
+            "daily": store.get_scanner_opportunities("daily"),
+            "tradfi": store.get_scanner_opportunities("tradfi")
         }
+
+
+@app.get("/api/v1/tradfi/opportunities")
+async def get_tradfi_opportunities():
+    """Retorna exclusivamente las oportunidades de trading institucional en MetaTrader 5 (FTMO)."""
+    opps = store.get_scanner_opportunities("tradfi")
+    return {"count": len(opps), "opportunities": opps}
+
+
+@app.get("/api/v1/ftmo/guardian")
+async def get_ftmo_guardian_status():
+    """Retorna el estado de seguridad y telemetría de la cuenta FTMO en tiempo real."""
+    from engine.risk.ftmo_guardian import ftmo_guardian
+    return ftmo_guardian.update_equity(ftmo_guardian.current_equity)
 
 
 @app.get("/api/v1/trades/active")

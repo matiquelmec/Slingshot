@@ -173,7 +173,7 @@ class SlingshotRouter:
             silent=silent,
         )
 
-        # ── Fase 5: Ensamblaje del Resultado Final ───────────────────────────
+        # ── Fase 5: Ensamblaje del Resultado Final ───────────
         result = build_base_result(market_map)
         result["signals"]         = gate.approved
         result["blocked_signals"] = gate.blocked

@@ -27,6 +27,7 @@ interface Opportunity {
     type: string;
     price: number;
     stop_loss: number;
+    be_price?: number;
     sl_dist_pct?: number;
     position_size_usdt?: number;
     tp1: number;
@@ -44,6 +45,8 @@ interface Opportunity {
 const EDUCATIONAL_NOTES: Record<string, string> = {
     "Salud de Activo (KER)": "El indicador KER mide si el precio tiene mechas erráticas. Si es < 0.22, entra en Cuarentena y exige ≥ 65% de confluencia para proteger tu capital.",
     "Alineación Macro BTC": "Filtro V12 Sovereign: Evita operar Altcoins si van en dirección opuesta a la tendencia macro de Bitcoin para prevenir trampas.",
+    "Transición de Ciclo (Bear to Bull)": "Detección temprana del fin de un Bear Market: Se confirma cuando Bitcoin rompe la EMA 50 diaria con RVOL ≥ 1.5x y genera un CHoCH (Change of Character), desbloqueando los multiplicadores de +4.5R en Altcoins.",
+    "Quiebre Estructural CHoCH": "Change of Character institucional. Indica el primer rompimiento de la estructura bajista previa con absorción de volumen pasivo.",
     "Narrativa SMC": "Estructura Institucional CHoCH/BOS. Valida que el impulso siga el flujo de volumen principal.",
     "Zonas POI": "Point of Interest (Order Blocks o FVGs). Zonas con bloques de órdenes institucionales pendientes.",
     "Yosh Order Flow": "Detección de trampas de liquidez y ventana de oro (Golden Window 10:00 - 11:30 AM EST).",
@@ -56,10 +59,11 @@ const EDUCATIONAL_NOTES: Record<string, string> = {
 };
 
 export default function OpportunitiesScanner() {
-    const [activeTab, setActiveTab] = useState<'scalp' | 'swing'>('scalp');
-    const [opportunities, setOpportunities] = useState<{ scalp: Opportunity[]; swing: Opportunity[] }>({
+    const [activeTab, setActiveTab] = useState<'scalp' | 'swing' | 'daily'>('scalp');
+    const [opportunities, setOpportunities] = useState<{ scalp: Opportunity[]; swing: Opportunity[]; daily: Opportunity[] }>({
         scalp: [],
-        swing: []
+        swing: [],
+        daily: []
     });
     const [filterHighConfluence, setFilterHighConfluence] = useState(false);
     const [filterAdaptiveKER, setFilterAdaptiveKER] = useState(true);
@@ -80,7 +84,8 @@ export default function OpportunitiesScanner() {
                 const data = await res.json();
                 setOpportunities({
                     scalp: data.scalp || [],
-                    swing: data.swing || []
+                    swing: data.swing || [],
+                    daily: data.daily || []
                 });
             }
         } catch (err) {
@@ -102,7 +107,7 @@ export default function OpportunitiesScanner() {
         fetchOpps();
     };
 
-    const currentOppsRaw = activeTab === 'scalp' ? opportunities.scalp : opportunities.swing;
+    const currentOppsRaw = activeTab === 'scalp' ? opportunities.scalp : (activeTab === 'swing' ? opportunities.swing : opportunities.daily);
     
     let filteredOpps = currentOppsRaw;
     
@@ -114,21 +119,17 @@ export default function OpportunitiesScanner() {
     }
 
     if (filterHighConfluence) {
-        filteredOpps = filteredOpps.filter(o => o.confluence_score >= 50);
+        filteredOpps = filteredOpps.filter(o => o.confluence_score >= 60);
     }
     
     if (filterAdaptiveKER) {
-        const HIGH_NOISE_ASSETS = ['BNBUSDT', 'XRPUSDT', 'SOLUSDT', 'LINKUSDT'];
-        // En modo adaptativo KER, bloquea activos ruidosos o en cuarentena a menos que alcancen confluencia ELITE (>= 65%)
+        // En modo adaptativo KER, filtra únicamente los que estén explícitamente en cuarentena con baja confluencia (< 60%)
         filteredOpps = filteredOpps.filter(o => {
-            const assetUpper = (o.asset || '').toUpperCase();
             const isQuarantined = o.asset_health?.is_quarantined || o.asset_health?.status === 'QUARANTINED';
-            const isKnownHighNoise = HIGH_NOISE_ASSETS.includes(assetUpper);
-            
-            if (isQuarantined || isKnownHighNoise) {
-                return o.confluence_score >= 65; // Exige 65%+ para salir del filtro antiruido
+            if (isQuarantined) {
+                return o.confluence_score >= 60;
             }
-            return o.confluence_score >= 45;
+            return true;
         });
     }
     
@@ -293,23 +294,35 @@ export default function OpportunitiesScanner() {
                     <div className="flex bg-[#070E18] p-1 rounded-xl border border-white/5">
                         <button
                             onClick={() => { setActiveTab('scalp'); setExpandedAsset(null); }}
-                            className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
                                 activeTab === 'scalp'
-                                    ? 'bg-neon-cyan/15 text-neon-cyan border border-neon-cyan/25'
-                                    : 'text-white/50 hover:text-white border border-transparent'
+                                    ? 'bg-neon-cyan/20 text-neon-cyan border border-neon-cyan/40 shadow-[0_0_10px_rgba(6,182,212,0.2)]'
+                                    : 'text-white/40 hover:text-white border border-transparent'
                             }`}
+                            title="Altcoins de Alto Beta (RENDER, SUI, INJ, NEAR, FET, PAXG)"
                         >
-                            Scalp (15m)
+                            ⚡ Scalp (15m)
                         </button>
                         <button
                             onClick={() => { setActiveTab('swing'); setExpandedAsset(null); }}
-                            className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
                                 activeTab === 'swing'
+                                    ? 'bg-neon-purple/20 text-purple-400 border border-purple-500/40 shadow-[0_0_10px_rgba(168,85,247,0.2)]'
+                                    : 'text-white/40 hover:text-white border border-transparent'
+                            }`}
+                            title="Mega-Caps Institucionales OTE Swing (BTC, ETH, SOL, XRP, AVAX, LINK)"
+                        >
+                            ⏱️ Intraday (1H)
+                        </button>
+                        <button
+                            onClick={() => { setActiveTab('daily'); setExpandedAsset(null); }}
+                            className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                                activeTab === 'daily'
                                     ? 'bg-neon-cyan/15 text-neon-cyan border border-neon-cyan/25'
                                     : 'text-white/50 hover:text-white border border-transparent'
                             }`}
                         >
-                            Swing (4h)
+                            Diario (1D)
                         </button>
                     </div>
 
@@ -527,7 +540,7 @@ export default function OpportunitiesScanner() {
                                                     </span>
                                                 </div>
                                                 <div className="flex justify-between items-center group/level">
-                                                    <span className="text-white/40">TP1 (Cobertura):</span>
+                                                    <span className="text-white/40">TP1 (+1.3R / 70%):</span>
                                                     <span 
                                                         onClick={() => {
                                                             navigator.clipboard.writeText(opp.tp1.toString());
@@ -558,6 +571,24 @@ export default function OpportunitiesScanner() {
                                                         </span>
                                                     </div>
                                                 )}
+                                                {/* Fast Breakeven Trigger (+1.0R) */}
+                                                <div className="flex justify-between items-center group/level py-0.5 px-1 bg-neon-cyan/5 border border-neon-cyan/20 rounded">
+                                                    <span className="text-neon-cyan font-bold text-[9px]">🛡️ Fast BE (+1.0R):</span>
+                                                    <span 
+                                                        onClick={() => {
+                                                            const beVal = opp.be_price || (isLong ? (opp.price + Math.abs(opp.price - opp.stop_loss) * 1.0) : (opp.price - Math.abs(opp.price - opp.stop_loss) * 1.0));
+                                                            navigator.clipboard.writeText(beVal.toFixed(2).toString());
+                                                            const el = document.getElementById(`copy-be-${assetKey}`);
+                                                            if (el) { el.innerText = "COPIADO"; setTimeout(() => el.innerText = "COPIAR", 1000); }
+                                                        }}
+                                                        className="text-white font-mono font-bold cursor-pointer hover:text-neon-cyan flex items-center gap-1.5 active:scale-95 transition-all select-all"
+                                                        title="Nivel para mover SL al precio de entrada"
+                                                    >
+                                                        <span>{formatCurrency(opp.be_price || (isLong ? (opp.price + Math.abs(opp.price - opp.stop_loss) * 1.0) : (opp.price - Math.abs(opp.price - opp.stop_loss) * 1.0)))}</span>
+                                                        <span id={`copy-be-${assetKey}`} className="text-[7px] text-neon-cyan/40 border border-neon-cyan/20 px-1 py-0.5 rounded opacity-0 group-hover/level:opacity-100 transition-opacity font-sans">COPIAR</span>
+                                                    </span>
+                                                </div>
+
                                                 <div className="flex justify-between items-center group/level">
                                                     <span className="text-white/40">TP3 (Estructural):</span>
                                                     <span 
@@ -599,18 +630,20 @@ export default function OpportunitiesScanner() {
                                                             const risk = activeProfileConfig.riskUsd;
                                                             const dist = Math.abs(opp.price - opp.stop_loss);
                                                             const lots = calculateMt5Lots(opp.asset, risk, dist);
-                                                            const text = `[${activeProfileConfig.isFtmo ? 'FTMO MT5' : 'BITUNIX'}] ${action} ${sym} @ ${opp.price} | LOTES: ${lots.toFixed(2)} | SL: ${opp.stop_loss} | TP1: ${opp.tp1} | TP3: ${opp.tp3}`;
+                                                            const isL = opp.direction.toUpperCase() === 'LONG';
+                                                            const beP = opp.be_price || (isL ? opp.price + (dist * 1.0) : opp.price - (dist * 1.0));
+                                                            const text = `[${activeProfileConfig.isFtmo ? 'FTMO MT5' : 'BITUNIX'}] ${action} ${sym} @ ${opp.price} | LOTES: ${lots.toFixed(2)} | SL: ${opp.stop_loss} | 🛡️ BE (+1.0R): ${formatCurrency(beP)} | 🥇 TP1: ${opp.tp1} | 🎯 TP3: ${opp.tp3}`;
                                                             navigator.clipboard.writeText(text);
                                                             setCopiedAsset(assetKey);
                                                             setTimeout(() => setCopiedAsset(null), 2000);
                                                         }}
-                                                        className={`w-full py-1.5 rounded-lg text-[9px] font-mono font-black transition-all flex items-center justify-center gap-1 cursor-pointer border ${
+                                                        className={`w-full py-2 rounded-xl text-[10px] font-mono font-black transition-all flex items-center justify-center gap-1.5 cursor-pointer border active:scale-[0.98] ${
                                                             copiedAsset === assetKey
-                                                                ? 'bg-neon-green text-black border-neon-green shadow-[0_0_10px_rgba(16,185,129,0.5)]'
-                                                                : 'bg-neon-green/15 hover:bg-neon-green/25 text-neon-green border-neon-green/30'
+                                                                ? 'bg-emerald-500 text-black border-emerald-400 shadow-[0_0_15px_rgba(16,185,129,0.6)]'
+                                                                : 'bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-400 border-emerald-500/30 shadow-[0_0_10px_rgba(16,185,129,0.1)]'
                                                         }`}
                                                     >
-                                                        {copiedAsset === assetKey ? '✅ ¡ORDEN COPIADA!' : '📋 COPIAR ORDEN MT5'}
+                                                        {copiedAsset === assetKey ? '✅ ¡ORDEN COPIADA EN 1-CLIC!' : '📋 COPIAR PARÁMETROS ORDEN MT5'}
                                                     </button>
                                                 </div>
                                             </div>

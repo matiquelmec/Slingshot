@@ -115,6 +115,38 @@ export default function LatticeStatus() {
             </div>
 
 
+            {/* 2.5 Ghost Sentinel Macro Banner (v17.1) */}
+            {(() => {
+                const ghost = useTelemetryStore.getState().ghostData;
+                if (!ghost) return null;
+                const fgVal = ghost.fear_greed_value ?? 50;
+                const fgLabel = ghost.fear_greed_label ?? 'Neutral';
+                const btcd = ghost.btc_dominance ? Number(ghost.btc_dominance).toFixed(1) : '56.9';
+                const bias = ghost.macro_bias ?? 'NEUTRAL';
+                
+                const fgColor = fgVal < 30 ? 'text-neon-red bg-neon-red/10 border-neon-red/30' : fgVal > 70 ? 'text-neon-green bg-neon-green/10 border-neon-green/30' : 'text-yellow-400 bg-yellow-400/10 border-yellow-400/30';
+                const biasColor = bias === 'BLOCK_LONGS' ? 'text-orange-400 border-orange-400/30 bg-orange-400/10' : bias === 'BULLISH' ? 'text-neon-green border-neon-green/30 bg-neon-green/10' : bias === 'BEARISH' ? 'text-neon-red border-neon-red/30 bg-neon-red/10' : 'text-white/60 border-white/10 bg-white/5';
+                
+                return (
+                    <div className="flex items-center gap-3">
+                        {/* Fear & Greed */}
+                        <div className={`px-2.5 py-1 rounded-lg border flex items-center gap-1.5 font-mono text-[9px] font-black ${fgColor}`}>
+                            <span>🧠 F&G: {fgVal}</span>
+                            <span className="text-[8px] opacity-80">({fgLabel})</span>
+                        </div>
+                        {/* BTC Dominance */}
+                        <div className="px-2.5 py-1 rounded-lg border border-white/10 bg-white/5 font-mono text-[9px] font-black text-white/80 flex items-center gap-1">
+                            <span className="text-neon-cyan">₿</span>
+                            <span>DOM: {btcd}%</span>
+                        </div>
+                        {/* Macro Bias */}
+                        <div className={`px-2.5 py-1 rounded-lg border font-mono text-[9px] font-black tracking-widest uppercase ${biasColor}`}>
+                            <span>🛡️ {bias}</span>
+                        </div>
+                    </div>
+                );
+            })()}
+
             <div className="flex-1" />
 
             {/* 3. Global Stats */}
@@ -195,6 +227,8 @@ export default function LatticeStatus() {
                             <div className="flex flex-col gap-1">
                                 <label className="text-white/40 font-bold tracking-wider">ACTIVO</label>
                                 <select 
+                                    id="sandbox-asset-select"
+                                    name="sandboxAsset"
                                     value={testAsset} 
                                     onChange={(e) => setTestAsset(e.target.value)}
                                     className="bg-black/50 border border-white/10 rounded px-2.5 py-1.5 text-white font-mono outline-none focus:border-neon-cyan/50"
@@ -233,6 +267,8 @@ export default function LatticeStatus() {
                             <div className="flex flex-col gap-1">
                                 <label className="text-white/40 font-bold tracking-wider">PRECIO DE REFERENCIA</label>
                                 <input 
+                                    id="sandbox-price-input"
+                                    name="sandboxPrice"
                                     type="number" 
                                     value={testPrice} 
                                     onChange={(e) => setTestPrice(Number(e.target.value))}

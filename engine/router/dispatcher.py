@@ -65,6 +65,7 @@ def enrich_signal(signal: dict, risk_data: dict, interval: str) -> dict:
         "leverage":          risk_data["leverage"],
         "position_size":     risk_data["position_size_usdt"],
         "stop_loss":         risk_data["stop_loss"],
+        "be_price":          risk_data.get("be_price", 0),
         "tp1":               risk_data["tp1"],
         "tp2":               risk_data["tp2"],
         "tp3":               risk_data["tp3"],
