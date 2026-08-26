@@ -417,8 +417,9 @@ class MarketScanner:
             score = top_c.get("confluence_score", 0)
             is_chasing = top_c.get("ote_chasing", False)
             is_quarantined = top_c.get("asset_health", {}).get("is_quarantined", False)
+            min_score = 65 if is_quarantined else 60
 
-            if score >= 60 and not is_chasing and not is_quarantined:
+            if score >= min_score and not is_chasing:
                 dist_sl = abs(float(top_c["price"]) - float(top_c["stop_loss"]))
                 is_long = "LONG" in top_c["direction"].upper()
                 be_val = top_c.get("be_price") or (float(top_c["price"]) + (dist_sl * 1.0) if is_long else float(top_c["price"]) - (dist_sl * 1.0))
