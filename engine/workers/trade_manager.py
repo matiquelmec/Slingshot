@@ -465,17 +465,9 @@ class TradeManager:
                     should_update_sl = True
 
             if should_update_sl:
-                cur_tp = float(pos.get("tpPrice") or 0.0)
-                if side == "LONG":
-                    if cur_tp <= cur_price:
-                        cur_tp = round(max(cur_price * 1.02, entry_price + (sl_dist * 2.5)), 4)
-                else:  # SHORT
-                    if cur_tp <= 0 or cur_tp >= cur_price:
-                        cur_tp = round(min(cur_price * 0.98, entry_price - (sl_dist * 2.5)), 4)
-                
-                await bitunix.modify_position_tpsl(symbol=sym, position_id=pos_id, sl_price=target_sl, tp_price=cur_tp)
+                await bitunix.modify_position_tpsl(symbol=sym, position_id=pos_id, sl_price=target_sl, tp_price=None)
                 action_taken = f"SL_ACTUALIZADO (${target_sl})"
-                logger.info(f"🛡️ [TRADE_MANAGER] Posición {sym} {side} (+{r_profit:.2f}R) protegida con SL=${target_sl} (TP=${cur_tp}).")
+                logger.info(f"🛡️ [TRADE_MANAGER] Posición {sym} {side} (+{r_profit:.2f}R) protegida con SL=${target_sl}.")
             elif sl_at_be:
                 status_msg = "YA_PROTEGIDO"
 
