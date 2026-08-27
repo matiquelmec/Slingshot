@@ -1,11 +1,11 @@
-# 🏗️ Estructura del Proyecto Slingshot v21.0 Apex Autonomous
+# 🏗️ Estructura del Proyecto Slingshot v22.0 Apex Sovereign
 
 > Guía de referencia oficial para la arquitectura, mantenimiento y evolución del sistema.
-> **Última actualización**: Agosto 2026 (v21.0 Apex Autonomous)
+> **Última actualización**: Agosto 2026 (v22.0 Apex Sovereign)
 
 ---
 
-## 📁 Árbol de Directorios Oficial v21.0
+## 📁 Árbol de Directorios Oficial v22.0
 
 ```text
 Slingshot_Trading/
@@ -26,7 +26,7 @@ Slingshot_Trading/
 │   │   └── advisor.py               # Motor IA (Ollama/Gemma-3) + Fallback Determinístico
 │   ├── core/                        # Núcleo del motor y Persistencia
 │   │   ├── vault.py                 # SQLite WAL Vault — Persistencia Transaccional ACID (SSoT)
-│   │   ├── confluence.py            # ConfluenceManager — Jurado de Confluencia (12 Factores SMC)
+│   │   ├── confluence.py            # ConfluenceManager — Jurado de Confluencia (14 Factores SMC)
 │   │   ├── store.py                 # MemoryStore — Estado persistente por activo y buffers
 │   │   ├── session_manager.py       # Gestión de sesiones institucionales (Asia/London/NY)
 │   │   └── validator.py             # AI Validator Agent — Auditoría narrativa
@@ -46,7 +46,7 @@ Slingshot_Trading/
 │   │   ├── regime.py                # Detector de Régimen de Mercado (EMA + ADX)
 │   │   └── tradfi_provider.py       # Configuración de Activos TradFi (Oro, Nasdaq, Dow Jones)
 │   ├── risk/                        # Gestión de riesgo institucional
-│   │   ├── risk_manager.py          # RiskManager v21.0 — Matriz Adaptativa R:R y Sizing
+│   │   ├── risk_manager.py          # RiskManager v22.0 — Matriz Adaptativa R:R y Sizing
 │   │   └── ftmo_guardian.py         # FTMO Guardian Shield — Kill-Switch Diario (-3.5%)
 │   ├── execution/                   # Ejecución Institucional en Exchanges
 │   │   ├── nexus.py                 # Nexus Node — Orquestador de Ejecución con Slot Recycling
@@ -56,38 +56,44 @@ Slingshot_Trading/
 │   ├── workers/                     # Procesos en segundo plano
 │   │   ├── orchestrator.py          # SlingshotOrchestrator — Director de orquesta 24/7
 │   │   ├── market_scanner.py        # Escáner de Oportunidades Multitemporal (14 Activos)
-│   │   ├── trade_manager.py         # Centinela de Posiciones Activas & Fast Breakeven (+1.0R)
+│   │   ├── trade_manager.py         # Centinela de Posiciones Activas & Apex Limit Sentinel
 │   │   ├── news_worker.py           # Ingestor de Noticias en Tiempo Real
 │   │   └── calendar_worker.py       # Calendario Económico de Alto Impacto
 │   ├── backtest/                    # Motor de Auditoría y Backtesting
-│   │   ├── unified_backtest_engine.py # The Truth Engine — Auditoría barra a barra
+│   │   ├── unified_backtest_engine.py # The Truth Engine — Auditoría con paridad 100%
 │   │   ├── backtest_tradfi_6mo.py   # Backtest TradFi de 6 meses
-│   │   └── data/                    # Datasets históricos 180d en formato binario .parquet
-│   └── tests/                       # ═══ Suite de Certificación QA (26 Tests al 100% OK) ═══
-│       ├── test_full_engine_autonomy_audit.py # Autonomía, Slot Recycling y no retroceso SL
-│       ├── test_live_trade_management.py      # Gestión en vivo de Stop Loss y Fast BE en Bitunix
-│       ├── test_sqlite_vault.py               # Persistencia WAL, anti-spam y concurrencia
-│       ├── test_mt5_bridge.py                 # Ejecución MT5 y bloqueo de Drawdown FTMO
-│       ├── test_deterministic_pipeline_isolation.py # Latencia < 15ms sin dependencias LLM
-│       ├── test_session_mastery.py            # Killzones Londres/NY y barridos de sesión
-│       ├── test_market_scanner_hft.py         # OTE Watchdog y fallback orden flow HFT
-│       ├── test_ftmo_security_guard.py        # Lot sizing de Oro y protección diaria FTMO
-│       ├── test_telegram_persistence.py       # Tolerancia a reinicios y purga de alertas
-│       └── test_dynamic_universe_screener.py  # Inmutabilidad de Core y rotación dinámica RVOL/KER
-├── scripts/                         # ═══ Utilidades de Mantenimiento y Auditoría ═══
-│   ├── manage_open_positions.py     # Script de inspección y protección en vivo en Bitunix
-│   └── run_qa_suite.py              # Ejecutor de la suite de pruebas unitarias
-├── slingshot_hft_sidecar/          # ═══ OMEGA HFT SIDECAR: Ingestor Node.js 20+ (Puerto 8080) ═══
-├── docs/                            # ═══ Documentación Técnica Oficial ═══
-│   ├── SLINGSHOT_BIBLE_V21.md       # Biblia Técnica de v21.0 Apex Autonomous
-│   └── ESTRUCTURA_PROYECTO.md       # Referencia de arquitectura del sistema
-├── launch.bat                       # Lanzador Unificado para Windows
-└── README.md                        # Documentación Oficial v21.0 Apex Autonomous
+│   │   ├── data/                    # Datasets históricos binarios .parquet (51 archivos)
+│   │   └── reports/                 # Reportes oficiales (unified + legacy_runs/)
+│   └── tests/                       # ═══ Suite de Certificación QA (35 Tests al 100% OK) ═══
+│       ├── test_intelligent_limit_order_sentinel.py # Centinela de órdenes límite
+│       ├── test_full_engine_autonomy_audit.py       # Autonomía, Slot Recycling y no retroceso SL
+│       ├── test_live_trade_management.py            # Gestión en vivo de Stop Loss y Fast BE en Bitunix
+│       ├── test_sqlite_vault.py                     # Persistencia WAL, anti-spam y concurrencia
+│       ├── test_mt5_bridge.py                       # Ejecución MT5 y bloqueo de Drawdown FTMO
+│       ├── test_deterministic_pipeline_isolation.py # Latencia y lot sizing sin red
+│       ├── test_session_mastery.py                  # Killzones de sesión (Asia/London/NY)
+│       ├── test_market_scanner_hft.py               # Watchdog OTE y order flow fallback
+│       ├── test_ftmo_security_guard.py              # Guardian FTMO y TradFi
+│       ├── test_telegram_persistence.py             # Deduplicación y supervivencia a reinicios
+│       └── test_dynamic_universe_screener.py        # Rotación cuantitativa de activos
+├── scripts/                         # ═══ Herramientas de Mantenimiento y QA ═══
+│   ├── run_qa_suite.py              # Ejecutor oficial de la suite QA (35/35 tests)
+│   ├── diagnostico_motor.py         # Diagnóstico integral del motor
+│   ├── doctor.py                    # Chequeo de salud del sistema
+│   ├── inspect_orders.py            # Inspección de órdenes activas en Bitunix
+│   ├── inspect_positions.py         # Inspección de posiciones vivas
+│   ├── manage_open_positions.py     # Cierre de emergencia / gestión manual
+│   └── archive/                     # Scripts exploratorios archivados
+├── docs/                            # ═══ Documentación Técnica y Biblias ═══
+│   ├── ESTRUCTURA_PROYECTO.md       # Guía de arquitectura (este archivo)
+│   ├── SLINGSHOT_BIBLE_V22.md       # Biblia técnica oficial v22.0 Apex Sovereign
+│   └── knowledge/                   # Base de conocimiento institucional
+└── launch.bat                       # Script de arranque rápido para Windows
 ```
 
 ---
 
-## 🔬 Suite de Pruebas Unitarias Verificadas (29/29 Tests en Verde)
+## 🔬 Suite de Pruebas Unitarias Verificadas (35/35 Tests en Verde)
 
 ```powershell
 python scripts/run_qa_suite.py
