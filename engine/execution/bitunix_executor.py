@@ -451,31 +451,55 @@ class BitunixExecutor:
     async def place_position_tpsl(self, symbol: str, position_id: str, sl_price: Optional[float] = None, tp_price: Optional[float] = None) -> Optional[str]:
         """
         Establece Stop Loss y/o Take Profit para una posicion abierta en Bitunix.
-        Usa el endpoint POST /api/v1/futures/tpsl/position/place_order.
+        Verifica primero si ya existe una orden TPSL activa para evitar el error de duplicado ('Network Error').
         """
         sym = symbol.replace('/', '').upper()
         if self.dry_run or (position_id and str(position_id).startswith("dry_")):
             logger.info(f"🧪 [BITUNIX DRY RUN] Colocando TP/SL de posicion para {sym} (PosId: {position_id}) -> TP: {tp_price}, SL: {sl_price}")
             return f"dry_tpsl_{uuid.uuid4().hex[:8]}"
 
+        decimals = 4 if (sl_price and float(sl_price) < 10.0) or (tp_price and float(tp_price) < 10.0) else 2
+        formatted_sl = f"{float(sl_price):.{decimals}f}" if sl_price is not None else None
+        formatted_tp = f"{float(tp_price):.{decimals}f}" if tp_price is not None else None
+
+        # 1. Comprobar si ya existe un TPSL para esta posición en Bitunix
+        try:
+            res_orders = await self._request("GET", "/api/v1/futures/tpsl/get_pending_orders", params={"symbol": sym})
+            existing_orders = res_orders.get("data", []) or []
+            if isinstance(existing_orders, list):
+                for eo in existing_orders:
+                    eo_sl = str(eo.get("slPrice", ""))
+                    eo_id = str(eo.get("id", ""))
+                    # Si ya tiene el mismo SL configurado, no reenviar
+                    if formatted_sl and eo_sl and abs(float(eo_sl) - float(formatted_sl)) < 0.001:
+                        logger.info(f"🛡️ [BITUNIX] {sym} ya cuenta con Stop Loss activo blindado en ${eo_sl} (ID: {eo_id}).")
+                        return eo_id
+                    # Si el SL es diferente y necesita actualización, cancelamos el anterior
+                    if eo_id:
+                        logger.info(f"🔄 [BITUNIX] Cancelando TPSL previo {eo_id} para actualizar {sym}...")
+                        await self._request("POST", "/api/v1/futures/tpsl/cancel_order", json_body={"orderId": eo_id, "symbol": sym})
+        except Exception as e:
+            logger.debug(f"[BITUNIX] Error verificando TPSL previos: {e}")
+
+        # 2. Emitir la nueva orden de Stop Loss / Take Profit
         payload = {
             "symbol": sym,
             "positionId": str(position_id)
         }
-        if sl_price:
-            payload["slPrice"] = str(round(float(sl_price), 2))
+        if formatted_sl:
+            payload["slPrice"] = formatted_sl
             payload["slStopType"] = "LAST_PRICE"
-        if tp_price:
-            payload["tpPrice"] = str(round(float(tp_price), 2))
+        if formatted_tp:
+            payload["tpPrice"] = formatted_tp
             payload["tpStopType"] = "LAST_PRICE"
 
         res = await self._request("POST", "/api/v1/futures/tpsl/position/place_order", json_body=payload)
         if res.get("code") == 0:
             order_id = res.get("data", {}).get("orderId")
-            logger.info(f"✅ [BITUNIX] TP/SL de posicion colocado con exito. Order ID: {order_id}")
+            logger.info(f"✅ [BITUNIX] TP/SL de posicion colocado con exito para {sym}. Order ID: {order_id}")
             return order_id
         else:
-            logger.error(f"❌ [BITUNIX] Error al colocar TP/SL de posicion: {res.get('msg')}")
+            logger.error(f"❌ [BITUNIX] Error al colocar TP/SL de posicion {sym}: {res.get('msg')}")
             return None
 
     async def get_pending_positions(self) -> List[Dict[str, Any]]:
