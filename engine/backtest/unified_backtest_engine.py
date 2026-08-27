@@ -22,6 +22,9 @@ from typing import List, Dict, Any, Optional
 import pandas as pd
 import numpy as np
 
+if sys.platform == "win32":
+    sys.stdout.reconfigure(encoding="utf-8")
+
 # Path config
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
 
@@ -181,13 +184,23 @@ class UnifiedBacktestEngine:
                 tp2 = entry - (risk * 2.5)
                 tp3 = entry - (risk * (4.0 if is_1h else 3.5))
 
-            # 5. Evaluación de Activación de Orden Límite (Horizonte de 12 velas)
+            # 5. Evaluación de Activación de Orden Límite con Centinela Institucional (12 velas)
             limit_filled = False
             fill_idx = -1
 
             for j in range(i + 1, min(i + 13, n)):
                 bar_h = float(df.iloc[j]['high'])
                 bar_l = float(df.iloc[j]['low'])
+
+                # Regla A (Missed Target Kill-Switch): Si el precio toca TP1 antes de entrar, se cancela
+                if (direction == "LONG" and bar_h >= tp1) or (direction == "SHORT" and bar_l <= tp1):
+                    break
+
+                # Regla B (Pre-Entry SL Breach): Si el precio rompe el SL antes de entrar, se cancela
+                if (direction == "LONG" and bar_l <= sl) or (direction == "SHORT" and bar_h >= sl):
+                    break
+
+                # Regla C: Llenado en zona de descuento
                 if direction == "LONG" and bar_l <= entry:
                     limit_filled = True
                     fill_idx = j
