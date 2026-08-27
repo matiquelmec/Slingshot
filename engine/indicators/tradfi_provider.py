@@ -46,6 +46,26 @@ TRADFI_ASSETS_CONFIG = {
         "pip_value": 1.0,
         "point_size": 1.0
     },
+    "US500": {
+        "ticker": "ES=F",
+        "name": "S&P 500 Cash",
+        "category": "INDICES",
+        "contract_size": 1,
+        "spread_usd": 0.40,
+        "min_lot": 0.1,
+        "pip_value": 1.0,
+        "point_size": 0.25
+    },
+    "HGUSD": {
+        "ticker": "HG=F",
+        "name": "Copper High Grade",
+        "category": "COMMODITIES",
+        "contract_size": 25000,
+        "spread_usd": 0.0010,
+        "min_lot": 0.01,
+        "pip_value": 12.5,
+        "point_size": 0.0005
+    },
     "GBPUSD": {
         "ticker": "GBPUSD=X",
         "name": "GBP/USD Forex",

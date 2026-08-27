@@ -862,5 +862,17 @@
   "44f62abfce3e51efc7be1e98d07d26fa": {
     "price": 0.0,
     "advice": "{\"verdict\": \"SIDEWAYS\", \"threat\": \"MEDIUM\", \"logic\": \"R\\u00e9gimen IDLE\"}"
+  },
+  "950469a50ae066431d5f153c88ee559c": {
+    "price": 0.0,
+    "advice": "{\"verdict\": \"SIDEWAYS\", \"threat\": \"MEDIUM\", \"logic\": \"R\\u00e9gimen IDLE\"}"
+  },
+  "0350021e952544d5ecd728d9d18525ea": {
+    "price": 0.0,
+    "advice": "{\"verdict\": \"SIDEWAYS\", \"threat\": \"MEDIUM\", \"logic\": \"R\\u00e9gimen IDLE\"}"
+  },
+  "6faeb733e0de709c883254704005a73e": {
+    "price": 0.0,
+    "advice": "{\"verdict\": \"SIDEWAYS\", \"threat\": \"MEDIUM\", \"logic\": \"R\\u00e9gimen IDLE\"}"
   }
 }

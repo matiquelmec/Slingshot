@@ -27,7 +27,7 @@ export type MarketCategory = 'ALL' | 'FTMO_INSTITUTIONAL' | 'CRYPTO_ALTCOINS';
  *   - AVAXUSD: 1 Lote = 10 AVAX (Contract Size: 10).
  */
 export const FTMO_CONTRACT_SIZES: Record<string, number> = {
-    // Metales
+    // Metales & Commodities
     'XAU': 100,
     'XAUUSD': 100,
     'GOLD': 100,
@@ -36,6 +36,9 @@ export const FTMO_CONTRACT_SIZES: Record<string, number> = {
     'XAG': 5000,
     'XAGUSD': 5000,
     'SILVER': 5000,
+    'HG': 25000,
+    'HGUSD': 25000,
+    'COPPER': 25000,
 
     // Índices
     'US100': 1,
@@ -45,6 +48,7 @@ export const FTMO_CONTRACT_SIZES: Record<string, number> = {
     'DJ30': 1,
     'US500': 1,
     'SPX500': 1,
+    'ES': 1,
 
     // Forex Majors
     'EURUSD': 100000,
@@ -93,8 +97,8 @@ export const FTMO_CONTRACT_SIZES: Record<string, number> = {
  * Lista de activos institucionales soportados en FTMO MT5
  */
 export const FTMO_INSTITUTIONAL_SYMBOLS = new Set([
-    'XAUUSD', 'GOLD', 'PAXGUSDT', 'XAGUSD',
-    'US100', 'NAS100', 'US30', 'US500',
+    'XAUUSD', 'GOLD', 'PAXGUSDT', 'XAGUSD', 'HGUSD', 'COPPER',
+    'US100', 'NAS100', 'US30', 'DJ30', 'US500', 'SPX500',
     'EURUSD', 'GBPUSD', 'USDJPY', 'AUDUSD', 'USDCAD',
     'BTCUSD', 'BTCUSDT', 'ETHUSD', 'ETHUSDT', 'SOLUSD', 'SOLUSDT', 'AVAXUSD', 'AVAXUSDT'
 ]);
@@ -104,7 +108,15 @@ export const FTMO_INSTITUTIONAL_SYMBOLS = new Set([
  */
 export function getAssetMarketCategory(symbol: string): 'FTMO_INSTITUTIONAL' | 'CRYPTO_ALTCOINS' {
     const cleanSym = symbol.toUpperCase().replace('.S', '').replace('.P', '');
-    if (FTMO_INSTITUTIONAL_SYMBOLS.has(cleanSym) || cleanSym.startsWith('XAU') || cleanSym.startsWith('US100') || cleanSym.startsWith('EUR')) {
+    if (
+        FTMO_INSTITUTIONAL_SYMBOLS.has(cleanSym) || 
+        cleanSym.startsWith('XAU') || 
+        cleanSym.startsWith('US100') || 
+        cleanSym.startsWith('US30') || 
+        cleanSym.startsWith('US500') || 
+        cleanSym.startsWith('HG') || 
+        cleanSym.startsWith('EUR')
+    ) {
         return 'FTMO_INSTITUTIONAL';
     }
     return 'CRYPTO_ALTCOINS';
