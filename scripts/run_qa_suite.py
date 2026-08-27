@@ -27,6 +27,7 @@ MODERN_TEST_FILES = [
     "engine/tests/test_market_scanner_hft.py",
     "engine/tests/test_ftmo_security_guard.py",
     "engine/tests/test_telegram_persistence.py",
+    "engine/tests/test_dynamic_sl_professional_audit.py",
     "engine/tests/test_dynamic_universe_screener.py"
 ]
 
@@ -40,7 +41,7 @@ def main():
     
     if result.returncode == 0:
         print("\n" + "="*80)
-        print("✅ CERTIFICACIÓN QA EXITOSA: 50/50 PRUEBAS APROBADAS AL 100%")
+        print("✅ CERTIFICACIÓN QA EXITOSA: 55/55 PRUEBAS APROBADAS AL 100%")
         print("="*80 + "\n")
     else:
         print("\n" + "="*80)

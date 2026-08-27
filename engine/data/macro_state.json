@@ -12,10 +12,10 @@
   "dxy_trend": "BULLISH",
   "dxy_price": 99.17,
   "nasdaq_trend": "BULLISH",
-  "nasdaq_change_pct": 1.26,
+  "nasdaq_change_pct": 1.23,
   "risk_appetite": "RISK_ON",
   "news_sentiment": 0.5,
   "active_event": "",
-  "last_updated": 1787856723.3617582,
+  "last_updated": 1787856863.541283,
   "is_stale": false
 }
