@@ -120,21 +120,21 @@ TRADFI_INSTITUTIONAL = [
 
 ---
 
-## 4. Certificación QA Oficial (56/56 Tests al 100% OK)
+## 4. Certificación QA Oficial (57/57 Tests al 100% OK)
 
 ```text
-============================= 56 passed in 8.39s ==============================
+============================= 57 passed in 7.83s ==============================
 ================================================================================
 🧪 SLINGSHOT v22.2 APEX — SUITE OFICIAL DE CERTIFICACIÓN QA
 ================================================================================
-✅ CERTIFICACIÓN QA EXITOSA: 56/56 PRUEBAS APROBADAS AL 100%
+✅ CERTIFICACIÓN QA EXITOSA: 57/57 PRUEBAS APROBADAS AL 100%
 ================================================================================
 ```
 
 | Módulo de Prueba | Componente Auditado | Resultado |
 | :--- | :--- | :---: |
 | `test_setup_and_portability.py` | Estado de Onboarding, Validación Bitunix/Telegram, .env Atómico y Rutas OS | **PASS (5/5)** |
-| `test_post_tp3_and_trailing_invariance.py` | Híbrido 50/50, 70% Ratchet e Invarianza de SL en Bitunix | **PASS (5/5)** |
+| `test_post_tp3_and_trailing_invariance.py` | Híbrido 50/50, 70% Ratchet, Invarianza Reboot y Rechazo de Degradación | **PASS (6/6)** |
 | `test_risk_and_resilience_advanced.py` | Micro-Buffer BE, Salidas 60/20/20, Gaps y Lockout FTMO | **PASS (5/5)** |
 | `test_intelligent_limit_order_sentinel.py` | Missed Target, Pre-SL, TTL y Auto-Purga | **PASS (6/6)** |
 | `test_full_engine_autonomy_audit.py` | Autonomía, Slot Recycling y Seguridad de SL | **PASS (3/3)** |
@@ -148,7 +148,7 @@ TRADFI_INSTITUTIONAL = [
 | `test_telegram_persistence.py` | Deduplicación de Alertas y Drift de Precio | **PASS (3/3)** |
 | `test_dynamic_sl_professional_audit.py` | Invarianza Monótona, Ratchet 1R-10R y Micro-Buffer ATR | **PASS (5/5)** |
 | `test_dynamic_universe_screener.py` | Inmutabilidad Core y Rotación RVOL/KER | **PASS (3/3)** |
-| **TOTAL** | **56 Pruebas Unitarias Ejecutadas en 8.39s** | **100% PASS ✅** |
+| **TOTAL** | **57 Pruebas Unitarias Ejecutadas en 7.83s** | **100% PASS ✅** |
 
 ---
 
