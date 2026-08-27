@@ -322,48 +322,33 @@ class BitunixExecutor:
             logger.error(f"💥 [BITUNIX AUTO-LIMIT] Excepción: {e}")
             return {"status": "error", "message": str(e)}
 
-    async def modify_position_tpsl(self, symbol: str, position_id: str, sl_price: Optional[float] = None, tp_price: Optional[float] = None) -> bool:
+    async def modify_position_tpsl(self, symbol: str, position_id: Optional[str] = None, sl_price: Optional[float] = None, tp_price: Optional[float] = None) -> bool:
         """
         Modifica el Stop Loss y/o Take Profit de una posicion abierta en Bitunix.
-        Consulta las órdenes TPSL existentes para pasar el orderId correspondiente de forma atómica.
+        Si position_id no es un ID numérico real, lo resuelve automáticamente consultando get_pending_positions.
         """
         sym = symbol.replace('/', '').upper()
         if self.dry_run or (position_id and str(position_id).startswith("dry_")):
             logger.info(f"🧪 [BITUNIX DRY RUN] Modificando TP/SL de posicion para {sym} (PosId: {position_id}) -> TP: {tp_price}, SL: {sl_price}")
             return True
 
-        # 1. Obtener y purgar órdenes TPSL desfasadas para evitar desajustes de cantidad
-        try:
-            res_orders = await self._request("GET", "/api/v1/futures/tpsl/get_pending_orders", params={"symbol": sym})
-            existing_orders = res_orders.get("data", []) or []
-            if existing_orders and isinstance(existing_orders, list):
-                for ord_item in existing_orders:
-                    o_id = str(ord_item.get("id"))
-                    await self._request("POST", "/api/v1/futures/tpsl/cancel_order", json_body={"orderId": o_id, "symbol": sym})
-        except Exception as e:
-            logger.debug(f"[BITUNIX] Error purgando TPSL desfasados: {e}")
+        # Resolver position_id real desde las posiciones abiertas si no es válido
+        if not position_id or not str(position_id).isdigit():
+            try:
+                real_positions = await self.get_pending_positions()
+                for p in real_positions:
+                    if p.get("symbol") == sym:
+                        position_id = str(p.get("positionId") or p.get("id"))
+                        break
+            except Exception as e:
+                logger.debug(f"[BITUNIX] Error resolviendo positionId para {sym}: {e}")
 
-        decimals = 4 if sl_price and float(sl_price) < 10.0 else 2
-
-        # 2. Colocar orden de posición 100% limpia y sincronizada con el tamaño actual
-        payload_new = {
-            "positionId": str(position_id),
-            "symbol": sym,
-        }
-        if sl_price is not None:
-            payload_new["slPrice"] = f"{float(sl_price):.{decimals}f}"
-            payload_new["slStopType"] = "LAST_PRICE"
-        if tp_price is not None:
-            payload_new["tpPrice"] = f"{float(tp_price):.{decimals}f}"
-            payload_new["tpStopType"] = "LAST_PRICE"
-
-        res_plc = await self._request("POST", "/api/v1/futures/tpsl/position/place_order", json_body=payload_new)
-        if res_plc.get("code") == 0:
-            logger.info(f"✅ [BITUNIX] Stop Loss de posición {sym} fijado y blindado en ${sl_price}")
-            return True
-        else:
-            logger.warning(f"⚠️ [BITUNIX] Error al colocar TPSL de posición {sym}: {res_plc.get('msg')}")
+        if not position_id or not str(position_id).isdigit():
+            logger.debug(f"[BITUNIX] No se encontró posición abierta real en Bitunix para {sym}")
             return False
+
+        order_id = await self.place_position_tpsl(symbol=sym, position_id=position_id, sl_price=sl_price, tp_price=tp_price)
+        return order_id is not None
 
     async def update_stop_loss(self, symbol: str, old_order_id: str, new_stop_price: float, amount: float, side: str, position_id: Optional[str] = None, tp_price: Optional[float] = None) -> Optional[str]:
         """
