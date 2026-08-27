@@ -1,13 +1,14 @@
-# 🛡️ SLINGSHOT v22.1 APEX SOVEREIGN — Intelligent Limit Sentinel, Staged Exits (60/20/20) & The Truth Engine
+# 🛡️ SLINGSHOT v22.2 APEX SOVEREIGN — 1-Click Installer, Onboarding Wizard & The Truth Engine
 
-> **"Terminal Cuantitativa Autónoma de Grado Institucional. Kernel de Indicadores en Rust (Polars < 2.5ms). Persistencia Transaccional SQLite WAL. Centinela Inteligente de Órdenes Límite en Vivo. Gestión Activa de Stop Loss & Fast Breakeven (+1.0R) en Bitunix. Puente Directo MetaTrader 5 con Protección FTMO. Suite de Certificación QA (45/45 Tests Aprobados al 100%)."**
+> **"Terminal Cuantitativa Autónoma de Grado Institucional. Instalador 1-Click Automatizado. Asistente Visual de Onboarding de API Keys con Validación en Vivo. Kernel de Indicadores en Rust (Polars < 2.5ms). Persistencia Transaccional SQLite WAL. Centinela Inteligente de Órdenes Límite en Vivo. Gestión Activa de Stop Loss & Fast Breakeven (+1.0R) en Bitunix. Puente Directo MetaTrader 5 con Protección FTMO. Suite de Certificación QA (50/50 Tests Aprobados al 100%)."**
 
 ![Status](https://img.shields.io/badge/Status-100%25_AUTONOMOUS-0d2a1a?style=for-the-badge&logo=codeproject&logoColor=fff)
-![Version](https://img.shields.io/badge/Version-22.1_Apex_Sovereign-1a3a6e?style=for-the-badge)
+![Version](https://img.shields.io/badge/Version-22.2_Apex_Sovereign-1a3a6e?style=for-the-badge)
+![Installer](https://img.shields.io/badge/Installer-1--Click_Automated-brightgreen?style=for-the-badge&logo=windows&logoColor=fff)
 ![Kernel](https://img.shields.io/badge/Kernel-Polars_Rust_Sub--2.5ms-black?style=for-the-badge&logo=rust&logoColor=fff)
 ![Vault](https://img.shields.io/badge/Persistence-SQLite_WAL_ACID-003B57?style=for-the-badge&logo=sqlite&logoColor=fff)
 ![Execution](https://img.shields.io/badge/Execution-Bitunix_Live_&_MT5-orange?style=for-the-badge)
-![QA](https://img.shields.io/badge/QA_Suite-45%2F45_Passed-success?style=for-the-badge)
+![QA](https://img.shields.io/badge/QA_Suite-50%2F50_Passed-success?style=for-the-badge)
 
 ---
 
@@ -88,7 +89,7 @@ graph TB
 * **Backend**: Python 3.12, FastAPI, Uvicorn, WebSockets, Polars (Rust), Pandas, NumPy.
 * **Base de Datos / Persistencia**: SQLite 3 (WAL Mode & Normal Synchronous).
 * **Exchanges & Brokers**: Bitunix Futures REST API, MetaTrader 5 (MT5 Python API).
-* **Testing & QA**: Pytest 8, AnyIO, Asyncio (45/45 tests pasando al 100% en 6s).
+* **Testing & QA**: Pytest 8, AnyIO, Asyncio (50/50 tests pasando al 100% en 7s).
 
 ---
 

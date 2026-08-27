@@ -390,6 +390,9 @@ async def websocket_stream_endpoint(
     finally:
         await registry.release(symbol, interval, client_id)
 
+# ── Setup & Onboarding Router ───────────────────────────────────────────────
+from engine.api.setup import router as setup_router
+app.include_router(setup_router, prefix="/api/v1")
 
 # ── Entry point ───────────────────────────────────────────────────────────────
 

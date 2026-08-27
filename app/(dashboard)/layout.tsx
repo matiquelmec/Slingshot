@@ -9,6 +9,7 @@ import {
     Crosshair, ShieldCheck 
 } from 'lucide-react';
 import { useTelemetryStore } from '../store/telemetryStore';
+import OnboardingModal from '@/components/setup/OnboardingModal';
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
     const pathname = usePathname();
@@ -110,6 +111,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                     </div>
                 </main>
             </div>
+
+            {/* Asistente de Configuración Inicial (Onboarding Wizard) */}
+            <OnboardingModal />
         </div>
     );
 }
