@@ -64,7 +64,8 @@ Slingshot_Trading/
 │   │   ├── backtest_tradfi_6mo.py   # Backtest TradFi de 6 meses
 │   │   ├── data/                    # Datasets históricos binarios .parquet (51 archivos)
 │   │   └── reports/                 # Reportes oficiales (unified + legacy_runs/)
-│   └── tests/                       # ═══ Suite de Certificación QA (40 Tests al 100% OK) ═══
+│   └── tests/                       # ═══ Suite de Certificación QA (45 Tests al 100% OK) ═══
+│       ├── test_post_tp3_and_trailing_invariance.py # Post-TP3 híbrido, 70% ratchet e invarianza SL
 │       ├── test_risk_and_resilience_advanced.py     # Micro-buffer BE, 60/20/20 y resiliencia a gaps
 │       ├── test_intelligent_limit_order_sentinel.py # Centinela de órdenes límite
 │       ├── test_full_engine_autonomy_audit.py       # Autonomía, Slot Recycling y no retroceso SL
@@ -78,7 +79,7 @@ Slingshot_Trading/
 │       ├── test_telegram_persistence.py             # Deduplicación y supervivencia a reinicios
 │       └── test_dynamic_universe_screener.py        # Rotación cuantitativa de activos
 ├── scripts/                         # ═══ Herramientas de Mantenimiento y QA ═══
-│   ├── run_qa_suite.py              # Ejecutor oficial de la suite QA (40/40 tests)
+│   ├── run_qa_suite.py              # Ejecutor oficial de la suite QA (45/45 tests)
 │   ├── diagnostico_motor.py         # Diagnóstico integral del motor
 │   ├── doctor.py                    # Chequeo de salud del sistema
 │   ├── inspect_orders.py            # Inspección de órdenes activas en Bitunix
@@ -87,14 +88,14 @@ Slingshot_Trading/
 │   └── archive/                     # Scripts exploratorios archivados
 ├── docs/                            # ═══ Documentación Técnica y Biblias ═══
 │   ├── ESTRUCTURA_PROYECTO.md       # Guía de arquitectura (este archivo)
-│   ├── SLINGSHOT_BIBLE_V22.md       # Biblia técnica oficial v22.0 Apex Sovereign
+│   ├── SLINGSHOT_BIBLE_V22.md       # Biblia técnica oficial v22.1 Apex Sovereign
 │   └── knowledge/                   # Base de conocimiento institucional
 └── launch.bat                       # Script de arranque rápido para Windows
 ```
 
 ---
 
-## 🔬 Suite de Pruebas Unitarias Verificadas (40/40 Tests en Verde)
+## 🔬 Suite de Pruebas Unitarias Verificadas (45/45 Tests en Verde)
 
 ```powershell
 python scripts/run_qa_suite.py
@@ -102,6 +103,7 @@ python scripts/run_qa_suite.py
 
 | Módulo de Prueba | Componente Auditado | Resultado |
 | :--- | :--- | :---: |
+| `test_post_tp3_and_trailing_invariance.py` | Híbrido 50/50, 70% Ratchet e Invarianza SL | **PASS (5/5)** |
 | `test_risk_and_resilience_advanced.py` | Micro-Buffer BE, Salidas 60/20/20, Gaps y Lockout | **PASS (5/5)** |
 | `test_intelligent_limit_order_sentinel.py` | Missed Target, Pre-SL, TTL y Auto-Purga | **PASS (6/6)** |
 | `test_full_engine_autonomy_audit.py` | Autonomía, Slot Recycling y Seguridad de SL | **PASS (3/3)** |

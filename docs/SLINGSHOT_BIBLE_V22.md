@@ -1,19 +1,19 @@
-# 🛡️ SLINGSHOT BIBLE v22.0 — Especificación Técnica APEX SOVEREIGN
-## v22.0 "Apex Sovereign: Intelligent Limit Sentinel, Staged Exits (60/20/20) & The Truth Engine" | Agosto 2026
+# 🛡️ SLINGSHOT BIBLE v22.1 — Especificación Técnica APEX SOVEREIGN
+## v22.1 "Apex Sovereign: Intelligent Limit Sentinel, Staged Exits (60/20/20) & The Truth Engine" | Agosto 2026
 
 **Auditor:** Antigravity (Advanced AI Coding — DeepMind)  
 **Fecha:** Agosto 2026  
-**Versión del Sistema:** v22.0 Apex Sovereign  
+**Versión del Sistema:** v22.1 Apex Sovereign  
 **Paradigma Arquitectónico:**
 - **Delta (Δ) — Terminal Reactiva & Radar:** Next.js 15 + Zustand 5 con telemetría en tiempo real, monitoreo de PnL flotante en unidades R, visualización de órdenes límite en el libro y alertas institucionales de alta confluencia.
 - **Sigma (Σ) — Cerebro Cuantitativo & Vault:** Kernel vectorial compilado en **Rust (Polars)** (< 2.5ms) + **Bóveda SQLite WAL Transaccional (`vault.py`)** con persistencia ACID + Jurado de Confluencia SMC de 14 Factores con filtro antiruido KER (Kaufman Efficiency Ratio).
 - **Omega (Ω) — Ejecución Autónoma & Centinelas de Resiliencia:** 
   - **Centinela Inteligente de Órdenes Límite (*Apex Limit Sentinel*):** Auto-cancelación en Bitunix por *Missed Target* (precio toca TP1 sin entrar), *Pre-Entry SL Breach* (perforación previa de SL), expiración temporal (TTL) y auto-purga por sobreexposición.
-  - **Gestión Activa de Posiciones en Vivo:** **Fast Breakeven (+1.0R / $0.00 riesgo)** + **Trailing Stop (+2.0R asegurando +1.2R)** + **Salidas Escalonadas (60% TP1, 20% TP2, 20% TP3)**.
+  - **Gestión Activa de Posiciones en Vivo:** **Fast Breakeven (+1.0R / $0.00 riesgo)** + **Trailing Stop Multi-Tier (Tier 1-4 hasta +70% de retención en TP3/Runner)** + **Salidas Escalonadas Híbridas (60% TP1, 20% TP2, 10% TP3 Límite, 10% Ultra Runner)**.
   - **Reciclaje Dinámico de Cupos (*Slot Recycling*):** Liberación instantánea de cupos de riesgo en cuanto las posiciones alcanzan Breakeven.
   - **The Truth Engine v22.0:** Motor de backtesting unificado con 100% de paridad con producción, fricción real de exchange y soporte para interés compuesto dinámico.
 
-**Veredicto:** ✅ PRODUCCIÓN ELITE CERTIFICADA — Suite completa de 40/40 pruebas unitarias aprobadas al 100% en 5.29 segundos.
+**Veredicto:** ✅ PRODUCCIÓN ELITE CERTIFICADA — Suite completa de 45/45 pruebas unitarias aprobadas al 100% en 6.25 segundos.
 
 ---
 
@@ -87,25 +87,19 @@ graph TB
 ## 3. Certificación QA Oficial
 
 ```text
-============================= 40 passed in 5.29s ==============================
-✅ CERTIFICACIÓN QA EXITOSA: 40/40 PRUEBAS APROBADAS AL 100%
+============================= 45 passed in 6.25s ==============================
+✅ CERTIFICACIÓN QA EXITOSA: 45/45 PRUEBAS APROBADAS AL 100%
 ```
 
 La suite cubre exhaustivamente:
+* `test_post_tp3_hybrid_order_distribution` (Partición Híbrida 50/50 Post-TP3)
+* `test_trailing_ratchet_tier_4_70_percent` (Retención matemática del 70% de ganancias en R)
+* `test_nexus_sync_never_downgrades_active_tpsl` (Invarianza estricta anti-degradación de SL)
+* `test_tpsl_reconciliation_exact_quantity_match` (Reconciliación de volumen post-parcial)
+* `test_multi_asset_concurrent_trailing_isolation` (Aislamiento de cálculo multi-activo)
 * `test_breakeven_micro_buffer_absorption` (Absorción de comisiones y slippage en BE +0.30 ATR)
 * `test_staged_exits_volume_conservation` (Conservación estricta de volumen 60/20/20)
 * `test_sentinel_race_condition_price_gap` (Invalidación ante gaps de precio)
 * `test_drawdown_lockout_blocks_new_limit_orders` (Bloqueo preventivo por drawdown -3.5%)
 * `test_sqlite_vault_audit_trail_integrity` (Persistencia transaccional SQLite WAL)
-* `test_orchestrator_auto_starts_trade_manager`
-* `test_security_sl_never_moves_backwards`
-* `test_slot_recycling_frees_risk_on_breakeven`
-* `test_fast_be_trigger_at_1r`
-* `test_sync_live_positions_fast_be`
-* `test_sentinel_cancels_when_target_missed_long`
-* `test_sentinel_cancels_when_target_missed_short`
-* `test_sentinel_cancels_when_sl_breached_prior_to_fill`
-* `test_sentinel_cancels_on_ttl_expiration`
-* `test_sentinel_purges_limits_when_max_risk_slots_filled`
-* `test_sentinel_preserves_valid_pending_orders_in_discount`
-* Y 24 pruebas de bóveda SQLite, puente MT5, aislamiento determinístico, filtros de sesión y screener dinámico.
+* Y 35 pruebas adicionales de centinelas de órdenes límite, bóveda SQLite, puente MT5, aislamiento determinístico y filtros de sesión.

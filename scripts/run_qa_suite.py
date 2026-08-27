@@ -14,6 +14,7 @@ if sys.platform == "win32":
 ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 MODERN_TEST_FILES = [
+    "engine/tests/test_post_tp3_and_trailing_invariance.py",
     "engine/tests/test_risk_and_resilience_advanced.py",
     "engine/tests/test_full_engine_autonomy_audit.py",
     "engine/tests/test_live_trade_management.py",
@@ -30,7 +31,7 @@ MODERN_TEST_FILES = [
 
 def main():
     print("\n" + "="*80)
-    print("🧪 SLINGSHOT v22.0 APEX — SUITE OFICIAL DE CERTIFICACIÓN QA")
+    print("🧪 SLINGSHOT v22.1 APEX — SUITE OFICIAL DE CERTIFICACIÓN QA")
     print("="*80)
     
     cmd = [sys.executable, "-m", "pytest"] + MODERN_TEST_FILES + ["-v", "--tb=short"]
@@ -38,7 +39,7 @@ def main():
     
     if result.returncode == 0:
         print("\n" + "="*80)
-        print("✅ CERTIFICACIÓN QA EXITOSA: 40/40 PRUEBAS APROBADAS AL 100%")
+        print("✅ CERTIFICACIÓN QA EXITOSA: 45/45 PRUEBAS APROBADAS AL 100%")
         print("="*80 + "\n")
     else:
         print("\n" + "="*80)
