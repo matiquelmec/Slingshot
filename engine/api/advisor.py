@@ -518,7 +518,6 @@ async def ai_worker():
                         logger.debug(f"[AI_WORKER] Error de conexión con OpenRouter: {oe}")
                     
                     if task['future'].cancelled():
-                        _ai_queue.task_done()
                         continue
                         
                     if response and response.status_code == 200:
@@ -562,7 +561,6 @@ async def ai_worker():
                         logger.debug(f"[AI_WORKER] Error conectando a Groq: {ge}")
                     
                     if task['future'].cancelled():
-                        _ai_queue.task_done()
                         continue
                         
                     if response and response.status_code == 200:
@@ -591,7 +589,6 @@ async def ai_worker():
                         logger.debug(f"[AI_WORKER] Error conectando a Gemini: {gme}")
                     
                     if task['future'].cancelled():
-                        _ai_queue.task_done()
                         continue
                         
                     if response and response.status_code == 200:
@@ -625,7 +622,6 @@ async def ai_worker():
                         logger.debug(f"[AI_WORKER] Error conectando a Ollama: {ole}")
                     
                     if task['future'].cancelled():
-                        _ai_queue.task_done()
                         continue
 
                     if response and response.status_code == 200:
