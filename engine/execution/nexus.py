@@ -301,14 +301,28 @@ class NexusNode:
 
                         # 1. Comprobar si la posición YA tiene un Stop Loss activo en Bitunix
                         existing_sl_in_exchange = None
-                        try:
-                            tpsl_chk = await self.executor._request("GET", "/api/v1/futures/tpsl/get_pending_orders", params={"symbol": symbol})
-                            if tpsl_chk.get("code") == 0 and isinstance(tpsl_chk.get("data"), list) and len(tpsl_chk["data"]) > 0:
-                                raw_sl = tpsl_chk["data"][0].get("slPrice")
-                                if raw_sl:
-                                    existing_sl_in_exchange = float(raw_sl)
-                        except Exception as e:
-                            logger.debug(f"[NEXUS SYNC] Error consultando TPSL existente: {e}")
+                        # Revisar si viene directamente en la posición
+                        pos_direct_sl = p.get("slPrice") or p.get("stopLoss")
+                        if pos_direct_sl:
+                            try:
+                                existing_sl_in_exchange = float(pos_direct_sl)
+                            except (ValueError, TypeError):
+                                pass
+
+                        if not existing_sl_in_exchange:
+                            try:
+                                tpsl_chk = await self.executor._request("GET", "/api/v1/futures/tpsl/get_pending_orders", params={"symbol": symbol})
+                                if tpsl_chk.get("code") == 0 and isinstance(tpsl_chk.get("data"), list):
+                                    for t_item in tpsl_chk["data"]:
+                                        raw_sl = t_item.get("slPrice") or t_item.get("triggerPrice")
+                                        if raw_sl:
+                                            try:
+                                                existing_sl_in_exchange = float(raw_sl)
+                                                break
+                                            except (ValueError, TypeError):
+                                                pass
+                            except Exception as e:
+                                logger.debug(f"[NEXUS SYNC] Error consultando TPSL existente: {e}")
 
                         # Buscar si existe un setup SMC institucional activo para este activo en el escáner
                         all_opps = store.get_scanner_opportunities("scalp") + store.get_scanner_opportunities("swing")

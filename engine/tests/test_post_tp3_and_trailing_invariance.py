@@ -147,3 +147,48 @@ async def test_multi_asset_concurrent_trailing_isolation():
         assert "RENDERUSDT" in symbols
         assert "FETUSDT" in symbols
         assert "PAXGUSDT" in symbols
+
+
+# ── TEST 6: RECHAZO ESTRICTO A LA DEGRADACIÓN DE SL TRAS REINICIO ────────────
+
+@pytest.mark.asyncio
+async def test_place_position_tpsl_strictly_rejects_sl_downgrade():
+    """
+    Verifica que la Regla de Invarianza en BitunixExecutor rechace
+    cualquier intento de retroceder un Stop Loss ya protegido en Bitunix.
+    Ej: Si LONG tiene SL en $105.00, un intento de moverlo a $95.00 debe ser rechazado.
+    """
+    from engine.execution.bitunix_executor import BitunixExecutor
+    bitunix = BitunixExecutor(dry_run=False)
+
+    existing_tpsl = [{
+        "symbol": "SOLUSDT",
+        "id": "tpsl_order_123",
+        "slPrice": "105.00"
+    }]
+    open_positions = [{
+        "symbol": "SOLUSDT",
+        "side": "BUY",
+        "positionId": "pos_999"
+    }]
+
+    with patch.object(bitunix, "_request", new_callable=AsyncMock) as mock_req, \
+         patch.object(bitunix, "get_pending_positions", new_callable=AsyncMock) as mock_pos:
+        
+        mock_req.return_value = {"code": 0, "data": existing_tpsl}
+        mock_pos.return_value = open_positions
+
+        # Intento de degradación en LONG (de 105.00 a 95.00)
+        res_id = await bitunix.place_position_tpsl(
+            symbol="SOLUSDT",
+            position_id="pos_999",
+            sl_price=95.00,
+            tp_price=None
+        )
+
+        # Debe preservar el ID de la orden existente sin emitir la orden degradada
+        assert res_id == "tpsl_order_123"
+        # No debe cancelar la orden existente
+        cancel_calls = [c for c in mock_req.call_args_list if "/cancel_order" in str(c)]
+        assert len(cancel_calls) == 0, "No debe cancelar un Stop Loss superior para colocar uno inferior"
+

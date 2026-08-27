@@ -447,21 +447,49 @@ class BitunixExecutor:
         formatted_sl = f"{float(sl_price):.{decimals}f}" if sl_price is not None else None
         formatted_tp = f"{float(tp_price):.{decimals}f}" if tp_price is not None else None
 
-        # 1. Comprobar si ya existe un TPSL para esta posición en Bitunix
+        # 1. Comprobar si ya existe un TPSL para esta posición en Bitunix y aplicar INVARIANZA ABSOLUTA
         try:
             res_orders = await self._request("GET", "/api/v1/futures/tpsl/get_pending_orders", params={"symbol": sym})
             existing_orders = res_orders.get("data", []) or []
             if isinstance(existing_orders, list):
                 for eo in existing_orders:
-                    eo_sl = str(eo.get("slPrice", ""))
-                    eo_id = str(eo.get("id", ""))
-                    # Si ya tiene el mismo SL configurado, no reenviar
-                    if formatted_sl and eo_sl and abs(float(eo_sl) - float(formatted_sl)) < 0.001:
-                        logger.info(f"🛡️ [BITUNIX] {sym} ya cuenta con Stop Loss activo blindado en ${eo_sl} (ID: {eo_id}).")
-                        return eo_id
-                    # Si el SL es diferente y necesita actualización, cancelamos el anterior
+                    raw_sl_str = eo.get("slPrice") or eo.get("triggerPrice") or ""
+                    eo_id = str(eo.get("id") or eo.get("orderId") or "")
+                    
+                    if raw_sl_str and formatted_sl:
+                        try:
+                            existing_sl_val = float(raw_sl_str)
+                            new_sl_val = float(formatted_sl)
+                            
+                            # Si ya tiene exactamente el mismo SL configurado, no reenviar
+                            if abs(existing_sl_val - new_sl_val) < 0.0001:
+                                logger.info(f"🛡️ [BITUNIX] {sym} ya cuenta con Stop Loss activo blindado en ${existing_sl_val:.4f} (ID: {eo_id}).")
+                                return eo_id
+                                
+                            # 🔒 REGLA DE INVARIANZA: Determinar la dirección de la posición
+                            # Si no se especifica, consultar la dirección en posiciones abiertas
+                            pos_side = "LONG"
+                            positions = await self.get_pending_positions()
+                            for p in positions:
+                                if p.get("symbol") == sym:
+                                    pos_side = "LONG" if p.get("side") in ("BUY", "LONG", "1") else "SHORT"
+                                    break
+                                    
+                            # Si es LONG y el nuevo SL es MENOR al existente -> BLOQUEAR INTENTO DE DEGRADACIÓN
+                            if pos_side == "LONG" and new_sl_val < existing_sl_val:
+                                logger.warning(f"🛑 [INVARIANZA SL] Intento de retroceder SL en LONG para {sym} de ${existing_sl_val:.4f} a ${new_sl_val:.4f} RECHAZADO.")
+                                return eo_id
+                                
+                            # Si es SHORT y el nuevo SL es MAYOR al existente -> BLOQUEAR INTENTO DE DEGRADACIÓN
+                            if pos_side == "SHORT" and new_sl_val > existing_sl_val:
+                                logger.warning(f"🛑 [INVARIANZA SL] Intento de retroceder SL en SHORT para {sym} de ${existing_sl_val:.4f} a ${new_sl_val:.4f} RECHAZADO.")
+                                return eo_id
+                        except (ValueError, TypeError):
+                            pass
+                            
+                    # Si el nuevo SL es estrictamente mejor, cancelamos el TPSL previo para colocar el nuevo
                     if eo_id:
-                        logger.info(f"🔄 [BITUNIX] Cancelando TPSL previo {eo_id} para actualizar {sym}...")
+                        logger.info(f"🔄 [BITUNIX] Actualizando SL de {sym} (Cancelando TPSL previo {eo_id})...")
                         await self._request("POST", "/api/v1/futures/tpsl/cancel_order", json_body={"orderId": eo_id, "symbol": sym})
         except Exception as e:
             logger.debug(f"[BITUNIX] Error verificando TPSL previos: {e}")

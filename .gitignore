@@ -29,6 +29,8 @@ bun.lockb
 # 🧪 Temporary & Scratch
 tmp/
 scratch/*.txt
+*.db-wal
+*.db-shm
 
 # 🤖 Agents
 .agents/cache/

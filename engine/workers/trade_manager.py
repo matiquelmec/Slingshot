@@ -427,9 +427,10 @@ class TradeManager:
             if tpsl_res.get("code") == 0 and isinstance(tpsl_res.get("data"), list):
                 for to in tpsl_res["data"]:
                     sym_key = to.get("symbol")
-                    if sym_key and to.get("slPrice"):
+                    raw_val = to.get("slPrice") or to.get("triggerPrice")
+                    if sym_key and raw_val:
                         try:
-                            tpsl_map[sym_key] = float(to.get("slPrice"))
+                            tpsl_map[sym_key] = float(raw_val)
                         except (ValueError, TypeError):
                             pass
         except Exception as e:
@@ -453,9 +454,21 @@ class TradeManager:
             if entry_price <= 0 or cur_price <= 0:
                 continue
 
-            # Si no hay SL configurado, asumir 1.5% de riesgo base
-            sl_dist = abs(entry_price - cur_sl) if cur_sl > 0 and cur_sl != entry_price else entry_price * 0.015
+            # Buscar si existe una señal registrada para recuperar su initial_stop_loss exacto
+            known_signals = await store.get_signals(asset=sym)
+            matched_sig = known_signals[-1] if known_signals else None
+            initial_sl = float(matched_sig.get("initial_stop_loss", 0.0)) if matched_sig else 0.0
+
+            if initial_sl > 0:
+                sl_dist = abs(entry_price - initial_sl)
+            elif cur_sl > 0 and abs(entry_price - cur_sl) > (entry_price * 0.002):
+                sl_dist = abs(entry_price - cur_sl)
+            else:
+                sl_dist = entry_price * 0.015
             
+            if sl_dist <= 0:
+                sl_dist = entry_price * 0.015
+
             # Ganancia en unidades R
             r_profit = (cur_price - entry_price) / sl_dist if side == "LONG" else (entry_price - cur_price) / sl_dist
             
