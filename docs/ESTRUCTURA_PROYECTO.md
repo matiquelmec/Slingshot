@@ -66,7 +66,7 @@ Slingshot_Trading/
 │   │   ├── backtest_tradfi_6mo.py   # Backtest TradFi de 6 meses
 │   │   ├── data/                    # Datasets históricos binarios .parquet (51 archivos)
 │   │   └── reports/                 # Reportes oficiales (unified + legacy_runs/)
-│   └── tests/                       # ═══ Suite de Certificación QA (50 Tests al 100% OK) ═══
+│   └── tests/                       # ═══ Suite de Certificación QA (56 Tests al 100% OK) ═══
 │       ├── test_setup_and_portability.py            # Onboarding, live test de keys, guardado atómico
 │       ├── test_post_tp3_and_trailing_invariance.py # Post-TP3 híbrido, 70% ratchet e invarianza SL
 │       ├── test_risk_and_resilience_advanced.py     # Micro-buffer BE, 60/20/20 y resiliencia a gaps
@@ -78,14 +78,16 @@ Slingshot_Trading/
 │       ├── test_deterministic_pipeline_isolation.py # Latencia y lot sizing sin red
 │       ├── test_session_mastery.py                  # Killzones de sesión (Asia/London/NY)
 │       ├── test_market_scanner_hft.py               # Watchdog OTE y order flow fallback
-│       ├── test_ftmo_security_guard.py              # Guardian FTMO y TradFi
+│       ├── test_ftmo_security_guard.py              # Guardian FTMO, Lotes US500/Oro y Config TradFi
 │       ├── test_telegram_persistence.py             # Deduplicación y supervivencia a reinicios
+│       ├── test_dynamic_sl_professional_audit.py    # Invarianza Monótona, Ratchet 1R-10R y Micro-Buffer ATR
 │       └── test_dynamic_universe_screener.py        # Rotación cuantitativa de activos
 ├── scripts/                         # ═══ Herramientas de Mantenimiento y QA ═══
-│   ├── run_qa_suite.py              # Ejecutor oficial de la suite QA (50/50 tests)
+│   ├── run_qa_suite.py              # Ejecutor oficial de la suite QA (56/56 tests)
 │   ├── check_live_bitunix_now.py    # Auditoría en tiempo real de posiciones y SL en Bitunix
 │   ├── check_open_orders_now.py     # Inspección de órdenes abiertas y límites en Bitunix
 │   ├── compare_optimization_matrix.py # Matriz comparativa de optimización cuantitativa
+│   ├── audit_tradfi_universe_deep.py # Auditoría inteligente TradFi multi-activo
 │   ├── audit_all_symbols_backtest.py # Auditoría multi-activo en 15m y 1h
 │   ├── diagnose_scanner.py          # Diagnóstico rápido de señales del escáner
 │   └── test_15m_scan.py             # Benchmark de escaneo en 15m
@@ -100,7 +102,7 @@ Slingshot_Trading/
 
 ---
 
-## 🔬 Suite de Pruebas Unitarias Verificadas (50/50 Tests en Verde)
+## 🔬 Suite de Pruebas Unitarias Verificadas (56/56 Tests en Verde)
 
 ```powershell
 python scripts/run_qa_suite.py
@@ -119,9 +121,10 @@ python scripts/run_qa_suite.py
 | `test_deterministic_pipeline_isolation.py` | Cero latencia ($< 15\text{ ms}$) y Sizing | **PASS (2/2)** |
 | `test_session_mastery.py` | Sesiones Institucionales y Killzones | **PASS (4/4)** |
 | `test_market_scanner_hft.py` | Escáner OTE Watchdog y Fallback HFT | **PASS (3/3)** |
-| `test_ftmo_security_guard.py` | FTMO Guardian Shield y Config TradFi | **PASS (3/3)** |
+| `test_ftmo_security_guard.py` | FTMO Guardian Shield, Lotes US500/Oro y Config TradFi | **PASS (4/4)** |
 | `test_telegram_persistence.py` | Deduplicación de Alertas y Drift de Precio | **PASS (3/3)** |
+| `test_dynamic_sl_professional_audit.py` | Invarianza Monótona, Ratchet 1R-10R y Micro-Buffer ATR | **PASS (5/5)** |
 | `test_dynamic_universe_screener.py` | Inmutabilidad Core y Rotación RVOL/KER | **PASS (3/3)** |
-| **TOTAL** | **50 Pruebas Unitarias Ejecutadas en 7.29s** | **100% PASS ✅** |
+| **TOTAL** | **56 Pruebas Unitarias Ejecutadas en 8.39s** | **100% PASS ✅** |
 
 *Slingshot v21.0 Apex Autonomous — Documentación Oficial de Estructura de Proyecto.*

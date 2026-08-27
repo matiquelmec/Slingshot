@@ -92,7 +92,7 @@ graph TB
 
 ### 8. 🏛️ Bóveda Transaccional SQLite WAL (`vault.py`) & Puente MT5
 * Persistencia ACID inmutable en `slingshot_vault.db` con modo Write-Ahead Logging (WAL) para operaciones multi-hilo concurrentes sin bloqueos ni corrupción de base de datos.
-* Integración TradFi para Oro (`XAUUSD`), Nasdaq (`US100`) y Forex con cálculo dinámico de lotaje por contrato y **FTMO Circuit Breaker (-3.5% lockout)**.
+* Integración TradFi para Oro (`XAUUSD`), Nasdaq (`US100`), Dow Jones (`US30`), S&P 500 (`US500`), Cobre (`HGUSD`) y Forex con cálculo dinámico de lotaje por contrato y **FTMO Circuit Breaker (-3.5% lockout)**.
 
 ---
 
@@ -106,20 +106,28 @@ RADAR_ASSETS = [
     # ⚡ Tier 1 High-Beta Altcoins (15m Scalp)
     "RENDERUSDT", "SUIUSDT", "INJUSDT", "NEARUSDT", "FETUSDT", "ATOMUSDT", "TIAUSDT"
 ]
+
+TRADFI_INSTITUTIONAL = [
+    # 📈 Wall Street Indices (1D Macro / 15m NY Open)
+    "US100" (Nasdaq 100, PF 2.76), "US30" (Dow Jones 30, PF 2.58), "US500" (S&P 500, PF 1.71),
+    
+    # 🥇 Metales & Commodities (1D Macro / 15m Scalp)
+    "XAUUSD" (Oro Spot, PF 2.10), "HGUSD" (Cobre High Grade, PF 1.80)
+]
 ```
 
 * **Screener Dinámico por Volumen ($30M+):** Rota en vivo los Top 6 activos más líquidos del mercado que cumplan $RVOL \ge 1.25\text{x}$ y $KER \ge 0.25$ (`ADA`, `DOGE`, `AAVE`, `ONDO`, `APT`, `ARB`, `OP`).
 
 ---
 
-## 4. Certificación QA Oficial (50/50 Tests al 100% OK)
+## 4. Certificación QA Oficial (56/56 Tests al 100% OK)
 
 ```text
-============================= 50 passed in 7.29s ==============================
+============================= 56 passed in 8.39s ==============================
 ================================================================================
 🧪 SLINGSHOT v22.2 APEX — SUITE OFICIAL DE CERTIFICACIÓN QA
 ================================================================================
-✅ CERTIFICACIÓN QA EXITOSA: 50/50 PRUEBAS APROBADAS AL 100%
+✅ CERTIFICACIÓN QA EXITOSA: 56/56 PRUEBAS APROBADAS AL 100%
 ================================================================================
 ```
 
@@ -136,10 +144,11 @@ RADAR_ASSETS = [
 | `test_deterministic_pipeline_isolation.py` | Cero latencia ($< 15\text{ ms}$) y Sizing | **PASS (2/2)** |
 | `test_session_mastery.py` | Sesiones Institucionales y Killzones | **PASS (4/4)** |
 | `test_market_scanner_hft.py` | Escáner OTE Watchdog y Fallback HFT | **PASS (3/3)** |
-| `test_ftmo_security_guard.py` | FTMO Guardian Shield y Config TradFi | **PASS (3/3)** |
+| `test_ftmo_security_guard.py` | FTMO Guardian Shield, Lotes US500/Oro y Config TradFi | **PASS (4/4)** |
 | `test_telegram_persistence.py` | Deduplicación de Alertas y Drift de Precio | **PASS (3/3)** |
+| `test_dynamic_sl_professional_audit.py` | Invarianza Monótona, Ratchet 1R-10R y Micro-Buffer ATR | **PASS (5/5)** |
 | `test_dynamic_universe_screener.py` | Inmutabilidad Core y Rotación RVOL/KER | **PASS (3/3)** |
-| **TOTAL** | **50 Pruebas Unitarias Ejecutadas en 7.29s** | **100% PASS ✅** |
+| **TOTAL** | **56 Pruebas Unitarias Ejecutadas en 8.39s** | **100% PASS ✅** |
 
 ---
 
