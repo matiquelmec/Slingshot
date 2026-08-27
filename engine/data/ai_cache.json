@@ -774,5 +774,9 @@
   "637fc8ec49fda3f1605ee0d17c63b015": {
     "price": 0.0,
     "advice": "{\"verdict\": \"SIDEWAYS\", \"threat\": \"MEDIUM\", \"logic\": \"R\\u00e9gimen IDLE\"}"
+  },
+  "4f86312c4af11ae3d76e68b1a73d0bc4": {
+    "price": 0.0,
+    "advice": "{\"verdict\": \"SIDEWAYS\", \"threat\": \"LOW\", \"logic\": \"SMC active, neutral 1m\"}"
   }
 }

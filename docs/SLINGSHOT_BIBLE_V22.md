@@ -13,7 +13,7 @@
   - **Reciclaje Dinámico de Cupos (*Slot Recycling*):** Liberación instantánea de cupos de riesgo en cuanto las posiciones alcanzan Breakeven.
   - **The Truth Engine v22.0:** Motor de backtesting unificado con 100% de paridad con producción, fricción real de exchange y soporte para interés compuesto dinámico.
 
-**Veredicto:** ✅ PRODUCCIÓN ELITE CERTIFICADA — Suite completa de 35/35 pruebas unitarias aprobadas al 100% en 5.25 segundos.
+**Veredicto:** ✅ PRODUCCIÓN ELITE CERTIFICADA — Suite completa de 40/40 pruebas unitarias aprobadas al 100% en 5.29 segundos.
 
 ---
 
@@ -87,11 +87,16 @@ graph TB
 ## 3. Certificación QA Oficial
 
 ```text
-============================= 35 passed in 5.25s ==============================
-✅ CERTIFICACIÓN QA EXITOSA: 35/35 PRUEBAS APROBADAS AL 100%
+============================= 40 passed in 5.29s ==============================
+✅ CERTIFICACIÓN QA EXITOSA: 40/40 PRUEBAS APROBADAS AL 100%
 ```
 
 La suite cubre exhaustivamente:
+* `test_breakeven_micro_buffer_absorption` (Absorción de comisiones y slippage en BE +0.30 ATR)
+* `test_staged_exits_volume_conservation` (Conservación estricta de volumen 60/20/20)
+* `test_sentinel_race_condition_price_gap` (Invalidación ante gaps de precio)
+* `test_drawdown_lockout_blocks_new_limit_orders` (Bloqueo preventivo por drawdown -3.5%)
+* `test_sqlite_vault_audit_trail_integrity` (Persistencia transaccional SQLite WAL)
 * `test_orchestrator_auto_starts_trade_manager`
 * `test_security_sl_never_moves_backwards`
 * `test_slot_recycling_frees_risk_on_breakeven`

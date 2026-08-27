@@ -64,7 +64,8 @@ Slingshot_Trading/
 │   │   ├── backtest_tradfi_6mo.py   # Backtest TradFi de 6 meses
 │   │   ├── data/                    # Datasets históricos binarios .parquet (51 archivos)
 │   │   └── reports/                 # Reportes oficiales (unified + legacy_runs/)
-│   └── tests/                       # ═══ Suite de Certificación QA (35 Tests al 100% OK) ═══
+│   └── tests/                       # ═══ Suite de Certificación QA (40 Tests al 100% OK) ═══
+│       ├── test_risk_and_resilience_advanced.py     # Micro-buffer BE, 60/20/20 y resiliencia a gaps
 │       ├── test_intelligent_limit_order_sentinel.py # Centinela de órdenes límite
 │       ├── test_full_engine_autonomy_audit.py       # Autonomía, Slot Recycling y no retroceso SL
 │       ├── test_live_trade_management.py            # Gestión en vivo de Stop Loss y Fast BE en Bitunix
@@ -77,7 +78,7 @@ Slingshot_Trading/
 │       ├── test_telegram_persistence.py             # Deduplicación y supervivencia a reinicios
 │       └── test_dynamic_universe_screener.py        # Rotación cuantitativa de activos
 ├── scripts/                         # ═══ Herramientas de Mantenimiento y QA ═══
-│   ├── run_qa_suite.py              # Ejecutor oficial de la suite QA (35/35 tests)
+│   ├── run_qa_suite.py              # Ejecutor oficial de la suite QA (40/40 tests)
 │   ├── diagnostico_motor.py         # Diagnóstico integral del motor
 │   ├── doctor.py                    # Chequeo de salud del sistema
 │   ├── inspect_orders.py            # Inspección de órdenes activas en Bitunix
@@ -93,7 +94,7 @@ Slingshot_Trading/
 
 ---
 
-## 🔬 Suite de Pruebas Unitarias Verificadas (35/35 Tests en Verde)
+## 🔬 Suite de Pruebas Unitarias Verificadas (40/40 Tests en Verde)
 
 ```powershell
 python scripts/run_qa_suite.py
@@ -101,6 +102,8 @@ python scripts/run_qa_suite.py
 
 | Módulo de Prueba | Componente Auditado | Resultado |
 | :--- | :--- | :---: |
+| `test_risk_and_resilience_advanced.py` | Micro-Buffer BE, Salidas 60/20/20, Gaps y Lockout | **PASS (5/5)** |
+| `test_intelligent_limit_order_sentinel.py` | Missed Target, Pre-SL, TTL y Auto-Purga | **PASS (6/6)** |
 | `test_full_engine_autonomy_audit.py` | Autonomía, Slot Recycling y Seguridad de SL | **PASS (3/3)** |
 | `test_live_trade_management.py` | Fast BE (+1.0R) y Sincronización con Bitunix | **PASS (2/2)** |
 | `test_sqlite_vault.py` | Repositorio SQLite WAL y Concurrencia | **PASS (4/4)** |
@@ -108,8 +111,8 @@ python scripts/run_qa_suite.py
 | `test_deterministic_pipeline_isolation.py` | Cero latencia ($< 15\text{ ms}$) y Sizing | **PASS (2/2)** |
 | `test_session_mastery.py` | Sesiones Institucionales y Killzones | **PASS (4/4)** |
 | `test_market_scanner_hft.py` | Escáner OTE Watchdog y Fallback HFT | **PASS (3/3)** |
-| `test_ftmo_security_guard.py` | Guardián FTMO TradFi y Lotes | **PASS (3/3)** |
-| `test_telegram_persistence.py` | Anti-Spam Telegram y Persistencia | **PASS (3/3)** |
+| `test_ftmo_security_guard.py` | FTMO Guardian Shield y Config TradFi | **PASS (3/3)** |
+| `test_telegram_persistence.py` | Deduplicación de Alertas y Drift de Precio | **PASS (3/3)** |
 | `test_dynamic_universe_screener.py` | Inmutabilidad Core y Rotación RVOL/KER | **PASS (3/3)** |
 
 ---

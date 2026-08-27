@@ -1,13 +1,13 @@
 # 🛡️ SLINGSHOT v22.0 APEX SOVEREIGN — Intelligent Limit Sentinel, Staged Exits (60/20/20) & The Truth Engine
 
-> **"Terminal Cuantitativa Autónoma de Grado Institucional. Kernel de Indicadores en Rust (Polars < 2.5ms). Persistencia Transaccional SQLite WAL. Centinela Inteligente de Órdenes Límite en Vivo. Gestión Activa de Stop Loss & Fast Breakeven (+1.0R) en Bitunix. Puente Directo MetaTrader 5 con Protección FTMO. Suite de Certificación QA (35/35 Tests Aprobados al 100%)."**
+> **"Terminal Cuantitativa Autónoma de Grado Institucional. Kernel de Indicadores en Rust (Polars < 2.5ms). Persistencia Transaccional SQLite WAL. Centinela Inteligente de Órdenes Límite en Vivo. Gestión Activa de Stop Loss & Fast Breakeven (+1.0R) en Bitunix. Puente Directo MetaTrader 5 con Protección FTMO. Suite de Certificación QA (40/40 Tests Aprobados al 100%)."**
 
 ![Status](https://img.shields.io/badge/Status-100%25_AUTONOMOUS-0d2a1a?style=for-the-badge&logo=codeproject&logoColor=fff)
 ![Version](https://img.shields.io/badge/Version-22.0_Apex_Sovereign-1a3a6e?style=for-the-badge)
 ![Kernel](https://img.shields.io/badge/Kernel-Polars_Rust_Sub--2.5ms-black?style=for-the-badge&logo=rust&logoColor=fff)
 ![Vault](https://img.shields.io/badge/Persistence-SQLite_WAL_ACID-003B57?style=for-the-badge&logo=sqlite&logoColor=fff)
 ![Execution](https://img.shields.io/badge/Execution-Bitunix_Live_&_MT5-orange?style=for-the-badge)
-![QA](https://img.shields.io/badge/QA_Suite-35%2F35_Passed-success?style=for-the-badge)
+![QA](https://img.shields.io/badge/QA_Suite-40%2F40_Passed-success?style=for-the-badge)
 
 ---
 
@@ -88,7 +88,7 @@ graph TB
 * **Backend**: Python 3.12, FastAPI, Uvicorn, WebSockets, Polars (Rust), Pandas, NumPy.
 * **Base de Datos / Persistencia**: SQLite 3 (WAL Mode & Normal Synchronous).
 * **Exchanges & Brokers**: Bitunix Futures REST API, MetaTrader 5 (MT5 Python API).
-* **Testing & QA**: Pytest 8, AnyIO, Asyncio (35/35 tests pasando al 100% en 5s).
+* **Testing & QA**: Pytest 8, AnyIO, Asyncio (40/40 tests pasando al 100% en 5s).
 
 ---
 
