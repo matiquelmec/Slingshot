@@ -474,18 +474,28 @@ async def generate_news_sentiment(headline: str) -> dict:
     batch = await generate_news_sentiment_batch([headline])
     return batch[0] if batch else {"sentiment": "NEUTRAL", "score": 0.5, "translated_title": headline, "impact": "Error en lote."}
 
+_ai_workers_started = False
+
 async def ai_worker():
-    """Worker que procesa la cola de IA."""
-    async with httpx.AsyncClient(timeout=90.0) as client:
+    """Worker singleton que procesa la cola de IA de forma secuencial y sin rate limits."""
+    async with httpx.AsyncClient(timeout=15.0) as client:
         while True:
-            priority, count, task = await _ai_queue.get()
-            if task['future'].cancelled():
+            try:
+                priority, count, task = await _ai_queue.get()
+            except Exception:
+                await asyncio.sleep(0.5)
+                continue
+
+            if task.get('future') is None or task['future'].cancelled():
                 _ai_queue.task_done()
                 continue
 
             try:
+                asset_name = task.get('asset', 'UNKNOWN')
+                fallback_content = _deterministic_verdict(asset_name, {})
+
                 if settings.OPENROUTER_API_KEY:
-                    # RUTA CLOUD DEEP REASONING: OpenRouter (NVIDIA Nemotron / DeepSeek R1)
+                    # RUTA CLOUD DEEP REASONING: OpenRouter
                     url = "https://openrouter.ai/api/v1/chat/completions"
                     headers = {
                         "Authorization": f"Bearer {settings.OPENROUTER_API_KEY}",
@@ -495,26 +505,17 @@ async def ai_worker():
                     }
                     openrouter_payload = {
                         "model": settings.OPENROUTER_MODEL or "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
-                        "messages": [
-                            {"role": "user", "content": task['prompt']}
-                        ],
+                        "messages": [{"role": "user", "content": task['prompt']}],
                         "temperature": 0.2
                     }
                     if task.get('format') == 'json':
                         openrouter_payload["response_format"] = {"type": "json_object"}
                     
                     response = None
-                    for attempt in range(3):
+                    try:
                         response = await client.post(url, json=openrouter_payload, headers=headers)
-                        if response.status_code == 429:
-                            try:
-                                retry_after = float(response.headers.get("retry-after", 2.0))
-                            except (TypeError, ValueError):
-                                retry_after = 2.0
-                            logger.warning(f"[AI_WORKER] ⚠️ Rate limit (429) en OpenRouter. Esperando {retry_after}s...")
-                            await asyncio.sleep(retry_after)
-                            continue
-                        break
+                    except Exception as oe:
+                        logger.debug(f"[AI_WORKER] Error de conexión con OpenRouter: {oe}")
                     
                     if task['future'].cancelled():
                         _ai_queue.task_done()
@@ -524,23 +525,23 @@ async def ai_worker():
                         result = response.json()
                         if "choices" in result and len(result["choices"]) > 0:
                             content = result["choices"][0]["message"]["content"].strip()
-                            logger.info(f"[AI_WORKER] 🧠 Respuesta de OpenRouter ({settings.OPENROUTER_MODEL}) para {task.get('asset')} ({len(content)} bytes)")
+                            logger.info(f"[AI_WORKER] 🧠 Respuesta de OpenRouter para {asset_name} ({len(content)} bytes)")
                             if not task['future'].done():
                                 task['future'].set_result(content)
                         else:
-                            logger.warning(f"[AI_WORKER] ⚠️ Respuesta inesperada de OpenRouter: {result}")
-                            fallback_content = _deterministic_verdict(task.get('asset'), {})
                             if not task['future'].done():
                                 task['future'].set_result(fallback_content)
                     else:
-                        status_code = response.status_code if response else "Unknown"
-                        logger.error(f"[AI_WORKER] ❌ Error OpenRouter: {status_code} para {task.get('asset')}. Probando fallback...")
-                        fallback_content = _deterministic_verdict(task.get('asset'), {})
+                        status_code = response.status_code if response else "Timeout"
+                        logger.warning(f"[AI_WORKER] ⚠️ OpenRouter {status_code} para {asset_name} — Aplicando veredicto determinístico.")
                         if not task['future'].done():
                             task['future'].set_result(fallback_content)
+                    
+                    # Espaciado de cortesía para no saturar el Rate Limit del Free Tier
+                    await asyncio.sleep(0.4)
 
                 elif settings.GROQ_API_KEY:
-                    # RUTA CLOUD: Groq API (Inferencia rápida)
+                    # RUTA CLOUD: Groq API
                     url = "https://api.groq.com/openai/v1/chat/completions"
                     headers = {
                         "Authorization": f"Bearer {settings.GROQ_API_KEY}",
@@ -548,9 +549,7 @@ async def ai_worker():
                     }
                     groq_payload = {
                         "model": "qwen/qwen3.6-27b",
-                        "messages": [
-                            {"role": "user", "content": task['prompt']}
-                        ],
+                        "messages": [{"role": "user", "content": task['prompt']}],
                         "temperature": 0.2
                     }
                     if task.get('format') == 'json':
@@ -569,57 +568,47 @@ async def ai_worker():
                     if response and response.status_code == 200:
                         result = response.json()
                         content = result["choices"][0]["message"]["content"].strip()
-                        logger.info(f"[AI_WORKER] ✅ Respuesta de Groq Cloud para {task.get('asset')} ({len(content)} bytes)")
                         if not task['future'].done():
                             task['future'].set_result(content)
                     else:
-                        # Fallback determinístico instantáneo sin bloqueos
-                        fallback_content = _deterministic_verdict(task.get('asset'), {})
                         if not task['future'].done():
                             task['future'].set_result(fallback_content)
+                    await asyncio.sleep(0.2)
+
                 elif settings.GEMINI_API_KEY:
-                    # RUTA CLOUD: Gemini API (Inferencia instantánea sin costo local de CPU)
+                    # RUTA CLOUD: Gemini API
                     url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={settings.GEMINI_API_KEY}"
-                    
-                    # Estructura del payload según especificación de Google Generative Language API
                     gemini_payload = {
-                        "contents": [{
-                            "parts": [{"text": task['prompt']}]
-                        }]
+                        "contents": [{"parts": [{"text": task['prompt']}]}]
                     }
                     if task.get('format') == 'json':
-                        gemini_payload['generationConfig'] = {
-                            "responseMimeType": "application/json"
-                        }
+                        gemini_payload['generationConfig'] = {"responseMimeType": "application/json"}
                     
-                    response = await client.post(url, json=gemini_payload)
+                    response = None
+                    try:
+                        response = await client.post(url, json=gemini_payload)
+                    except Exception as gme:
+                        logger.debug(f"[AI_WORKER] Error conectando a Gemini: {gme}")
                     
                     if task['future'].cancelled():
                         _ai_queue.task_done()
                         continue
                         
-                    if response.status_code == 200:
+                    if response and response.status_code == 200:
                         result = response.json()
                         try:
                             content = result["candidates"][0]["content"]["parts"][0]["text"].strip()
                         except (KeyError, IndexError):
-                            content = ""
-                            
-                        if not content:
-                            logger.warning(f"[AI_WORKER] Gemini API devolvió respuesta vacía para {task.get('asset')}")
-                            content = json.dumps({"verdict": "SIDEWAYS", "logic": "EMPTY_RESPONSE", "threat": "LOW"})
-                        
-                        logger.info(f"[AI_WORKER] ✅ Respuesta de Gemini Cloud para {task.get('asset')} ({len(content)} bytes)")
+                            content = fallback_content
                         if not task['future'].done():
                             task['future'].set_result(content)
                     else:
-                        logger.error(f"[AI_WORKER] ❌ Error de Gemini API: {response.status_code} para {task.get('asset')} - {response.text}")
-                        # En caso de error de API, respondemos con el veredicto determinístico local
-                        fallback_content = _deterministic_verdict(task.get('asset'), {})
                         if not task['future'].done():
                             task['future'].set_result(fallback_content)
+                    await asyncio.sleep(0.2)
+
                 else:
-                    # RUTA LOCAL: Ollama local (CPU-heavy)
+                    # RUTA LOCAL: Ollama local
                     payload = {
                         "model": DEFAULT_MODEL,
                         "prompt": task['prompt'],
@@ -629,47 +618,50 @@ async def ai_worker():
                     if task.get('format') == 'json':
                         payload['format'] = 'json'
 
-                    # Petición a Ollama con posibilidad de cancelación
-                    response = await client.post(f"{OLLAMA_URL}/api/generate", json=payload)
+                    response = None
+                    try:
+                        response = await client.post(f"{OLLAMA_URL}/api/generate", json=payload)
+                    except Exception as ole:
+                        logger.debug(f"[AI_WORKER] Error conectando a Ollama: {ole}")
                     
                     if task['future'].cancelled():
                         _ai_queue.task_done()
                         continue
 
-                    if response.status_code == 200:
+                    if response and response.status_code == 200:
                         result = response.json()
-                        content = result.get("response", "").strip()
-                        if not content:
-                            logger.warning(f"[AI_WORKER] Ollama devolvió respuesta vacía para {task.get('asset')}")
-                            content = json.dumps({"verdict": "SIDEWAYS", "logic": "EMPTY_RESPONSE", "threat": "LOW"})
-                        
-                        logger.info(f"[AI_WORKER] ✅ Respuesta de Ollama recibida para {task.get('asset')} ({len(content)} bytes)")
+                        content = result.get("response", "").strip() or fallback_content
                         if not task['future'].done():
                             task['future'].set_result(content)
                     else:
-                        logger.error(f"[AI_WORKER] ❌ Error de Ollama: {response.status_code} para {task.get('asset')}")
                         if not task['future'].done():
-                            task['future'].set_exception(Exception(f"Ollama error: {response.status_code}"))
+                            task['future'].set_result(fallback_content)
+
             except Exception as e:
-                if not task['future'].done():
-                    task['future'].set_exception(e)
+                logger.debug(f"[AI_WORKER] Excepción controlada en worker: {e}")
+                if task.get('future') and not task['future'].done() and not task['future'].cancelled():
+                    task['future'].set_result(_deterministic_verdict(task.get('asset', 'UNKNOWN'), {}))
             finally:
-                # Limpiar rastreador de símbolos si esta era la tarea activa
                 asset = task.get('asset')
-                if asset in _symbol_tasks and _symbol_tasks[asset] == task['future']:
+                if asset in _symbol_tasks and _symbol_tasks[asset] == task.get('future'):
                     del _symbol_tasks[asset]
                 _ai_queue.task_done()
 
 def start_ai_worker():
-    global _ai_worker_task
-    # [v6.0.1] Paralelización del Advisor: 3 workers para evitar cuellos de botella
-    for _ in range(3):
-        asyncio.create_task(ai_worker())
+    """Inicia el worker singleton y monitor de salud sin duplicar hilos."""
+    global _ai_workers_started
+    if _ai_workers_started:
+        return
+    _ai_workers_started = True
+    asyncio.create_task(ai_worker())
     asyncio.create_task(background_ollama_check())
 
 async def background_ollama_check():
-    """Mantiene la caché actualizada."""
+    """Mantiene la caché actualizada sin fugas de excepciones."""
     while True:
-        await check_ollama_status()
+        try:
+            await check_ollama_status()
+        except Exception as e:
+            logger.debug(f"[OLLAMA_CHECK] Error verificando estado: {e}")
         await asyncio.sleep(60)
 
