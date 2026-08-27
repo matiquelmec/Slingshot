@@ -1,17 +1,18 @@
-# 🏗️ Estructura del Proyecto Slingshot v22.0 Apex Sovereign
+# 🏗️ Estructura del Proyecto Slingshot v22.2 Apex Sovereign
 
 > Guía de referencia oficial para la arquitectura, mantenimiento y evolución del sistema.
-> **Última actualización**: Agosto 2026 (v22.0 Apex Sovereign)
+> **Última actualización**: Agosto 2026 (v22.2 Apex Sovereign — 1-Click Installer & Onboarding Wizard)
 
 ---
 
-## 📁 Árbol de Directorios Oficial v22.0
+## 📁 Árbol de Directorios Oficial v22.2
 
 ```text
 Slingshot_Trading/
 ├── app/                             # ═══ DELTA: Terminal Reactiva Frontend (Next.js 15) ═══
 │   ├── components/
 │   │   ├── radar/                   # OpportunitiesScanner (Notas Educativas + OTE Watchdog)
+│   │   ├── setup/                   # OnboardingModal (Asistente Visual de API Keys con Live Test)
 │   │   ├── signals/                 # SignalTerminal & SignalCardItem (Calculadora Lote Sugerido)
 │   │   ├── execution/               # Panel de Monitoreo de Posiciones y Auditor de Órdenes
 │   │   └── ui/                      # PlanOperativoPanel & Copiar Plan Completo
@@ -21,6 +22,7 @@ Slingshot_Trading/
 │   ├── main_router.py               # Pipeline principal: Orquesta SMC → Confluence → Gatekeeper
 │   ├── api/                         # Capa de comunicación REST / WebSockets
 │   │   ├── main.py                  # FastAPI entry point con lifespan (Auto-start de Workers)
+│   │   ├── setup.py                 # SetupRouter — Endpoints de Onboarding, Live Test y Guardado Atómico
 │   │   ├── config.py                # Settings centralizadas (.env) + Watchlist Curada
 │   │   ├── ws_manager.py            # WebSocket broadcaster al frontend
 │   │   └── advisor.py               # Motor IA (Ollama/Gemma-3) + Fallback Determinístico
@@ -64,7 +66,8 @@ Slingshot_Trading/
 │   │   ├── backtest_tradfi_6mo.py   # Backtest TradFi de 6 meses
 │   │   ├── data/                    # Datasets históricos binarios .parquet (51 archivos)
 │   │   └── reports/                 # Reportes oficiales (unified + legacy_runs/)
-│   └── tests/                       # ═══ Suite de Certificación QA (45 Tests al 100% OK) ═══
+│   └── tests/                       # ═══ Suite de Certificación QA (50 Tests al 100% OK) ═══
+│       ├── test_setup_and_portability.py            # Onboarding, live test de keys, guardado atómico
 │       ├── test_post_tp3_and_trailing_invariance.py # Post-TP3 híbrido, 70% ratchet e invarianza SL
 │       ├── test_risk_and_resilience_advanced.py     # Micro-buffer BE, 60/20/20 y resiliencia a gaps
 │       ├── test_intelligent_limit_order_sentinel.py # Centinela de órdenes límite
@@ -79,23 +82,25 @@ Slingshot_Trading/
 │       ├── test_telegram_persistence.py             # Deduplicación y supervivencia a reinicios
 │       └── test_dynamic_universe_screener.py        # Rotación cuantitativa de activos
 ├── scripts/                         # ═══ Herramientas de Mantenimiento y QA ═══
-│   ├── run_qa_suite.py              # Ejecutor oficial de la suite QA (45/45 tests)
-│   ├── diagnostico_motor.py         # Diagnóstico integral del motor
-│   ├── doctor.py                    # Chequeo de salud del sistema
-│   ├── inspect_orders.py            # Inspección de órdenes activas en Bitunix
-│   ├── inspect_positions.py         # Inspección de posiciones vivas
-│   ├── manage_open_positions.py     # Cierre de emergencia / gestión manual
-│   └── archive/                     # Scripts exploratorios archivados
+│   ├── run_qa_suite.py              # Ejecutor oficial de la suite QA (50/50 tests)
+│   ├── check_live_bitunix_now.py    # Auditoría en tiempo real de posiciones y SL en Bitunix
+│   ├── check_open_orders_now.py     # Inspección de órdenes abiertas y límites en Bitunix
+│   ├── compare_optimization_matrix.py # Matriz comparativa de optimización cuantitativa
+│   ├── audit_all_symbols_backtest.py # Auditoría multi-activo en 15m y 1h
+│   ├── diagnose_scanner.py          # Diagnóstico rápido de señales del escáner
+│   └── test_15m_scan.py             # Benchmark de escaneo en 15m
 ├── docs/                            # ═══ Documentación Técnica y Biblias ═══
 │   ├── ESTRUCTURA_PROYECTO.md       # Guía de arquitectura (este archivo)
-│   ├── SLINGSHOT_BIBLE_V22.md       # Biblia técnica oficial v22.1 Apex Sovereign
+│   ├── SLINGSHOT_BIBLE_V22.md       # Biblia técnica oficial v22.2 Apex Sovereign
 │   └── knowledge/                   # Base de conocimiento institucional
+├── install.bat                      # Instalador automatizado 1-Click para Windows
+├── install.ps1                      # Script PowerShell con winget y auto-configuración
 └── launch.bat                       # Script de arranque rápido para Windows
 ```
 
 ---
 
-## 🔬 Suite de Pruebas Unitarias Verificadas (45/45 Tests en Verde)
+## 🔬 Suite de Pruebas Unitarias Verificadas (50/50 Tests en Verde)
 
 ```powershell
 python scripts/run_qa_suite.py
@@ -103,8 +108,9 @@ python scripts/run_qa_suite.py
 
 | Módulo de Prueba | Componente Auditado | Resultado |
 | :--- | :--- | :---: |
-| `test_post_tp3_and_trailing_invariance.py` | Híbrido 50/50, 70% Ratchet e Invarianza SL | **PASS (5/5)** |
-| `test_risk_and_resilience_advanced.py` | Micro-Buffer BE, Salidas 60/20/20, Gaps y Lockout | **PASS (5/5)** |
+| `test_setup_and_portability.py` | Asistente de Onboarding, Live Key Testing, Guardado Atómico | **PASS (5/5)** |
+| `test_post_tp3_and_trailing_invariance.py` | Híbrido 50/50, 70% Ratchet e Invarianza SL en Bitunix | **PASS (5/5)** |
+| `test_risk_and_resilience_advanced.py` | Micro-Buffer BE, Salidas 60/20/20, Gaps y Lockout FTMO | **PASS (5/5)** |
 | `test_intelligent_limit_order_sentinel.py` | Missed Target, Pre-SL, TTL y Auto-Purga | **PASS (6/6)** |
 | `test_full_engine_autonomy_audit.py` | Autonomía, Slot Recycling y Seguridad de SL | **PASS (3/3)** |
 | `test_live_trade_management.py` | Fast BE (+1.0R) y Sincronización con Bitunix | **PASS (2/2)** |
@@ -116,7 +122,6 @@ python scripts/run_qa_suite.py
 | `test_ftmo_security_guard.py` | FTMO Guardian Shield y Config TradFi | **PASS (3/3)** |
 | `test_telegram_persistence.py` | Deduplicación de Alertas y Drift de Precio | **PASS (3/3)** |
 | `test_dynamic_universe_screener.py` | Inmutabilidad Core y Rotación RVOL/KER | **PASS (3/3)** |
-
----
+| **TOTAL** | **50 Pruebas Unitarias Ejecutadas en 7.29s** | **100% PASS ✅** |
 
 *Slingshot v21.0 Apex Autonomous — Documentación Oficial de Estructura de Proyecto.*

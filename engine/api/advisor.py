@@ -429,6 +429,9 @@ Responde ÚNICAMENTE con un array JSON de objetos:
                 for o in top_opps
             ]
 
+        # Asegurar que los workers estén corriendo
+        start_ai_worker()
+
         loop = asyncio.get_running_loop()
         future = loop.create_future()
         global _ai_task_counter
@@ -441,7 +444,7 @@ Responde ÚNICAMENTE con un array JSON de objetos:
             'format': 'json'
         }))
 
-        raw_content = await future
+        raw_content = await asyncio.wait_for(future, timeout=2.5)
         clean_content = extract_json_from_llm(raw_content)
         parsed = json.loads(clean_content)
 
@@ -537,14 +540,14 @@ async def ai_worker():
                             task['future'].set_result(fallback_content)
 
                 elif settings.GROQ_API_KEY:
-                    # RUTA CLOUD: Groq API (Inferencia hiper-rápida y de alta calidad Llama-3.3-70B)
+                    # RUTA CLOUD: Groq API (Inferencia rápida)
                     url = "https://api.groq.com/openai/v1/chat/completions"
                     headers = {
                         "Authorization": f"Bearer {settings.GROQ_API_KEY}",
                         "Content-Type": "application/json"
                     }
                     groq_payload = {
-                        "model": "llama-3.3-70b-versatile",
+                        "model": "qwen/qwen3.6-27b",
                         "messages": [
                             {"role": "user", "content": task['prompt']}
                         ],
@@ -554,17 +557,10 @@ async def ai_worker():
                         groq_payload["response_format"] = {"type": "json_object"}
                     
                     response = None
-                    for attempt in range(3):
+                    try:
                         response = await client.post(url, json=groq_payload, headers=headers)
-                        if response.status_code == 429:
-                            try:
-                                retry_after = float(response.headers.get("retry-after", 2.0))
-                            except (TypeError, ValueError):
-                                retry_after = 2.0
-                            logger.warning(f"[AI_WORKER] ⚠️ Rate limit (429) en Groq. Esperando {retry_after}s antes de reintentar (Intento {attempt+1}/3)...")
-                            await asyncio.sleep(retry_after)
-                            continue
-                        break
+                    except Exception as ge:
+                        logger.debug(f"[AI_WORKER] Error conectando a Groq: {ge}")
                     
                     if task['future'].cancelled():
                         _ai_queue.task_done()
@@ -577,10 +573,7 @@ async def ai_worker():
                         if not task['future'].done():
                             task['future'].set_result(content)
                     else:
-                        status_code = response.status_code if response else "Unknown"
-                        response_text = response.text if response else "No response"
-                        logger.error(f"[AI_WORKER] ❌ Error de Groq API: {status_code} para {task.get('asset')} - {response_text}")
-                        # Fallback determinístico
+                        # Fallback determinístico instantáneo sin bloqueos
                         fallback_content = _deterministic_verdict(task.get('asset'), {})
                         if not task['future'].done():
                             task['future'].set_result(fallback_content)

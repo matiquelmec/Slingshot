@@ -21,7 +21,7 @@ class MarketScanner:
     """
     def __init__(self):
         self.router = SlingshotRouter()
-        # 🚀 Tier 1: Núcleo Fijo Especializado por Perfil de Activo
+        # 🚀 Tier 1: Núcleo Fijo Especializado por Perfil Cuantitativo y Mejor Rendimiento
         self.core_scalp_assets = ["RENDERUSDT", "SUIUSDT", "INJUSDT", "NEARUSDT", "FETUSDT", "ATOMUSDT", "PAXGUSDT", "TIAUSDT"]
         self.core_swing_1h_assets = ["BTCUSDT", "ETHUSDT", "SOLUSDT", "AVAXUSDT", "LINKUSDT", "XRPUSDT", "PAXGUSDT"]
         self.daily_assets = ["BTCUSDT", "ETHUSDT", "SOLUSDT", "PAXGUSDT", "RENDERUSDT", "NEARUSDT"]

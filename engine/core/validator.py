@@ -38,29 +38,43 @@ class ValidatorAgent:
         prompt = self._build_prompt(signal)
         
         try:
-            async with httpx.AsyncClient(timeout=10.0) as client:
-                if settings.GROQ_API_KEY:
+            async with httpx.AsyncClient(timeout=4.0) as client:
+                if settings.OPENROUTER_API_KEY:
+                    url = "https://openrouter.ai/api/v1/chat/completions"
+                    headers = {
+                        "Authorization": f"Bearer {settings.OPENROUTER_API_KEY}",
+                        "Content-Type": "application/json"
+                    }
+                    payload = {
+                        "model": settings.OPENROUTER_MODEL or "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
+                        "messages": [{"role": "user", "content": prompt}],
+                        "temperature": 0.2,
+                        "response_format": {"type": "json_object"}
+                    }
+                    response = await client.post(url, json=payload, headers=headers)
+                    if response.status_code == 200:
+                        result = response.json()
+                        response_text = result["choices"][0]["message"]["content"].strip()
+                    else:
+                        return self._fallback_response("Aprobación técnica determinística (OpenRouter fallback).")
+                elif settings.GROQ_API_KEY:
                     url = "https://api.groq.com/openai/v1/chat/completions"
                     headers = {
                         "Authorization": f"Bearer {settings.GROQ_API_KEY}",
                         "Content-Type": "application/json"
                     }
                     groq_payload = {
-                        "model": "llama-3.3-70b-versatile",
-                        "messages": [
-                            {"role": "user", "content": prompt}
-                        ],
+                        "model": "qwen/qwen3.6-27b",
+                        "messages": [{"role": "user", "content": prompt}],
                         "temperature": 0.2,
                         "response_format": {"type": "json_object"}
                     }
                     response = await client.post(url, json=groq_payload, headers=headers)
-                    
-                    if response.status_code != 200:
-                        logger.error(f"❌ [VALIDATOR] Error de Groq API ({response.status_code}) - {response.text}")
-                        return self._fallback_response("Error de conexión con el núcleo neural de Groq.")
-                        
-                    result = response.json()
-                    response_text = result["choices"][0]["message"]["content"].strip()
+                    if response.status_code == 200:
+                        result = response.json()
+                        response_text = result["choices"][0]["message"]["content"].strip()
+                    else:
+                        return self._fallback_response("Aprobación técnica determinística (Groq fallback).")
                 elif settings.GEMINI_API_KEY:
                     url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={settings.GEMINI_API_KEY}"
                     gemini_payload = {
