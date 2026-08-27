@@ -299,11 +299,30 @@ class NexusNode:
 
                         logger.info(f"📈 [NEXUS SYNC] Sincronizando posicion externa Bitunix: {symbol} ({side})")
 
+                        # 1. Comprobar si la posición YA tiene un Stop Loss activo en Bitunix
+                        existing_sl_in_exchange = None
+                        try:
+                            tpsl_chk = await self.executor._request("GET", "/api/v1/futures/tpsl/get_pending_orders", params={"symbol": symbol})
+                            if tpsl_chk.get("code") == 0 and isinstance(tpsl_chk.get("data"), list) and len(tpsl_chk["data"]) > 0:
+                                raw_sl = tpsl_chk["data"][0].get("slPrice")
+                                if raw_sl:
+                                    existing_sl_in_exchange = float(raw_sl)
+                        except Exception as e:
+                            logger.debug(f"[NEXUS SYNC] Error consultando TPSL existente: {e}")
+
                         # Buscar si existe un setup SMC institucional activo para este activo en el escáner
                         all_opps = store.get_scanner_opportunities("scalp") + store.get_scanner_opportunities("swing")
                         matching_setup = next((o for o in all_opps if o.get("asset") == symbol and side in str(o.get("direction", "")).upper()), None)
 
-                        if matching_setup:
+                        if existing_sl_in_exchange:
+                            sl_price = existing_sl_in_exchange
+                            be_price = entry_price
+                            dist = abs(entry_price - sl_price) if sl_price > 0 else entry_price * 0.02
+                            tp1 = entry_price + (dist * 1.3) if side == "LONG" else entry_price - (dist * 1.3)
+                            tp2 = entry_price + (dist * 2.2) if side == "LONG" else entry_price - (dist * 2.2)
+                            tp3 = entry_price + (dist * 3.5) if side == "LONG" else entry_price - (dist * 3.5)
+                            logger.info(f"🛡️ [NEXUS SYNC] Posición {symbol} ya cuenta con Stop Loss activo blindado en ${sl_price:.4f}.")
+                        elif matching_setup:
                             sl_price = float(matching_setup.get("stop_loss", 0))
                             be_price = float(matching_setup.get("be_price", 0))
                             tp1 = float(matching_setup.get("tp1", 0))
@@ -339,30 +358,18 @@ class NexusNode:
                             "id": position_id
                         }
 
-                        # 1. Colocar o actualizar orden de protección de posición (Solo SL) en Bitunix
+                        # Si NO tenía Stop Loss en el exchange, colocar el SL inicial
                         protection_ids = []
-                        logger.info(f"🛡️ [NEXUS SYNC] Configurando Stop Loss institucional en Bitunix (SL: ${sl_price:.2f}) para {symbol}...")
-                        tpsl_order_id = await self.executor.place_position_tpsl(
-                            symbol=symbol,
-                            position_id=position_id,
-                            sl_price=sl_price,
-                            tp_price=None
-                        )
-                        if tpsl_order_id:
-                            protection_ids.append(tpsl_order_id)
-
-                        # Limpieza de cualquier SL huérfano/antiguo previo en Bitunix
-                        try:
-                            tpsl_orders = await self.executor._request("GET", "/api/v1/futures/tpsl/get_pending_orders", params={"symbol": symbol})
-                            if tpsl_orders.get("code") == 0 and isinstance(tpsl_orders.get("data"), list):
-                                for o in tpsl_orders["data"]:
-                                    oid = o.get("id")
-                                    o_sl = o.get("slPrice")
-                                    if o_sl and oid != tpsl_order_id and round(float(o_sl), 2) != round(sl_price, 2):
-                                        logger.info(f"🧹 [NEXUS SYNC] Limpiando SL huérfano {oid} (${o_sl}) en {symbol}...")
-                                        await self.executor._request("POST", "/api/v1/futures/tpsl/cancel_order", json_body={"symbol": symbol, "orderId": str(oid)})
-                        except Exception as clean_err:
-                            logger.debug(f"[NEXUS SYNC] Limpieza de órdenes ignorada: {clean_err}")
+                        if not existing_sl_in_exchange and sl_price > 0:
+                            logger.info(f"🛡️ [NEXUS SYNC] Configurando Stop Loss inicial en Bitunix (SL: ${sl_price:.2f}) para {symbol}...")
+                            tpsl_order_id = await self.executor.place_position_tpsl(
+                                symbol=symbol,
+                                position_id=position_id,
+                                sl_price=sl_price,
+                                tp_price=None
+                            )
+                            if tpsl_order_id:
+                                protection_ids.append(tpsl_order_id)
 
                         # 2. Colocar Take Profits límites fragmentados (60% / 20% / 20%) si no existen previamente
                         try:
