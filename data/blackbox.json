@@ -1,21 +1,5 @@
 [
   {
-    "timestamp": "2026-06-04T21:18:36.982537+00:00",
-    "asset": "BTCUSDT",
-    "signal_type": "BUY",
-    "result": "TAKE_PROFIT",
-    "confluence_score": 0,
-    "fingerprint": {
-      "regime": "UNKNOWN",
-      "rvol": 1.0,
-      "has_ob": false,
-      "has_sweep": false,
-      "session": "UNKNOWN",
-      "absorption_score": 0.0,
-      "is_in_ote": false
-    }
-  },
-  {
     "timestamp": "2026-06-04T21:18:44.071570+00:00",
     "asset": "BTCUSDT",
     "signal_type": "BUY",
@@ -3188,6 +3172,22 @@
     "asset": "XAGUSDT",
     "signal_type": "LONG",
     "result": "STOP_LOSS",
+    "confluence_score": 0,
+    "fingerprint": {
+      "regime": "UNKNOWN",
+      "rvol": 1.0,
+      "has_ob": false,
+      "has_sweep": false,
+      "session": "UNKNOWN",
+      "absorption_score": 0.0,
+      "is_in_ote": false
+    }
+  },
+  {
+    "timestamp": "2026-08-28T15:25:58.928563+00:00",
+    "asset": "TRUMPUSDT",
+    "signal_type": "LONG",
+    "result": "TAKE_PROFIT",
     "confluence_score": 0,
     "fingerprint": {
       "regime": "UNKNOWN",
