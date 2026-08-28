@@ -75,13 +75,46 @@ class BitunixExecutor:
                 
                 response.raise_for_status()
                 res_json = response.json()
-                
                 if res_json.get("code") != 0:
                     logger.error(f"❌ Bitunix API error en {path}: {res_json}")
                 return res_json
         except Exception as e:
             logger.error(f"💥 Fallo en conexión HTTP con Bitunix: {e}")
             return {"code": -1, "msg": str(e), "data": {}}
+
+    async def get_symbol_precision(self, symbol: str) -> tuple[int, int]:
+        """
+        Devuelve (qty_precision, price_precision) consultando la API de Bitunix o desde la caché en memoria.
+        """
+        sym = symbol.replace('/', '').upper()
+        if not hasattr(self, "_symbol_precisions"):
+            self._symbol_precisions = {}
+            
+        if sym in self._symbol_precisions:
+            return self._symbol_precisions[sym]
+            
+        try:
+            r = await self._request("GET", "/api/v1/futures/market/trading_pairs")
+            if r.get("code") == 0 and isinstance(r.get("data"), list):
+                for item in r["data"]:
+                    s = item.get("symbol")
+                    bp = int(item.get("basePrecision", 2))
+                    qp = int(item.get("quotePrecision", 2))
+                    self._symbol_precisions[s] = (bp, qp)
+                    
+            if sym in self._symbol_precisions:
+                return self._symbol_precisions[sym]
+        except Exception as e:
+            logger.debug(f"[BITUNIX] Error cargando precisiones de mercado: {e}")
+            
+        # Fallback inteligente
+        fallback_map = {
+            "BTCUSDT": (4, 1), "ETHUSDT": (3, 2), "SOLUSDT": (2, 2), "PAXGUSDT": (3, 2),
+            "AVAXUSDT": (2, 2), "LINKUSDT": (2, 2), "NEARUSDT": (1, 3), "RENDERUSDT": (1, 3),
+            "SUIUSDT": (1, 4), "INJUSDT": (2, 3), "FETUSDT": (0, 4), "ATOMUSDT": (2, 3),
+            "TIAUSDT": (1, 3), "XRPUSDT": (0, 4), "TRUMPUSDT": (2, 3)
+        }
+        return fallback_map.get(sym, (2, 2))
 
     async def get_ticker_price(self, symbol: str) -> float:
         """Obtiene el último precio de mercado para un símbolo en Bitunix (con fallback institucional)."""
@@ -286,13 +319,12 @@ class BitunixExecutor:
                 "marginCoin": "USDT"
             })
 
-            # 2. Calcular cantidad nominal ajustada y precisión dinámica
+            # 2. Calcular cantidad nominal ajustada y precisión dinámica exacta de Bitunix
             nominal_usd = amount_usd * leverage
             raw_qty = nominal_usd / entry_price
-            qty_decimals = 0 if raw_qty >= 100 else 2
-            price_decimals = 4 if entry_price < 10.0 else 2
+            qty_decimals, price_decimals = await self.get_symbol_precision(symbol)
 
-            qty = str(int(raw_qty)) if qty_decimals == 0 else str(round(raw_qty, 2))
+            qty = str(int(raw_qty)) if qty_decimals == 0 else f"{raw_qty:.{qty_decimals}f}"
             price_str = f"{entry_price:.{price_decimals}f}"
 
             # 3. Payload orden límite en Bitunix

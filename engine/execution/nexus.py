@@ -398,14 +398,8 @@ class NexusNode:
                             existing_close_orders = []
 
                         if not existing_close_orders:
-                            # Formatear decimales según especificación exacta de Bitunix
-                            sym_precisions = {
-                                "BTCUSDT": (4, 1), "ETHUSDT": (3, 2), "SOLUSDT": (2, 2), "PAXGUSDT": (3, 2),
-                                "AVAXUSDT": (2, 2), "LINKUSDT": (2, 2), "NEARUSDT": (1, 3), "RENDERUSDT": (1, 3),
-                                "SUIUSDT": (1, 4), "INJUSDT": (2, 3), "FETUSDT": (0, 4), "ATOMUSDT": (2, 3),
-                                "TIAUSDT": (1, 3), "XRPUSDT": (0, 4)
-                            }
-                            q_dec, p_dec = sym_precisions.get(symbol, (0 if qty >= 10 else (2 if qty >= 1 else 3), 4 if tp1 < 10 else 2))
+                            # Formatear decimales según especificación exacta y dinámica de Bitunix
+                            q_dec, p_dec = await self.executor.get_symbol_precision(symbol)
                             
                             if q_dec == 0:
                                 f1 = int(round(qty * 0.60))
