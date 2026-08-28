@@ -271,7 +271,7 @@ class NexusNode:
                 # 1. Obtener posiciones reales del exchange
                 real_positions = await self.executor.get_pending_positions()
                 if real_positions is None:
-                    await asyncio.sleep(self.SYNC_INTERVAL_SECONDS)
+                    await asyncio.sleep(15)
                     continue
 
                 real_positions_map = {p.get("symbol"): p for p in real_positions if p.get("symbol")}
@@ -398,9 +398,14 @@ class NexusNode:
                             existing_close_orders = []
 
                         if not existing_close_orders:
-                            # Formatear decimales según activo
-                            p_dec = 4 if tp1 < 10 else 2
-                            q_dec = 0 if qty >= 10 else (2 if qty >= 1 else 4)
+                            # Formatear decimales según especificación exacta de Bitunix
+                            sym_precisions = {
+                                "BTCUSDT": (4, 1), "ETHUSDT": (3, 2), "SOLUSDT": (2, 2), "PAXGUSDT": (3, 2),
+                                "AVAXUSDT": (2, 2), "LINKUSDT": (2, 2), "NEARUSDT": (1, 3), "RENDERUSDT": (1, 3),
+                                "SUIUSDT": (1, 4), "INJUSDT": (2, 3), "FETUSDT": (0, 4), "ATOMUSDT": (2, 3),
+                                "TIAUSDT": (1, 3), "XRPUSDT": (0, 4)
+                            }
+                            q_dec, p_dec = sym_precisions.get(symbol, (0 if qty >= 10 else (2 if qty >= 1 else 3), 4 if tp1 < 10 else 2))
                             
                             if q_dec == 0:
                                 f1 = int(round(qty * 0.60))
@@ -419,14 +424,16 @@ class NexusNode:
                                     continue
                                 tp_payload = {
                                     "symbol": symbol,
-                                    "qty": str(int(tp_qty) if q_dec == 0 else tp_qty),
-                                    "price": str(round(tp_val, p_dec)),
+                                    "qty": str(int(tp_qty) if q_dec == 0 else f"{tp_qty:.{q_dec}f}"),
+                                    "price": f"{float(tp_val):.{p_dec}f}",
                                     "side": close_side,
                                     "tradeSide": "CLOSE",
                                     "orderType": "LIMIT",
-                                    "effect": "GTC",
-                                    "positionId": str(position_id)
+                                    "effect": "GTC"
                                 }
+                                if position_id and str(position_id).isdigit():
+                                    tp_payload["positionId"] = str(position_id)
+
                                 tp_res = await self.executor._request("POST", "/api/v1/futures/trade/place_order", json_body=tp_payload)
                                 if tp_res.get("code") == 0:
                                     tp_order_id = tp_res.get("data", {}).get("orderId")
