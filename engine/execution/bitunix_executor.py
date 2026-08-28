@@ -1,4 +1,5 @@
 import os
+import asyncio
 import hashlib
 import time
 import uuid
@@ -41,8 +42,6 @@ class BitunixExecutor:
             return {"code": 0, "msg": "Success (DRY RUN)", "data": {}}
 
         url = f"{self.base_url}{path}"
-        nonce = uuid.uuid4().hex
-        timestamp = str(int(time.time() * 1000))
         
         # Serializar parámetros de consulta ordenados por clave
         query_str = ""
@@ -56,31 +55,51 @@ class BitunixExecutor:
             import json
             body_str = json.dumps(json_body, separators=(',', ':'))
             
-        sign = self._generate_signature(nonce, timestamp, query_str, body_str)
-        
-        headers = {
-            "api-key": self.api_key,
-            "nonce": nonce,
-            "timestamp": timestamp,
-            "sign": sign,
-            "Content-Type": "application/json"
-        }
-        
-        try:
-            async with httpx.AsyncClient(timeout=10.0) as client:
-                if method.upper() == "POST":
-                    response = await client.post(url, params=params, content=body_str, headers=headers)
+        max_retries = 3
+        last_err = None
+
+        for attempt in range(1, max_retries + 1):
+            try:
+                # Regenerar timestamp y nonce por intento para evitar replay rejects
+                curr_ts = str(int(time.time() * 1000))
+                curr_nonce = uuid.uuid4().hex
+                curr_sign = self._generate_signature(curr_nonce, curr_ts, query_str, body_str)
+                curr_headers = {
+                    "api-key": self.api_key,
+                    "nonce": curr_nonce,
+                    "timestamp": curr_ts,
+                    "sign": curr_sign,
+                    "Content-Type": "application/json"
+                }
+
+                async with httpx.AsyncClient(timeout=10.0) as client:
+                    if method.upper() == "POST":
+                        response = await client.post(url, params=params, content=body_str, headers=curr_headers)
+                    else:
+                        response = await client.get(url, params=params, headers=curr_headers)
+
+                    if response.status_code == 429 or response.status_code >= 500:
+                        raise httpx.HTTPStatusError(f"HTTP {response.status_code}", request=response.request, response=response)
+
+                    response.raise_for_status()
+                    res_json = response.json()
+
+                    if res_json.get("code") != 0:
+                        # Errores específicos de exchange (ej. 100007, 10002) no requieren retry infinito
+                        logger.error(f"❌ Bitunix API error en {path}: {res_json}")
+                    return res_json
+
+            except Exception as e:
+                last_err = e
+                if attempt < max_retries:
+                    import random
+                    sleep_time = (0.5 * (2 ** (attempt - 1))) + random.uniform(0.1, 0.3)
+                    logger.debug(f"[BITUNIX RETRY] Reintento {attempt}/{max_retries} para {path} en {sleep_time:.2f}s debido a: {e}")
+                    await asyncio.sleep(sleep_time)
                 else:
-                    response = await client.get(url, params=params, headers=headers)
-                
-                response.raise_for_status()
-                res_json = response.json()
-                if res_json.get("code") != 0:
-                    logger.error(f"❌ Bitunix API error en {path}: {res_json}")
-                return res_json
-        except Exception as e:
-            logger.error(f"💥 Fallo en conexión HTTP con Bitunix: {e}")
-            return {"code": -1, "msg": str(e), "data": {}}
+                    logger.error(f"💥 Fallo definitivo en conexión HTTP con Bitunix tras {max_retries} intentos: {e}")
+
+        return {"code": -1, "msg": str(last_err), "data": {}}
 
     async def get_symbol_precision(self, symbol: str) -> tuple[int, int]:
         """

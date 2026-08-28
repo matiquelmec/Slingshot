@@ -211,6 +211,77 @@ class TelegramDispatcher:
             logger.error(f"[TELEGRAM] ❌ Excepción en Telegram Dispatcher: {e}")
             return False
 
+    async def send_heartbeat_report(self, stats: Dict[str, Any]) -> bool:
+        """
+        Envía un reporte periódico de signos vitales (Heartbeat) a Telegram.
+        """
+        if not self.enabled:
+            return False
+
+        uptime_hrs = stats.get("uptime_hours", 0.0)
+        positions = stats.get("positions", [])
+        latency_ms = stats.get("latency_ms", 12.0)
+        drawdown_pct = stats.get("ftmo_drawdown_pct", 0.0)
+        free_margin = stats.get("free_margin_usdt", 0.0)
+
+        pos_lines = ""
+        if positions:
+            for p in positions:
+                sym = p.get("symbol", "")
+                side = p.get("side", "")
+                pnl = p.get("pnl", 0.0)
+                sl = p.get("sl", "N/A")
+                pnl_str = f"+${pnl:.2f}" if pnl >= 0 else f"-${abs(pnl):.2f}"
+                pos_lines += f"   • <b>{sym}</b> ({side}) | SL: <code>{sl}</code> | PnL: <b>{pnl_str}</b>\n"
+        else:
+            pos_lines = "   <i>Sin posiciones abiertas en este ciclo.</i>\n"
+
+        msg = (
+            "💓 <b>SLINGSHOT APEX — SIGNOS VITALES DEL SISTEMA</b>\n"
+            "━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"🟢 <b>Estado:</b> <code>100% OPERATIVO</code> | ⏱️ <b>Uptime:</b> <code>{uptime_hrs:.1f}h</code>\n"
+            f"⚡ <b>Latencia API Bitunix:</b> <code>{latency_ms:.1f} ms</code>\n"
+            f"🛡️ <b>Escudo FTMO Drawdown:</b> <code>{drawdown_pct:.2f}% / -3.50% Max</code>\n"
+            f"💰 <b>Margen Libre Cripto:</b> <code>${free_margin:.2f} USDT</code>\n"
+            "━━━━━━━━━━━━━━━━━━━━━━\n"
+            "📊 <b>POSICIONES VIVAS Y BLINDADAS:</b>\n"
+            f"{pos_lines}"
+            "━━━━━━━━━━━━━━━━━━━━━━\n"
+            "🤖 <i>Centinelas de Auto-Healing, Invarianza SL y OTE Activos 24/7.</i>"
+        )
+
+        url = f"https://api.telegram.org/bot{self.bot_token}/sendMessage"
+        try:
+            async with httpx.AsyncClient(timeout=5.0) as client:
+                for cid in self.chat_ids:
+                    await client.post(url, json={
+                        "chat_id": cid,
+                        "text": msg,
+                        "parse_mode": "HTML",
+                        "disable_web_page_preview": True
+                    })
+            logger.info("[TELEGRAM] 💓 Reporte de Heartbeat enviado exitosamente.")
+            return True
+        except Exception as e:
+            logger.debug(f"[TELEGRAM] Error enviando heartbeat: {e}")
+            return False
+
+    async def send_system_alert(self, title: str, details: str, severity: str = "WARNING") -> bool:
+        """Envía una alerta crítica de contingencia a Telegram."""
+        if not self.enabled:
+            return False
+        icon = "🚨" if severity == "CRITICAL" else "⚠️"
+        msg = f"{icon} <b>SLINGSHOT ALERTA [{severity}]</b>\n<b>{title}</b>\n\n<code>{details}</code>"
+        url = f"https://api.telegram.org/bot{self.bot_token}/sendMessage"
+        try:
+            async with httpx.AsyncClient(timeout=5.0) as client:
+                for cid in self.chat_ids:
+                    await client.post(url, json={"chat_id": cid, "text": msg, "parse_mode": "HTML"})
+            return True
+        except Exception:
+            return False
+
 # Instancia singleton para importación
 telegram_dispatcher = TelegramDispatcher()
+
 

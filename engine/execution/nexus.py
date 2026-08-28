@@ -455,10 +455,74 @@ class NexusNode:
                         from engine.api.registry import registry
                         await registry.broadcast_global({"type": "signal_auditor_update", "data": reconstructed_signal})
 
+                # 4. 🛡️ [AUTO-HEALING RECONCILIATOR]
+                # Auditar posiciones activas existentes para auto-reparar cualquier SL o TP faltante
+                for symbol, pos_data in list(self._active_positions.items()):
+                    try:
+                        sig = pos_data.get("signal", {})
+                        entry_p = float(sig.get("entry_price") or sig.get("price", 0))
+                        pos_id = str(pos_data.get("execution", {}).get("main_order_id", ""))
+                        pos_qty = float(pos_data.get("execution", {}).get("amount", 0))
+                        sl_p = float(sig.get("stop_loss", 0))
+                        side = sig.get("signal_type", sig.get("type", "LONG"))
+
+                        # 4.1 Comprobar y auto-reparar Stop Loss si falta
+                        if sl_p > 0 and pos_id:
+                            chk_tpsl = await self.executor._request("GET", "/api/v1/futures/tpsl/get_pending_orders", params={"symbol": symbol})
+                            t_orders = chk_tpsl.get("data", []) or []
+                            has_active_sl = any(t.get("slPrice") or t.get("triggerPrice") for t in t_orders) if isinstance(t_orders, list) else False
+                            if not has_active_sl:
+                                logger.warning(f"🩹 [AUTO-HEALING] Posición {symbol} carece de Stop Loss activo en Bitunix. Auto-reparando SL @ ${sl_p}...")
+                                await self.executor.place_position_tpsl(symbol=symbol, position_id=pos_id, sl_price=sl_p)
+
+                        # 4.2 Comprobar y auto-reparar Take Profits límites si faltan
+                        tp1_val = float(sig.get("tp1", 0))
+                        tp2_val = float(sig.get("tp2", 0))
+                        tp3_val = float(sig.get("tp3") or sig.get("take_profit_3r", 0))
+
+                        if tp1_val > 0 and pos_qty > 0 and pos_id:
+                            chk_orders_res = await self.executor._request("GET", "/api/v1/futures/trade/get_pending_orders", params={"symbol": symbol})
+                            chk_data = chk_orders_res.get("data", {})
+                            cur_orders = chk_data.get("orderList", []) if isinstance(chk_data, dict) else (chk_data if isinstance(chk_data, list) else [])
+                            close_count = sum(1 for o in cur_orders if o.get("tradeSide") == "CLOSE" or o.get("reduceOnly"))
+                            
+                            # Si no hay órdenes de cierre y aún no hemos alcanzado TP1, re-colocar la grilla 60/20/20
+                            if close_count == 0 and not pos_data.get("smart_trailing", {}).get("be_active"):
+                                logger.warning(f"🩹 [AUTO-HEALING] Posición {symbol} no tiene órdenes límite TP en Bitunix. Auto-reparando salidas escalonadas...")
+                                q_dec, p_dec = await self.executor.get_symbol_precision(symbol)
+                                if q_dec == 0:
+                                    f1 = int(round(pos_qty * 0.60))
+                                    f2 = int(round(pos_qty * 0.20))
+                                    f3 = int(pos_qty - f1 - f2)
+                                else:
+                                    f1 = round(pos_qty * 0.60, q_dec)
+                                    f2 = round(pos_qty * 0.20, q_dec)
+                                    f3 = round(pos_qty - f1 - f2, q_dec)
+
+                                tps = [(tp1_val, f1, "TP1"), (tp2_val, f2, "TP2"), (tp3_val, f3, "TP3")]
+                                close_side = "SELL" if "LONG" in side.upper() else "BUY"
+                                for p_val, q_val, lbl in tps:
+                                    if q_val <= 0 or p_val <= 0: continue
+                                    tp_pld = {
+                                        "symbol": symbol,
+                                        "qty": str(int(q_val) if q_dec == 0 else f"{q_val:.{q_dec}f}"),
+                                        "price": f"{float(p_val):.{p_dec}f}",
+                                        "side": close_side,
+                                        "tradeSide": "CLOSE",
+                                        "orderType": "LIMIT",
+                                        "effect": "GTC",
+                                        "positionId": str(pos_id)
+                                    }
+                                    res_heal = await self.executor._request("POST", "/api/v1/futures/trade/place_order", json_body=tp_pld)
+                                    if res_heal.get("code") == 0:
+                                        logger.info(f"✅ [AUTO-HEALING] {symbol} {lbl} colocado a ${p_val:.{p_dec}f} ({q_val} u)")
+                    except Exception as heal_err:
+                        logger.debug(f"[AUTO-HEALING] Skip reconciliación para {symbol}: {heal_err}")
+
             except Exception as e:
                 logger.error(f"❌ [NEXUS SYNC] Error en auto-sincronización: {e}")
 
-            await asyncio.sleep(10)
+            await asyncio.sleep(15)
 
     MAX_CONCURRENT_POSITIONS = 4
     DEFAULT_MARGIN_USDT = 8.50 # ~5% del capital ($170 USDT) a 20x apalancamiento aislado

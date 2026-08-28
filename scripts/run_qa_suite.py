@@ -28,7 +28,8 @@ MODERN_TEST_FILES = [
     "engine/tests/test_ftmo_security_guard.py",
     "engine/tests/test_telegram_persistence.py",
     "engine/tests/test_dynamic_sl_professional_audit.py",
-    "engine/tests/test_dynamic_universe_screener.py"
+    "engine/tests/test_dynamic_universe_screener.py",
+    "engine/tests/test_auto_healing_and_telemetry.py"
 ]
 
 def main():
