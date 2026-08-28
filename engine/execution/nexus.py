@@ -270,6 +270,10 @@ class NexusNode:
             try:
                 # 1. Obtener posiciones reales del exchange
                 real_positions = await self.executor.get_pending_positions()
+                if real_positions is None:
+                    await asyncio.sleep(self.SYNC_INTERVAL_SECONDS)
+                    continue
+
                 real_positions_map = {p.get("symbol"): p for p in real_positions if p.get("symbol")}
 
                 # 2. Eliminar de memoria posiciones que ya no existen en Bitunix (cerradas)

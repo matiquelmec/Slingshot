@@ -10,12 +10,12 @@
   "reason": "Sin datos macro disponibles.",
   "oi_delta_pct": 0.0,
   "dxy_trend": "BULLISH",
-  "dxy_price": 99.2,
+  "dxy_price": 99.21,
   "nasdaq_trend": "BULLISH",
   "nasdaq_change_pct": 1.74,
   "risk_appetite": "RISK_ON",
   "news_sentiment": 0.5,
   "active_event": "GDP m/m",
-  "last_updated": 1787920159.7126052,
+  "last_updated": 1787920306.363424,
   "is_stale": false
 }
