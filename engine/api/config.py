@@ -59,7 +59,7 @@ class Settings(BaseSettings):
     DYNAMIC_MIN_RVOL: float = 1.25                 # Mínimo 1.25x volumen relativo
     DYNAMIC_MIN_KER: float = 0.25                  # Mínimo 0.25 eficiencia de tendencia
     DYNAMIC_MAX_ROTATING_ASSETS: int = 6           # Máximo 6 activos rotativos
-    EXCLUDED_DYNAMIC_ASSETS: str = "XAGUSDT,XAGUSD" # Activos excluidos del escáner dinámico (Plata/ruidosos)
+    EXCLUDED_DYNAMIC_ASSETS: str = "XAGUSDT,XAGUSD,SNDKUSDT,SKHYNIXUSDT,NVDAUSDT,TSLAUSDT,AAPLUSDT" # Excluir tokens de acciones y plata ruidosa
     
     @property
     def MASTER_WATCHLIST(self) -> list[str]:
