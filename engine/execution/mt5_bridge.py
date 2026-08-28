@@ -59,6 +59,15 @@ class MT5Bridge:
         is_long = "LONG" in direction.upper()
         sym_mt5 = symbol.replace("USDT", "USD")
 
+        # Resolución inteligente de sufijo .cash para brokers FTMO
+        if MT5_AVAILABLE and self.connected:
+            cash_cand = f"{sym_mt5}.cash"
+            try:
+                if mt5.symbol_info(cash_cand) is not None:
+                    sym_mt5 = cash_cand
+            except Exception:
+                pass
+
         # 2. Validación de Kill-Switch de Drawdown
         if ftmo_guardian.is_daily_lockout:
             logger.error(f"🛑 [MT5_BRIDGE] Orden rechazada para {sym_mt5}: Cuenta bloqueada por Kill-Switch de Drawdown Diario.")

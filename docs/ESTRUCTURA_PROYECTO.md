@@ -102,7 +102,7 @@ Slingshot_Trading/
 
 ---
 
-## 🔬 Suite de Pruebas Unitarias Verificadas (57/57 Tests en Verde)
+## 🔬 Suite de Pruebas Unitarias Verificadas (59/59 Tests en Verde)
 
 ```powershell
 python scripts/run_qa_suite.py
@@ -121,10 +121,10 @@ python scripts/run_qa_suite.py
 | `test_deterministic_pipeline_isolation.py` | Cero latencia ($< 15\text{ ms}$) y Sizing | **PASS (2/2)** |
 | `test_session_mastery.py` | Sesiones Institucionales y Killzones | **PASS (4/4)** |
 | `test_market_scanner_hft.py` | Escáner OTE Watchdog y Fallback HFT | **PASS (3/3)** |
-| `test_ftmo_security_guard.py` | FTMO Guardian Shield, Lotes US500/Oro y Config TradFi | **PASS (4/4)** |
+| `test_ftmo_security_guard.py` | FTMO Guardian Shield, Lotes US500/DAX40/GBPJPY/Oro y Config TradFi | **PASS (6/6)** |
 | `test_telegram_persistence.py` | Deduplicación de Alertas y Drift de Precio | **PASS (3/3)** |
 | `test_dynamic_sl_professional_audit.py` | Invarianza Monótona, Ratchet 1R-10R y Micro-Buffer ATR | **PASS (5/5)** |
 | `test_dynamic_universe_screener.py` | Inmutabilidad Core y Rotación RVOL/KER | **PASS (3/3)** |
-| **TOTAL** | **57 Pruebas Unitarias Ejecutadas en 7.83s** | **100% PASS ✅** |
+| **TOTAL** | **59 Pruebas Unitarias Ejecutadas en 7.67s** | **100% PASS ✅** |
 
 *Slingshot v21.0 Apex Autonomous — Documentación Oficial de Estructura de Proyecto.*

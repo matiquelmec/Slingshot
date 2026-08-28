@@ -106,10 +106,10 @@ class FtmoGuardianShield:
         
         # Ajuste de pasos y mínimos según activo
         min_lot = spec.get("min_lot", 0.01)
-        if "US100" in symbol or "US30" in symbol:
+        if any(idx in symbol for idx in ["US100", "US30", "US500", "GER40"]):
             lots = round(max(min_lot, raw_lots), 1) # Índices típicamente van en pasos de 0.1
         else:
-            lots = round(max(min_lot, raw_lots), 2) # Oro y Forex en pasos de 0.01
+            lots = round(max(min_lot, raw_lots), 2) # Oro, Cobre y Forex (GBPJPY) en pasos de 0.01
             
         return {
             "symbol": symbol,

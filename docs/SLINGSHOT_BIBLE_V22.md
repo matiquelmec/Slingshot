@@ -108,11 +108,13 @@ RADAR_ASSETS = [
 ]
 
 TRADFI_INSTITUTIONAL = [
-    # 📈 Wall Street Indices (1D Macro / 15m NY Open)
+    # 📈 Wall Street & Global Indices (1D Macro / 15m Open)
     "US100" (Nasdaq 100, PF 2.76), "US30" (Dow Jones 30, PF 2.58), "US500" (S&P 500, PF 1.71),
+    "GER40" (DAX 40 Alemania, PF 2.17 / +8.68R),
     
-    # 🥇 Metales & Commodities (1D Macro / 15m Scalp)
-    "XAUUSD" (Oro Spot, PF 2.10), "HGUSD" (Cobre High Grade, PF 1.80)
+    # 🥇 Metales & Forex Alpha (1D Macro / 15m Scalp)
+    "XAUUSD" (Oro Spot, PF 2.10), "HGUSD" (Cobre High Grade, PF 1.80),
+    "GBPJPY" (Dragon Forex Cross, PF 2.23 / Win Rate 60.0%)
 ]
 ```
 
@@ -120,14 +122,14 @@ TRADFI_INSTITUTIONAL = [
 
 ---
 
-## 4. Certificación QA Oficial (57/57 Tests al 100% OK)
+## 4. Certificación QA Oficial (59/59 Tests al 100% OK)
 
 ```text
-============================= 57 passed in 7.83s ==============================
+============================= 59 passed in 7.67s ==============================
 ================================================================================
 🧪 SLINGSHOT v22.2 APEX — SUITE OFICIAL DE CERTIFICACIÓN QA
 ================================================================================
-✅ CERTIFICACIÓN QA EXITOSA: 57/57 PRUEBAS APROBADAS AL 100%
+✅ CERTIFICACIÓN QA EXITOSA: 59/59 PRUEBAS APROBADAS AL 100%
 ================================================================================
 ```
 
@@ -144,11 +146,11 @@ TRADFI_INSTITUTIONAL = [
 | `test_deterministic_pipeline_isolation.py` | Cero latencia ($< 15\text{ ms}$) y Sizing | **PASS (2/2)** |
 | `test_session_mastery.py` | Sesiones Institucionales y Killzones | **PASS (4/4)** |
 | `test_market_scanner_hft.py` | Escáner OTE Watchdog y Fallback HFT | **PASS (3/3)** |
-| `test_ftmo_security_guard.py` | FTMO Guardian Shield, Lotes US500/Oro y Config TradFi | **PASS (4/4)** |
+| `test_ftmo_security_guard.py` | FTMO Guardian Shield, Lotes US500/DAX40/GBPJPY/Oro y Config TradFi | **PASS (6/6)** |
 | `test_telegram_persistence.py` | Deduplicación de Alertas y Drift de Precio | **PASS (3/3)** |
 | `test_dynamic_sl_professional_audit.py` | Invarianza Monótona, Ratchet 1R-10R y Micro-Buffer ATR | **PASS (5/5)** |
 | `test_dynamic_universe_screener.py` | Inmutabilidad Core y Rotación RVOL/KER | **PASS (3/3)** |
-| **TOTAL** | **57 Pruebas Unitarias Ejecutadas en 7.83s** | **100% PASS ✅** |
+| **TOTAL** | **59 Pruebas Unitarias Ejecutadas en 7.67s** | **100% PASS ✅** |
 
 ---
 

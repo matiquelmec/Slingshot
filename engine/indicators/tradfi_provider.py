@@ -66,6 +66,26 @@ TRADFI_ASSETS_CONFIG = {
         "pip_value": 12.5,
         "point_size": 0.0005
     },
+    "GER40": {
+        "ticker": "^GDAXI",
+        "name": "DAX 40 Germany",
+        "category": "INDICES",
+        "contract_size": 25,
+        "spread_usd": 1.50,
+        "min_lot": 0.1,
+        "pip_value": 1.0,
+        "point_size": 1.0
+    },
+    "GBPJPY": {
+        "ticker": "GBPJPY=X",
+        "name": "GBP/JPY Dragon",
+        "category": "FOREX",
+        "contract_size": 100000,
+        "spread_usd": 0.025,
+        "min_lot": 0.01,
+        "pip_value": 6.8,
+        "point_size": 0.01
+    },
     "GBPUSD": {
         "ticker": "GBPUSD=X",
         "name": "GBP/USD Forex",

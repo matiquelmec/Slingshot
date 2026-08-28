@@ -1,37 +1,5 @@
 [
   {
-    "timestamp": "2026-06-04T20:52:07.326791+00:00",
-    "asset": "BTCUSDT",
-    "signal_type": "BUY",
-    "result": "TAKE_PROFIT",
-    "confluence_score": 0,
-    "fingerprint": {
-      "regime": "UNKNOWN",
-      "rvol": 1.0,
-      "has_ob": false,
-      "has_sweep": false,
-      "session": "UNKNOWN",
-      "absorption_score": 0.0,
-      "is_in_ote": false
-    }
-  },
-  {
-    "timestamp": "2026-06-04T20:52:13.963040+00:00",
-    "asset": "BTCUSDT",
-    "signal_type": "BUY",
-    "result": "TAKE_PROFIT",
-    "confluence_score": 0,
-    "fingerprint": {
-      "regime": "UNKNOWN",
-      "rvol": 1.0,
-      "has_ob": false,
-      "has_sweep": false,
-      "session": "UNKNOWN",
-      "absorption_score": 0.0,
-      "is_in_ote": false
-    }
-  },
-  {
     "timestamp": "2026-06-04T20:52:25.617225+00:00",
     "asset": "BTCUSDT",
     "signal_type": "BUY",
@@ -3188,6 +3156,38 @@
     "asset": "SOLUSDT",
     "signal_type": "LONG",
     "result": "TAKE_PROFIT",
+    "confluence_score": 0,
+    "fingerprint": {
+      "regime": "UNKNOWN",
+      "rvol": 1.0,
+      "has_ob": false,
+      "has_sweep": false,
+      "session": "UNKNOWN",
+      "absorption_score": 0.0,
+      "is_in_ote": false
+    }
+  },
+  {
+    "timestamp": "2026-08-28T02:29:50.328858+00:00",
+    "asset": "SOLUSDT",
+    "signal_type": "LONG",
+    "result": "TAKE_PROFIT",
+    "confluence_score": 0,
+    "fingerprint": {
+      "regime": "UNKNOWN",
+      "rvol": 1.0,
+      "has_ob": false,
+      "has_sweep": false,
+      "session": "UNKNOWN",
+      "absorption_score": 0.0,
+      "is_in_ote": false
+    }
+  },
+  {
+    "timestamp": "2026-08-28T02:51:40.019686+00:00",
+    "asset": "HYPEUSDT",
+    "signal_type": "LONG",
+    "result": "STOP_LOSS",
     "confluence_score": 0,
     "fingerprint": {
       "regime": "UNKNOWN",

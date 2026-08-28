@@ -49,10 +49,14 @@ export const FTMO_CONTRACT_SIZES: Record<string, number> = {
     'US500': 1,
     'SPX500': 1,
     'ES': 1,
+    'GER40': 25,
+    'DAX40': 25,
+    'DE40': 25,
 
-    // Forex Majors
+    // Forex Majors & Cruces
     'EURUSD': 100000,
     'GBPUSD': 100000,
+    'GBPJPY': 100000,
     'USDJPY': 100000,
     'AUDUSD': 100000,
     'USDCAD': 100000,
@@ -98,8 +102,8 @@ export const FTMO_CONTRACT_SIZES: Record<string, number> = {
  */
 export const FTMO_INSTITUTIONAL_SYMBOLS = new Set([
     'XAUUSD', 'GOLD', 'PAXGUSDT', 'XAGUSD', 'HGUSD', 'COPPER',
-    'US100', 'NAS100', 'US30', 'DJ30', 'US500', 'SPX500',
-    'EURUSD', 'GBPUSD', 'USDJPY', 'AUDUSD', 'USDCAD',
+    'US100', 'NAS100', 'US30', 'DJ30', 'US500', 'SPX500', 'GER40', 'DAX40', 'DE40',
+    'EURUSD', 'GBPUSD', 'GBPJPY', 'USDJPY', 'AUDUSD', 'USDCAD',
     'BTCUSD', 'BTCUSDT', 'ETHUSD', 'ETHUSDT', 'SOLUSD', 'SOLUSDT', 'AVAXUSD', 'AVAXUSDT'
 ]);
 
@@ -114,8 +118,11 @@ export function getAssetMarketCategory(symbol: string): 'FTMO_INSTITUTIONAL' | '
         cleanSym.startsWith('US100') || 
         cleanSym.startsWith('US30') || 
         cleanSym.startsWith('US500') || 
+        cleanSym.startsWith('GER') ||
+        cleanSym.startsWith('DAX') ||
         cleanSym.startsWith('HG') || 
-        cleanSym.startsWith('EUR')
+        cleanSym.startsWith('EUR') ||
+        cleanSym.startsWith('GBP')
     ) {
         return 'FTMO_INSTITUTIONAL';
     }

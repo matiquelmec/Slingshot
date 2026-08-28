@@ -40,6 +40,8 @@ def test_tradfi_assets_config_integrity():
     assert "US30" in TRADFI_ASSETS_CONFIG
     assert "US500" in TRADFI_ASSETS_CONFIG
     assert "HGUSD" in TRADFI_ASSETS_CONFIG
+    assert "GER40" in TRADFI_ASSETS_CONFIG
+    assert "GBPJPY" in TRADFI_ASSETS_CONFIG
     assert "GBPUSD" in TRADFI_ASSETS_CONFIG
 
 def test_ftmo_lot_sizing_sp500():
@@ -53,3 +55,28 @@ def test_ftmo_lot_sizing_sp500():
     assert lot_info["lots"] > 0
     # En US500 (1 contrato por lote): 25 puntos = $25 por lote -> 750 / 25 = 30.0 Lotes
     assert round(lot_info["lots"], 1) == 30.0
+
+def test_ftmo_lot_sizing_dax40():
+    """Valida el cálculo de lotes para DAX 40 (GER40) con riesgo de $750 USD."""
+    ftmo_guardian.reset_daily_metrics(100000.0)
+    entry_price = 18500.0
+    stop_loss = 18450.0 # Distancia = 50.0 puntos
+    
+    lot_info = ftmo_guardian.calculate_mt5_lots("GER40", entry_price, stop_loss)
+    assert lot_info["risk_usd"] == 750.0
+    assert lot_info["lots"] > 0
+    # En GER40 (25 contratos por lote): 50 puntos * 25 = $1250 por lote -> 750 / 1250 = 0.60 Lotes
+    assert round(lot_info["lots"], 1) == 0.6
+
+def test_ftmo_lot_sizing_gbpjpy():
+    """Valida el cálculo de lotes para GBPJPY con riesgo de $750 USD."""
+    ftmo_guardian.reset_daily_metrics(100000.0)
+    entry_price = 195.50
+    stop_loss = 195.00 # Distancia = 0.50 = 50 pips
+    
+    lot_info = ftmo_guardian.calculate_mt5_lots("GBPJPY", entry_price, stop_loss)
+    assert lot_info["risk_usd"] == 750.0
+    assert lot_info["lots"] > 0
+    # En GBPJPY (100,000 unidades): 0.50 * 100,000 = $50,000 por lote -> 750 / 50,000 = 0.015 -> 0.02 Lotes
+    assert round(lot_info["lots"], 2) == 0.01 or round(lot_info["lots"], 2) == 0.02
+
