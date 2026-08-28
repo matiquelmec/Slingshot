@@ -1,7 +1,7 @@
 {
   "fear_greed_value": 73,
   "fear_greed_label": "Greed",
-  "btc_dominance": 59.11,
+  "btc_dominance": 59.1,
   "funding_rate": 0.0,
   "funding_symbol": "BTCUSDT",
   "macro_bias": "NEUTRAL",
@@ -10,12 +10,12 @@
   "reason": "Sin datos macro disponibles.",
   "oi_delta_pct": 0.0,
   "dxy_trend": "BULLISH",
-  "dxy_price": 99.23,
+  "dxy_price": 99.56,
   "nasdaq_trend": "BULLISH",
-  "nasdaq_change_pct": 0.31,
+  "nasdaq_change_pct": 0.53,
   "risk_appetite": "RISK_ON",
   "news_sentiment": 0.5,
   "active_event": "Fed Chairman Warsh Speaks",
-  "last_updated": 1787925828.2778606,
+  "last_updated": 1787927879.2739298,
   "is_stale": false
 }

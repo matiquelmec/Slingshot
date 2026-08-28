@@ -494,7 +494,7 @@ class BitunixExecutor:
             logger.info(f"🧪 [BITUNIX DRY RUN] Colocando TP/SL de posicion para {sym} (PosId: {position_id}) -> TP: {tp_price}, SL: {sl_price}")
             return f"dry_tpsl_{uuid.uuid4().hex[:8]}"
 
-        decimals = 4 if (sl_price and float(sl_price) < 10.0) or (tp_price and float(tp_price) < 10.0) else 2
+        _, decimals = await self.get_symbol_precision(sym)
         formatted_sl = f"{float(sl_price):.{decimals}f}" if sl_price is not None else None
         formatted_tp = f"{float(tp_price):.{decimals}f}" if tp_price is not None else None
 
