@@ -50,9 +50,16 @@ class MarketScanner:
         try:
             min_vol = getattr(settings, "DYNAMIC_MIN_24H_VOL_USDT", 30_000_000.0)
             max_dynamic = getattr(settings, "DYNAMIC_MAX_ROTATING_ASSETS", 6)
+            excluded_raw = getattr(settings, "EXCLUDED_DYNAMIC_ASSETS", "XAGUSDT,XAGUSD")
+            excluded_set = {s.strip().upper() for s in excluded_raw.split(",") if s.strip()}
             
             liquid_candidates = await fetch_top_liquid_tickers(min_volume_usdt=min_vol, limit=25)
-            new_dynamic = [sym for sym in liquid_candidates if sym not in self.core_scalp_assets and sym not in self.core_swing_1h_assets]
+            new_dynamic = [
+                sym for sym in liquid_candidates 
+                if sym not in self.core_scalp_assets 
+                and sym not in self.core_swing_1h_assets
+                and sym.upper() not in excluded_set
+            ]
             
             # Tomar los top N candidatos adicionales más líquidos
             selected_dynamic = new_dynamic[:max_dynamic]
