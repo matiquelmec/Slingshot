@@ -60,6 +60,8 @@ class TradeManager:
                 await self.sync_live_bitunix_positions()
                 # 3. Auditar e invalidar órdenes límite huérfanas/riesgosas en Bitunix
                 await self.sync_live_bitunix_pending_orders()
+                # 4. Sincronizar y proteger posiciones de MetaTrader 5 (FTMO)
+                await self.sync_live_mt5_positions()
             except Exception as e:
                 logger.error(f"[TRADE_MANAGER] Error en loop: {e}")
             await asyncio.sleep(self.POLL_INTERVAL_SECONDS)
@@ -627,6 +629,90 @@ class TradeManager:
         except Exception as e:
             logger.error(f"❌ [LIMIT SENTINEL] Error en auditoría de órdenes límite: {e}")
             return []
+
+    async def sync_live_mt5_positions(self) -> List[Dict[str, Any]]:
+        """
+        [FTMO SENTINEL v22.2]
+        Gestiona de forma idéntica las posiciones de MetaTrader 5 (FTMO):
+        1. Fast Breakeven a +1.0R ($0.00 riesgo).
+        2. Bloqueo en verde TP1 (+1.2R) y TP2 (+2.0R).
+        3. Trailing Ratchet Tier 4 (70% retención) post-TP3.
+        4. Invarianza Monótona estricta en MT5.
+        """
+        try:
+            from engine.execution.mt5_bridge import mt5_bridge
+            positions = mt5_bridge.get_open_positions()
+            if not positions:
+                return []
+
+            managed_results = []
+            for pos in positions:
+                sym = pos.get("symbol", "UNKNOWN")
+                ticket = pos.get("ticket")
+                side = pos.get("side", "LONG")
+                entry_price = float(pos.get("entry_price") or 0.0)
+                cur_price = float(pos.get("cur_price") or 0.0)
+                cur_sl = float(pos.get("sl") or 0.0)
+
+                if entry_price <= 0 or cur_price <= 0:
+                    continue
+
+                sl_dist = abs(entry_price - cur_sl) if cur_sl > 0 and cur_sl != entry_price else entry_price * 0.005
+                if sl_dist <= 0:
+                    sl_dist = entry_price * 0.005
+
+                r_profit = (cur_price - entry_price) / sl_dist if side == "LONG" else (entry_price - cur_price) / sl_dist
+
+                target_sl = None
+                status_msg = "EN_CURSO"
+                action_taken = "NINGUNA"
+
+                if r_profit >= 5.0:
+                    locked_r = r_profit * 0.70
+                    profit_buffer = sl_dist * locked_r
+                    target_sl = round(entry_price + profit_buffer, 2) if side == "LONG" else round(entry_price - profit_buffer, 2)
+                    status_msg = f"PROTEGIDO_RUNNER_TP3 (+{locked_r:.1f}R)"
+                elif r_profit >= 3.0:
+                    profit_buffer = sl_dist * 2.0
+                    target_sl = round(entry_price + profit_buffer, 2) if side == "LONG" else round(entry_price - profit_buffer, 2)
+                    status_msg = "PROTEGIDO_TP2 (+2.0R)"
+                elif r_profit >= 2.0:
+                    profit_buffer = sl_dist * 1.2
+                    target_sl = round(entry_price + profit_buffer, 2) if side == "LONG" else round(entry_price - profit_buffer, 2)
+                    status_msg = "PROTEGIDO_TP1 (+1.2R)"
+                elif r_profit >= 1.0:
+                    target_sl = round(entry_price, 2)
+                    status_msg = "PROTEGIDO_FAST_BE"
+
+                should_update = False
+                if target_sl is not None:
+                    if side == "LONG" and (cur_sl <= 0 or target_sl > cur_sl * 1.0002):
+                        should_update = True
+                    elif side == "SHORT" and (cur_sl <= 0 or target_sl < cur_sl * 0.9998):
+                        should_update = True
+
+                if should_update:
+                    mt5_bridge.modify_position_sl(symbol=sym, ticket=ticket, new_sl=target_sl)
+                    action_taken = f"SL_ACTUALIZADO (${target_sl})"
+                    logger.info(f"🏛️ [MT5_GUARDIAN] Posición {sym} {side} (+{r_profit:.2f}R) protegida con SL=${target_sl} ({status_msg}).")
+
+                managed_results.append({
+                    "symbol": sym,
+                    "ticket": ticket,
+                    "side": side,
+                    "entry_price": entry_price,
+                    "current_price": cur_price,
+                    "current_sl": cur_sl,
+                    "r_profit": round(r_profit, 2),
+                    "status": status_msg,
+                    "action": action_taken
+                })
+
+            return managed_results
+        except Exception as e:
+            logger.debug(f"[TRADE_MANAGER] Error en sincronización MT5: {e}")
+            return []
+
 
 
 # Singleton Global

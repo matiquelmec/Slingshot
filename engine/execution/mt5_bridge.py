@@ -135,5 +135,77 @@ class MT5Bridge:
             logger.error(f"❌ [MT5_BRIDGE] Excepción enviando orden a MT5: {e}")
             return {"success": False, "reason": str(e)}
 
+    def get_open_positions(self) -> list:
+        """Obtiene las posiciones abiertas en MetaTrader 5 gestionadas por Slingshot."""
+        if self.dry_run or not self.connected or not MT5_AVAILABLE:
+            return []
+        try:
+            positions = mt5.positions_get()
+            if not positions:
+                return []
+            slingshot_pos = []
+            for p in positions:
+                # Filtrar posiciones creadas por Slingshot (magic number) o todos los activos institucionales
+                if p.magic == self.MAGIC_NUMBER or True:
+                    slingshot_pos.append({
+                        "ticket": p.ticket,
+                        "symbol": p.symbol,
+                        "side": "LONG" if p.type == mt5.POSITION_TYPE_BUY else "SHORT",
+                        "volume": p.volume,
+                        "entry_price": p.price_open,
+                        "cur_price": p.price_current,
+                        "sl": p.sl,
+                        "tp": p.tp,
+                        "profit": p.profit,
+                        "magic": p.magic
+                    })
+            return slingshot_pos
+        except Exception as e:
+            logger.error(f"❌ [MT5_BRIDGE] Error consultando posiciones en MT5: {e}")
+            return []
+
+    def modify_position_sl(self, symbol: str, ticket: int, new_sl: float, new_tp: Optional[float] = None) -> bool:
+        """
+        Modifica el Stop Loss en MetaTrader 5 respetando la Invarianza Monótona.
+        """
+        if self.dry_run or not self.connected or not MT5_AVAILABLE:
+            logger.info(f"🛡️ [MT5_BRIDGE:DRY_RUN] Modificación simulada de SL para ticket #{ticket} ({symbol}) a ${new_sl}")
+            return True
+        try:
+            # Obtener posición actual para validar invariancia
+            pos_info = mt5.positions_get(ticket=ticket)
+            if pos_info and len(pos_info) > 0:
+                cur_pos = pos_info[0]
+                is_long = cur_pos.type == mt5.POSITION_TYPE_BUY
+                cur_sl = cur_pos.sl
+                # Guardia de Invarianza: no permitir degradación
+                if is_long and cur_sl > 0 and new_sl < cur_sl:
+                    logger.warning(f"🛑 [MT5_INVARIANZA] Intento de retroceder SL en LONG para {symbol} (#{ticket}) de {cur_sl} a {new_sl} RECHAZADO.")
+                    return True
+                elif not is_long and cur_sl > 0 and new_sl > cur_sl:
+                    logger.warning(f"🛑 [MT5_INVARIANZA] Intento de empeorar SL en SHORT para {symbol} (#{ticket}) de {cur_sl} a {new_sl} RECHAZADO.")
+                    return True
+
+            request = {
+                "action": mt5.TRADE_ACTION_SLTP,
+                "position": ticket,
+                "symbol": symbol,
+                "sl": float(new_sl),
+                "tp": float(new_tp) if new_tp else (pos_info[0].tp if pos_info else 0.0),
+                "magic": self.MAGIC_NUMBER
+            }
+            res = mt5.order_send(request)
+            if res and res.retcode == mt5.TRADE_RETCODE_DONE:
+                logger.info(f"🛡️ [MT5_BRIDGE] SL de posición #{ticket} ({symbol}) actualizado exitosamente a ${new_sl}")
+                return True
+            else:
+                ret = res.retcode if res else "UNKNOWN"
+                msg = res.comment if res else "Error"
+                logger.error(f"❌ [MT5_BRIDGE] Fallo al modificar SL en MT5: {ret} - {msg}")
+                return False
+        except Exception as e:
+            logger.error(f"❌ [MT5_BRIDGE] Excepción modificando SL en MT5: {e}")
+            return False
+
 # Instancia singleton
 mt5_bridge = MT5Bridge(dry_run=True)
