@@ -1,69 +1,5 @@
 [
   {
-    "timestamp": "2026-06-04T21:20:48.225823+00:00",
-    "asset": "BTCUSDT",
-    "signal_type": "BUY",
-    "result": "TAKE_PROFIT",
-    "confluence_score": 0,
-    "fingerprint": {
-      "regime": "UNKNOWN",
-      "rvol": 1.0,
-      "has_ob": false,
-      "has_sweep": false,
-      "session": "UNKNOWN",
-      "absorption_score": 0.0,
-      "is_in_ote": false
-    }
-  },
-  {
-    "timestamp": "2026-06-04T21:21:06.982080+00:00",
-    "asset": "BTCUSDT",
-    "signal_type": "BUY",
-    "result": "TAKE_PROFIT",
-    "confluence_score": 0,
-    "fingerprint": {
-      "regime": "UNKNOWN",
-      "rvol": 1.0,
-      "has_ob": false,
-      "has_sweep": false,
-      "session": "UNKNOWN",
-      "absorption_score": 0.0,
-      "is_in_ote": false
-    }
-  },
-  {
-    "timestamp": "2026-06-04T21:21:15.883747+00:00",
-    "asset": "BTCUSDT",
-    "signal_type": "BUY",
-    "result": "TAKE_PROFIT",
-    "confluence_score": 0,
-    "fingerprint": {
-      "regime": "UNKNOWN",
-      "rvol": 1.0,
-      "has_ob": false,
-      "has_sweep": false,
-      "session": "UNKNOWN",
-      "absorption_score": 0.0,
-      "is_in_ote": false
-    }
-  },
-  {
-    "timestamp": "2026-06-04T21:21:27.503770+00:00",
-    "asset": "BTCUSDT",
-    "signal_type": "BUY",
-    "result": "TAKE_PROFIT",
-    "confluence_score": 0,
-    "fingerprint": {
-      "regime": "UNKNOWN",
-      "rvol": 1.0,
-      "has_ob": false,
-      "has_sweep": false,
-      "session": "UNKNOWN",
-      "absorption_score": 0.0,
-      "is_in_ote": false
-    }
-  },
-  {
     "timestamp": "2026-06-04T21:21:34.045255+00:00",
     "asset": "BTCUSDT",
     "signal_type": "BUY",
@@ -3188,6 +3124,70 @@
     "asset": "INJUSDT",
     "signal_type": "SHORT",
     "result": "TAKE_PROFIT",
+    "confluence_score": 0,
+    "fingerprint": {
+      "regime": "UNKNOWN",
+      "rvol": 1.0,
+      "has_ob": false,
+      "has_sweep": false,
+      "session": "UNKNOWN",
+      "absorption_score": 0.0,
+      "is_in_ote": false
+    }
+  },
+  {
+    "timestamp": "2026-08-28T15:56:22.109371+00:00",
+    "asset": "INJUSDT",
+    "signal_type": "SHORT",
+    "result": "TAKE_PROFIT",
+    "confluence_score": 0,
+    "fingerprint": {
+      "regime": "UNKNOWN",
+      "rvol": 1.0,
+      "has_ob": false,
+      "has_sweep": false,
+      "session": "UNKNOWN",
+      "absorption_score": 0.0,
+      "is_in_ote": false
+    }
+  },
+  {
+    "timestamp": "2026-08-28T15:59:29.142107+00:00",
+    "asset": "INJUSDT",
+    "signal_type": "SHORT",
+    "result": "TAKE_PROFIT",
+    "confluence_score": 0,
+    "fingerprint": {
+      "regime": "UNKNOWN",
+      "rvol": 1.0,
+      "has_ob": false,
+      "has_sweep": false,
+      "session": "UNKNOWN",
+      "absorption_score": 0.0,
+      "is_in_ote": false
+    }
+  },
+  {
+    "timestamp": "2026-08-28T16:02:16.278298+00:00",
+    "asset": "INJUSDT",
+    "signal_type": "SHORT",
+    "result": "TAKE_PROFIT",
+    "confluence_score": 0,
+    "fingerprint": {
+      "regime": "UNKNOWN",
+      "rvol": 1.0,
+      "has_ob": false,
+      "has_sweep": false,
+      "session": "UNKNOWN",
+      "absorption_score": 0.0,
+      "is_in_ote": false
+    }
+  },
+  {
+    "timestamp": "2026-08-28T16:02:58.130182+00:00",
+    "asset": "ETHUSDT",
+    "signal_type": "LONG",
+    "result": "STOP_LOSS",
     "confluence_score": 0,
     "fingerprint": {
       "regime": "UNKNOWN",
