@@ -515,7 +515,7 @@ class BitunixExecutor:
             logger.error(f"❌ [BITUNIX] Error al colocar TP/SL de posicion {sym}: {res.get('msg')}")
             return None
 
-    async def get_pending_positions(self) -> List[Dict[str, Any]]:
+    async def get_pending_positions(self) -> Optional[List[Dict[str, Any]]]:
         """Obtiene las posiciones abiertas actuales desde Bitunix."""
         try:
             res = await self._request("GET", "/api/v1/futures/position/get_pending_positions")
@@ -523,9 +523,10 @@ class BitunixExecutor:
                 return res["data"]
             else:
                 logger.error(f"❌ Error al obtener posiciones de Bitunix: {res.get('msg')}")
+                return None
         except Exception as e:
             logger.error(f"❌ Error al conectar con endpoint de posiciones: {e}")
-        return []
+            return None
 
     async def get_pending_orders(self, symbol: Optional[str] = None) -> List[Dict[str, Any]]:
         """Obtiene las órdenes límite pendientes activas en Bitunix."""

@@ -441,7 +441,11 @@ class TradeManager:
 
         managed_results = []
 
-        if not positions:
+        if positions is None:
+            logger.warning("[TRADE_MANAGER] ⚠️ Error de autenticación/comunicación con Bitunix. Reintentando en el próximo ciclo.")
+            return []
+
+        if len(positions) == 0:
             logger.info("[TRADE_MANAGER] No hay posiciones abiertas actualmente en Bitunix.")
             return []
 
