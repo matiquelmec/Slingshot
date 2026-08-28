@@ -3,7 +3,7 @@ title Slingshot Apex Sovereign — Instalador Automatico 1-Click
 color 0B
 
 echo ===============================================================================
-echo       SLINGSHOT v22.2 APEX SOVEREIGN — INSTALADOR AUTOMATICO 1-CLICK          
+echo       SLINGSHOT v22.3 APEX SOVEREIGN — INSTALADOR AUTOMATICO 1-CLICK          
 echo ===============================================================================
 echo.
 echo [1/4] Comprobando politicas de PowerShell y permisos locales...

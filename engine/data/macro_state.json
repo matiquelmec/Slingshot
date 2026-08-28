@@ -10,12 +10,12 @@
   "reason": "Sin datos macro disponibles.",
   "oi_delta_pct": 0.0,
   "dxy_trend": "BULLISH",
-  "dxy_price": 99.53,
+  "dxy_price": 99.52,
   "nasdaq_trend": "BULLISH",
-  "nasdaq_change_pct": 0.51,
+  "nasdaq_change_pct": 0.41,
   "risk_appetite": "RISK_ON",
   "news_sentiment": 0.5,
-  "active_event": "Fed Chairman Warsh Speaks",
-  "last_updated": 1787931825.0958142,
+  "active_event": "Jackson Hole Symposium",
+  "last_updated": 1787932017.0106502,
   "is_stale": false
 }
