@@ -88,8 +88,8 @@ class UnifiedBacktestEngine:
             raw = pd.read_parquet(f15)
             raw.rename(columns={'o': 'open', 'h': 'high', 'l': 'low', 'c': 'close', 'v': 'volume', 't': 'timestamp'}, inplace=True)
             if not pd.api.types.is_datetime64_any_dtype(raw['timestamp']):
-                first_ts = raw['timestamp'].iloc[0]
-                unit = 's' if (isinstance(first_ts, (int, float)) and first_ts < 1e11) else 'ms'
+                first_ts = float(raw['timestamp'].iloc[0])
+                unit = 's' if first_ts < 1e11 else 'ms'
                 raw['timestamp'] = pd.to_datetime(raw['timestamp'], unit=unit)
             raw.set_index('timestamp', inplace=True)
             rule = '1h' if interval in ['1h', '1H', '60m'] else ('4h' if interval == '4h' else '1D')
@@ -98,8 +98,8 @@ class UnifiedBacktestEngine:
             raw = pd.read_parquet(file_candidates[0])
             raw.rename(columns={'o': 'open', 'h': 'high', 'l': 'low', 'c': 'close', 'v': 'volume', 't': 'timestamp'}, inplace=True)
             if not pd.api.types.is_datetime64_any_dtype(raw['timestamp']):
-                first_ts = raw['timestamp'].iloc[0]
-                unit = 's' if (isinstance(first_ts, (int, float)) and first_ts < 1e11) else 'ms'
+                first_ts = float(raw['timestamp'].iloc[0])
+                unit = 's' if first_ts < 1e11 else 'ms'
                 raw['timestamp'] = pd.to_datetime(raw['timestamp'], unit=unit)
             df = raw.sort_values('timestamp').reset_index(drop=True)
 
