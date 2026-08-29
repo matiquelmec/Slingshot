@@ -1,7 +1,7 @@
 {
   "fear_greed_value": 68,
   "fear_greed_label": "Greed",
-  "btc_dominance": 58.97,
+  "btc_dominance": 58.98,
   "funding_rate": 0.0,
   "funding_symbol": "BTCUSDT",
   "macro_bias": "NEUTRAL",
@@ -15,7 +15,7 @@
   "nasdaq_change_pct": -0.19,
   "risk_appetite": "RISK_OFF",
   "news_sentiment": 0.7,
-  "active_event": "Jackson Hole Symposium",
-  "last_updated": 1787974159.769883,
+  "active_event": "",
+  "last_updated": 1787977528.4106002,
   "is_stale": false
 }
