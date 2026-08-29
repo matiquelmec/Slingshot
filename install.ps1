@@ -136,8 +136,11 @@ if (-not (Test-Path $venvPython) -or -not (Test-Path $venvPip)) {
 Write-Host "        [OK] Entorno virtual .venv creado y verificado." -ForegroundColor Green
 
 Write-Host "        Instalando librerias requeridas (FastAPI, Polars, Pytest)..." -ForegroundColor DarkGray
-& $venvPip install --upgrade pip --quiet
-& $venvPip install -r "$rootDir\requirements.txt" --quiet
+try {
+    & $venvPython -m pip install --upgrade pip --quiet --no-warn-script-location 2>$null
+} catch {}
+
+& $venvPython -m pip install -r "$rootDir\requirements.txt" --quiet --no-warn-script-location
 Write-Host "        [OK] Todas las dependencias de Python instaladas con exito." -ForegroundColor Green
 
 # ── PASO 4: INSTALACION DE DEPENDENCIAS DEL FRONTEND ────────────────────────
