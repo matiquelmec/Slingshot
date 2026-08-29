@@ -11,6 +11,8 @@ const VISIBLE_ROWS = 12;
 
 export default function LatticeScanner() {
     const marketSummary = useTelemetryStore((state) => state.marketSummary);
+    const latestPrices = useTelemetryStore((state) => state.latestPrices);
+    const latestPrice = useTelemetryStore((state) => state.latestPrice);
     const activeSymbol = useTelemetryStore((state) => state.activeSymbol);
     const activeTimeframe = useTelemetryStore((state) => state.activeTimeframe);
     const connect = useTelemetryStore((state) => state.connect);
@@ -18,19 +20,34 @@ export default function LatticeScanner() {
     const [scrollTop, setScrollTop] = useState(0);
     const containerRef = useRef<HTMLDivElement>(null);
 
-    // Construir lista de pares reales desde el marketSummary del backend
+    // Construir lista de pares reales combinando marketSummary y el flujo en vivo de latestPrices
     const pairs = useMemo(() => {
         const entries = marketSummary ? { ...marketSummary } : {};
         
         // 🛡️ OMEGA STABILITY: Asegurar que los Master siempre existan en el mapa visual
         MASTER_WATCHLIST.forEach(symbol => {
+            const currentLivePrice = (symbol === activeSymbol ? latestPrice : latestPrices[symbol]) || 0;
             if (!entries[symbol]) {
-                entries[symbol] = { asset: symbol, price: 0, regime: 'SYNCING...', strategy: 'STANDBY', bias: 'NEUTRAL', trend: 0 };
+                entries[symbol] = { 
+                    asset: symbol, 
+                    price: currentLivePrice, 
+                    regime: 'ACTIVE', 
+                    strategy: 'SMC INSTITUTIONAL', 
+                    bias: 'NEUTRAL', 
+                    trend: 0 
+                };
             }
         });
 
         return Object.values(entries)
             .filter(p => p.asset && p.asset.endsWith('USDT'))
+            .map(p => {
+                const liveP = (p.asset === activeSymbol ? latestPrice : (latestPrices[p.asset] || p.price)) || 0;
+                return {
+                    ...p,
+                    price: liveP
+                };
+            })
             .sort((a, b) => {
                 // Prioridad 1: Master Watchlist al principio (Orden Estricto según MASTER_WATCHLIST)
                 const indexA = MASTER_WATCHLIST.indexOf(a.asset);
@@ -43,7 +60,7 @@ export default function LatticeScanner() {
                 // Prioridad 2: Orden por precio para el resto
                 return (b.price || 0) - (a.price || 0);
             });
-    }, [marketSummary]);
+    }, [marketSummary, latestPrices, latestPrice, activeSymbol]);
 
     // Filtrar por búsqueda
     const filteredPairs = useMemo(() => {

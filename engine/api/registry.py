@@ -41,15 +41,26 @@ class BroadcasterRegistry:
         """Loop que emite el estado resumido de todo el mercado cada 3 segundos."""
         while True:
             try:
-                await asyncio.sleep(3) 
+                await asyncio.sleep(1) 
                 states = await store.get_market_states()
                 if not states: continue
 
+                # Inyección de precios en vivo ultra-rápidos desde la memoria de los Broadcasters
+                live_prices = {}
+                async with self._lock:
+                    for key, b in self._broadcasters.items():
+                        sym = getattr(b, 'symbol', None) or key.split(':')[0]
+                        p = getattr(b.state, 'latest_price', 0.0) if hasattr(b, 'state') else 0.0
+                        if p > 0:
+                            live_prices[sym] = p
+
                 summary = []
                 for s in states:
+                    asset_sym = s.get("asset")
+                    price_val = live_prices.get(asset_sym) or s.get("price") or s.get("current_price")
                     summary.append({
-                        "asset":       s.get("asset"),
-                        "price":       s.get("price") or s.get("current_price"),
+                        "asset":       asset_sym,
+                        "price":       price_val,
                         "regime":      s.get("regime") or s.get("market_regime", "UNKNOWN"),
                         "strategy":    s.get("strategy") or "SMC INSTITUTIONAL",
                         "bias":        s.get("macro_bias") or (s.get("htf_bias", {}).get("direction", "NEUTRAL") if isinstance(s.get("htf_bias"), dict) else "NEUTRAL"),
@@ -75,7 +86,7 @@ class BroadcasterRegistry:
                         await b._broadcast({"type": "radar_update", "data": summary})
             except Exception as e:
                 logger.error(f"[REGISTRY] Pulse error: {e}")
-                await asyncio.sleep(5)
+                await asyncio.sleep(2)
 
     async def get_or_create(self, symbol: str, interval: str, persistent: bool = False) -> tuple:
         """

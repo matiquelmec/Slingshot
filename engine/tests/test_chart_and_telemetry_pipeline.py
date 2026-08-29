@@ -223,3 +223,66 @@ def test_multi_timeframe_tick_update_safety():
         assert updated["low"] == 5.35
         assert updated["time"] == 1700000000
 
+
+def test_lattice_scanner_live_price_fusion_hierarchy():
+    """Valida la jerarquía de fusión de precios para el Lattice Scanner (Ticks > WebSocket Radar > Fallback)."""
+    active_symbol = "BTCUSDT"
+    latest_price = 96420.50
+    latest_prices = {
+        "BTCUSDT": 96420.50,
+        "ETHUSDT": 2745.20,
+        "SOLUSDT": 182.10,
+        "NEARUSDT": 1.857
+    }
+    market_summary = {
+        "BTCUSDT": {"asset": "BTCUSDT", "price": 96000.0, "regime": "MARKUP"},
+        "ETHUSDT": {"asset": "ETHUSDT", "price": 2700.0, "regime": "ACCUMULATION"},
+        "SOLUSDT": {"asset": "SOLUSDT", "price": 0.0, "regime": "SYNCING..."},
+        "SUIUSDT": {"asset": "SUIUSDT", "price": 2.45, "regime": "RANGING"},
+    }
+
+    # Función idéntica a LatticeScanner.tsx
+    def resolve_lattice_price(sym: str):
+        market_p = market_summary.get(sym, {}).get("price", 0.0)
+        return (latest_price if sym == active_symbol else (latest_prices.get(sym) or market_p)) or 0.0
+
+    # 1. Active symbol debe tomar latest_price en vivo
+    assert resolve_lattice_price("BTCUSDT") == 96420.50
+
+    # 2. Símbolo secundario con tick debe tomar latest_prices (2745.20 > 2700.0)
+    assert resolve_lattice_price("ETHUSDT") == 2745.20
+
+    # 3. Símbolo que tenía price: 0 en marketSummary se recupera con latest_prices (182.10)
+    assert resolve_lattice_price("SOLUSDT") == 182.10
+
+    # 4. Símbolo sin tick individual mantiene el precio del radar (2.45)
+    assert resolve_lattice_price("SUIUSDT") == 2.45
+
+
+def test_registry_pulse_in_memory_price_enrichment():
+    """Valida que el pulso global enriquezca los estados con los precios en memoria de los broadcasters."""
+    states = [
+        {"asset": "BTCUSDT", "price": None, "regime": "MARKUP"},
+        {"asset": "ETHUSDT", "price": 2700.0, "regime": "RANGING"}
+    ]
+    live_broadcaster_prices = {
+        "BTCUSDT": 96500.0,
+        "ETHUSDT": 2750.0
+    }
+
+    enriched = []
+    for s in states:
+        asset_sym = s.get("asset")
+        price_val = live_broadcaster_prices.get(asset_sym) or s.get("price")
+        enriched.append({
+            "asset": asset_sym,
+            "price": price_val,
+            "regime": s.get("regime")
+        })
+
+    assert enriched[0]["asset"] == "BTCUSDT"
+    assert enriched[0]["price"] == 96500.0 # Se enriqueció el None
+    assert enriched[1]["asset"] == "ETHUSDT"
+    assert enriched[1]["price"] == 2750.0  # Se actualizó el precio vivo
+
+

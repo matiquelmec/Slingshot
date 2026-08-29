@@ -416,6 +416,7 @@ class SymbolBroadcaster:
         # Solo actualizamos si el precio cambió significativamente o pasó tiempo
         if new_price != self.state.latest_price:
             self.state.latest_price = new_price
+            asyncio.create_task(store.update_market_state(self.symbol, {"price": new_price, "current_price": new_price}))
             
             if self.symbol == "XAGUSDT":
                 now = time.time()
@@ -471,6 +472,7 @@ class SymbolBroadcaster:
         
         # 🟢 Sync Latest Price
         self.state.latest_price = float(kline["c"])
+        asyncio.create_task(store.update_market_state(self.symbol, {"price": float(kline["c"]), "current_price": float(kline["c"])}))
         if self.symbol == "XAGUSDT":
             # Log más detallado para debuggear por qué dicen que no se mueve
             logger.info(f"📊 [XAG-KLINE] Close: {kline['c']} | IsFinal: {kline.get('x')}")

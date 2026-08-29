@@ -28,7 +28,7 @@ export default function ActiveAssetsMonitor() {
     const [globalStates, setGlobalStates] = useState<MarketState[]>([]);
     const [watchlist, setWatchlist] = useState<string[]>([]);
     const [loading, setLoading] = useState(true);
-    const { activeSymbol, connect } = useTelemetryStore();
+    const { activeSymbol, connect, latestPrices, latestPrice } = useTelemetryStore();
     
     // Obtenemos el flujo en tiempo real desde Websockets
     const marketSummary = useTelemetryStore(state => state.marketSummary);
@@ -74,19 +74,20 @@ export default function ActiveAssetsMonitor() {
         loadInitialSync();
     }, []);
 
-    // 3. Fusión Híbrida Inteligente (Memoizado)
+    // 3. Fusión Híbrida Inteligente (Memoizado con Precios en Vivo)
     const states = React.useMemo(() => {
         const displayMap = new Map();
         globalStates.forEach(s => displayMap.set(s.asset.toUpperCase(), s));
         
-        // Transmisión de estado vivo (Zustand radar_update)
+        // Transmisión de estado vivo (Zustand radar_update + latestPrices)
         Object.values(marketSummary).forEach((s: any) => {
             if(s.asset) {
                 const assetKey = s.asset.toUpperCase();
+                const liveP = (assetKey === activeSymbol?.toUpperCase() ? latestPrice : (latestPrices[s.asset] || latestPrices[assetKey])) || s.price || s.current_price;
                 displayMap.set(assetKey, {
                    ...(displayMap.get(assetKey) || {}),
                    ...s,
-                   price: s.price || s.current_price,
+                   price: liveP,
                    last_updated: new Date().toISOString()
                 });
             }
@@ -97,7 +98,7 @@ export default function ActiveAssetsMonitor() {
             (watchlist && watchlist.includes(s.asset.toUpperCase())) || 
             (MASTER_WATCHLIST && MASTER_WATCHLIST.includes(s.asset.toUpperCase()))
         );
-    }, [globalStates, marketSummary, watchlist]);
+    }, [globalStates, marketSummary, latestPrices, latestPrice, activeSymbol, watchlist]);
 
     const getBiasIcon = (bias?: string) => {
         switch (bias) {
