@@ -29,6 +29,7 @@ export default function TradingChart() {
     const volumeRef = useRef<ISeriesApi<'Histogram'> | null>(null);
     const williamsRRef = useRef<ISeriesApi<'Line'> | null>(null);
     const sessionSeriesRef = useRef<ISeriesApi<'Baseline'>[]>([]);
+    const killzoneSeriesRef = useRef<ISeriesApi<'Baseline'>[]>([]);
     const valueAreaSeriesRef = useRef<ISeriesApi<'Baseline'> | null>(null);
     const priceLineRef = useRef<any>(null);
     const pocLineRef = useRef<any>(null);

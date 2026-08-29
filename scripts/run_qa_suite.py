@@ -29,7 +29,8 @@ MODERN_TEST_FILES = [
     "engine/tests/test_telegram_persistence.py",
     "engine/tests/test_dynamic_sl_professional_audit.py",
     "engine/tests/test_dynamic_universe_screener.py",
-    "engine/tests/test_auto_healing_and_telemetry.py"
+    "engine/tests/test_auto_healing_and_telemetry.py",
+    "engine/tests/test_chart_and_telemetry_pipeline.py"
 ]
 
 def main():
@@ -42,7 +43,7 @@ def main():
     
     if result.returncode == 0:
         print("\n" + "="*80)
-        print("✅ CERTIFICACIÓN QA EXITOSA: 55/55 PRUEBAS APROBADAS AL 100%")
+        print("✅ CERTIFICACIÓN QA EXITOSA: 69/69 PRUEBAS APROBADAS AL 100%")
         print("="*80 + "\n")
     else:
         print("\n" + "="*80)

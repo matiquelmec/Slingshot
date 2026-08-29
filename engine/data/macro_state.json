@@ -1,7 +1,7 @@
 {
-  "fear_greed_value": 73,
+  "fear_greed_value": 68,
   "fear_greed_label": "Greed",
-  "btc_dominance": 58.91,
+  "btc_dominance": 58.99,
   "funding_rate": 0.0,
   "funding_symbol": "BTCUSDT",
   "macro_bias": "NEUTRAL",
@@ -10,12 +10,12 @@
   "reason": "Sin datos macro disponibles.",
   "oi_delta_pct": 0.0,
   "dxy_trend": "BULLISH",
-  "dxy_price": 99.67,
+  "dxy_price": 99.68,
   "nasdaq_trend": "BEARISH",
-  "nasdaq_change_pct": -0.15,
+  "nasdaq_change_pct": -0.19,
   "risk_appetite": "RISK_OFF",
-  "news_sentiment": 0.5,
+  "news_sentiment": 0.6,
   "active_event": "Jackson Hole Symposium",
-  "last_updated": 1787934715.4358602,
+  "last_updated": 1787965911.8872626,
   "is_stale": false
 }
