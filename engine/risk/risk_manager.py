@@ -341,7 +341,7 @@ class RiskManager:
                 all_targets.sort(reverse=True) # De más cercano a más lejano (hacia abajo)
                 
                 for t in all_targets:
-                    if (current_price - t) / final_risk >= 2.0:
+                    if (current_price - t) / final_risk >= 1.5:
                         tp1 = t
                         break
                 
@@ -350,21 +350,21 @@ class RiskManager:
                 else: tp2 = tp1 - (final_risk * 1.5)
                 
         # Red de Seguridad y Garantía Geométrica Estricta de R:R
-        # LONG:  Entry < BE (+1.0R) < TP1 (+1.3R) < TP2 (+2.2R) < TP3 (+3.5R)
-        # SHORT: Entry > BE (+1.0R) > TP1 (+1.3R) > TP2 (+2.2R) > TP3 (+3.5R)
+        # LONG:  Entry < BE (+1.0R / +1.2R) < TP1 (+1.5R) < TP2 (+3.0R) < TP3 (+5.0R)
+        # SHORT: Entry > BE (+1.0R / +1.2R) > TP1 (+1.5R) > TP2 (+3.0R) > TP3 (+5.0R)
         if signal_type == "LONG":
-            calc_tp1 = current_price + (final_risk * 1.3)
-            calc_tp2 = current_price + (final_risk * 2.2)
-            calc_tp3 = current_price + (final_risk * 3.5)
+            calc_tp1 = current_price + (final_risk * 1.5)
+            calc_tp2 = current_price + (final_risk * 3.0)
+            calc_tp3 = current_price + (final_risk * 5.0)
             
             # Si el target magnético no respeta la jerarquía matemática, aplicamos los niveles R:R geométricos
             if tp1 <= current_price or tp1 < calc_tp1: tp1 = calc_tp1
             if tp2 <= tp1 or tp2 < calc_tp2: tp2 = max(tp2, calc_tp2)
             if tp3 <= tp2 or tp3 < calc_tp3: tp3 = max(tp3, calc_tp3)
         else: # SHORT
-            calc_tp1 = current_price - (final_risk * 1.3)
-            calc_tp2 = current_price - (final_risk * 2.2)
-            calc_tp3 = current_price - (final_risk * 3.5)
+            calc_tp1 = current_price - (final_risk * 1.5)
+            calc_tp2 = current_price - (final_risk * 3.0)
+            calc_tp3 = current_price - (final_risk * 5.0)
             
             # Si el target magnético no respeta la jerarquía matemática, aplicamos los niveles R:R geométricos
             if tp1 >= current_price or tp1 > calc_tp1: tp1 = calc_tp1

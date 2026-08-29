@@ -1,1205 +1,5 @@
 [
   {
-    "timestamp": "2026-06-04T21:30:02.187167+00:00",
-    "asset": "BTCUSDT",
-    "signal_type": "BUY",
-    "result": "TAKE_PROFIT",
-    "confluence_score": 0,
-    "fingerprint": {
-      "regime": "UNKNOWN",
-      "rvol": 1.0,
-      "has_ob": false,
-      "has_sweep": false,
-      "session": "UNKNOWN",
-      "absorption_score": 0.0,
-      "is_in_ote": false
-    }
-  },
-  {
-    "timestamp": "2026-06-04T21:30:18.747455+00:00",
-    "asset": "BTCUSDT",
-    "signal_type": "BUY",
-    "result": "TAKE_PROFIT",
-    "confluence_score": 0,
-    "fingerprint": {
-      "regime": "UNKNOWN",
-      "rvol": 1.0,
-      "has_ob": false,
-      "has_sweep": false,
-      "session": "UNKNOWN",
-      "absorption_score": 0.0,
-      "is_in_ote": false
-    }
-  },
-  {
-    "timestamp": "2026-06-04T21:30:30.317062+00:00",
-    "asset": "BTCUSDT",
-    "signal_type": "BUY",
-    "result": "TAKE_PROFIT",
-    "confluence_score": 0,
-    "fingerprint": {
-      "regime": "UNKNOWN",
-      "rvol": 1.0,
-      "has_ob": false,
-      "has_sweep": false,
-      "session": "UNKNOWN",
-      "absorption_score": 0.0,
-      "is_in_ote": false
-    }
-  },
-  {
-    "timestamp": "2026-06-04T21:30:46.685595+00:00",
-    "asset": "BTCUSDT",
-    "signal_type": "BUY",
-    "result": "TAKE_PROFIT",
-    "confluence_score": 0,
-    "fingerprint": {
-      "regime": "UNKNOWN",
-      "rvol": 1.0,
-      "has_ob": false,
-      "has_sweep": false,
-      "session": "UNKNOWN",
-      "absorption_score": 0.0,
-      "is_in_ote": false
-    }
-  },
-  {
-    "timestamp": "2026-06-04T21:33:22.998222+00:00",
-    "asset": "BTCUSDT",
-    "signal_type": "LONG",
-    "result": "STOP_LOSS",
-    "confluence_score": 0,
-    "fingerprint": {
-      "regime": "UNKNOWN",
-      "rvol": 1.0,
-      "has_ob": false,
-      "has_sweep": false,
-      "session": "UNKNOWN",
-      "absorption_score": 0.0,
-      "is_in_ote": false
-    }
-  },
-  {
-    "timestamp": "2026-08-26T02:18:51.069590+00:00",
-    "asset": "SOLUSDT",
-    "signal_type": "LONG",
-    "result": "STOP_LOSS",
-    "confluence_score": 0,
-    "fingerprint": {
-      "regime": "UNKNOWN",
-      "rvol": 1.0,
-      "has_ob": false,
-      "has_sweep": false,
-      "session": "UNKNOWN",
-      "absorption_score": 0.0,
-      "is_in_ote": false
-    }
-  },
-  {
-    "timestamp": "2026-08-26T02:29:39.511794+00:00",
-    "asset": "SOLUSDT",
-    "signal_type": "LONG",
-    "result": "STOP_LOSS",
-    "confluence_score": 0,
-    "fingerprint": {
-      "regime": "UNKNOWN",
-      "rvol": 1.0,
-      "has_ob": false,
-      "has_sweep": false,
-      "session": "UNKNOWN",
-      "absorption_score": 0.0,
-      "is_in_ote": false
-    }
-  },
-  {
-    "timestamp": "2026-08-26T07:32:41.821309+00:00",
-    "asset": "SOLUSDT",
-    "signal_type": "LONG",
-    "result": "STOP_LOSS",
-    "confluence_score": 0,
-    "fingerprint": {
-      "regime": "UNKNOWN",
-      "rvol": 1.0,
-      "has_ob": false,
-      "has_sweep": false,
-      "session": "UNKNOWN",
-      "absorption_score": 0.0,
-      "is_in_ote": false
-    }
-  },
-  {
-    "timestamp": "2026-08-26T11:20:24.690754+00:00",
-    "asset": "FETUSDT",
-    "signal_type": "SHORT",
-    "result": "TAKE_PROFIT",
-    "confluence_score": 0,
-    "fingerprint": {
-      "regime": "UNKNOWN",
-      "rvol": 1.0,
-      "has_ob": false,
-      "has_sweep": false,
-      "session": "UNKNOWN",
-      "absorption_score": 0.0,
-      "is_in_ote": false
-    }
-  },
-  {
-    "timestamp": "2026-08-26T14:56:25.583233+00:00",
-    "asset": "ATOMUSDT",
-    "signal_type": "LONG",
-    "result": "STOP_LOSS",
-    "confluence_score": 0,
-    "fingerprint": {
-      "regime": "UNKNOWN",
-      "rvol": 1.0,
-      "has_ob": false,
-      "has_sweep": false,
-      "session": "UNKNOWN",
-      "absorption_score": 0.0,
-      "is_in_ote": false
-    }
-  },
-  {
-    "timestamp": "2026-08-26T14:59:29.192942+00:00",
-    "asset": "AVAXUSDT",
-    "signal_type": "LONG",
-    "result": "STOP_LOSS",
-    "confluence_score": 0,
-    "fingerprint": {
-      "regime": "UNKNOWN",
-      "rvol": 1.0,
-      "has_ob": false,
-      "has_sweep": false,
-      "session": "UNKNOWN",
-      "absorption_score": 0.0,
-      "is_in_ote": false
-    }
-  },
-  {
-    "timestamp": "2026-08-27T08:09:43.340260+00:00",
-    "asset": "SOLUSDT",
-    "signal_type": "LONG",
-    "result": "TAKE_PROFIT",
-    "confluence_score": 0,
-    "fingerprint": {
-      "regime": "UNKNOWN",
-      "rvol": 1.0,
-      "has_ob": false,
-      "has_sweep": false,
-      "session": "UNKNOWN",
-      "absorption_score": 0.0,
-      "is_in_ote": false
-    }
-  },
-  {
-    "timestamp": "2026-08-27T08:30:06.804440+00:00",
-    "asset": "RENDERUSDT",
-    "signal_type": "LONG",
-    "result": "TAKE_PROFIT",
-    "confluence_score": 0,
-    "fingerprint": {
-      "regime": "UNKNOWN",
-      "rvol": 1.0,
-      "has_ob": false,
-      "has_sweep": false,
-      "session": "UNKNOWN",
-      "absorption_score": 0.0,
-      "is_in_ote": false
-    }
-  },
-  {
-    "timestamp": "2026-08-27T16:27:17.850052+00:00",
-    "asset": "ATOMUSDT",
-    "signal_type": "SHORT",
-    "result": "STOP_LOSS",
-    "confluence_score": 0,
-    "fingerprint": {
-      "regime": "UNKNOWN",
-      "rvol": 1.0,
-      "has_ob": false,
-      "has_sweep": false,
-      "session": "UNKNOWN",
-      "absorption_score": 0.0,
-      "is_in_ote": false
-    }
-  },
-  {
-    "timestamp": "2026-08-27T18:10:48.661652+00:00",
-    "asset": "RENDERUSDT",
-    "signal_type": "LONG",
-    "result": "TAKE_PROFIT",
-    "confluence_score": 0,
-    "fingerprint": {
-      "regime": "UNKNOWN",
-      "rvol": 1.0,
-      "has_ob": false,
-      "has_sweep": false,
-      "session": "UNKNOWN",
-      "absorption_score": 0.0,
-      "is_in_ote": false
-    }
-  },
-  {
-    "timestamp": "2026-08-27T18:11:07.554247+00:00",
-    "asset": "SOLUSDT",
-    "signal_type": "LONG",
-    "result": "TAKE_PROFIT",
-    "confluence_score": 0,
-    "fingerprint": {
-      "regime": "UNKNOWN",
-      "rvol": 1.0,
-      "has_ob": false,
-      "has_sweep": false,
-      "session": "UNKNOWN",
-      "absorption_score": 0.0,
-      "is_in_ote": false
-    }
-  },
-  {
-    "timestamp": "2026-08-27T18:11:36.178055+00:00",
-    "asset": "RENDERUSDT",
-    "signal_type": "LONG",
-    "result": "TAKE_PROFIT",
-    "confluence_score": 0,
-    "fingerprint": {
-      "regime": "UNKNOWN",
-      "rvol": 1.0,
-      "has_ob": false,
-      "has_sweep": false,
-      "session": "UNKNOWN",
-      "absorption_score": 0.0,
-      "is_in_ote": false
-    }
-  },
-  {
-    "timestamp": "2026-08-27T18:11:41.009492+00:00",
-    "asset": "SOLUSDT",
-    "signal_type": "LONG",
-    "result": "TAKE_PROFIT",
-    "confluence_score": 0,
-    "fingerprint": {
-      "regime": "UNKNOWN",
-      "rvol": 1.0,
-      "has_ob": false,
-      "has_sweep": false,
-      "session": "UNKNOWN",
-      "absorption_score": 0.0,
-      "is_in_ote": false
-    }
-  },
-  {
-    "timestamp": "2026-08-27T18:11:56.735951+00:00",
-    "asset": "RENDERUSDT",
-    "signal_type": "LONG",
-    "result": "TAKE_PROFIT",
-    "confluence_score": 0,
-    "fingerprint": {
-      "regime": "UNKNOWN",
-      "rvol": 1.0,
-      "has_ob": false,
-      "has_sweep": false,
-      "session": "UNKNOWN",
-      "absorption_score": 0.0,
-      "is_in_ote": false
-    }
-  },
-  {
-    "timestamp": "2026-08-27T18:11:58.824634+00:00",
-    "asset": "SOLUSDT",
-    "signal_type": "LONG",
-    "result": "TAKE_PROFIT",
-    "confluence_score": 0,
-    "fingerprint": {
-      "regime": "UNKNOWN",
-      "rvol": 1.0,
-      "has_ob": false,
-      "has_sweep": false,
-      "session": "UNKNOWN",
-      "absorption_score": 0.0,
-      "is_in_ote": false
-    }
-  },
-  {
-    "timestamp": "2026-08-27T18:12:08.270906+00:00",
-    "asset": "RENDERUSDT",
-    "signal_type": "LONG",
-    "result": "TAKE_PROFIT",
-    "confluence_score": 0,
-    "fingerprint": {
-      "regime": "UNKNOWN",
-      "rvol": 1.0,
-      "has_ob": false,
-      "has_sweep": false,
-      "session": "UNKNOWN",
-      "absorption_score": 0.0,
-      "is_in_ote": false
-    }
-  },
-  {
-    "timestamp": "2026-08-27T18:12:18.991178+00:00",
-    "asset": "SOLUSDT",
-    "signal_type": "LONG",
-    "result": "TAKE_PROFIT",
-    "confluence_score": 0,
-    "fingerprint": {
-      "regime": "UNKNOWN",
-      "rvol": 1.0,
-      "has_ob": false,
-      "has_sweep": false,
-      "session": "UNKNOWN",
-      "absorption_score": 0.0,
-      "is_in_ote": false
-    }
-  },
-  {
-    "timestamp": "2026-08-27T18:25:42.207996+00:00",
-    "asset": "RENDERUSDT",
-    "signal_type": "LONG",
-    "result": "TAKE_PROFIT",
-    "confluence_score": 0,
-    "fingerprint": {
-      "regime": "UNKNOWN",
-      "rvol": 1.0,
-      "has_ob": false,
-      "has_sweep": false,
-      "session": "UNKNOWN",
-      "absorption_score": 0.0,
-      "is_in_ote": false
-    }
-  },
-  {
-    "timestamp": "2026-08-27T18:26:49.385337+00:00",
-    "asset": "RENDERUSDT",
-    "signal_type": "LONG",
-    "result": "TAKE_PROFIT",
-    "confluence_score": 0,
-    "fingerprint": {
-      "regime": "UNKNOWN",
-      "rvol": 1.0,
-      "has_ob": false,
-      "has_sweep": false,
-      "session": "UNKNOWN",
-      "absorption_score": 0.0,
-      "is_in_ote": false
-    }
-  },
-  {
-    "timestamp": "2026-08-27T18:30:44.827362+00:00",
-    "asset": "RENDERUSDT",
-    "signal_type": "LONG",
-    "result": "TAKE_PROFIT",
-    "confluence_score": 0,
-    "fingerprint": {
-      "regime": "UNKNOWN",
-      "rvol": 1.0,
-      "has_ob": false,
-      "has_sweep": false,
-      "session": "UNKNOWN",
-      "absorption_score": 0.0,
-      "is_in_ote": false
-    }
-  },
-  {
-    "timestamp": "2026-08-27T18:31:27.516690+00:00",
-    "asset": "SOLUSDT",
-    "signal_type": "LONG",
-    "result": "TAKE_PROFIT",
-    "confluence_score": 0,
-    "fingerprint": {
-      "regime": "UNKNOWN",
-      "rvol": 1.0,
-      "has_ob": false,
-      "has_sweep": false,
-      "session": "UNKNOWN",
-      "absorption_score": 0.0,
-      "is_in_ote": false
-    }
-  },
-  {
-    "timestamp": "2026-08-27T18:33:00.376491+00:00",
-    "asset": "RENDERUSDT",
-    "signal_type": "LONG",
-    "result": "TAKE_PROFIT",
-    "confluence_score": 0,
-    "fingerprint": {
-      "regime": "UNKNOWN",
-      "rvol": 1.0,
-      "has_ob": false,
-      "has_sweep": false,
-      "session": "UNKNOWN",
-      "absorption_score": 0.0,
-      "is_in_ote": false
-    }
-  },
-  {
-    "timestamp": "2026-08-27T18:33:49.410997+00:00",
-    "asset": "SOLUSDT",
-    "signal_type": "LONG",
-    "result": "TAKE_PROFIT",
-    "confluence_score": 0,
-    "fingerprint": {
-      "regime": "UNKNOWN",
-      "rvol": 1.0,
-      "has_ob": false,
-      "has_sweep": false,
-      "session": "UNKNOWN",
-      "absorption_score": 0.0,
-      "is_in_ote": false
-    }
-  },
-  {
-    "timestamp": "2026-08-27T18:34:05.337752+00:00",
-    "asset": "RENDERUSDT",
-    "signal_type": "LONG",
-    "result": "TAKE_PROFIT",
-    "confluence_score": 0,
-    "fingerprint": {
-      "regime": "UNKNOWN",
-      "rvol": 1.0,
-      "has_ob": false,
-      "has_sweep": false,
-      "session": "UNKNOWN",
-      "absorption_score": 0.0,
-      "is_in_ote": false
-    }
-  },
-  {
-    "timestamp": "2026-08-27T18:34:16.657085+00:00",
-    "asset": "SOLUSDT",
-    "signal_type": "LONG",
-    "result": "TAKE_PROFIT",
-    "confluence_score": 0,
-    "fingerprint": {
-      "regime": "UNKNOWN",
-      "rvol": 1.0,
-      "has_ob": false,
-      "has_sweep": false,
-      "session": "UNKNOWN",
-      "absorption_score": 0.0,
-      "is_in_ote": false
-    }
-  },
-  {
-    "timestamp": "2026-08-27T18:34:19.068333+00:00",
-    "asset": "RENDERUSDT",
-    "signal_type": "LONG",
-    "result": "TAKE_PROFIT",
-    "confluence_score": 0,
-    "fingerprint": {
-      "regime": "UNKNOWN",
-      "rvol": 1.0,
-      "has_ob": false,
-      "has_sweep": false,
-      "session": "UNKNOWN",
-      "absorption_score": 0.0,
-      "is_in_ote": false
-    }
-  },
-  {
-    "timestamp": "2026-08-27T18:34:28.134633+00:00",
-    "asset": "RENDERUSDT",
-    "signal_type": "LONG",
-    "result": "TAKE_PROFIT",
-    "confluence_score": 0,
-    "fingerprint": {
-      "regime": "UNKNOWN",
-      "rvol": 1.0,
-      "has_ob": false,
-      "has_sweep": false,
-      "session": "UNKNOWN",
-      "absorption_score": 0.0,
-      "is_in_ote": false
-    }
-  },
-  {
-    "timestamp": "2026-08-27T18:34:30.403386+00:00",
-    "asset": "SOLUSDT",
-    "signal_type": "LONG",
-    "result": "TAKE_PROFIT",
-    "confluence_score": 0,
-    "fingerprint": {
-      "regime": "UNKNOWN",
-      "rvol": 1.0,
-      "has_ob": false,
-      "has_sweep": false,
-      "session": "UNKNOWN",
-      "absorption_score": 0.0,
-      "is_in_ote": false
-    }
-  },
-  {
-    "timestamp": "2026-08-27T18:35:22.911661+00:00",
-    "asset": "RENDERUSDT",
-    "signal_type": "LONG",
-    "result": "TAKE_PROFIT",
-    "confluence_score": 0,
-    "fingerprint": {
-      "regime": "UNKNOWN",
-      "rvol": 1.0,
-      "has_ob": false,
-      "has_sweep": false,
-      "session": "UNKNOWN",
-      "absorption_score": 0.0,
-      "is_in_ote": false
-    }
-  },
-  {
-    "timestamp": "2026-08-27T18:35:27.945158+00:00",
-    "asset": "SOLUSDT",
-    "signal_type": "LONG",
-    "result": "TAKE_PROFIT",
-    "confluence_score": 0,
-    "fingerprint": {
-      "regime": "UNKNOWN",
-      "rvol": 1.0,
-      "has_ob": false,
-      "has_sweep": false,
-      "session": "UNKNOWN",
-      "absorption_score": 0.0,
-      "is_in_ote": false
-    }
-  },
-  {
-    "timestamp": "2026-08-27T18:54:51.601681+00:00",
-    "asset": "SOLUSDT",
-    "signal_type": "LONG",
-    "result": "TAKE_PROFIT",
-    "confluence_score": 0,
-    "fingerprint": {
-      "regime": "UNKNOWN",
-      "rvol": 1.0,
-      "has_ob": false,
-      "has_sweep": false,
-      "session": "UNKNOWN",
-      "absorption_score": 0.0,
-      "is_in_ote": false
-    }
-  },
-  {
-    "timestamp": "2026-08-28T02:29:50.328858+00:00",
-    "asset": "SOLUSDT",
-    "signal_type": "LONG",
-    "result": "TAKE_PROFIT",
-    "confluence_score": 0,
-    "fingerprint": {
-      "regime": "UNKNOWN",
-      "rvol": 1.0,
-      "has_ob": false,
-      "has_sweep": false,
-      "session": "UNKNOWN",
-      "absorption_score": 0.0,
-      "is_in_ote": false
-    }
-  },
-  {
-    "timestamp": "2026-08-28T02:51:40.019686+00:00",
-    "asset": "HYPEUSDT",
-    "signal_type": "LONG",
-    "result": "STOP_LOSS",
-    "confluence_score": 0,
-    "fingerprint": {
-      "regime": "UNKNOWN",
-      "rvol": 1.0,
-      "has_ob": false,
-      "has_sweep": false,
-      "session": "UNKNOWN",
-      "absorption_score": 0.0,
-      "is_in_ote": false
-    }
-  },
-  {
-    "timestamp": "2026-08-28T12:47:41.186935+00:00",
-    "asset": "TIAUSDT",
-    "signal_type": "LONG",
-    "result": "TAKE_PROFIT",
-    "confluence_score": 0,
-    "fingerprint": {
-      "regime": "UNKNOWN",
-      "rvol": 1.0,
-      "has_ob": false,
-      "has_sweep": false,
-      "session": "UNKNOWN",
-      "absorption_score": 0.0,
-      "is_in_ote": false
-    }
-  },
-  {
-    "timestamp": "2026-08-28T12:49:09.394256+00:00",
-    "asset": "TIAUSDT",
-    "signal_type": "LONG",
-    "result": "TAKE_PROFIT",
-    "confluence_score": 0,
-    "fingerprint": {
-      "regime": "UNKNOWN",
-      "rvol": 1.0,
-      "has_ob": false,
-      "has_sweep": false,
-      "session": "UNKNOWN",
-      "absorption_score": 0.0,
-      "is_in_ote": false
-    }
-  },
-  {
-    "timestamp": "2026-08-28T12:49:33.693393+00:00",
-    "asset": "TIAUSDT",
-    "signal_type": "LONG",
-    "result": "TAKE_PROFIT",
-    "confluence_score": 0,
-    "fingerprint": {
-      "regime": "UNKNOWN",
-      "rvol": 1.0,
-      "has_ob": false,
-      "has_sweep": false,
-      "session": "UNKNOWN",
-      "absorption_score": 0.0,
-      "is_in_ote": false
-    }
-  },
-  {
-    "timestamp": "2026-08-28T12:50:21.583618+00:00",
-    "asset": "TIAUSDT",
-    "signal_type": "LONG",
-    "result": "TAKE_PROFIT",
-    "confluence_score": 0,
-    "fingerprint": {
-      "regime": "UNKNOWN",
-      "rvol": 1.0,
-      "has_ob": false,
-      "has_sweep": false,
-      "session": "UNKNOWN",
-      "absorption_score": 0.0,
-      "is_in_ote": false
-    }
-  },
-  {
-    "timestamp": "2026-08-28T12:50:42.693079+00:00",
-    "asset": "TIAUSDT",
-    "signal_type": "LONG",
-    "result": "TAKE_PROFIT",
-    "confluence_score": 0,
-    "fingerprint": {
-      "regime": "UNKNOWN",
-      "rvol": 1.0,
-      "has_ob": false,
-      "has_sweep": false,
-      "session": "UNKNOWN",
-      "absorption_score": 0.0,
-      "is_in_ote": false
-    }
-  },
-  {
-    "timestamp": "2026-08-28T12:50:54.294546+00:00",
-    "asset": "TIAUSDT",
-    "signal_type": "LONG",
-    "result": "TAKE_PROFIT",
-    "confluence_score": 0,
-    "fingerprint": {
-      "regime": "UNKNOWN",
-      "rvol": 1.0,
-      "has_ob": false,
-      "has_sweep": false,
-      "session": "UNKNOWN",
-      "absorption_score": 0.0,
-      "is_in_ote": false
-    }
-  },
-  {
-    "timestamp": "2026-08-28T12:51:07.648002+00:00",
-    "asset": "TIAUSDT",
-    "signal_type": "LONG",
-    "result": "TAKE_PROFIT",
-    "confluence_score": 0,
-    "fingerprint": {
-      "regime": "UNKNOWN",
-      "rvol": 1.0,
-      "has_ob": false,
-      "has_sweep": false,
-      "session": "UNKNOWN",
-      "absorption_score": 0.0,
-      "is_in_ote": false
-    }
-  },
-  {
-    "timestamp": "2026-08-28T12:51:19.514205+00:00",
-    "asset": "TIAUSDT",
-    "signal_type": "LONG",
-    "result": "TAKE_PROFIT",
-    "confluence_score": 0,
-    "fingerprint": {
-      "regime": "UNKNOWN",
-      "rvol": 1.0,
-      "has_ob": false,
-      "has_sweep": false,
-      "session": "UNKNOWN",
-      "absorption_score": 0.0,
-      "is_in_ote": false
-    }
-  },
-  {
-    "timestamp": "2026-08-28T12:52:01.746291+00:00",
-    "asset": "TIAUSDT",
-    "signal_type": "LONG",
-    "result": "TAKE_PROFIT",
-    "confluence_score": 0,
-    "fingerprint": {
-      "regime": "UNKNOWN",
-      "rvol": 1.0,
-      "has_ob": false,
-      "has_sweep": false,
-      "session": "UNKNOWN",
-      "absorption_score": 0.0,
-      "is_in_ote": false
-    }
-  },
-  {
-    "timestamp": "2026-08-28T12:52:23.170639+00:00",
-    "asset": "TIAUSDT",
-    "signal_type": "LONG",
-    "result": "TAKE_PROFIT",
-    "confluence_score": 0,
-    "fingerprint": {
-      "regime": "UNKNOWN",
-      "rvol": 1.0,
-      "has_ob": false,
-      "has_sweep": false,
-      "session": "UNKNOWN",
-      "absorption_score": 0.0,
-      "is_in_ote": false
-    }
-  },
-  {
-    "timestamp": "2026-08-28T12:52:45.605206+00:00",
-    "asset": "TIAUSDT",
-    "signal_type": "LONG",
-    "result": "TAKE_PROFIT",
-    "confluence_score": 0,
-    "fingerprint": {
-      "regime": "UNKNOWN",
-      "rvol": 1.0,
-      "has_ob": false,
-      "has_sweep": false,
-      "session": "UNKNOWN",
-      "absorption_score": 0.0,
-      "is_in_ote": false
-    }
-  },
-  {
-    "timestamp": "2026-08-28T12:53:21.476586+00:00",
-    "asset": "TIAUSDT",
-    "signal_type": "LONG",
-    "result": "TAKE_PROFIT",
-    "confluence_score": 0,
-    "fingerprint": {
-      "regime": "UNKNOWN",
-      "rvol": 1.0,
-      "has_ob": false,
-      "has_sweep": false,
-      "session": "UNKNOWN",
-      "absorption_score": 0.0,
-      "is_in_ote": false
-    }
-  },
-  {
-    "timestamp": "2026-08-28T12:53:44.181586+00:00",
-    "asset": "TIAUSDT",
-    "signal_type": "LONG",
-    "result": "TAKE_PROFIT",
-    "confluence_score": 0,
-    "fingerprint": {
-      "regime": "UNKNOWN",
-      "rvol": 1.0,
-      "has_ob": false,
-      "has_sweep": false,
-      "session": "UNKNOWN",
-      "absorption_score": 0.0,
-      "is_in_ote": false
-    }
-  },
-  {
-    "timestamp": "2026-08-28T12:54:08.359573+00:00",
-    "asset": "TIAUSDT",
-    "signal_type": "LONG",
-    "result": "TAKE_PROFIT",
-    "confluence_score": 0,
-    "fingerprint": {
-      "regime": "UNKNOWN",
-      "rvol": 1.0,
-      "has_ob": false,
-      "has_sweep": false,
-      "session": "UNKNOWN",
-      "absorption_score": 0.0,
-      "is_in_ote": false
-    }
-  },
-  {
-    "timestamp": "2026-08-28T12:54:48.577386+00:00",
-    "asset": "TIAUSDT",
-    "signal_type": "LONG",
-    "result": "TAKE_PROFIT",
-    "confluence_score": 0,
-    "fingerprint": {
-      "regime": "UNKNOWN",
-      "rvol": 1.0,
-      "has_ob": false,
-      "has_sweep": false,
-      "session": "UNKNOWN",
-      "absorption_score": 0.0,
-      "is_in_ote": false
-    }
-  },
-  {
-    "timestamp": "2026-08-28T12:55:11.452669+00:00",
-    "asset": "TIAUSDT",
-    "signal_type": "LONG",
-    "result": "TAKE_PROFIT",
-    "confluence_score": 0,
-    "fingerprint": {
-      "regime": "UNKNOWN",
-      "rvol": 1.0,
-      "has_ob": false,
-      "has_sweep": false,
-      "session": "UNKNOWN",
-      "absorption_score": 0.0,
-      "is_in_ote": false
-    }
-  },
-  {
-    "timestamp": "2026-08-28T12:55:32.345071+00:00",
-    "asset": "TIAUSDT",
-    "signal_type": "LONG",
-    "result": "TAKE_PROFIT",
-    "confluence_score": 0,
-    "fingerprint": {
-      "regime": "UNKNOWN",
-      "rvol": 1.0,
-      "has_ob": false,
-      "has_sweep": false,
-      "session": "UNKNOWN",
-      "absorption_score": 0.0,
-      "is_in_ote": false
-    }
-  },
-  {
-    "timestamp": "2026-08-28T12:56:27.663673+00:00",
-    "asset": "TIAUSDT",
-    "signal_type": "LONG",
-    "result": "TAKE_PROFIT",
-    "confluence_score": 0,
-    "fingerprint": {
-      "regime": "UNKNOWN",
-      "rvol": 1.0,
-      "has_ob": false,
-      "has_sweep": false,
-      "session": "UNKNOWN",
-      "absorption_score": 0.0,
-      "is_in_ote": false
-    }
-  },
-  {
-    "timestamp": "2026-08-28T12:56:51.544451+00:00",
-    "asset": "TIAUSDT",
-    "signal_type": "LONG",
-    "result": "TAKE_PROFIT",
-    "confluence_score": 0,
-    "fingerprint": {
-      "regime": "UNKNOWN",
-      "rvol": 1.0,
-      "has_ob": false,
-      "has_sweep": false,
-      "session": "UNKNOWN",
-      "absorption_score": 0.0,
-      "is_in_ote": false
-    }
-  },
-  {
-    "timestamp": "2026-08-28T12:57:05.083331+00:00",
-    "asset": "TIAUSDT",
-    "signal_type": "LONG",
-    "result": "TAKE_PROFIT",
-    "confluence_score": 0,
-    "fingerprint": {
-      "regime": "UNKNOWN",
-      "rvol": 1.0,
-      "has_ob": false,
-      "has_sweep": false,
-      "session": "UNKNOWN",
-      "absorption_score": 0.0,
-      "is_in_ote": false
-    }
-  },
-  {
-    "timestamp": "2026-08-28T12:57:46.900636+00:00",
-    "asset": "TIAUSDT",
-    "signal_type": "LONG",
-    "result": "TAKE_PROFIT",
-    "confluence_score": 0,
-    "fingerprint": {
-      "regime": "UNKNOWN",
-      "rvol": 1.0,
-      "has_ob": false,
-      "has_sweep": false,
-      "session": "UNKNOWN",
-      "absorption_score": 0.0,
-      "is_in_ote": false
-    }
-  },
-  {
-    "timestamp": "2026-08-28T12:58:11.277913+00:00",
-    "asset": "TIAUSDT",
-    "signal_type": "LONG",
-    "result": "TAKE_PROFIT",
-    "confluence_score": 0,
-    "fingerprint": {
-      "regime": "UNKNOWN",
-      "rvol": 1.0,
-      "has_ob": false,
-      "has_sweep": false,
-      "session": "UNKNOWN",
-      "absorption_score": 0.0,
-      "is_in_ote": false
-    }
-  },
-  {
-    "timestamp": "2026-08-28T12:58:55.763517+00:00",
-    "asset": "TIAUSDT",
-    "signal_type": "LONG",
-    "result": "TAKE_PROFIT",
-    "confluence_score": 0,
-    "fingerprint": {
-      "regime": "UNKNOWN",
-      "rvol": 1.0,
-      "has_ob": false,
-      "has_sweep": false,
-      "session": "UNKNOWN",
-      "absorption_score": 0.0,
-      "is_in_ote": false
-    }
-  },
-  {
-    "timestamp": "2026-08-28T12:59:09.548320+00:00",
-    "asset": "TIAUSDT",
-    "signal_type": "LONG",
-    "result": "TAKE_PROFIT",
-    "confluence_score": 0,
-    "fingerprint": {
-      "regime": "UNKNOWN",
-      "rvol": 1.0,
-      "has_ob": false,
-      "has_sweep": false,
-      "session": "UNKNOWN",
-      "absorption_score": 0.0,
-      "is_in_ote": false
-    }
-  },
-  {
-    "timestamp": "2026-08-28T12:59:21.977088+00:00",
-    "asset": "TIAUSDT",
-    "signal_type": "LONG",
-    "result": "TAKE_PROFIT",
-    "confluence_score": 0,
-    "fingerprint": {
-      "regime": "UNKNOWN",
-      "rvol": 1.0,
-      "has_ob": false,
-      "has_sweep": false,
-      "session": "UNKNOWN",
-      "absorption_score": 0.0,
-      "is_in_ote": false
-    }
-  },
-  {
-    "timestamp": "2026-08-28T12:59:35.134741+00:00",
-    "asset": "TIAUSDT",
-    "signal_type": "LONG",
-    "result": "TAKE_PROFIT",
-    "confluence_score": 0,
-    "fingerprint": {
-      "regime": "UNKNOWN",
-      "rvol": 1.0,
-      "has_ob": false,
-      "has_sweep": false,
-      "session": "UNKNOWN",
-      "absorption_score": 0.0,
-      "is_in_ote": false
-    }
-  },
-  {
-    "timestamp": "2026-08-28T12:59:48.466323+00:00",
-    "asset": "TIAUSDT",
-    "signal_type": "LONG",
-    "result": "TAKE_PROFIT",
-    "confluence_score": 0,
-    "fingerprint": {
-      "regime": "UNKNOWN",
-      "rvol": 1.0,
-      "has_ob": false,
-      "has_sweep": false,
-      "session": "UNKNOWN",
-      "absorption_score": 0.0,
-      "is_in_ote": false
-    }
-  },
-  {
-    "timestamp": "2026-08-28T13:00:34.100291+00:00",
-    "asset": "TIAUSDT",
-    "signal_type": "LONG",
-    "result": "TAKE_PROFIT",
-    "confluence_score": 0,
-    "fingerprint": {
-      "regime": "UNKNOWN",
-      "rvol": 1.0,
-      "has_ob": false,
-      "has_sweep": false,
-      "session": "UNKNOWN",
-      "absorption_score": 0.0,
-      "is_in_ote": false
-    }
-  },
-  {
-    "timestamp": "2026-08-28T13:00:57.944609+00:00",
-    "asset": "TIAUSDT",
-    "signal_type": "LONG",
-    "result": "TAKE_PROFIT",
-    "confluence_score": 0,
-    "fingerprint": {
-      "regime": "UNKNOWN",
-      "rvol": 1.0,
-      "has_ob": false,
-      "has_sweep": false,
-      "session": "UNKNOWN",
-      "absorption_score": 0.0,
-      "is_in_ote": false
-    }
-  },
-  {
-    "timestamp": "2026-08-28T13:01:23.129515+00:00",
-    "asset": "TIAUSDT",
-    "signal_type": "LONG",
-    "result": "TAKE_PROFIT",
-    "confluence_score": 0,
-    "fingerprint": {
-      "regime": "UNKNOWN",
-      "rvol": 1.0,
-      "has_ob": false,
-      "has_sweep": false,
-      "session": "UNKNOWN",
-      "absorption_score": 0.0,
-      "is_in_ote": false
-    }
-  },
-  {
-    "timestamp": "2026-08-28T13:02:09.012374+00:00",
-    "asset": "TIAUSDT",
-    "signal_type": "LONG",
-    "result": "TAKE_PROFIT",
-    "confluence_score": 0,
-    "fingerprint": {
-      "regime": "UNKNOWN",
-      "rvol": 1.0,
-      "has_ob": false,
-      "has_sweep": false,
-      "session": "UNKNOWN",
-      "absorption_score": 0.0,
-      "is_in_ote": false
-    }
-  },
-  {
-    "timestamp": "2026-08-28T13:02:35.391521+00:00",
-    "asset": "TIAUSDT",
-    "signal_type": "LONG",
-    "result": "TAKE_PROFIT",
-    "confluence_score": 0,
-    "fingerprint": {
-      "regime": "UNKNOWN",
-      "rvol": 1.0,
-      "has_ob": false,
-      "has_sweep": false,
-      "session": "UNKNOWN",
-      "absorption_score": 0.0,
-      "is_in_ote": false
-    }
-  },
-  {
-    "timestamp": "2026-08-28T13:02:48.209850+00:00",
-    "asset": "TIAUSDT",
-    "signal_type": "LONG",
-    "result": "TAKE_PROFIT",
-    "confluence_score": 0,
-    "fingerprint": {
-      "regime": "UNKNOWN",
-      "rvol": 1.0,
-      "has_ob": false,
-      "has_sweep": false,
-      "session": "UNKNOWN",
-      "absorption_score": 0.0,
-      "is_in_ote": false
-    }
-  },
-  {
-    "timestamp": "2026-08-28T13:03:24.438840+00:00",
-    "asset": "TIAUSDT",
-    "signal_type": "LONG",
-    "result": "TAKE_PROFIT",
-    "confluence_score": 0,
-    "fingerprint": {
-      "regime": "UNKNOWN",
-      "rvol": 1.0,
-      "has_ob": false,
-      "has_sweep": false,
-      "session": "UNKNOWN",
-      "absorption_score": 0.0,
-      "is_in_ote": false
-    }
-  },
-  {
-    "timestamp": "2026-08-28T13:03:48.894344+00:00",
-    "asset": "TIAUSDT",
-    "signal_type": "LONG",
-    "result": "TAKE_PROFIT",
-    "confluence_score": 0,
-    "fingerprint": {
-      "regime": "UNKNOWN",
-      "rvol": 1.0,
-      "has_ob": false,
-      "has_sweep": false,
-      "session": "UNKNOWN",
-      "absorption_score": 0.0,
-      "is_in_ote": false
-    }
-  },
-  {
-    "timestamp": "2026-08-28T13:04:15.338080+00:00",
-    "asset": "TIAUSDT",
-    "signal_type": "LONG",
-    "result": "TAKE_PROFIT",
-    "confluence_score": 0,
-    "fingerprint": {
-      "regime": "UNKNOWN",
-      "rvol": 1.0,
-      "has_ob": false,
-      "has_sweep": false,
-      "session": "UNKNOWN",
-      "absorption_score": 0.0,
-      "is_in_ote": false
-    }
-  },
-  {
-    "timestamp": "2026-08-28T13:05:13.068287+00:00",
-    "asset": "TIAUSDT",
-    "signal_type": "LONG",
-    "result": "TAKE_PROFIT",
-    "confluence_score": 0,
-    "fingerprint": {
-      "regime": "UNKNOWN",
-      "rvol": 1.0,
-      "has_ob": false,
-      "has_sweep": false,
-      "session": "UNKNOWN",
-      "absorption_score": 0.0,
-      "is_in_ote": false
-    }
-  },
-  {
     "timestamp": "2026-08-28T13:05:39.332636+00:00",
     "asset": "TIAUSDT",
     "signal_type": "LONG",
@@ -3188,6 +1988,1206 @@
     "asset": "TRUMPUSDT",
     "signal_type": "LONG",
     "result": "STOP_LOSS",
+    "confluence_score": 0,
+    "fingerprint": {
+      "regime": "UNKNOWN",
+      "rvol": 1.0,
+      "has_ob": false,
+      "has_sweep": false,
+      "session": "UNKNOWN",
+      "absorption_score": 0.0,
+      "is_in_ote": false
+    }
+  },
+  {
+    "timestamp": "2026-08-29T18:52:57.333015+00:00",
+    "asset": "TIAUSDT",
+    "signal_type": "SHORT",
+    "result": "TAKE_PROFIT",
+    "confluence_score": 0,
+    "fingerprint": {
+      "regime": "UNKNOWN",
+      "rvol": 1.0,
+      "has_ob": false,
+      "has_sweep": false,
+      "session": "UNKNOWN",
+      "absorption_score": 0.0,
+      "is_in_ote": false
+    }
+  },
+  {
+    "timestamp": "2026-08-29T18:54:15.857741+00:00",
+    "asset": "TIAUSDT",
+    "signal_type": "SHORT",
+    "result": "TAKE_PROFIT",
+    "confluence_score": 0,
+    "fingerprint": {
+      "regime": "UNKNOWN",
+      "rvol": 1.0,
+      "has_ob": false,
+      "has_sweep": false,
+      "session": "UNKNOWN",
+      "absorption_score": 0.0,
+      "is_in_ote": false
+    }
+  },
+  {
+    "timestamp": "2026-08-29T18:54:53.508167+00:00",
+    "asset": "TIAUSDT",
+    "signal_type": "SHORT",
+    "result": "TAKE_PROFIT",
+    "confluence_score": 0,
+    "fingerprint": {
+      "regime": "UNKNOWN",
+      "rvol": 1.0,
+      "has_ob": false,
+      "has_sweep": false,
+      "session": "UNKNOWN",
+      "absorption_score": 0.0,
+      "is_in_ote": false
+    }
+  },
+  {
+    "timestamp": "2026-08-29T18:55:18.076827+00:00",
+    "asset": "TIAUSDT",
+    "signal_type": "SHORT",
+    "result": "TAKE_PROFIT",
+    "confluence_score": 0,
+    "fingerprint": {
+      "regime": "UNKNOWN",
+      "rvol": 1.0,
+      "has_ob": false,
+      "has_sweep": false,
+      "session": "UNKNOWN",
+      "absorption_score": 0.0,
+      "is_in_ote": false
+    }
+  },
+  {
+    "timestamp": "2026-08-29T18:55:35.939675+00:00",
+    "asset": "TIAUSDT",
+    "signal_type": "SHORT",
+    "result": "TAKE_PROFIT",
+    "confluence_score": 0,
+    "fingerprint": {
+      "regime": "UNKNOWN",
+      "rvol": 1.0,
+      "has_ob": false,
+      "has_sweep": false,
+      "session": "UNKNOWN",
+      "absorption_score": 0.0,
+      "is_in_ote": false
+    }
+  },
+  {
+    "timestamp": "2026-08-29T18:55:55.194176+00:00",
+    "asset": "TIAUSDT",
+    "signal_type": "SHORT",
+    "result": "TAKE_PROFIT",
+    "confluence_score": 0,
+    "fingerprint": {
+      "regime": "UNKNOWN",
+      "rvol": 1.0,
+      "has_ob": false,
+      "has_sweep": false,
+      "session": "UNKNOWN",
+      "absorption_score": 0.0,
+      "is_in_ote": false
+    }
+  },
+  {
+    "timestamp": "2026-08-29T18:56:39.089026+00:00",
+    "asset": "TIAUSDT",
+    "signal_type": "SHORT",
+    "result": "TAKE_PROFIT",
+    "confluence_score": 0,
+    "fingerprint": {
+      "regime": "UNKNOWN",
+      "rvol": 1.0,
+      "has_ob": false,
+      "has_sweep": false,
+      "session": "UNKNOWN",
+      "absorption_score": 0.0,
+      "is_in_ote": false
+    }
+  },
+  {
+    "timestamp": "2026-08-29T18:56:57.294190+00:00",
+    "asset": "TIAUSDT",
+    "signal_type": "SHORT",
+    "result": "TAKE_PROFIT",
+    "confluence_score": 0,
+    "fingerprint": {
+      "regime": "UNKNOWN",
+      "rvol": 1.0,
+      "has_ob": false,
+      "has_sweep": false,
+      "session": "UNKNOWN",
+      "absorption_score": 0.0,
+      "is_in_ote": false
+    }
+  },
+  {
+    "timestamp": "2026-08-29T18:57:24.874035+00:00",
+    "asset": "TIAUSDT",
+    "signal_type": "SHORT",
+    "result": "TAKE_PROFIT",
+    "confluence_score": 0,
+    "fingerprint": {
+      "regime": "UNKNOWN",
+      "rvol": 1.0,
+      "has_ob": false,
+      "has_sweep": false,
+      "session": "UNKNOWN",
+      "absorption_score": 0.0,
+      "is_in_ote": false
+    }
+  },
+  {
+    "timestamp": "2026-08-29T18:58:05.034006+00:00",
+    "asset": "TIAUSDT",
+    "signal_type": "SHORT",
+    "result": "TAKE_PROFIT",
+    "confluence_score": 0,
+    "fingerprint": {
+      "regime": "UNKNOWN",
+      "rvol": 1.0,
+      "has_ob": false,
+      "has_sweep": false,
+      "session": "UNKNOWN",
+      "absorption_score": 0.0,
+      "is_in_ote": false
+    }
+  },
+  {
+    "timestamp": "2026-08-29T18:58:22.757758+00:00",
+    "asset": "TIAUSDT",
+    "signal_type": "SHORT",
+    "result": "TAKE_PROFIT",
+    "confluence_score": 0,
+    "fingerprint": {
+      "regime": "UNKNOWN",
+      "rvol": 1.0,
+      "has_ob": false,
+      "has_sweep": false,
+      "session": "UNKNOWN",
+      "absorption_score": 0.0,
+      "is_in_ote": false
+    }
+  },
+  {
+    "timestamp": "2026-08-29T18:58:41.757570+00:00",
+    "asset": "TIAUSDT",
+    "signal_type": "SHORT",
+    "result": "TAKE_PROFIT",
+    "confluence_score": 0,
+    "fingerprint": {
+      "regime": "UNKNOWN",
+      "rvol": 1.0,
+      "has_ob": false,
+      "has_sweep": false,
+      "session": "UNKNOWN",
+      "absorption_score": 0.0,
+      "is_in_ote": false
+    }
+  },
+  {
+    "timestamp": "2026-08-29T18:59:24.618168+00:00",
+    "asset": "TIAUSDT",
+    "signal_type": "SHORT",
+    "result": "TAKE_PROFIT",
+    "confluence_score": 0,
+    "fingerprint": {
+      "regime": "UNKNOWN",
+      "rvol": 1.0,
+      "has_ob": false,
+      "has_sweep": false,
+      "session": "UNKNOWN",
+      "absorption_score": 0.0,
+      "is_in_ote": false
+    }
+  },
+  {
+    "timestamp": "2026-08-29T18:59:51.442913+00:00",
+    "asset": "TIAUSDT",
+    "signal_type": "SHORT",
+    "result": "TAKE_PROFIT",
+    "confluence_score": 0,
+    "fingerprint": {
+      "regime": "UNKNOWN",
+      "rvol": 1.0,
+      "has_ob": false,
+      "has_sweep": false,
+      "session": "UNKNOWN",
+      "absorption_score": 0.0,
+      "is_in_ote": false
+    }
+  },
+  {
+    "timestamp": "2026-08-29T19:00:10.051062+00:00",
+    "asset": "TIAUSDT",
+    "signal_type": "SHORT",
+    "result": "TAKE_PROFIT",
+    "confluence_score": 0,
+    "fingerprint": {
+      "regime": "UNKNOWN",
+      "rvol": 1.0,
+      "has_ob": false,
+      "has_sweep": false,
+      "session": "UNKNOWN",
+      "absorption_score": 0.0,
+      "is_in_ote": false
+    }
+  },
+  {
+    "timestamp": "2026-08-29T19:00:49.616027+00:00",
+    "asset": "TIAUSDT",
+    "signal_type": "SHORT",
+    "result": "TAKE_PROFIT",
+    "confluence_score": 0,
+    "fingerprint": {
+      "regime": "UNKNOWN",
+      "rvol": 1.0,
+      "has_ob": false,
+      "has_sweep": false,
+      "session": "UNKNOWN",
+      "absorption_score": 0.0,
+      "is_in_ote": false
+    }
+  },
+  {
+    "timestamp": "2026-08-29T19:01:15.656501+00:00",
+    "asset": "TIAUSDT",
+    "signal_type": "SHORT",
+    "result": "TAKE_PROFIT",
+    "confluence_score": 0,
+    "fingerprint": {
+      "regime": "UNKNOWN",
+      "rvol": 1.0,
+      "has_ob": false,
+      "has_sweep": false,
+      "session": "UNKNOWN",
+      "absorption_score": 0.0,
+      "is_in_ote": false
+    }
+  },
+  {
+    "timestamp": "2026-08-29T19:01:33.636624+00:00",
+    "asset": "TIAUSDT",
+    "signal_type": "SHORT",
+    "result": "TAKE_PROFIT",
+    "confluence_score": 0,
+    "fingerprint": {
+      "regime": "UNKNOWN",
+      "rvol": 1.0,
+      "has_ob": false,
+      "has_sweep": false,
+      "session": "UNKNOWN",
+      "absorption_score": 0.0,
+      "is_in_ote": false
+    }
+  },
+  {
+    "timestamp": "2026-08-29T19:02:16.241199+00:00",
+    "asset": "TIAUSDT",
+    "signal_type": "SHORT",
+    "result": "TAKE_PROFIT",
+    "confluence_score": 0,
+    "fingerprint": {
+      "regime": "UNKNOWN",
+      "rvol": 1.0,
+      "has_ob": false,
+      "has_sweep": false,
+      "session": "UNKNOWN",
+      "absorption_score": 0.0,
+      "is_in_ote": false
+    }
+  },
+  {
+    "timestamp": "2026-08-29T19:02:34.331340+00:00",
+    "asset": "TIAUSDT",
+    "signal_type": "SHORT",
+    "result": "TAKE_PROFIT",
+    "confluence_score": 0,
+    "fingerprint": {
+      "regime": "UNKNOWN",
+      "rvol": 1.0,
+      "has_ob": false,
+      "has_sweep": false,
+      "session": "UNKNOWN",
+      "absorption_score": 0.0,
+      "is_in_ote": false
+    }
+  },
+  {
+    "timestamp": "2026-08-29T19:03:02.472867+00:00",
+    "asset": "TIAUSDT",
+    "signal_type": "SHORT",
+    "result": "TAKE_PROFIT",
+    "confluence_score": 0,
+    "fingerprint": {
+      "regime": "UNKNOWN",
+      "rvol": 1.0,
+      "has_ob": false,
+      "has_sweep": false,
+      "session": "UNKNOWN",
+      "absorption_score": 0.0,
+      "is_in_ote": false
+    }
+  },
+  {
+    "timestamp": "2026-08-29T19:03:38.028946+00:00",
+    "asset": "TIAUSDT",
+    "signal_type": "SHORT",
+    "result": "TAKE_PROFIT",
+    "confluence_score": 0,
+    "fingerprint": {
+      "regime": "UNKNOWN",
+      "rvol": 1.0,
+      "has_ob": false,
+      "has_sweep": false,
+      "session": "UNKNOWN",
+      "absorption_score": 0.0,
+      "is_in_ote": false
+    }
+  },
+  {
+    "timestamp": "2026-08-29T19:04:04.063449+00:00",
+    "asset": "TIAUSDT",
+    "signal_type": "SHORT",
+    "result": "TAKE_PROFIT",
+    "confluence_score": 0,
+    "fingerprint": {
+      "regime": "UNKNOWN",
+      "rvol": 1.0,
+      "has_ob": false,
+      "has_sweep": false,
+      "session": "UNKNOWN",
+      "absorption_score": 0.0,
+      "is_in_ote": false
+    }
+  },
+  {
+    "timestamp": "2026-08-29T19:04:22.380630+00:00",
+    "asset": "TIAUSDT",
+    "signal_type": "SHORT",
+    "result": "TAKE_PROFIT",
+    "confluence_score": 0,
+    "fingerprint": {
+      "regime": "UNKNOWN",
+      "rvol": 1.0,
+      "has_ob": false,
+      "has_sweep": false,
+      "session": "UNKNOWN",
+      "absorption_score": 0.0,
+      "is_in_ote": false
+    }
+  },
+  {
+    "timestamp": "2026-08-29T19:05:04.849061+00:00",
+    "asset": "TIAUSDT",
+    "signal_type": "SHORT",
+    "result": "TAKE_PROFIT",
+    "confluence_score": 0,
+    "fingerprint": {
+      "regime": "UNKNOWN",
+      "rvol": 1.0,
+      "has_ob": false,
+      "has_sweep": false,
+      "session": "UNKNOWN",
+      "absorption_score": 0.0,
+      "is_in_ote": false
+    }
+  },
+  {
+    "timestamp": "2026-08-29T19:05:22.628215+00:00",
+    "asset": "TIAUSDT",
+    "signal_type": "SHORT",
+    "result": "TAKE_PROFIT",
+    "confluence_score": 0,
+    "fingerprint": {
+      "regime": "UNKNOWN",
+      "rvol": 1.0,
+      "has_ob": false,
+      "has_sweep": false,
+      "session": "UNKNOWN",
+      "absorption_score": 0.0,
+      "is_in_ote": false
+    }
+  },
+  {
+    "timestamp": "2026-08-29T19:05:49.293633+00:00",
+    "asset": "TIAUSDT",
+    "signal_type": "SHORT",
+    "result": "TAKE_PROFIT",
+    "confluence_score": 0,
+    "fingerprint": {
+      "regime": "UNKNOWN",
+      "rvol": 1.0,
+      "has_ob": false,
+      "has_sweep": false,
+      "session": "UNKNOWN",
+      "absorption_score": 0.0,
+      "is_in_ote": false
+    }
+  },
+  {
+    "timestamp": "2026-08-29T19:06:26.794404+00:00",
+    "asset": "TIAUSDT",
+    "signal_type": "SHORT",
+    "result": "TAKE_PROFIT",
+    "confluence_score": 0,
+    "fingerprint": {
+      "regime": "UNKNOWN",
+      "rvol": 1.0,
+      "has_ob": false,
+      "has_sweep": false,
+      "session": "UNKNOWN",
+      "absorption_score": 0.0,
+      "is_in_ote": false
+    }
+  },
+  {
+    "timestamp": "2026-08-29T19:06:44.557595+00:00",
+    "asset": "TIAUSDT",
+    "signal_type": "SHORT",
+    "result": "TAKE_PROFIT",
+    "confluence_score": 0,
+    "fingerprint": {
+      "regime": "UNKNOWN",
+      "rvol": 1.0,
+      "has_ob": false,
+      "has_sweep": false,
+      "session": "UNKNOWN",
+      "absorption_score": 0.0,
+      "is_in_ote": false
+    }
+  },
+  {
+    "timestamp": "2026-08-29T19:07:11.636836+00:00",
+    "asset": "TIAUSDT",
+    "signal_type": "SHORT",
+    "result": "TAKE_PROFIT",
+    "confluence_score": 0,
+    "fingerprint": {
+      "regime": "UNKNOWN",
+      "rvol": 1.0,
+      "has_ob": false,
+      "has_sweep": false,
+      "session": "UNKNOWN",
+      "absorption_score": 0.0,
+      "is_in_ote": false
+    }
+  },
+  {
+    "timestamp": "2026-08-29T19:07:45.631675+00:00",
+    "asset": "TIAUSDT",
+    "signal_type": "SHORT",
+    "result": "TAKE_PROFIT",
+    "confluence_score": 0,
+    "fingerprint": {
+      "regime": "UNKNOWN",
+      "rvol": 1.0,
+      "has_ob": false,
+      "has_sweep": false,
+      "session": "UNKNOWN",
+      "absorption_score": 0.0,
+      "is_in_ote": false
+    }
+  },
+  {
+    "timestamp": "2026-08-29T19:08:07.572787+00:00",
+    "asset": "TIAUSDT",
+    "signal_type": "SHORT",
+    "result": "TAKE_PROFIT",
+    "confluence_score": 0,
+    "fingerprint": {
+      "regime": "UNKNOWN",
+      "rvol": 1.0,
+      "has_ob": false,
+      "has_sweep": false,
+      "session": "UNKNOWN",
+      "absorption_score": 0.0,
+      "is_in_ote": false
+    }
+  },
+  {
+    "timestamp": "2026-08-29T19:08:29.393360+00:00",
+    "asset": "TIAUSDT",
+    "signal_type": "SHORT",
+    "result": "TAKE_PROFIT",
+    "confluence_score": 0,
+    "fingerprint": {
+      "regime": "UNKNOWN",
+      "rvol": 1.0,
+      "has_ob": false,
+      "has_sweep": false,
+      "session": "UNKNOWN",
+      "absorption_score": 0.0,
+      "is_in_ote": false
+    }
+  },
+  {
+    "timestamp": "2026-08-29T19:09:05.441299+00:00",
+    "asset": "TIAUSDT",
+    "signal_type": "SHORT",
+    "result": "TAKE_PROFIT",
+    "confluence_score": 0,
+    "fingerprint": {
+      "regime": "UNKNOWN",
+      "rvol": 1.0,
+      "has_ob": false,
+      "has_sweep": false,
+      "session": "UNKNOWN",
+      "absorption_score": 0.0,
+      "is_in_ote": false
+    }
+  },
+  {
+    "timestamp": "2026-08-29T19:09:32.208689+00:00",
+    "asset": "TIAUSDT",
+    "signal_type": "SHORT",
+    "result": "TAKE_PROFIT",
+    "confluence_score": 0,
+    "fingerprint": {
+      "regime": "UNKNOWN",
+      "rvol": 1.0,
+      "has_ob": false,
+      "has_sweep": false,
+      "session": "UNKNOWN",
+      "absorption_score": 0.0,
+      "is_in_ote": false
+    }
+  },
+  {
+    "timestamp": "2026-08-29T19:09:54.861268+00:00",
+    "asset": "TIAUSDT",
+    "signal_type": "SHORT",
+    "result": "TAKE_PROFIT",
+    "confluence_score": 0,
+    "fingerprint": {
+      "regime": "UNKNOWN",
+      "rvol": 1.0,
+      "has_ob": false,
+      "has_sweep": false,
+      "session": "UNKNOWN",
+      "absorption_score": 0.0,
+      "is_in_ote": false
+    }
+  },
+  {
+    "timestamp": "2026-08-29T19:10:35.310958+00:00",
+    "asset": "TIAUSDT",
+    "signal_type": "SHORT",
+    "result": "TAKE_PROFIT",
+    "confluence_score": 0,
+    "fingerprint": {
+      "regime": "UNKNOWN",
+      "rvol": 1.0,
+      "has_ob": false,
+      "has_sweep": false,
+      "session": "UNKNOWN",
+      "absorption_score": 0.0,
+      "is_in_ote": false
+    }
+  },
+  {
+    "timestamp": "2026-08-29T19:10:50.592042+00:00",
+    "asset": "TIAUSDT",
+    "signal_type": "SHORT",
+    "result": "TAKE_PROFIT",
+    "confluence_score": 0,
+    "fingerprint": {
+      "regime": "UNKNOWN",
+      "rvol": 1.0,
+      "has_ob": false,
+      "has_sweep": false,
+      "session": "UNKNOWN",
+      "absorption_score": 0.0,
+      "is_in_ote": false
+    }
+  },
+  {
+    "timestamp": "2026-08-29T19:11:12.235521+00:00",
+    "asset": "TIAUSDT",
+    "signal_type": "SHORT",
+    "result": "TAKE_PROFIT",
+    "confluence_score": 0,
+    "fingerprint": {
+      "regime": "UNKNOWN",
+      "rvol": 1.0,
+      "has_ob": false,
+      "has_sweep": false,
+      "session": "UNKNOWN",
+      "absorption_score": 0.0,
+      "is_in_ote": false
+    }
+  },
+  {
+    "timestamp": "2026-08-29T19:11:50.666276+00:00",
+    "asset": "TIAUSDT",
+    "signal_type": "SHORT",
+    "result": "TAKE_PROFIT",
+    "confluence_score": 0,
+    "fingerprint": {
+      "regime": "UNKNOWN",
+      "rvol": 1.0,
+      "has_ob": false,
+      "has_sweep": false,
+      "session": "UNKNOWN",
+      "absorption_score": 0.0,
+      "is_in_ote": false
+    }
+  },
+  {
+    "timestamp": "2026-08-29T19:12:12.316797+00:00",
+    "asset": "TIAUSDT",
+    "signal_type": "SHORT",
+    "result": "TAKE_PROFIT",
+    "confluence_score": 0,
+    "fingerprint": {
+      "regime": "UNKNOWN",
+      "rvol": 1.0,
+      "has_ob": false,
+      "has_sweep": false,
+      "session": "UNKNOWN",
+      "absorption_score": 0.0,
+      "is_in_ote": false
+    }
+  },
+  {
+    "timestamp": "2026-08-29T19:12:34.197007+00:00",
+    "asset": "TIAUSDT",
+    "signal_type": "SHORT",
+    "result": "TAKE_PROFIT",
+    "confluence_score": 0,
+    "fingerprint": {
+      "regime": "UNKNOWN",
+      "rvol": 1.0,
+      "has_ob": false,
+      "has_sweep": false,
+      "session": "UNKNOWN",
+      "absorption_score": 0.0,
+      "is_in_ote": false
+    }
+  },
+  {
+    "timestamp": "2026-08-29T19:13:15.523534+00:00",
+    "asset": "TIAUSDT",
+    "signal_type": "SHORT",
+    "result": "TAKE_PROFIT",
+    "confluence_score": 0,
+    "fingerprint": {
+      "regime": "UNKNOWN",
+      "rvol": 1.0,
+      "has_ob": false,
+      "has_sweep": false,
+      "session": "UNKNOWN",
+      "absorption_score": 0.0,
+      "is_in_ote": false
+    }
+  },
+  {
+    "timestamp": "2026-08-29T19:13:24.861885+00:00",
+    "asset": "TIAUSDT",
+    "signal_type": "SHORT",
+    "result": "TAKE_PROFIT",
+    "confluence_score": 0,
+    "fingerprint": {
+      "regime": "UNKNOWN",
+      "rvol": 1.0,
+      "has_ob": false,
+      "has_sweep": false,
+      "session": "UNKNOWN",
+      "absorption_score": 0.0,
+      "is_in_ote": false
+    }
+  },
+  {
+    "timestamp": "2026-08-29T19:13:46.299967+00:00",
+    "asset": "TIAUSDT",
+    "signal_type": "SHORT",
+    "result": "TAKE_PROFIT",
+    "confluence_score": 0,
+    "fingerprint": {
+      "regime": "UNKNOWN",
+      "rvol": 1.0,
+      "has_ob": false,
+      "has_sweep": false,
+      "session": "UNKNOWN",
+      "absorption_score": 0.0,
+      "is_in_ote": false
+    }
+  },
+  {
+    "timestamp": "2026-08-29T19:14:07.787063+00:00",
+    "asset": "TIAUSDT",
+    "signal_type": "SHORT",
+    "result": "TAKE_PROFIT",
+    "confluence_score": 0,
+    "fingerprint": {
+      "regime": "UNKNOWN",
+      "rvol": 1.0,
+      "has_ob": false,
+      "has_sweep": false,
+      "session": "UNKNOWN",
+      "absorption_score": 0.0,
+      "is_in_ote": false
+    }
+  },
+  {
+    "timestamp": "2026-08-29T19:14:46.675484+00:00",
+    "asset": "TIAUSDT",
+    "signal_type": "SHORT",
+    "result": "TAKE_PROFIT",
+    "confluence_score": 0,
+    "fingerprint": {
+      "regime": "UNKNOWN",
+      "rvol": 1.0,
+      "has_ob": false,
+      "has_sweep": false,
+      "session": "UNKNOWN",
+      "absorption_score": 0.0,
+      "is_in_ote": false
+    }
+  },
+  {
+    "timestamp": "2026-08-29T19:15:03.515352+00:00",
+    "asset": "TIAUSDT",
+    "signal_type": "SHORT",
+    "result": "TAKE_PROFIT",
+    "confluence_score": 0,
+    "fingerprint": {
+      "regime": "UNKNOWN",
+      "rvol": 1.0,
+      "has_ob": false,
+      "has_sweep": false,
+      "session": "UNKNOWN",
+      "absorption_score": 0.0,
+      "is_in_ote": false
+    }
+  },
+  {
+    "timestamp": "2026-08-29T19:15:25.508111+00:00",
+    "asset": "TIAUSDT",
+    "signal_type": "SHORT",
+    "result": "TAKE_PROFIT",
+    "confluence_score": 0,
+    "fingerprint": {
+      "regime": "UNKNOWN",
+      "rvol": 1.0,
+      "has_ob": false,
+      "has_sweep": false,
+      "session": "UNKNOWN",
+      "absorption_score": 0.0,
+      "is_in_ote": false
+    }
+  },
+  {
+    "timestamp": "2026-08-29T19:16:13.288758+00:00",
+    "asset": "TIAUSDT",
+    "signal_type": "SHORT",
+    "result": "TAKE_PROFIT",
+    "confluence_score": 0,
+    "fingerprint": {
+      "regime": "UNKNOWN",
+      "rvol": 1.0,
+      "has_ob": false,
+      "has_sweep": false,
+      "session": "UNKNOWN",
+      "absorption_score": 0.0,
+      "is_in_ote": false
+    }
+  },
+  {
+    "timestamp": "2026-08-29T19:16:28.682569+00:00",
+    "asset": "TIAUSDT",
+    "signal_type": "SHORT",
+    "result": "TAKE_PROFIT",
+    "confluence_score": 0,
+    "fingerprint": {
+      "regime": "UNKNOWN",
+      "rvol": 1.0,
+      "has_ob": false,
+      "has_sweep": false,
+      "session": "UNKNOWN",
+      "absorption_score": 0.0,
+      "is_in_ote": false
+    }
+  },
+  {
+    "timestamp": "2026-08-29T19:16:49.884110+00:00",
+    "asset": "TIAUSDT",
+    "signal_type": "SHORT",
+    "result": "TAKE_PROFIT",
+    "confluence_score": 0,
+    "fingerprint": {
+      "regime": "UNKNOWN",
+      "rvol": 1.0,
+      "has_ob": false,
+      "has_sweep": false,
+      "session": "UNKNOWN",
+      "absorption_score": 0.0,
+      "is_in_ote": false
+    }
+  },
+  {
+    "timestamp": "2026-08-29T19:17:29.904842+00:00",
+    "asset": "TIAUSDT",
+    "signal_type": "SHORT",
+    "result": "TAKE_PROFIT",
+    "confluence_score": 0,
+    "fingerprint": {
+      "regime": "UNKNOWN",
+      "rvol": 1.0,
+      "has_ob": false,
+      "has_sweep": false,
+      "session": "UNKNOWN",
+      "absorption_score": 0.0,
+      "is_in_ote": false
+    }
+  },
+  {
+    "timestamp": "2026-08-29T19:17:51.483006+00:00",
+    "asset": "TIAUSDT",
+    "signal_type": "SHORT",
+    "result": "TAKE_PROFIT",
+    "confluence_score": 0,
+    "fingerprint": {
+      "regime": "UNKNOWN",
+      "rvol": 1.0,
+      "has_ob": false,
+      "has_sweep": false,
+      "session": "UNKNOWN",
+      "absorption_score": 0.0,
+      "is_in_ote": false
+    }
+  },
+  {
+    "timestamp": "2026-08-29T19:18:13.525004+00:00",
+    "asset": "TIAUSDT",
+    "signal_type": "SHORT",
+    "result": "TAKE_PROFIT",
+    "confluence_score": 0,
+    "fingerprint": {
+      "regime": "UNKNOWN",
+      "rvol": 1.0,
+      "has_ob": false,
+      "has_sweep": false,
+      "session": "UNKNOWN",
+      "absorption_score": 0.0,
+      "is_in_ote": false
+    }
+  },
+  {
+    "timestamp": "2026-08-29T19:18:53.534633+00:00",
+    "asset": "TIAUSDT",
+    "signal_type": "SHORT",
+    "result": "TAKE_PROFIT",
+    "confluence_score": 0,
+    "fingerprint": {
+      "regime": "UNKNOWN",
+      "rvol": 1.0,
+      "has_ob": false,
+      "has_sweep": false,
+      "session": "UNKNOWN",
+      "absorption_score": 0.0,
+      "is_in_ote": false
+    }
+  },
+  {
+    "timestamp": "2026-08-29T19:19:15.527827+00:00",
+    "asset": "TIAUSDT",
+    "signal_type": "SHORT",
+    "result": "TAKE_PROFIT",
+    "confluence_score": 0,
+    "fingerprint": {
+      "regime": "UNKNOWN",
+      "rvol": 1.0,
+      "has_ob": false,
+      "has_sweep": false,
+      "session": "UNKNOWN",
+      "absorption_score": 0.0,
+      "is_in_ote": false
+    }
+  },
+  {
+    "timestamp": "2026-08-29T19:19:38.503405+00:00",
+    "asset": "TIAUSDT",
+    "signal_type": "SHORT",
+    "result": "TAKE_PROFIT",
+    "confluence_score": 0,
+    "fingerprint": {
+      "regime": "UNKNOWN",
+      "rvol": 1.0,
+      "has_ob": false,
+      "has_sweep": false,
+      "session": "UNKNOWN",
+      "absorption_score": 0.0,
+      "is_in_ote": false
+    }
+  },
+  {
+    "timestamp": "2026-08-29T19:20:18.879790+00:00",
+    "asset": "TIAUSDT",
+    "signal_type": "SHORT",
+    "result": "TAKE_PROFIT",
+    "confluence_score": 0,
+    "fingerprint": {
+      "regime": "UNKNOWN",
+      "rvol": 1.0,
+      "has_ob": false,
+      "has_sweep": false,
+      "session": "UNKNOWN",
+      "absorption_score": 0.0,
+      "is_in_ote": false
+    }
+  },
+  {
+    "timestamp": "2026-08-29T19:20:34.993107+00:00",
+    "asset": "TIAUSDT",
+    "signal_type": "SHORT",
+    "result": "TAKE_PROFIT",
+    "confluence_score": 0,
+    "fingerprint": {
+      "regime": "UNKNOWN",
+      "rvol": 1.0,
+      "has_ob": false,
+      "has_sweep": false,
+      "session": "UNKNOWN",
+      "absorption_score": 0.0,
+      "is_in_ote": false
+    }
+  },
+  {
+    "timestamp": "2026-08-29T19:20:56.657212+00:00",
+    "asset": "TIAUSDT",
+    "signal_type": "SHORT",
+    "result": "TAKE_PROFIT",
+    "confluence_score": 0,
+    "fingerprint": {
+      "regime": "UNKNOWN",
+      "rvol": 1.0,
+      "has_ob": false,
+      "has_sweep": false,
+      "session": "UNKNOWN",
+      "absorption_score": 0.0,
+      "is_in_ote": false
+    }
+  },
+  {
+    "timestamp": "2026-08-29T19:21:12.070145+00:00",
+    "asset": "TIAUSDT",
+    "signal_type": "SHORT",
+    "result": "TAKE_PROFIT",
+    "confluence_score": 0,
+    "fingerprint": {
+      "regime": "UNKNOWN",
+      "rvol": 1.0,
+      "has_ob": false,
+      "has_sweep": false,
+      "session": "UNKNOWN",
+      "absorption_score": 0.0,
+      "is_in_ote": false
+    }
+  },
+  {
+    "timestamp": "2026-08-29T19:21:50.259032+00:00",
+    "asset": "TIAUSDT",
+    "signal_type": "SHORT",
+    "result": "TAKE_PROFIT",
+    "confluence_score": 0,
+    "fingerprint": {
+      "regime": "UNKNOWN",
+      "rvol": 1.0,
+      "has_ob": false,
+      "has_sweep": false,
+      "session": "UNKNOWN",
+      "absorption_score": 0.0,
+      "is_in_ote": false
+    }
+  },
+  {
+    "timestamp": "2026-08-29T19:22:06.076238+00:00",
+    "asset": "TIAUSDT",
+    "signal_type": "SHORT",
+    "result": "TAKE_PROFIT",
+    "confluence_score": 0,
+    "fingerprint": {
+      "regime": "UNKNOWN",
+      "rvol": 1.0,
+      "has_ob": false,
+      "has_sweep": false,
+      "session": "UNKNOWN",
+      "absorption_score": 0.0,
+      "is_in_ote": false
+    }
+  },
+  {
+    "timestamp": "2026-08-29T19:22:28.110339+00:00",
+    "asset": "TIAUSDT",
+    "signal_type": "SHORT",
+    "result": "TAKE_PROFIT",
+    "confluence_score": 0,
+    "fingerprint": {
+      "regime": "UNKNOWN",
+      "rvol": 1.0,
+      "has_ob": false,
+      "has_sweep": false,
+      "session": "UNKNOWN",
+      "absorption_score": 0.0,
+      "is_in_ote": false
+    }
+  },
+  {
+    "timestamp": "2026-08-29T19:23:11.797021+00:00",
+    "asset": "TIAUSDT",
+    "signal_type": "SHORT",
+    "result": "TAKE_PROFIT",
+    "confluence_score": 0,
+    "fingerprint": {
+      "regime": "UNKNOWN",
+      "rvol": 1.0,
+      "has_ob": false,
+      "has_sweep": false,
+      "session": "UNKNOWN",
+      "absorption_score": 0.0,
+      "is_in_ote": false
+    }
+  },
+  {
+    "timestamp": "2026-08-29T19:23:34.268668+00:00",
+    "asset": "TIAUSDT",
+    "signal_type": "SHORT",
+    "result": "TAKE_PROFIT",
+    "confluence_score": 0,
+    "fingerprint": {
+      "regime": "UNKNOWN",
+      "rvol": 1.0,
+      "has_ob": false,
+      "has_sweep": false,
+      "session": "UNKNOWN",
+      "absorption_score": 0.0,
+      "is_in_ote": false
+    }
+  },
+  {
+    "timestamp": "2026-08-29T19:23:49.799260+00:00",
+    "asset": "TIAUSDT",
+    "signal_type": "SHORT",
+    "result": "TAKE_PROFIT",
+    "confluence_score": 0,
+    "fingerprint": {
+      "regime": "UNKNOWN",
+      "rvol": 1.0,
+      "has_ob": false,
+      "has_sweep": false,
+      "session": "UNKNOWN",
+      "absorption_score": 0.0,
+      "is_in_ote": false
+    }
+  },
+  {
+    "timestamp": "2026-08-29T19:24:31.774378+00:00",
+    "asset": "TIAUSDT",
+    "signal_type": "SHORT",
+    "result": "TAKE_PROFIT",
+    "confluence_score": 0,
+    "fingerprint": {
+      "regime": "UNKNOWN",
+      "rvol": 1.0,
+      "has_ob": false,
+      "has_sweep": false,
+      "session": "UNKNOWN",
+      "absorption_score": 0.0,
+      "is_in_ote": false
+    }
+  },
+  {
+    "timestamp": "2026-08-29T19:24:56.713911+00:00",
+    "asset": "TIAUSDT",
+    "signal_type": "SHORT",
+    "result": "TAKE_PROFIT",
+    "confluence_score": 0,
+    "fingerprint": {
+      "regime": "UNKNOWN",
+      "rvol": 1.0,
+      "has_ob": false,
+      "has_sweep": false,
+      "session": "UNKNOWN",
+      "absorption_score": 0.0,
+      "is_in_ote": false
+    }
+  },
+  {
+    "timestamp": "2026-08-29T19:25:21.976075+00:00",
+    "asset": "TIAUSDT",
+    "signal_type": "SHORT",
+    "result": "TAKE_PROFIT",
+    "confluence_score": 0,
+    "fingerprint": {
+      "regime": "UNKNOWN",
+      "rvol": 1.0,
+      "has_ob": false,
+      "has_sweep": false,
+      "session": "UNKNOWN",
+      "absorption_score": 0.0,
+      "is_in_ote": false
+    }
+  },
+  {
+    "timestamp": "2026-08-29T19:26:01.711421+00:00",
+    "asset": "TIAUSDT",
+    "signal_type": "SHORT",
+    "result": "TAKE_PROFIT",
+    "confluence_score": 0,
+    "fingerprint": {
+      "regime": "UNKNOWN",
+      "rvol": 1.0,
+      "has_ob": false,
+      "has_sweep": false,
+      "session": "UNKNOWN",
+      "absorption_score": 0.0,
+      "is_in_ote": false
+    }
+  },
+  {
+    "timestamp": "2026-08-29T19:26:17.063356+00:00",
+    "asset": "TIAUSDT",
+    "signal_type": "SHORT",
+    "result": "TAKE_PROFIT",
+    "confluence_score": 0,
+    "fingerprint": {
+      "regime": "UNKNOWN",
+      "rvol": 1.0,
+      "has_ob": false,
+      "has_sweep": false,
+      "session": "UNKNOWN",
+      "absorption_score": 0.0,
+      "is_in_ote": false
+    }
+  },
+  {
+    "timestamp": "2026-08-29T19:26:38.339916+00:00",
+    "asset": "TIAUSDT",
+    "signal_type": "SHORT",
+    "result": "TAKE_PROFIT",
+    "confluence_score": 0,
+    "fingerprint": {
+      "regime": "UNKNOWN",
+      "rvol": 1.0,
+      "has_ob": false,
+      "has_sweep": false,
+      "session": "UNKNOWN",
+      "absorption_score": 0.0,
+      "is_in_ote": false
+    }
+  },
+  {
+    "timestamp": "2026-08-29T19:27:55.702721+00:00",
+    "asset": "TIAUSDT",
+    "signal_type": "SHORT",
+    "result": "TAKE_PROFIT",
     "confluence_score": 0,
     "fingerprint": {
       "regime": "UNKNOWN",

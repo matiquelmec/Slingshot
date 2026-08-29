@@ -154,6 +154,11 @@ class TradeManager:
             nexus.remove_pending_limit_symbol(asset)
             logger.info(f"🛑 [TRADE_MANAGER] Orden PENDING {asset} INVALIDADA (SL roto previo a entrada).")
 
+    def is_megacap(self, symbol: str) -> bool:
+        """Determina si un activo es Mega-Cap institucional (BTC, ETH, SOL, etc.)."""
+        s = (symbol or "").upper()
+        return any(m in s for m in ["BTC", "ETH", "SOL", "AVAX", "LINK", "XRP", "BNB", "PAXG", "XAG"])
+
     # ─────────────────────────────────────────────
     # LÓGICA CENTRAL DE TRAILING
     # ─────────────────────────────────────────────
@@ -186,28 +191,29 @@ class TradeManager:
         current_price = float(df["close"].iloc[-1])
         atr_val = float(df["atr"].iloc[-1]) if "atr" in df.columns else entry_price * 0.002
 
-        # ── Fase 1: ACTIVE → FAST BREAKEVEN (+1.0R) ────────────────────────
+        # ── Fase 1: ACTIVE → FAST BREAKEVEN (Adaptativo: 1.2R Megas / 1.0R Alts) ──
         if phase == "ACTIVE":
             initial_sl = float(signal.get("initial_stop_loss", current_sl))
             risk_dist = abs(entry_price - initial_sl)
-            be_fast_trigger = entry_price + (risk_dist * 1.0) if is_long else entry_price - (risk_dist * 1.0)
+            be_multiplier = 1.2 if self.is_megacap(asset) else 1.0
+            be_fast_trigger = entry_price + (risk_dist * be_multiplier) if is_long else entry_price - (risk_dist * be_multiplier)
 
-            # Condición A: Toca Fast BE (+1.0R)
+            # Condición A: Toca Fast BE (+1.2R Megas / +1.0R Alts)
             fast_be_hit = (is_long and current_price >= be_fast_trigger) or (not is_long and current_price <= be_fast_trigger)
-            # Condición B: Toca TP1 (+1.3R / +1.5R)
+            # Condición B: Toca TP1 (+1.5R)
             tp1_hit = (is_long and current_price >= tp1) or (not is_long and current_price <= tp1)
 
             if fast_be_hit or tp1_hit:
                 new_sl = self._calculate_breakeven_sl(entry_price, atr_val, is_long)
                 if self._sl_improved(current_sl, new_sl, is_long):
-                    trig_label = "TP1" if tp1_hit else "Fast BE (+1.0R)"
+                    trig_label = "TP1" if tp1_hit else f"Fast BE (+{be_multiplier:.1f}R)"
                     await self._apply_sl_update(
                         signal,
                         new_sl,
                         "BREAKEVEN",
-                        f"🎯 {trig_label} alcanzado @ ${current_price:.4f}. SL protegido a entrada (${new_sl:.4f})"
+                        f"🎯 {trig_label} alcanzado @ ${current_price:.4f}. SL protegido a entrada con Fee Absorber (${new_sl:.4f})"
                     )
-                    logger.info(f"🛡️ [TRADE_MANAGER] {asset} -> Fast BE activado: SL movido a {new_sl:.6f}")
+                    logger.info(f"🛡️ [TRADE_MANAGER] {asset} -> Fast BE (+{be_multiplier:.1f}R) activado: SL movido a {new_sl:.6f}")
             return
 
         # ── Fase 2: BREAKEVEN → TRAILING ────────────────────────────────────
@@ -250,14 +256,14 @@ class TradeManager:
                     f"Trailing actualizado a nuevo soporte estructural = {structural_sl:.6f}")
                 logger.info(f"[TRADE_MANAGER] {asset} -> TRAILING update: SL = {structural_sl:.6f}")
 
-    # ─────────────────────────────────────────────
-    # HELPERS DE CÁLCULO ESTRUCTURAL
-    # ─────────────────────────────────────────────
-
     def _calculate_breakeven_sl(self, entry: float, atr: float, is_long: bool) -> float:
-        """SL de Break Even = precio de entrada + buffer de 30% del ATR en favor."""
-        buffer = atr * self.ATR_BE_BUFFER
-        return round(entry + buffer, 8) if is_long else round(entry - buffer, 8)
+        """
+        [FEE ABSORBER BUFFER v23.0]
+        Calcula el Stop Loss de Break Even asegurando cubrir las comisiones del exchange (0.08%).
+        Garantiza un PnL neto en verde (+$0.01 a +$0.05 USDT) ante cualquier cierre en Breakeven.
+        """
+        fee_buffer = max(entry * 0.0008, atr * self.ATR_BE_BUFFER)
+        return round(entry + fee_buffer, 8) if is_long else round(entry - fee_buffer, 8)
 
     def _find_structural_sl(
         self,
@@ -483,6 +489,10 @@ class TradeManager:
             action_taken = "NINGUNA"
 
             # ── ESCALERA INSTITUCIONAL DE TRAILING STOP (TIER 1 A TIER 4) ──
+            # Umbral adaptativo: 1.2R en Megacaps (BTC, ETH, SOL) para absorber re-tests, 1.0R en Altcoins
+            be_threshold = 1.2 if self.is_megacap(sym) else 1.0
+            fee_buffer = entry_price * 0.0008  # Micro-Buffer de 0.08% para absorber comisiones
+
             target_sl = None
             if r_profit >= 5.0:
                 # Tier 4 (TP3 / Ultra Runner): Ratchet dinámico que asegura el 70% de la ganancia total
@@ -491,7 +501,7 @@ class TradeManager:
                 target_sl = round(entry_price + profit_buffer, 4) if side == "LONG" else round(entry_price - profit_buffer, 4)
                 status_msg = f"PROTEGIDO_RUNNER_TP3 (+{locked_r:.1f}R)"
             elif r_profit >= 3.0:
-                # Tier 3 (TP2 Alcano / +3R): Bloquear al menos +2.0R en ganancia neta
+                # Tier 3 (TP2 Alcanzado / +3R): Bloquear al menos +2.0R en ganancia neta
                 profit_buffer = sl_dist * 2.0
                 target_sl = round(entry_price + profit_buffer, 4) if side == "LONG" else round(entry_price - profit_buffer, 4)
                 status_msg = "PROTEGIDO_TP2 (+2.0R)"
@@ -500,10 +510,10 @@ class TradeManager:
                 profit_buffer = sl_dist * 1.2
                 target_sl = round(entry_price + profit_buffer, 4) if side == "LONG" else round(entry_price - profit_buffer, 4)
                 status_msg = "PROTEGIDO_TP1 (+1.2R)"
-            elif r_profit >= 1.0:
-                # Tier 1 (Fast Breakeven / +1R): Asegurar $0.00 de pérdida
-                target_sl = round(entry_price, 4)
-                status_msg = "PROTEGIDO_FAST_BE"
+            elif r_profit >= be_threshold:
+                # Tier 1 (Fast Breakeven Adaptativo): Asegurar capital con colchón de comisiones (+$0.01 a +$0.05 neto)
+                target_sl = round(entry_price + fee_buffer, 4) if side == "LONG" else round(entry_price - fee_buffer, 4)
+                status_msg = f"PROTEGIDO_FAST_BE (+{be_threshold:.1f}R)"
 
             should_update_sl = False
             if target_sl is not None:

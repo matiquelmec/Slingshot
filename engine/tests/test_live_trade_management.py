@@ -1,12 +1,13 @@
 """
-engine/tests/test_live_trade_management.py
+engine/tests/test_live_trade_management.py — v23.0 APEX SOVEREIGN
 =============================================================================
-PRUEBAS UNITARIAS: GESTIÓN EN VIVO DE STOP LOSS & FAST BREAKEVEN (BITUNIX)
+PRUEBAS UNITARIAS: GESTIÓN EN VIVO DE STOP LOSS, ADAPTIVE BREAKEVEN & FEE ABSORBER
 =============================================================================
 Valida:
-1. Disparo inmediato de Fast BE al alcanzar +1.0R en TradeManager.
-2. Invocación de modify_position_tpsl hacia el exchange.
-3. Sincronización y cálculo de avance en R para posiciones abiertas.
+1. Disparo de Fast BE Adaptativo (+1.2R Megacaps / +1.0R Altcoins) en TradeManager.
+2. Micro-Buffer de Fee Absorber (0.08%) para garantizar PnL neto positivo.
+3. Invocación de modify_position_tpsl hacia el exchange.
+4. Sincronización y cálculo de avance en R para posiciones abiertas.
 """
 import pytest
 import asyncio
@@ -16,27 +17,27 @@ from engine.execution.bitunix_executor import BitunixExecutor
 
 @pytest.mark.asyncio
 async def test_fast_be_trigger_at_1r():
-    """Valida que una posición ACTIVE que alcance +1.0R dispare Fast BE inmediatamente."""
+    """Valida que una posición ACTIVE que alcance el umbral dispare Fast BE con Fee Absorber."""
     tm = TradeManager()
     
     signal = {
-        "asset": "BTCUSDT",
-        "symbol": "BTCUSDT",
+        "asset": "SUIUSDT",
+        "symbol": "SUIUSDT",
         "signal_type": "LONG",
-        "price": 95000.0,
-        "stop_loss": 94000.0, # Riesgo = $1,000 -> +1.0R es $96,000
-        "initial_stop_loss": 94000.0,
-        "tp1": 96300.0,
-        "tp2": 97200.0,
-        "tp3": 98500.0,
+        "price": 2.0000,
+        "stop_loss": 1.9000, # Riesgo = $0.10 -> +1.0R es $2.1000
+        "initial_stop_loss": 1.9000,
+        "tp1": 2.1500,
+        "tp2": 2.3000,
+        "tp3": 2.5000,
         "trailing_phase": "ACTIVE",
         "status": "FILLED",
         "position_id": "mock_pos_123"
     }
     
-    # Mock de fetch_binance_history devolviendo precio actual $96,050 (+1.05R)
+    # Mock de fetch_binance_history devolviendo precio actual $2.1050 (+1.05R en Altcoin)
     mock_history = [
-        {"data": {"timestamp": 1700000000 + i*900, "close": 96050.0, "atr": 200.0}}
+        {"data": {"timestamp": 1700000000 + i*900, "close": 2.1050, "atr": 0.02}}
         for i in range(30)
     ]
     
@@ -49,8 +50,37 @@ async def test_fast_be_trigger_at_1r():
             await tm._update_signal_trailing(signal)
             
             assert signal["trailing_phase"] == "BREAKEVEN"
-            assert signal["stop_loss"] >= 95000.0, "El nuevo SL debe estar en la entrada o superior"
+            # Debe incluir el Fee Absorber (+0.08% o ATR buffer)
+            assert signal["stop_loss"] >= 2.0000, "El nuevo SL debe estar en la entrada o superior"
             assert mock_modify.called, "Debe llamar a modify_position_tpsl en Bitunix"
+
+
+@pytest.mark.asyncio
+async def test_adaptive_breakeven_threshold_megacaps_vs_alts():
+    """Valida que Megacaps exijan +1.2R para absorber re-tests, mientras Altcoins usen +1.0R."""
+    tm = TradeManager()
+    
+    assert tm.is_megacap("BTCUSDT") is True
+    assert tm.is_megacap("ETHUSDT") is True
+    assert tm.is_megacap("SOLUSDT") is True
+    assert tm.is_megacap("SUIUSDT") is False
+    assert tm.is_megacap("NEARUSDT") is False
+    assert tm.is_megacap("INJUSDT") is False
+
+
+@pytest.mark.asyncio
+async def test_fee_absorber_breakeven_math_positive_net_pnl():
+    """Valida que el cálculo de Breakeven sume/reste el buffer de 0.08% para absorber comisiones."""
+    tm = TradeManager()
+    
+    # LONG entry en $100 -> SL en Breakeven debe ser > $100.00 (ej: $100.08)
+    long_be_sl = tm._calculate_breakeven_sl(entry=100.0, atr=0.10, is_long=True)
+    assert long_be_sl >= 100.08
+    
+    # SHORT entry en $100 -> SL en Breakeven debe ser < $100.00 (ej: $99.92)
+    short_be_sl = tm._calculate_breakeven_sl(entry=100.0, atr=0.10, is_long=False)
+    assert short_be_sl <= 99.92
+
 
 @pytest.mark.asyncio
 async def test_sync_live_positions_fast_be():
@@ -86,10 +116,10 @@ async def test_sync_live_positions_fast_be():
             results = await tm.sync_live_bitunix_positions()
             
             assert len(results) == 2
-            # SOL en +1.5R debe estar protegida
+            # SOL en +1.5R debe estar protegida con Fast BE adaptativo
             assert results[0]["symbol"] == "SOLUSDT"
             assert results[0]["r_profit"] == 1.5
-            assert results[0]["status"] == "PROTEGIDO_FAST_BE"
+            assert "PROTEGIDO_FAST_BE" in results[0]["status"]
             
             # ETH en +0.3R sigue en curso sin modificar
             assert results[1]["symbol"] == "ETHUSDT"
