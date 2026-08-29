@@ -466,8 +466,6 @@ export default function TradingChart() {
     }, [smcData, indicators, candles.length, auditedSignals, signalHistory, activeSymbol]);
 
     // ── Key Levels, Sessions & Fibonacci ──
-    const killzoneSeriesRef = useRef<ISeriesApi<'Baseline'>[]>([]);
-
     useEffect(() => {
         const chart = chartRef.current; const s = candleSeriesRef.current;
         if (!chart || !s) return;
