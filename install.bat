@@ -1,15 +1,17 @@
 @echo off
-title Slingshot Apex Sovereign — Instalador Automatico 1-Click
+chcp 65001 >nul
+title Slingshot Apex Sovereign -- Instalador Automatico 1-Click
 color 0B
 
 echo ===============================================================================
-echo       SLINGSHOT v22.3 APEX SOVEREIGN — INSTALADOR AUTOMATICO 1-CLICK          
+echo       SLINGSHOT v22.3 APEX SOVEREIGN -- INSTALADOR AUTOMATICO 1-CLICK          
 echo ===============================================================================
 echo.
 echo [1/4] Comprobando politicas de PowerShell y permisos locales...
 echo.
 
-powershell -ExecutionPolicy Bypass -NoProfile -File ".\install.ps1"
+cd /d "%~dp0"
+powershell -ExecutionPolicy Bypass -NoProfile -File "%~dp0install.ps1"
 
 if %ERRORLEVEL% NEQ 0 (
     echo.
