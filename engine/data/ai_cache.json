@@ -914,5 +914,9 @@
   "2d229c92486544f1ee3afd74770747bc": {
     "price": 0.0,
     "advice": "{\"verdict\": \"SIDEWAYS\", \"threat\": \"MEDIUM\", \"logic\": \"R\\u00e9gimen IDLE\"}"
+  },
+  "f4f687eef8a406797b87081fb3970f82": {
+    "price": 0.0,
+    "advice": "{\"verdict\": \"SIDEWAYS\", \"threat\": \"MEDIUM\", \"logic\": \"R\\u00e9gimen IDLE\"}"
   }
 }

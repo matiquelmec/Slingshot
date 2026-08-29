@@ -141,6 +141,43 @@ export const handleWsMessage = (
                 break;
             }
 
+            case 'price_update': {
+                const pData = data.data;
+                if (!pData || pData.price === undefined || pData.price === null) break;
+                const priceVal = Number(pData.price);
+                if (isNaN(priceVal) || priceVal <= 0) break;
+                
+                const sym = pData.symbol || data.asset || get().activeSymbol;
+                
+                set((state) => {
+                    const newPrices = { ...state.latestPrices, [sym]: priceVal };
+                    if (!isSameSymbol(sym, state.activeSymbol)) {
+                        return { latestPrices: newPrices };
+                    }
+
+                    // Actualizar la vela viva actual en tiempo real
+                    let updatedCandles = state.candles;
+                    if (updatedCandles.length > 0) {
+                        const lastIdx = updatedCandles.length - 1;
+                        const lastCandle = updatedCandles[lastIdx];
+                        const updatedLast: CandleData = {
+                            ...lastCandle,
+                            close: priceVal,
+                            high: Math.max(Number(lastCandle.high), priceVal),
+                            low: Math.min(Number(lastCandle.low), priceVal)
+                        };
+                        updatedCandles = [...updatedCandles.slice(0, lastIdx), updatedLast];
+                    }
+
+                    return {
+                        latestPrice: priceVal,
+                        latestPrices: newPrices,
+                        candles: updatedCandles
+                    };
+                });
+                break;
+            }
+
             case 'neural_pulse': {
                 set((state) => {
                     const pulseData = data.data || {};

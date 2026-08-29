@@ -158,21 +158,25 @@ export default function TradingChart() {
         else if (latestPrice < 100) { precision = 3; minMove = 0.001; }
         try { s.applyOptions({ priceFormat: { type: 'price', precision, minMove } }); } catch(e){}
 
-        // 2. Real-time Candle Body (Lattice Scanner Style)
+        // 2. Real-time Candle Body & Live Tick Update
         const last = candles[candles.length - 1];
         if (last && last.time) {
-            const timeframeDuration = TIMEFRAME_SECONDS[activeTimeframe] || 300;
-            const nowSeconds = Date.now() / 1000;
-            const isCandleActive = (nowSeconds - Number(last.time)) < timeframeDuration * 1.5;
+            try {
+                s.update({
+                    ...last,
+                    time: Math.floor(Number(last.time)) as any,
+                    close: latestPrice,
+                    high: Math.max(Number(last.high), latestPrice),
+                    low: Math.min(Number(last.low), latestPrice),
+                } as any);
+            } catch (e) {}
 
-            if (isCandleActive) {
+            if (volumeRef.current && isEnabled('volume')) {
                 try {
-                    s.update({
-                        ...last,
+                    volumeRef.current.update({
                         time: Math.floor(Number(last.time)) as any,
-                        close: latestPrice,
-                        high: Math.max(last.high, latestPrice),
-                        low: Math.min(last.low, latestPrice),
+                        value: Number(last.volume || 0),
+                        color: latestPrice >= Number(last.open) ? 'rgba(0,255,65,0.4)' : 'rgba(255,0,60,0.4)',
                     } as any);
                 } catch (e) {}
             }

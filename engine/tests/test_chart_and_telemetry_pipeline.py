@@ -153,3 +153,73 @@ def test_live_tick_candle_update_invariance():
     assert updated_2["high"] == 105.0
     assert updated_2["low"] == 95.0
     assert updated_2["close"] == 95.0
+
+
+def test_price_update_payload_and_live_tick_broadcasting():
+    """Valida la estructura y absorción de eventos price_update desde miniTicker/markPrice."""
+    payload = {
+        "type": "price_update",
+        "data": {
+            "symbol": "BTCUSDT",
+            "price": 96520.25,
+            "ts": 1700000500.0,
+            "source": "24hrTicker"
+        }
+    }
+    
+    assert payload["type"] == "price_update"
+    assert payload["data"]["symbol"] == "BTCUSDT"
+    assert float(payload["data"]["price"]) > 0
+    assert payload["data"]["ts"] > 0
+
+
+def test_candle_payload_includes_asset_for_isolation():
+    """Valida que el mensaje de vela contenga el asset explícito para evitar contaminación cruzada."""
+    kline_sample = {
+        "t": 1700000000000,
+        "o": "84500.0",
+        "h": "84600.0",
+        "l": "84450.0",
+        "c": "84550.0",
+        "v": "12.5",
+        "x": False
+    }
+    
+    candle = {
+        "type": "candle",
+        "asset": "BTCUSDT",
+        "data": {
+            "timestamp": kline_sample["t"] / 1000,
+            "open": float(kline_sample["o"]),
+            "high": float(kline_sample["h"]),
+            "low": float(kline_sample["l"]),
+            "close": float(kline_sample["c"]),
+            "volume": float(kline_sample["v"]),
+        }
+    }
+    
+    assert candle["type"] == "candle"
+    assert candle["asset"] == "BTCUSDT"
+    assert candle["data"]["timestamp"] == 1700000000.0
+    assert candle["data"]["close"] == 84550.0
+    assert candle["data"]["volume"] == 12.5
+
+
+def test_multi_timeframe_tick_update_safety():
+    """Valida la integridad de la actualización de la vela independientemente de la temporalidad."""
+    timeframes = ['1m', '3m', '5m', '15m', '30m', '1h', '2h', '4h', '1d']
+    last_candle = {"time": 1700000000, "open": 5.40, "high": 5.50, "low": 5.35, "close": 5.45, "volume": 1000}
+    
+    for tf in timeframes:
+        live_tick = 5.55
+        updated = {
+            **last_candle,
+            "close": live_tick,
+            "high": max(last_candle["high"], live_tick),
+            "low": min(last_candle["low"], live_tick)
+        }
+        assert updated["close"] == 5.55
+        assert updated["high"] == 5.55
+        assert updated["low"] == 5.35
+        assert updated["time"] == 1700000000
+

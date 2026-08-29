@@ -477,6 +477,7 @@ class SymbolBroadcaster:
 
         candle = {
             "type": "candle",
+            "asset": self.symbol,
             "data": {
                 "timestamp": kline["t"] / 1000, "open": float(kline["o"]),
                 "high": float(kline["h"]), "low": float(kline["l"]),

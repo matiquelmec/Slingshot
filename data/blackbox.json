@@ -1,37 +1,5 @@
 [
   {
-    "timestamp": "2026-06-04T21:21:45.677234+00:00",
-    "asset": "BTCUSDT",
-    "signal_type": "BUY",
-    "result": "TAKE_PROFIT",
-    "confluence_score": 0,
-    "fingerprint": {
-      "regime": "UNKNOWN",
-      "rvol": 1.0,
-      "has_ob": false,
-      "has_sweep": false,
-      "session": "UNKNOWN",
-      "absorption_score": 0.0,
-      "is_in_ote": false
-    }
-  },
-  {
-    "timestamp": "2026-06-04T21:29:50.488241+00:00",
-    "asset": "BTCUSDT",
-    "signal_type": "BUY",
-    "result": "TAKE_PROFIT",
-    "confluence_score": 0,
-    "fingerprint": {
-      "regime": "UNKNOWN",
-      "rvol": 1.0,
-      "has_ob": false,
-      "has_sweep": false,
-      "session": "UNKNOWN",
-      "absorption_score": 0.0,
-      "is_in_ote": false
-    }
-  },
-  {
     "timestamp": "2026-06-04T21:30:02.187167+00:00",
     "asset": "BTCUSDT",
     "signal_type": "BUY",
@@ -3187,6 +3155,38 @@
     "timestamp": "2026-08-29T03:46:07.169641+00:00",
     "asset": "ATOMUSDT",
     "signal_type": "SHORT",
+    "result": "STOP_LOSS",
+    "confluence_score": 0,
+    "fingerprint": {
+      "regime": "UNKNOWN",
+      "rvol": 1.0,
+      "has_ob": false,
+      "has_sweep": false,
+      "session": "UNKNOWN",
+      "absorption_score": 0.0,
+      "is_in_ote": false
+    }
+  },
+  {
+    "timestamp": "2026-08-29T14:21:01.466197+00:00",
+    "asset": "RENDERUSDT",
+    "signal_type": "SHORT",
+    "result": "STOP_LOSS",
+    "confluence_score": 0,
+    "fingerprint": {
+      "regime": "UNKNOWN",
+      "rvol": 1.0,
+      "has_ob": false,
+      "has_sweep": false,
+      "session": "UNKNOWN",
+      "absorption_score": 0.0,
+      "is_in_ote": false
+    }
+  },
+  {
+    "timestamp": "2026-08-29T15:30:33.527947+00:00",
+    "asset": "TRUMPUSDT",
+    "signal_type": "LONG",
     "result": "STOP_LOSS",
     "confluence_score": 0,
     "fingerprint": {
