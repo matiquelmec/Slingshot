@@ -62,7 +62,7 @@ Slingshot_Trading/
 │       ├── unified_backtest_engine.py # Motor Unificado de Backtesting con Paridad 1:1 en Producción
 │       ├── data/                    # Datasets históricos binarios .parquet (51 archivos)
 │       └── reports/                 # Reportes oficiales inmutables JSON
-│   └── tests/                       # ═══ Suite Oficial de Certificación QA (80/80 Tests OK) ═══
+│   └── tests/                       # ═══ Suite Oficial de Certificación QA (86/86 Tests OK) ═══
 │       ├── test_setup_and_portability.py            # Onboarding, live test de keys, guardado atómico
 │       ├── test_post_tp3_and_trailing_invariance.py # Post-TP3 híbrido, 70% ratchet e invarianza SL
 │       ├── test_risk_and_resilience_advanced.py     # Micro-buffer BE, 50/30/20, Asymmetric Gating, KER/RVOL
@@ -74,22 +74,23 @@ Slingshot_Trading/
 │       ├── test_deterministic_pipeline_isolation.py # Latencia y lot sizing sin red
 │       ├── test_session_mastery.py                  # Killzones de sesión (Asia/London/NY)
 │       ├── test_market_scanner_hft.py               # Watchdog OTE y order flow fallback
-│       ├── test_ftmo_security_guard.py              # Guardian FTMO, Lotes GER40/GBPJPY/Oro
+│       ├── test_ftmo_security_guard.py              # Guardian FTMO, Lotes GER40/GBPJPY/Oro y Dynamic Phase Sizing
 │       ├── test_telegram_persistence.py             # Deduplicación y supervivencia a reinicios
 │       ├── test_dynamic_sl_professional_audit.py    # Invarianza Monótona, Ratchet 1R-10R y Buffer ATR
 │       ├── test_dynamic_universe_screener.py        # Rotación cuantitativa de activos
 │       ├── test_chart_and_telemetry_pipeline.py     # Reactividad de velas, LatticeScanner y Broadcast
-│       └── test_auto_healing_and_telemetry.py       # Auto-Healing, Backoff y Heartbeat Telegram
+│       ├── test_auto_healing_and_telemetry.py       # Auto-Healing, Backoff y Heartbeat Telegram
+│       └── test_confluence_end_to_end_integrity.py  # Integridad 14 factores SMC, anti-NaN y coherencia 50/30/20
 ├── scripts/                         # ═══ HERRAMIENTAS CLI DE PRODUCCIÓN (SSoT) ═══
 │   ├── run_institutional_backtest.py# CLI Oficial de Backtesting por Símbolo / Timeframe / Cartera
-│   ├── run_qa_suite.py              # Suite Oficial de Certificación QA (80/80 Tests)
+│   ├── run_qa_suite.py              # Suite Oficial de Certificación QA (86/86 Tests)
 │   ├── historical_fetcher.py        # Descargador oficial de Parquets históricos
 │   ├── doctor.py                    # Diagnóstico y salud del sistema
 │   ├── watchdog_supervisor.py       # Monitor supervisor 24/7 en segundo plano
 │   └── archive/                     # 📦 28 scripts antiguos archivados
 ├── docs/                            # ═══ Documentación Técnica y Biblias ═══
-│   ├── ESTRUCTURA_PROYECTO.md       # Guía de arquitectura oficial v24.0 (este archivo)
-│   ├── SLINGSHOT_BIBLE_V24.md       # Biblia técnica oficial v24.0 Apex Alpha
+│   ├── ESTRUCTURA_PROYECTO.md       # Guía de arquitectura oficial v25.1 (este archivo)
+│   ├── SLINGSHOT_BIBLE_V25.md       # Biblia técnica oficial v25.1 Confluence Elite & FTMO Titanium
 │   └── knowledge/                   # Base de conocimiento institucional
 ├── install.bat                      # Instalador automatizado 1-Click para Windows
 ├── install.ps1                      # Script PowerShell con winget y auto-configuración
