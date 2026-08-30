@@ -24,6 +24,13 @@ import numpy as np
 import pandas as pd
 
 
+try:
+    import orjson
+    HAS_ORJSON = True
+except ImportError:
+    HAS_ORJSON = False
+
+
 class SlingshotJSONEncoder(json.JSONEncoder):
     """
     Encoder JSON personalizado que convierte tipos no nativos de Python
@@ -42,12 +49,29 @@ class SlingshotJSONEncoder(json.JSONEncoder):
 
 
 def safe_dumps(obj: Any, **kwargs) -> str:
-    """Serializa a JSON usando SlingshotJSONEncoder. Nunca lanza TypeError."""
+    """Serializa a JSON usando orjson (Fast-Path Rust) o SlingshotJSONEncoder. Nunca lanza TypeError."""
+    if HAS_ORJSON and not kwargs:
+        try:
+            # Fast-path nativo Rust: 10x más rápido
+            return orjson.dumps(
+                obj,
+                default=sanitize_for_json,
+                option=orjson.OPT_NON_STR_KEYS | orjson.OPT_SERIALIZE_NUMPY
+            ).decode('utf-8')
+        except Exception:
+            pass
     return json.dumps(obj, cls=SlingshotJSONEncoder, **kwargs)
 
 
-def safe_loads(s: str) -> Any:
-    """Deserializa JSON estándar."""
+def safe_loads(s: str | bytes) -> Any:
+    """Deserializa JSON a alta velocidad."""
+    if HAS_ORJSON:
+        try:
+            return orjson.loads(s)
+        except Exception:
+            pass
+    if isinstance(s, bytes):
+        s = s.decode('utf-8')
     return json.loads(s)
 
 

@@ -98,14 +98,25 @@ async def lifespan(app: FastAPI):
 
 # ── FastAPI app ───────────────────────────────────────────────────────────────
 
+from fastapi.middleware.gzip import GZipMiddleware
+import time
+import os
+import psutil
+
+# Registrar tiempo de inicio para telemetría
+_ENGINE_START_TIME = time.time()
+
 app = FastAPI(
     title=settings.PROJECT_NAME,
-    description="Slingshot v10.0.0 Apex Sovereign (Institutional-Grade Trading Engine)",
+    description="Slingshot v25.3 HFT Titan (Institutional-Grade Trading Engine)",
     version=settings.VERSION,
     lifespan=lifespan,
     docs_url="/docs",
     redoc_url="/redoc"
 )
+
+# Compresión GZip automática para payloads > 1KB (Fast REST)
+app.add_middleware(GZipMiddleware, minimum_size=1000)
 
 app.add_middleware(
     CORSMiddleware,
@@ -121,7 +132,7 @@ app.add_middleware(
 async def root():
     return {
         "status": "online",
-        "engine": "Slingshot v10.0.0 Apex Sovereign",
+        "engine": "Slingshot v25.3 HFT Titan",
         "version": settings.VERSION,
     }
 
@@ -132,6 +143,24 @@ async def health_check():
         "status": "healthy",
         "version": settings.VERSION,
         "ollama_active": await check_ollama_status()
+    }
+
+@app.get("/api/v1/metrics")
+async def get_metrics():
+    """Telemetría de rendimiento, memoria y latencia institucional."""
+    process = psutil.Process(os.getpid())
+    mem_info = process.memory_info()
+    uptime_sec = time.time() - _ENGINE_START_TIME
+    
+    return {
+        "uptime_seconds": round(uptime_sec, 2),
+        "uptime_formatted": f"{int(uptime_sec // 3600)}h {int((uptime_sec % 3600) // 60)}m {int(uptime_sec % 60)}s",
+        "memory_rss_mb": round(mem_info.rss / (1024 * 1024), 2),
+        "memory_vms_mb": round(mem_info.vms / (1024 * 1024), 2),
+        "cpu_percent": process.cpu_percent(interval=None),
+        "active_broadcasters": len(registry._broadcasters),
+        "stored_signals": len(await store.get_signals(limit=100)),
+        "hft_latency_target_ms": "< 2.5ms"
     }
 
 @app.get("/api/v1/status")

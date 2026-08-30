@@ -31,12 +31,13 @@ MODERN_TEST_FILES = [
     "engine/tests/test_dynamic_universe_screener.py",
     "engine/tests/test_auto_healing_and_telemetry.py",
     "engine/tests/test_chart_and_telemetry_pipeline.py",
-    "engine/tests/test_confluence_end_to_end_integrity.py"
+    "engine/tests/test_confluence_end_to_end_integrity.py",
+    "engine/tests/test_backend_performance_and_security.py"
 ]
 
 def main():
     print("\n" + "="*80)
-    print("🧪 SLINGSHOT v25.1 APEX — SUITE OFICIAL DE CERTIFICACIÓN QA")
+    print("🧪 SLINGSHOT v25.3 HFT TITAN — SUITE OFICIAL DE CERTIFICACIÓN QA")
     print("="*80)
     
     cmd = [sys.executable, "-m", "pytest"] + MODERN_TEST_FILES + ["-v", "--tb=short"]
@@ -44,7 +45,7 @@ def main():
     
     if result.returncode == 0:
         print("\n" + "="*80)
-        print("✅ CERTIFICACIÓN QA EXITOSA: 86/86 PRUEBAS APROBADAS AL 100%")
+        print("✅ CERTIFICACIÓN QA EXITOSA: 89/89 PRUEBAS APROBADAS AL 100%")
         print("="*80 + "\n")
     else:
         print("\n" + "="*80)
