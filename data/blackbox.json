@@ -1,21 +1,5 @@
 [
   {
-    "timestamp": "2026-08-28T13:33:59.989838+00:00",
-    "asset": "TIAUSDT",
-    "signal_type": "LONG",
-    "result": "TAKE_PROFIT",
-    "confluence_score": 0,
-    "fingerprint": {
-      "regime": "UNKNOWN",
-      "rvol": 1.0,
-      "has_ob": false,
-      "has_sweep": false,
-      "session": "UNKNOWN",
-      "absorption_score": 0.0,
-      "is_in_ote": false
-    }
-  },
-  {
     "timestamp": "2026-08-28T13:34:21.119503+00:00",
     "asset": "TIAUSDT",
     "signal_type": "LONG",
@@ -3188,6 +3172,22 @@
     "asset": "LINKUSDT",
     "signal_type": "LONG",
     "result": "TAKE_PROFIT",
+    "confluence_score": 0,
+    "fingerprint": {
+      "regime": "UNKNOWN",
+      "rvol": 1.0,
+      "has_ob": false,
+      "has_sweep": false,
+      "session": "UNKNOWN",
+      "absorption_score": 0.0,
+      "is_in_ote": false
+    }
+  },
+  {
+    "timestamp": "2026-08-30T21:01:45.240442+00:00",
+    "asset": "HYPEUSDT",
+    "signal_type": "LONG",
+    "result": "STOP_LOSS",
     "confluence_score": 0,
     "fingerprint": {
       "regime": "UNKNOWN",

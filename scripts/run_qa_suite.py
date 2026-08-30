@@ -35,12 +35,13 @@ MODERN_TEST_FILES = [
     "engine/tests/test_backend_performance_and_security.py",
     "engine/tests/test_breathing_room_and_nexus_harmony.py",
     "engine/tests/test_institutional_execution_security_audit.py",
-    "engine/tests/test_cluster_risk_guard.py"
+    "engine/tests/test_cluster_risk_guard.py",
+    "engine/tests/test_stream_resilience_and_rate_limiting.py"
 ]
 
 def main():
     print("\n" + "="*80)
-    print("🧪 SLINGSHOT v26.0 CLUSTER FORTRESS — SUITE OFICIAL DE CERTIFICACIÓN QA")
+    print("🧪 SLINGSHOT v26.1 STREAM FORTRESS — SUITE OFICIAL DE CERTIFICACIÓN QA")
     print("="*80)
     
     cmd = [sys.executable, "-m", "pytest"] + MODERN_TEST_FILES + ["-v", "--tb=short"]
@@ -48,7 +49,7 @@ def main():
     
     if result.returncode == 0:
         print("\n" + "="*80)
-        print("✅ CERTIFICACIÓN QA EXITOSA: 106/106 PRUEBAS APROBADAS AL 100%")
+        print("✅ CERTIFICACIÓN QA EXITOSA: 110/110 PRUEBAS APROBADAS AL 100%")
         print("="*80 + "\n")
     else:
         print("\n" + "="*80)

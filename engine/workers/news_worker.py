@@ -87,14 +87,14 @@ class NewsWorker:
         existing_titles = {elite_normalize(n.get('title', '')) for n in existing_news}
         existing_urls = {n.get('url', '').lower().rstrip('/').split('?')[0] for n in existing_news}
 
-        async with httpx.AsyncClient(timeout=15.0, headers=headers) as client:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(6.0, connect=3.0), headers=headers) as client:
             for url in RSS_FEEDS:
                 try:
                     response = await client.get(url)
                     if response.status_code == 200:
                         # Si recibimos HTML en vez de XML (bloqueo Cloudflare/Bot), descartar
                         if "<html" in response.text.lower()[:500]:
-                            logger.warning(f"⚠️ [NEWS-WORKER] Feed {url} bloqueado (HTML devuelto). Saltando...")
+                            logger.debug(f"[NEWS-WORKER] Feed {url} bloqueado (HTML devuelto). Saltando...")
                             continue
                             
                         try:
@@ -129,11 +129,13 @@ class NewsWorker:
                                 existing_titles.add(title_norm)
                                 existing_urls.add(link_norm)
                         except Exception as parse_err:
-                            logger.error(f"❌ [NEWS-WORKER] Error de parseo XML en {url}: {parse_err}")
+                            logger.debug(f"[NEWS-WORKER] Parseo XML omitido en {url}: {parse_err}")
                             continue
 
+                except httpx.TimeoutException:
+                    logger.debug(f"[NEWS-WORKER] Timeout de lectura en feed externo {url} (saltando)")
                 except Exception as track_err:
-                    logger.error(f"❌ [NEWS-WORKER] Error rastreando {url}: {track_err}")
+                    logger.debug(f"[NEWS-WORKER] Feed temporalmente inaccesible {url}: {track_err}")
 
         if not all_new_items:
             return

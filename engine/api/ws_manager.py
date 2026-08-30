@@ -210,19 +210,19 @@ class SymbolBroadcaster:
         while True:
             try:
                 await self._bootstrap()
-                # Intentar conectar con un timeout agresivo para el handshake
-                await asyncio.wait_for(self._stream_live(), timeout=None) # El loop interno tiene sus propios timeouts
+                # Intentar conectar con un timeout controlado para el handshake
+                await asyncio.wait_for(self._stream_live(), timeout=None)
                 retry_delay = 2.0
             except (asyncio.TimeoutError, Exception) as e:
-                logger.error(f"[BROADCASTER] Error o Timeout en {self._key}: {e}")
+                logger.info(f"🔄 [BROADCASTER] Reintentando conexión para {self._key} ({e})")
                 
                 # [FALLBACK] Forzamos el inicio del rescate si no logramos conectar en 10s
                 if not self.state.is_connected:
-                    logger.warning(f"⚠️ [BROADCASTER] {self._key} Sin conexión Binance. Activando Bitunix...")
+                    logger.info(f"🛡️ [BROADCASTER] {self._key} Conmutando a sensor de respaldo Bitunix...")
                     await self.fallback.start()
                 
                 await asyncio.sleep(retry_delay)
-                retry_delay = min(retry_delay * 2, 60.0)
+                retry_delay = min(retry_delay * 1.5, 30.0)
 
     # --- Bootstrap ---
     async def _bootstrap(self):
@@ -273,7 +273,7 @@ class SymbolBroadcaster:
             try:
                 await self._stream_live()
             except Exception as e:
-                logger.warning(f"[RECONNECT] Reiniciando túnel para {self._key} en 5s: {e}")
+                logger.info(f"🔄 [BROADCASTER] Túnel {self._key} reconectando en 5s ({e})")
                 await asyncio.sleep(5.0)
 
     async def _sync_initial_telemetry(self):
@@ -353,13 +353,19 @@ class SymbolBroadcaster:
         logger.info(f"[BROADCASTER] {self._key} → Iniciando túnel en vivo...")
         
         # 🚨 [REDUNDANCIA v10.2.2] Solo el sensor de 1m gestiona el fallback paralelo
-        # Esto evita triplicar las peticiones a Bitunix (el precio es el mismo)
         if is_futures and self.interval == "1m":
             logger.info(f"🛡️ [FUTURES-GUARD] Activando redundancia Bitunix para {self.symbol} (v10.2.2).")
             await self.fallback.start()
 
+        # ⚡ [STAGGERED HANDSHAKE v26.1] Desfase inteligente con jitter para prevenir el Thundering Herd Problem
+        import random
+        await asyncio.sleep(random.uniform(0.08, 0.25))
+
         try:
-            async with await asyncio.wait_for(ws_client.connect(binance_url, ping_interval=30), timeout=15.0) as binance_ws:
+            async with await asyncio.wait_for(
+                ws_client.connect(binance_url, ping_interval=30, ping_timeout=15, close_timeout=5),
+                timeout=25.0
+            ) as binance_ws:
                 self.state.is_connected = True
                 logger.info(f"[BROADCASTER] {self._key} → Stream Conectado 🟢")
                 # Apagamos el fallback en cuanto conectamos con éxito a Binance WS
@@ -396,13 +402,13 @@ class SymbolBroadcaster:
                             asyncio.create_task(self._process_depth_stream(p_load))
                             
                     except asyncio.TimeoutError:
-                        logger.warning(f"[BROADCASTER] Timeout de datos en {self._key}. Reintentando...")
+                        logger.debug(f"[BROADCASTER] Timeout de datos en {self._key}. Reintentando...")
                         break
                     except Exception as loop_e:
-                        logger.error(f"[BROADCASTER-LOOP] Error procesando mensaje en {self._key}: {loop_e}")
+                        logger.debug(f"[BROADCASTER-LOOP] Mensaje skip en {self._key}: {loop_e}")
                         continue
         except Exception as e:
-            logger.error(f"[BROADCASTER] Fallo crítico de conexión en {self._key}: {e}")
+            logger.info(f"🔄 [BROADCASTER] Túnel {self._key} reconectando ({e})")
             raise
 
     async def _process_ticker_stream(self, payload: dict):
