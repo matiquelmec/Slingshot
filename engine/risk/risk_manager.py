@@ -94,24 +94,24 @@ class RiskManager:
     # High-Beta Alts (RENDER, SUI, INJ, NEAR, FET, PAXG): 15M Scalp -> SL Ágil (0.30x - 1.8x ATR)
     ASSET_TUNING = {
         # 🏛️ MEGA-CAPS (Intraday Swing 1H - Colchón de Liquidez Institucional)
-        "BTCUSDT":  {"atr_mult": 2.5, "tp1_ratio": 1.3, "tp1_vol": 0.70, "spread_impact": 0.0002, "min_sl_pct": 0.50, "max_sl_pct": 100.0},
-        "ETHUSDT":  {"atr_mult": 2.8, "tp1_ratio": 1.3, "tp1_vol": 0.70, "spread_impact": 0.0003, "min_sl_pct": 0.60, "max_sl_pct": 100.0},
-        "SOLUSDT":  {"atr_mult": 2.8, "tp1_ratio": 1.3, "tp1_vol": 0.70, "spread_impact": 0.0006, "min_sl_pct": 0.70, "max_sl_pct": 100.0},
-        "XRPUSDT":  {"atr_mult": 2.5, "tp1_ratio": 1.3, "tp1_vol": 0.70, "spread_impact": 0.0004, "min_sl_pct": 0.60, "max_sl_pct": 100.0},
-        "AVAXUSDT": {"atr_mult": 2.6, "tp1_ratio": 1.3, "tp1_vol": 0.70, "spread_impact": 0.0005, "min_sl_pct": 0.60, "max_sl_pct": 100.0},
-        "LINKUSDT": {"atr_mult": 2.5, "tp1_ratio": 1.3, "tp1_vol": 0.70, "spread_impact": 0.0005, "min_sl_pct": 0.60, "max_sl_pct": 100.0},
+        "BTCUSDT":  {"atr_mult": 2.5, "tp1_ratio": 1.3, "tp1_vol": 0.50, "spread_impact": 0.0002, "min_sl_pct": 0.50, "max_sl_pct": 100.0},
+        "ETHUSDT":  {"atr_mult": 2.8, "tp1_ratio": 1.3, "tp1_vol": 0.50, "spread_impact": 0.0003, "min_sl_pct": 0.60, "max_sl_pct": 100.0},
+        "SOLUSDT":  {"atr_mult": 2.8, "tp1_ratio": 1.3, "tp1_vol": 0.50, "spread_impact": 0.0006, "min_sl_pct": 0.70, "max_sl_pct": 100.0},
+        "XRPUSDT":  {"atr_mult": 2.5, "tp1_ratio": 1.3, "tp1_vol": 0.50, "spread_impact": 0.0004, "min_sl_pct": 0.60, "max_sl_pct": 100.0},
+        "AVAXUSDT": {"atr_mult": 2.6, "tp1_ratio": 1.3, "tp1_vol": 0.50, "spread_impact": 0.0005, "min_sl_pct": 0.60, "max_sl_pct": 100.0},
+        "LINKUSDT": {"atr_mult": 2.5, "tp1_ratio": 1.3, "tp1_vol": 0.50, "spread_impact": 0.0005, "min_sl_pct": 0.60, "max_sl_pct": 100.0},
         
         # 🚀 HIGH-BETA ALTCOINS & DEFENSIVE (Hyper-Scalp 15M / Momentum Expansivo)
-        "RENDERUSDT":{"atr_mult": 1.8, "tp1_ratio": 1.3, "tp1_vol": 0.70, "spread_impact": 0.0008, "min_sl_pct": 0.35, "max_sl_pct": 100.0},
-        "SUIUSDT":   {"atr_mult": 1.8, "tp1_ratio": 1.3, "tp1_vol": 0.70, "spread_impact": 0.0008, "min_sl_pct": 0.35, "max_sl_pct": 100.0},
-        "INJUSDT":   {"atr_mult": 1.8, "tp1_ratio": 1.3, "tp1_vol": 0.70, "spread_impact": 0.0008, "min_sl_pct": 0.35, "max_sl_pct": 100.0},
-        "NEARUSDT":  {"atr_mult": 1.8, "tp1_ratio": 1.3, "tp1_vol": 0.70, "spread_impact": 0.0008, "min_sl_pct": 0.35, "max_sl_pct": 100.0},
-        "FETUSDT":   {"atr_mult": 1.8, "tp1_ratio": 1.3, "tp1_vol": 0.70, "spread_impact": 0.0008, "min_sl_pct": 0.35, "max_sl_pct": 100.0},
-        "ATOMUSDT":  {"atr_mult": 1.8, "tp1_ratio": 1.3, "tp1_vol": 0.70, "spread_impact": 0.0008, "min_sl_pct": 0.35, "max_sl_pct": 100.0},
-        "BNBUSDT":   {"atr_mult": 2.0, "tp1_ratio": 1.3, "tp1_vol": 0.70, "spread_impact": 0.0004, "min_sl_pct": 0.40, "max_sl_pct": 100.0},
-        "PAXGUSDT":  {"atr_mult": 2.0, "tp1_ratio": 1.3, "tp1_vol": 0.70, "spread_impact": 0.0012, "min_sl_pct": 0.30, "max_sl_pct": 100.0}, # Oro
+        "RENDERUSDT":{"atr_mult": 1.8, "tp1_ratio": 1.3, "tp1_vol": 0.50, "spread_impact": 0.0008, "min_sl_pct": 0.35, "max_sl_pct": 100.0},
+        "SUIUSDT":   {"atr_mult": 1.8, "tp1_ratio": 1.3, "tp1_vol": 0.50, "spread_impact": 0.0008, "min_sl_pct": 0.35, "max_sl_pct": 100.0},
+        "INJUSDT":   {"atr_mult": 1.8, "tp1_ratio": 1.3, "tp1_vol": 0.50, "spread_impact": 0.0008, "min_sl_pct": 0.35, "max_sl_pct": 100.0},
+        "NEARUSDT":  {"atr_mult": 1.8, "tp1_ratio": 1.3, "tp1_vol": 0.50, "spread_impact": 0.0008, "min_sl_pct": 0.35, "max_sl_pct": 100.0},
+        "FETUSDT":   {"atr_mult": 1.8, "tp1_ratio": 1.3, "tp1_vol": 0.50, "spread_impact": 0.0008, "min_sl_pct": 0.35, "max_sl_pct": 100.0},
+        "ATOMUSDT":  {"atr_mult": 1.8, "tp1_ratio": 1.3, "tp1_vol": 0.50, "spread_impact": 0.0008, "min_sl_pct": 0.35, "max_sl_pct": 100.0},
+        "BNBUSDT":   {"atr_mult": 2.0, "tp1_ratio": 1.3, "tp1_vol": 0.50, "spread_impact": 0.0004, "min_sl_pct": 0.40, "max_sl_pct": 100.0},
+        "PAXGUSDT":  {"atr_mult": 2.0, "tp1_ratio": 1.3, "tp1_vol": 0.50, "spread_impact": 0.0012, "min_sl_pct": 0.30, "max_sl_pct": 100.0}, # Oro
     }
-    DEFAULT_TUNING = {"atr_mult": 2.0, "tp1_ratio": 1.3, "tp1_vol": 0.70, "spread_impact": 0.0008, "min_sl_pct": 0.40, "max_sl_pct": 100.0}
+    DEFAULT_TUNING = {"atr_mult": 2.0, "tp1_ratio": 1.3, "tp1_vol": 0.50, "spread_impact": 0.0008, "min_sl_pct": 0.40, "max_sl_pct": 100.0}
 
     def _adaptive_risk(self, confluence_score: int) -> float:
         """

@@ -18,17 +18,17 @@ class DeltaOrchestrator:
         Divide la posición total en 3 tramos institucionales basándose en la data de riesgo.
         """
         total_size = signal.get("position_size_usdt", signal.get("position_size", 0))
-        tp1_vol_pct = signal.get("tp1_vol_pct", 0.60)
+        tp1_vol_pct = signal.get("tp1_vol_pct", 0.50)
         
-        # Fragmentación Estándar 60/20/20 (o personalizada por SIGMA)
-        # Tramo 1: 60% (Peaje / BE Trigger)
-        # Tramo 2: 20% (Lock Profit)
-        # Tramo 3: 20% (Moonbag / Home Run)
+        # Fragmentación Alpha Maximizer 50/30/20 (v24.0 APEX ALPHA)
+        # Tramo 1: 50% (Peaje / BE Trigger @ +1.5R)
+        # Tramo 2: 30% (Lock Profit @ +3.0R con SL a +2.0R)
+        # Tramo 3: 20% (Moonbag / Home Run @ +5.0R a +8.0R con Trailing Ratchet 70%)
         
         vol_tp1 = total_size * tp1_vol_pct
         remaining = total_size - vol_tp1
-        vol_tp2 = remaining * 0.50 # 50% de lo que queda (20% del total si tp1=60%)
-        vol_tp3 = remaining - vol_tp2 # El resto
+        vol_tp2 = remaining * 0.60  # 30% del total
+        vol_tp3 = remaining - vol_tp2  # 20% del total (Home Run)
         
         fragments = [
             {
@@ -45,7 +45,7 @@ class DeltaOrchestrator:
                 "tp_price": signal.get("tp2"),
                 "sl_price": signal.get("stop_loss"),
                 "is_entry_risk": False,
-                "label": "Tramo 2 (20%)"
+                "label": "Tramo 2 (30%)"
             },
             {
                 "id": "TP3_HOME_RUN",

@@ -53,11 +53,11 @@ class Settings(BaseSettings):
     # Strategy Delta Δ: Tiered Priority (14 Curated Institutional Assets)
     RADAR_ASSETS: str = "BTCUSDT,ETHUSDT,SOLUSDT,AVAXUSDT,LINKUSDT,XRPUSDT,PAXGUSDT,RENDERUSDT,SUIUSDT,INJUSDT,NEARUSDT,FETUSDT,ATOMUSDT,TIAUSDT"
     
-    # Universo Dinámico Cuantitativo v21.0
+    # Universo Dinámico Cuantitativo v24.0 APEX ALPHA
     ENABLE_DYNAMIC_WATCHLIST: bool = True
     DYNAMIC_MIN_24H_VOL_USDT: float = 30_000_000.0  # Mínimo $30M de volumen 24h
-    DYNAMIC_MIN_RVOL: float = 1.25                 # Mínimo 1.25x volumen relativo
-    DYNAMIC_MIN_KER: float = 0.25                  # Mínimo 0.25 eficiencia de tendencia
+    DYNAMIC_MIN_RVOL: float = 1.30                 # Mínimo 1.30x volumen relativo institucional
+    DYNAMIC_MIN_KER: float = 0.35                  # Mínimo 0.35 eficiencia de tendencia (filtra consolidaciones)
     DYNAMIC_MAX_ROTATING_ASSETS: int = 6           # Máximo 6 activos rotativos
     EXCLUDED_DYNAMIC_ASSETS: str = "XAGUSDT,XAGUSD,SNDKUSDT,SKHYNIXUSDT,NVDAUSDT,TSLAUSDT,AAPLUSDT" # Excluir tokens de acciones y plata ruidosa
     

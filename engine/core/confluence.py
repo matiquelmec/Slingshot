@@ -678,9 +678,11 @@ class ConfluenceManager:
         except Exception as ker_err:
             logger.debug(f"[CONFLUENCE] Bypass KER check: {ker_err}")
 
-        # 🚀 11.8. BTC MACRO ALIGNMENT VETO (v12 Sovereign Core)
+        # 🚀 11.8. BTC MACRO ALIGNMENT VETO & ASYMMETRIC ALTCOIN LONG BIAS (v24.0 APEX ALPHA)
         btc_aligned = kwargs.get('btc_aligned', None)
         asset_name = str(signal.get('asset', signal.get('symbol', ''))).upper()
+        is_altcoin = asset_name and not any(m in asset_name for m in ["BTC", "ETH", "SOL", "PAXG", "XAU"])
+        
         if btc_aligned is False and asset_name and "BTC" not in asset_name:
             multiplier = 0
             checklist.append({
@@ -695,6 +697,22 @@ class ConfluenceManager:
                 "status": "CONFIRMADO",
                 "detail": "Alineación Macro con Bitcoin validada (+10pts)"
             })
+
+        # Asimetría Cuantitativa: Shorts en Altcoins solo permitidos si Confluencia >= 70
+        if is_altcoin and not is_long:
+            if score < 70:
+                multiplier *= 0.0
+                checklist.append({
+                    "factor": "Asimetría Direccional Altcoin (Short Gating)",
+                    "status": "DENEGADO",
+                    "detail": "Veto Alpha v24.0: Shorts en Altcoins exigen Confluencia Institucional >= 70%"
+                })
+            else:
+                checklist.append({
+                    "factor": "Asimetría Direccional Altcoin (Short Gating)",
+                    "status": "CONFIRMADO",
+                    "detail": "Short en Altcoin con Alta Convicción (Score >= 70%)"
+                })
 
         # 🚀 11.9. GOLD ATH LONG-ONLY VETO (v13.7 Sovereign Gold Titanium)
         # El oro en régimen alcista secular rompiendo máximos prohíbe ventas institucionales

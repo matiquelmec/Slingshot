@@ -228,7 +228,7 @@ class UnifiedBacktestEngine:
             close_reason = ""
             exit_idx = fill_idx
             
-            f1, f2, f3 = 0.60, 0.20, 0.20
+            f1, f2, f3 = 0.50, 0.30, 0.20  # Alpha Maximizer Staged Exits (v24.0 APEX ALPHA)
             rem_pos = 1.0
 
             max_horizon = min(fill_idx + (48 if interval == '15m' else 36), n)

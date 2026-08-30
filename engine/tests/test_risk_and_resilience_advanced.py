@@ -57,26 +57,26 @@ def test_breakeven_micro_buffer_absorption():
     assert be_sl_short == pytest.approx(entry_price - expected_buffer_usd, rel=1e-5)
 
 
-# ── TEST 2: CONSERVACIÓN ESTRICTA DE VOLUMEN (60% / 20% / 20%) ──────────────
+# ── TEST 2: CONSERVACIÓN ESTRICTA DE VOLUMEN (50% / 30% / 20%) ──────────────
 
 def test_staged_exits_volume_conservation():
     """
-    Verifica que la fragmentación en salidas escalonadas sume exactamente el 100%
-    del volumen de la posición sin pérdidas por redondeo en activos enteros o decimales.
+    Verifica que la fragmentación en salidas escalonadas Alpha Maximizer (50/30/20)
+    sume exactamente el 100% del volumen de la posición sin pérdidas por redondeo.
     """
     test_quantities = [100.0, 15.75, 0.832, 100000.0]
     
     for total_qty in test_quantities:
-        tp1_qty = total_qty * 0.60
-        tp2_qty = total_qty * 0.20
+        tp1_qty = total_qty * 0.50
+        tp2_qty = total_qty * 0.30
         tp3_qty = total_qty * 0.20
         
         sum_qty = tp1_qty + tp2_qty + tp3_qty
         assert sum_qty == pytest.approx(total_qty, rel=1e-6)
         
-        # Verificar porcentajes
-        assert tp1_qty / total_qty == pytest.approx(0.60, rel=1e-6)
-        assert tp2_qty / total_qty == pytest.approx(0.20, rel=1e-6)
+        # Verificar porcentajes exactos
+        assert tp1_qty / total_qty == pytest.approx(0.50, rel=1e-6)
+        assert tp2_qty / total_qty == pytest.approx(0.30, rel=1e-6)
         assert tp3_qty / total_qty == pytest.approx(0.20, rel=1e-6)
 
 
@@ -183,3 +183,64 @@ def test_sqlite_vault_audit_trail_integrity(tmp_path):
     # 3. La segunda comprobación debe ser True (bloqueo anti-spam)
     is_blocked_after, _, _ = vault.is_signal_in_cooldown(dedup_key, current_price=2500.0)
     assert is_blocked_after is True
+
+
+# ── TEST 6: ASYMMETRIC ALTCOIN DIRECTIONAL GATING (v24.0 APEX ALPHA) ───────
+
+def test_altcoin_asymmetric_directional_filter_blocks_shorts_in_bull_market():
+    """
+    Verifica que en Altcoins de alta volatilidad (SUI, RENDER, ATOM, FET, NEAR)
+    los Shorts sean vetados si no alcanzan la confluencia institucional mínima (>= 70),
+    evitando pérdidas por contracorriente alcista.
+    """
+    import pandas as pd
+    from engine.core.confluence import ConfluenceManager
+    
+    cm = ConfluenceManager()
+    
+    # Crear DataFrame mock de mercado
+    df_mock = pd.DataFrame({
+        "timestamp": [pd.Timestamp.now() - pd.Timedelta(minutes=15*i) for i in range(50)][::-1],
+        "open": [1.80 + i*0.001 for i in range(50)],
+        "high": [1.82 + i*0.001 for i in range(50)],
+        "low": [1.79 + i*0.001 for i in range(50)],
+        "close": [1.81 + i*0.001 for i in range(50)],
+        "volume": [1000.0 for _ in range(50)],
+        "ema50": [1.80 for _ in range(50)],
+        "ema200": [1.75 for _ in range(50)],
+    })
+    
+    # Señal SHORT en Altcoin (SUI) con confluencia débil (< 70)
+    sig_alt_short_weak = {
+        "asset": "SUIUSDT",
+        "symbol": "SUIUSDT",
+        "type": "SHORT",
+        "signal_type": "SHORT",
+        "price": 1.81,
+        "timestamp": pd.Timestamp.now().isoformat()
+    }
+    
+    # Evaluar con macro BTC Bullish (divergente para el short)
+    res_short = cm.evaluate_signal(
+        df=df_mock,
+        signal=sig_alt_short_weak,
+        btc_aligned=False  # BTC alcista -> Altcoin short no alineado
+    )
+    
+    # Debe ser vetada (multiplier = 0 o score = 0)
+    assert res_short["score"] == 0
+    assert res_short["conviction"] == "VETADA"
+
+
+# ── TEST 7: FILTRO DE EFICIENCIA KER Y RVOL INSTITUCIONAL ──────────────────
+
+def test_kaufman_efficiency_and_rvol_filters():
+    """
+    Verifica que las configuraciones de KER >= 0.35 y RVOL >= 1.30
+    estén activas en el entorno global para purgar mechas y consolidaciones sucias.
+    """
+    from engine.api.config import settings
+    
+    assert settings.DYNAMIC_MIN_KER == 0.35
+    assert settings.DYNAMIC_MIN_RVOL == 1.30
+
