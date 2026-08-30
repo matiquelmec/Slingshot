@@ -213,7 +213,7 @@ class SignalHandler:
             "tp1":              calc.get("tp1", sig.get("tp1")) if 'calc' in locals() else sig.get("tp1"),
             "tp2":              calc.get("tp2", sig.get("tp2")) if 'calc' in locals() else sig.get("tp2"),
             "tp3":              calc.get("tp3", sig.get("tp3")) if 'calc' in locals() else sig.get("tp3"),
-            "tp1_vol_pct":      calc.get("tp1_vol_pct", 0.60) if 'calc' in locals() else 0.60,
+            "tp1_vol_pct":      calc.get("tp1_vol_pct", 0.50) if 'calc' in locals() else 0.50,
             "is_test":          sig.get("is_test", False),
         }
 

@@ -44,7 +44,7 @@ const formatTime = (ts: any) => {
     }
 };
 
-const getStatusType = (status: string): 'success' | 'warning' | 'info' => {
+const getStatusType = (status: string): 'success' | 'warning' | 'danger' | 'info' => {
     if (!status) return 'info';
     const s = status.toUpperCase();
     if (
@@ -55,16 +55,27 @@ const getStatusType = (status: string): 'success' | 'warning' | 'info' => {
         s === 'FRESCO' ||
         s === 'FAVORABLE' ||
         s === 'ALINEADO' ||
-        s === 'INSTITUCIONAL'
+        s === 'INSTITUCIONAL' ||
+        s === 'OPTIMAL'
     ) {
         return 'success';
+    }
+    if (
+        s === 'DENEGADO' ||
+        s === 'VETADO' ||
+        s === 'OBSOLETO' ||
+        s.includes('DIVERGENTE') ||
+        s === 'QUARANTINED'
+    ) {
+        return 'danger';
     }
     if (
         s === 'PARCIAL' ||
         s === 'VOLÁTIL' ||
         s === 'DECAYENDO' ||
         s.includes('PRECAUCIÓN') ||
-        s.includes('ALERTA')
+        s.includes('ALERTA') ||
+        s === 'MODERATE_NOISE'
     ) {
         return 'warning';
     }
@@ -377,11 +388,12 @@ const SignalCardItem: React.FC<SignalCardItemProps> = ({ signal, currentPrice, p
                                     <span className="text-emerald-400 text-[8px] tracking-widest uppercase font-black">TP Targets (70% / 15% / 15%)</span>
                                 </div>
                                 <div className="flex items-center gap-2">
-                                    <span className="text-emerald-300 text-[8px] font-bold">TP1 (+1.3R):</span>
+                                    <span className="text-emerald-300 text-[8px] font-bold">TP1 (+1.5R):</span>
                                     <span className="text-emerald-400 font-black">{formatCurrency(signal.tp1) || '---'}</span>
-                                    <span className="text-emerald-300 text-[8px] font-bold ml-1">TP2:</span>
+                                    <span className="text-emerald-300 text-[8px] font-bold ml-1">TP2 (+3.0R):</span>
                                     <span className="text-emerald-400 font-black">{formatCurrency(signal.tp2) || '---'}</span>
                                     <span className="text-emerald-500 text-[10px]">⚡</span>
+                                    <span className="text-emerald-300 text-[8px] font-bold">TP3 (+5.0R):</span>
                                     <span className="text-emerald-300 font-black">{formatCurrency(signal.tp3 || signal.take_profit_3r) || '---'}</span>
                                 </div>
                             </div>
@@ -394,7 +406,7 @@ const SignalCardItem: React.FC<SignalCardItemProps> = ({ signal, currentPrice, p
                                 <span className="text-white font-black text-[10px]">{formatCurrency(bePrice)}</span>
                             </span>
                             <span className="text-white/50 text-[8px] font-sans font-medium">
-                                Al alcanzar este nivel 👉 Mover SL a Entrada ($0.00 Riesgo)
+                                Al alcanzar este nivel 👉 Mover SL a Entrada + Comisiones ($0.00 Riesgo)
                             </span>
                         </div>
                     </div>
@@ -553,12 +565,13 @@ const SignalCardItem: React.FC<SignalCardItemProps> = ({ signal, currentPrice, p
                         {signal.confluence.checklist?.map((item, i) => {
                             const statusType = getStatusType(item.status);
                             return (
-                                <span key={i} className={`px-1.5 py-0.5 text-[8px] font-bold tracking-wider rounded border ${
-                                    statusType === 'success' ? 'text-neon-green/90 bg-neon-green/10 border-neon-green/20' :
+                                <span key={i} className={`px-1.5 py-0.5 text-[8px] font-bold tracking-wider rounded border transition-all ${
+                                    statusType === 'success' ? 'text-neon-green/90 bg-neon-green/10 border-neon-green/30 shadow-[0_0_8px_rgba(0,255,65,0.15)]' :
+                                    statusType === 'danger'  ? 'text-rose-400 bg-rose-500/10 border-rose-500/30' :
                                     statusType === 'warning' ? 'text-yellow-400/90 bg-yellow-400/10 border-yellow-400/20' :
                                     'text-white/30 bg-white/5 border-white/10'
                                 }`} title={item.detail}>
-                                    {statusType === 'success' ? '✓' : statusType === 'warning' ? '◑' : '✗'} {item.factor}
+                                    {statusType === 'success' ? '✓' : statusType === 'danger' ? '✕' : statusType === 'warning' ? '◑' : '○'} {item.factor}
                                 </span>
                             );
                         })}

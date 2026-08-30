@@ -938,5 +938,17 @@
   "b4dd472184d7b6a92bc5abb06d68f351": {
     "price": 0.0,
     "advice": "{\"verdict\": \"SIDEWAYS\", \"threat\": \"MEDIUM\", \"logic\": \"R\\u00e9gimen IDLE\"}"
+  },
+  "a5433e53e60aaeee3e92b6c7a6b63687": {
+    "price": 0.0,
+    "advice": "{\"verdict\": \"SIDEWAYS\", \"threat\": \"LOW\", \"logic\": \"No SMC, sideways market\"}"
+  },
+  "70c83f9175e6fad8b94af0cb662c1f41": {
+    "price": 0.0,
+    "advice": "{\"verdict\": \"SIDEWAYS\", \"threat\": \"LOW\", \"logic\": \"Sin SMC ni FVG\"}"
+  },
+  "7ee6c5b1971410c6e3e3164db8345428": {
+    "price": 0.0,
+    "advice": "{\"verdict\": \"SIDEWAYS\", \"threat\": \"MEDIUM\", \"logic\": \"R\\u00e9gimen IDLE\"}"
   }
 }

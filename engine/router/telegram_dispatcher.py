@@ -84,7 +84,7 @@ class TelegramDispatcher:
         dist = abs(price - stop_loss)
         lots = calculate_mt5_lots_py(asset, risk_usd, dist)
         
-        # ── GEOMETRÍA MATEMÁTICA ESTRICTA (R:R Apex v19.1) ──
+        # ── GEOMETRÍA MATEMÁTICA ESTRICTA (Alpha Maximizer v25.1 50/30/20) ──
         # SHORT: Entry > BE > TP1 > TP2 > TP3
         # LONG:  Entry < BE < TP1 < TP2 < TP3
         is_long = "LONG" in direction
@@ -92,9 +92,9 @@ class TelegramDispatcher:
         
         # Cálculo geométrico riguroso de niveles R:R
         be_price = price + (dist * 1.0 * sign)
-        tp1 = price + (dist * 1.3 * sign)
-        tp2 = price + (dist * 2.2 * sign)
-        tp3 = price + (dist * 3.5 * sign)
+        tp1 = price + (dist * 1.5 * sign)
+        tp2 = price + (dist * 3.0 * sign)
+        tp3 = price + (dist * 5.0 * sign)
         
         # Formateo de precisión decimal según el precio del activo (Cripto vs Forex/Índices)
         decimals = 4 if price < 10.0 else (2 if price < 1000.0 else 2)
@@ -133,17 +133,17 @@ class TelegramDispatcher:
         tp2_str = f"{tp2:.{decimals}f}"
         tp3_str = f"{tp3:.{decimals}f}"
         
-        one_click_text = f"[{account_profile.split('_')[0]} MT5] {action} {sym_mt5} @ {p_str} | LOTS: {lots:.2f} | SL: {sl_str} | 🛡️ BE (+1.0R): {be_str} | TP1: {tp1_str} | TP2: {tp2_str} | TP3: {tp3_str}"
+        one_click_text = f"[{account_profile.split('_')[0]} MT5] {action} {sym_mt5} @ {p_str} | LOTS: {lots:.2f} | SL: {sl_str} | 🛡️ BE (+1.0R): {be_str} | TP1 (50%): {tp1_str} | TP2 (30%): {tp2_str} | TP3 (20%): {tp3_str}"
 
         # Resumen de confluencias
         conf_badges = []
         if score >= 75: conf_badges.append("🔥 Grado ELITE")
-        if rvol >= 1.5: conf_badges.append(f"📊 RVOL {rvol:.1f}x (Bancos)")
-        if ker_val >= 0.30: conf_badges.append(f"⚡ KER {ker_val:.2f} (Limpio)")
+        if rvol >= 1.3: conf_badges.append(f"📊 RVOL {rvol:.1f}x (Bancos)")
+        if ker_val >= 0.35: conf_badges.append(f"⚡ KER {ker_val:.2f} (Limpio)")
         conf_summary = " • ".join(conf_badges) if conf_badges else "Confirmación SMC Institucional"
 
         message = (
-            f"🎯 <b>NUEVA OPORTUNIDAD INSTITUCIONAL — SLINGSHOT v19.1</b>\n"
+            f"🎯 <b>NUEVA OPORTUNIDAD INSTITUCIONAL — SLINGSHOT v25.1</b>\n"
             f"━━━━━━━━━━━━━━━━━━━━━━\n"
             f"💎 <b>Activo:</b> <code>{sym_mt5}</code> ({asset})\n"
             f"🧭 <b>Dirección:</b> <b>{'🟢 ' + direction if 'LONG' in direction else '🔴 ' + direction}</b> | ⏱️ <b>TF:</b> <code>{timeframe}</code>\n"
@@ -153,12 +153,11 @@ class TelegramDispatcher:
             f"📍 <b>Entrada Límite (OTE 61.8%):</b> <code>{p_str}</code>\n"
             f"🛑 <b>Stop Loss (1.0R):</b> <code>{sl_str}</code> (-{((dist/price)*100):.2f}%)\n"
             f"🛡️ <b>Fast BE (+1.0R):</b> <code>{be_str}</code> <i>(Mover SL a Entrada / $0.00 Riesgo)</i>\n"
-            f"🚀 <b>Pyramiding Cero Riesgo:</b> <i>Al tocar BE 👉 Añadir +50% tamaño</i>\n"
             f"━━━━━━━━━━━━━━━━━━━━━━\n"
-            f"💰 <b>OBJETIVOS DE TOMA DE GANANCIAS (R:R):</b>\n"
-            f"   🥇 <b>TP1 (+1.3R):</b> <code>{tp1_str}</code> <i>(Cerrar 50% - 70% de posición)</i>\n"
-            f"   🥈 <b>TP2 (+2.2R):</b> <code>{tp2_str}</code> <i>(Equilibrio de Mercado)</i>\n"
-            f"   🥉 <b>TP3 (+3.5R):</b> <code>{tp3_str}</code> <i>(Expansión / Runner)</i>\n"
+            f"💰 <b>OBJETIVOS ALPHA MAXIMIZER (50/30/20):</b>\n"
+            f"   🥇 <b>TP1 (+1.5R - 50%):</b> <code>{tp1_str}</code> <i>(Cobra riesgo + Fee Absorber)</i>\n"
+            f"   🥈 <b>TP2 (+3.0R - 30%):</b> <code>{tp2_str}</code> <i>(Garantiza +2.0R SL)</i>\n"
+            f"   🥉 <b>TP3 (+5.0R - 20%):</b> <code>{tp3_str}</code> <i>(Home Run Runner)</i>\n"
             f"━━━━━━━━━━━━━━━━━━━━━━\n"
             f"📊 <b>GESTIÓN DE RIESGO Y MARGEN:</b>\n"
             f"   • 🏛️ <b>FTMO / MT5 ({account_profile}):</b> <code>{lots:.2f} Lots</code> (Riesgo: ${risk_usd:,.0f} USD)\n"

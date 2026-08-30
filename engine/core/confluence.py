@@ -846,19 +846,24 @@ class ConfluenceManager:
         else:
             checklist.append({"factor": "On-Chain Sentinel", "status": "CALIBRANDO", "detail": "Datos On-Chain no disponibles (Bypass)"})
 
-        # RESULTADO FINAL
+        # RESULTADO FINAL CON SANITIZACIÓN ESTRICTA (v25.1 ELITE)
+        import math
         base_score = int((score / total_weight) * 100) if total_weight > 0 else 0
-        final_score = min(100, int(base_score * multiplier))
+        final_score = min(100, max(0, int(base_score * multiplier)))
         
         conviction = "ALTA CONVICCIÓN" if final_score >= 70 else "SÓLIDA" if final_score >= 50 else "ESPECULATIVA"
         
         v_reason = None
-        if multiplier == 0: 
+        if multiplier == 0 or final_score == 0: 
             conviction = "VETADA"
             # Extraer el motivo del veto del checklist
-            veto_entries = [c for c in checklist if c.get('status') == 'DENEGADO' or c.get('status') == 'OBSOLETO']
+            veto_entries = [c for c in checklist if c.get('status') in ('DENEGADO', 'OBSOLETO', 'DIVERGENTE')]
             v_reason = veto_entries[-1].get('detail', 'Veto por Confluencia') if veto_entries else 'Veto por Riesgo'
         
+        safe_rvol = round(rvol, 2) if isinstance(rvol, (int, float)) and math.isfinite(rvol) else 1.0
+        safe_ker = round(ker_value, 2) if isinstance(ker_value, (int, float)) and math.isfinite(ker_value) else 0.35
+        safe_smt = round(smt_strength, 2) if isinstance(smt_strength, (int, float)) and math.isfinite(smt_strength) else 0.0
+
         logger.info(f"[CONFLUENCE] Asset: {signal.get('asset', 'UNKNOWN')} | Score: {final_score}% (Multiplier: {multiplier})")
         logger.info(f"             Regime OK? {regime_ok} | POI? {poi_pts} | Macro Near? {high_impact_near}")
 
@@ -867,12 +872,12 @@ class ConfluenceManager:
             "conviction": conviction,
             "is_long": is_long, # [DELTA v6.1] Propagación de polaridad
             "checklist": checklist,
-            "reasoning": self._build_reasoning(final_score, conviction, is_long, regime, has_ob, rvol, high_impact_near, event_name, cluster_hit, v_reason),
-            "rvol": round(rvol, 2),
-            "smt_strength": smt_strength,
+            "reasoning": self._build_reasoning(final_score, conviction, is_long, regime, has_ob, safe_rvol, high_impact_near, event_name, cluster_hit, v_reason),
+            "rvol": safe_rvol,
+            "smt_strength": safe_smt,
             "veto_reason": v_reason,
             "asset_health": {
-                "ker": round(ker_value, 2),
+                "ker": safe_ker,
                 "status": health_status,
                 "is_quarantined": is_quarantined
             }

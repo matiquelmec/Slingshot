@@ -29,7 +29,7 @@ export interface AIAudit {
 
 export interface ConfluenceChecklist {
     factor: string;
-    status: 'CONFIRMADO' | 'PARCIAL' | 'BAJO' | 'NEUTRAL' | 'PRECAUCIÓN' | 'DIVERGENTE';
+    status: 'CONFIRMADO' | 'PARCIAL' | 'BAJO' | 'NEUTRAL' | 'PRECAUCIÓN' | 'DIVERGENTE' | 'DENEGADO' | 'OBSOLETO' | 'FAVORABLE' | 'CALIBRANDO' | 'FRESCO' | 'ALERTA' | 'OPTIMAL' | 'MODERATE_NOISE' | 'QUARANTINED' | string;
     detail: string;
 }
 
