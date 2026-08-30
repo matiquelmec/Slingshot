@@ -68,15 +68,66 @@ def test_ftmo_lot_sizing_dax40():
     # En GER40 (25 contratos por lote): 50 puntos * 25 = $1250 por lote -> 750 / 1250 = 0.60 Lotes
     assert round(lot_info["lots"], 1) == 0.6
 
-def test_ftmo_lot_sizing_gbpjpy():
-    """Valida el cálculo de lotes para GBPJPY con riesgo de $750 USD."""
+def test_ftmo_phase_based_risk_scaling():
+    """Valida que el riesgo monetario se adapte automáticamente según la fase configurada."""
+    # Fase 1: 0.75% ($750 USD en $100K)
+    ftmo_guardian.set_phase("PHASE_1")
     ftmo_guardian.reset_daily_metrics(100000.0)
-    entry_price = 195.50
-    stop_loss = 195.00 # Distancia = 0.50 = 50 pips
+    info_p1 = ftmo_guardian.calculate_mt5_lots("XAUUSD", 2500.0, 2490.0)
+    assert info_p1["risk_usd"] == 750.0
+    assert info_p1["risk_pct"] == 0.75
     
-    lot_info = ftmo_guardian.calculate_mt5_lots("GBPJPY", entry_price, stop_loss)
-    assert lot_info["risk_usd"] == 750.0
-    assert lot_info["lots"] > 0
-    # En GBPJPY (100,000 unidades): 0.50 * 100,000 = $50,000 por lote -> 750 / 50,000 = 0.015 -> 0.02 Lotes
-    assert round(lot_info["lots"], 2) == 0.01 or round(lot_info["lots"], 2) == 0.02
+    # Fase 2: 0.50% ($500 USD en $100K)
+    ftmo_guardian.set_phase("PHASE_2")
+    ftmo_guardian.reset_daily_metrics(100000.0)
+    info_p2 = ftmo_guardian.calculate_mt5_lots("XAUUSD", 2500.0, 2490.0)
+    assert info_p2["risk_usd"] == 500.0
+    assert info_p2["risk_pct"] == 0.50
+
+    # Fondeada (Funded): 0.35% ($350 USD en $100K)
+    ftmo_guardian.set_phase("FUNDED")
+    ftmo_guardian.reset_daily_metrics(100000.0)
+    info_funded = ftmo_guardian.calculate_mt5_lots("XAUUSD", 2500.0, 2490.0)
+    assert info_funded["risk_usd"] == 350.0
+    assert info_funded["risk_pct"] == pytest.approx(0.35, rel=1e-5)
+    
+    # Restaurar a PHASE_1
+    ftmo_guardian.set_phase("PHASE_1")
+
+
+def test_ftmo_dynamic_daily_lockout_by_phase():
+    """Valida que el Kill-Switch diario sea más estricto en Fase 2 (-2.5%) y Fondeada (-2.0%)."""
+    # Fase 1: Permite hasta -3.5%
+    ftmo_guardian.set_phase("PHASE_1")
+    ftmo_guardian.reset_daily_metrics(100000.0)
+    # Pérdida de $2,800 (-2.8%) no debe bloquear en Fase 1
+    st1 = ftmo_guardian.update_equity(97200.0)
+    assert st1["is_daily_lockout"] is False
+    
+    # Fase 2: Bloquea a -2.5% ($2,500)
+    ftmo_guardian.set_phase("PHASE_2")
+    ftmo_guardian.reset_daily_metrics(100000.0)
+    # Pérdida de $2,800 (-2.8%) SÍ debe bloquear en Fase 2
+    st2 = ftmo_guardian.update_equity(97200.0)
+    assert st2["is_daily_lockout"] is True
+    assert "PHASE_2" in st2["lockout_reason"]
+    
+    # Restaurar a PHASE_1
+    ftmo_guardian.set_phase("PHASE_1")
+
+
+def test_tradfi_staged_exits_lot_fragmentation():
+    """Valida la conservación exacta de lotes MT5 en la fragmentación 50/30/20."""
+    ftmo_guardian.set_phase("PHASE_1")
+    ftmo_guardian.reset_daily_metrics(100000.0)
+    
+    # XAUUSD: Oro Spot
+    gold_lots = ftmo_guardian.calculate_mt5_lots("XAUUSD", 2500.0, 2495.0)
+    assert gold_lots["lots"] == pytest.approx(gold_lots["lots_tp1"] + gold_lots["lots_tp2"] + gold_lots["lots_tp3"], rel=1e-5)
+    assert gold_lots["lots_tp1"] / gold_lots["lots"] == pytest.approx(0.50, abs=0.05)
+    
+    # US100: Nasdaq 100 Cash
+    nq_lots = ftmo_guardian.calculate_mt5_lots("US100", 19500.0, 19450.0)
+    assert nq_lots["lots"] == pytest.approx(nq_lots["lots_tp1"] + nq_lots["lots_tp2"] + nq_lots["lots_tp3"], rel=1e-5)
+
 

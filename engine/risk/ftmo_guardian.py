@@ -13,15 +13,18 @@ from engine.core.logger import logger
 from engine.indicators.tradfi_provider import TRADFI_ASSETS_CONFIG
 
 class FtmoGuardianShield:
-    """Guardián de Capital y Reglas de Prop Firm (FTMO / MT5)."""
+    """Guardián de Capital y Reglas de Prop Firm (FTMO / MT5) — v25.0 APEX TITANIUM."""
     
-    # Límites Cuantitativos de Seguridad
-    DAILY_DRAWDOWN_LIMIT_PCT = 3.5   # Stop diario de seguridad (vs 5.0% de FTMO)
-    MAX_TOTAL_DRAWDOWN_PCT   = 7.5   # Stop total de seguridad (vs 10.0% de FTMO)
+    # Límites Cuantitativos de Seguridad Dinámicos por Fase
+    PHASE_CONFIGS = {
+        "PHASE_1": {"risk_pct": 0.0075, "target_pct": 10.0, "daily_max_loss_pct": 3.5, "total_max_loss_pct": 7.5},
+        "PHASE_2": {"risk_pct": 0.0050, "target_pct": 5.0,  "daily_max_loss_pct": 2.5, "total_max_loss_pct": 5.0},
+        "FUNDED":  {"risk_pct": 0.0035, "target_pct": 0.0,  "daily_max_loss_pct": 2.0, "total_max_loss_pct": 4.5},
+    }
     
     def __init__(self, account_size: float = 100000.0, phase: str = "PHASE_1"):
         self.account_size = account_size
-        self.phase = phase # "PHASE_1" (10%), "PHASE_2" (5%), "FUNDED"
+        self.phase = phase.upper() if phase.upper() in self.PHASE_CONFIGS else "PHASE_1"
         self.current_equity = account_size
         self.daily_starting_equity = account_size
         self.peak_equity = account_size
@@ -29,6 +32,25 @@ class FtmoGuardianShield:
         self.lockout_reason = ""
         self.trades_today = 0
         
+    @property
+    def current_config(self) -> Dict[str, float]:
+        return self.PHASE_CONFIGS.get(self.phase, self.PHASE_CONFIGS["PHASE_1"])
+
+    @property
+    def DAILY_DRAWDOWN_LIMIT_PCT(self) -> float:
+        return self.current_config["daily_max_loss_pct"]
+
+    @property
+    def MAX_TOTAL_DRAWDOWN_PCT(self) -> float:
+        return self.current_config["total_max_loss_pct"]
+
+    def set_phase(self, phase: str):
+        """Actualiza la fase de evaluación de FTMO."""
+        p_up = phase.upper()
+        if p_up in self.PHASE_CONFIGS:
+            self.phase = p_up
+            logger.info(f"🛡️ [FTMO_GUARDIAN] Fase actualizada a {self.phase} (Riesgo base: {self.current_config['risk_pct']*100:.2f}%)")
+
     def reset_daily_metrics(self, new_starting_equity: Optional[float] = None):
         """Resetea los contadores al inicio de la jornada (00:00 UTC / MT5 Server Time)."""
         if new_starting_equity:
@@ -37,7 +59,7 @@ class FtmoGuardianShield:
         self.is_daily_lockout = False
         self.lockout_reason = ""
         self.trades_today = 0
-        logger.info(f"🛡️ [FTMO_GUARDIAN] Nueva jornada iniciada. Base diaria: ${self.daily_starting_equity:,.2f} USD")
+        logger.info(f"🛡️ [FTMO_GUARDIAN] Nueva jornada iniciada. Base diaria: ${self.daily_starting_equity:,.2f} USD | Fase: {self.phase}")
         
     def update_equity(self, current_equity: float) -> Dict[str, Any]:
         """Actualiza el equity en tiempo real y evalúa los interceptores de seguridad."""
@@ -53,14 +75,15 @@ class FtmoGuardianShield:
         total_loss_usd = self.peak_equity - current_equity
         total_dd_pct = (total_loss_usd / self.account_size * 100.0) if self.account_size > 0 else 0.0
         
-        # 3. Evaluar Kill-Switch Diario (-3.5%)
-        if daily_dd_pct >= self.DAILY_DRAWDOWN_LIMIT_PCT and not self.is_daily_lockout:
+        # 3. Evaluar Kill-Switch Diario Dinámico (-3.5% Fase 1 / -2.5% Fase 2 / -2.0% Fondeada)
+        daily_limit = self.DAILY_DRAWDOWN_LIMIT_PCT
+        if daily_dd_pct >= daily_limit and not self.is_daily_lockout:
             self.is_daily_lockout = True
-            self.lockout_reason = f"KILL-SWITCH DIARIO ACTIVADO: Pérdida diaria alcanzada ({daily_dd_pct:.2f}% >= {self.DAILY_DRAWDOWN_LIMIT_PCT}%). Bot congelado por seguridad."
+            self.lockout_reason = f"KILL-SWITCH DIARIO ACTIVADO ({self.phase}): Pérdida diaria alcanzada ({daily_dd_pct:.2f}% >= {daily_limit}%). Bot congelado por seguridad."
             logger.error(f"🛑 [FTMO_GUARDIAN] {self.lockout_reason}")
             
         # 4. Evaluar Progreso de Fase
-        target_pct = 10.0 if self.phase == "PHASE_1" else 5.0 if self.phase == "PHASE_2" else 0.0
+        target_pct = self.current_config["target_pct"]
         profit_usd = current_equity - self.account_size
         progress_pct = (profit_usd / (self.account_size * (target_pct / 100.0)) * 100.0) if target_pct > 0 else 100.0
         
@@ -71,7 +94,7 @@ class FtmoGuardianShield:
             "daily_loss_usd": max(0.0, daily_loss_usd),
             "daily_dd_pct": max(0.0, daily_dd_pct),
             "total_dd_pct": max(0.0, total_dd_pct),
-            "daily_safe_margin_left_pct": max(0.0, self.DAILY_DRAWDOWN_LIMIT_PCT - daily_dd_pct),
+            "daily_safe_margin_left_pct": max(0.0, daily_limit - daily_dd_pct),
             "is_daily_lockout": self.is_daily_lockout,
             "lockout_reason": self.lockout_reason,
             "phase": self.phase,
@@ -82,7 +105,7 @@ class FtmoGuardianShield:
         
     def calculate_mt5_lots(self, symbol: str, entry_price: float, stop_loss: float, risk_usd_override: Optional[float] = None) -> Dict[str, Any]:
         """
-        Calcula los lotes exactos para MetaTrader 5 según el tamaño de contrato institucional.
+        Calcula los lotes exactos para MetaTrader 5 según el tamaño de contrato institucional y la fragmentación 50/30/20.
         """
         symbol = symbol.upper()
         spec = TRADFI_ASSETS_CONFIG.get(symbol, {
@@ -91,13 +114,13 @@ class FtmoGuardianShield:
             "name": symbol
         })
         
-        # Riesgo base según fase (Fase 1: 0.75% = $750 | Fase 2: 0.50% = $500)
-        risk_pct = 0.0075 if self.phase == "PHASE_1" else 0.0050 if self.phase == "PHASE_2" else 0.0075
+        # Riesgo base según fase (Fase 1: 0.75% = $750 | Fase 2: 0.50% = $500 | Fondeada: 0.35% = $350)
+        risk_pct = self.current_config["risk_pct"]
         risk_usd = risk_usd_override or (self.current_equity * risk_pct)
         
         dist = abs(entry_price - stop_loss)
         if dist <= 0:
-            return {"lots": spec["min_lot"], "risk_usd": risk_usd, "dist": 0.0}
+            return {"lots": spec["min_lot"], "risk_usd": risk_usd, "dist": 0.0, "lots_tp1": spec["min_lot"], "lots_tp2": 0.0, "lots_tp3": 0.0}
             
         contract_size = spec["contract_size"]
         
@@ -106,10 +129,18 @@ class FtmoGuardianShield:
         
         # Ajuste de pasos y mínimos según activo
         min_lot = spec.get("min_lot", 0.01)
-        if any(idx in symbol for idx in ["US100", "US30", "US500", "GER40"]):
-            lots = round(max(min_lot, raw_lots), 1) # Índices típicamente van en pasos de 0.1
+        is_index = any(idx in symbol for idx in ["US100", "US30", "US500", "GER40"])
+        
+        if is_index:
+            total_lots = round(max(min_lot, raw_lots), 1)
+            lots_tp1 = round(total_lots * 0.50, 1)
+            lots_tp2 = round(total_lots * 0.30, 1)
+            lots_tp3 = round(total_lots - lots_tp1 - lots_tp2, 1)
         else:
-            lots = round(max(min_lot, raw_lots), 2) # Oro, Cobre y Forex (GBPJPY) en pasos de 0.01
+            total_lots = round(max(min_lot, raw_lots), 2)
+            lots_tp1 = round(total_lots * 0.50, 2)
+            lots_tp2 = round(total_lots * 0.30, 2)
+            lots_tp3 = round(total_lots - lots_tp1 - lots_tp2, 2)
             
         return {
             "symbol": symbol,
@@ -119,7 +150,10 @@ class FtmoGuardianShield:
             "dist": dist,
             "risk_usd": risk_usd,
             "risk_pct": risk_pct * 100.0,
-            "lots": lots,
+            "lots": total_lots,
+            "lots_tp1": lots_tp1,  # 50% TP1 (+1.5R)
+            "lots_tp2": lots_tp2,  # 30% TP2 (+3.0R)
+            "lots_tp3": lots_tp3,  # 20% TP3 (+5.0R Runner)
             "contract_size": contract_size
         }
 

@@ -648,8 +648,29 @@ class ConfluenceManager:
                 checklist.append({"factor": "Día Institucional", "status": "PRECAUCIÓN", "detail": "Lunes Pre-NY Open: Riesgo de Manipulación / Rango Inicial (-5pts)"})
             else:
                 checklist.append({"factor": "Día Institucional", "status": "NEUTRAL", "detail": f"Sesión en {day_wk}"})
+
+            # 🚀 Killzone Timing Gating para Índices TradFi (v25.0 FTMO Titanium)
+            # Índices (US100, US30, US500, GER40): Exclusivamente en London Open (07:00-10:00 UTC) o NY Open (13:30-16:30 UTC)
+            is_tradfi_index = any(idx in asset_name for idx in ["US100", "US30", "US500", "GER40", "NQ", "YM", "ES"])
+            if is_tradfi_index:
+                in_london_kz = (7 <= hr_utc < 10)
+                in_ny_kz = (13 <= hr_utc < 17)
+                if not (in_london_kz or in_ny_kz):
+                    multiplier *= 0.0
+                    checklist.append({
+                        "factor": "Killzone Timing TradFi",
+                        "status": "DENEGADO",
+                        "detail": f"Veto Horario FTMO: {asset_name} fuera de Killzone de Londres/NY ({hr_utc:02d}:00 UTC). Sin liquidez institucional."
+                    })
+                else:
+                    score += 5
+                    checklist.append({
+                        "factor": "Killzone Timing TradFi",
+                        "status": "CONFIRMADO",
+                        "detail": f"Operando en Ventana Institucional {'Londres' if in_london_kz else 'Nueva York'} (+5pts)"
+                    })
         except Exception as day_err:
-            logger.debug(f"[CONFLUENCE] Bypass Day Check: {day_err}")
+            logger.debug(f"[CONFLUENCE] Bypass Day/Killzone Check: {day_err}")
 
         # 🚀 11.7. KAUFMAN EFFICIENCY RATIO (KER) & DYNAMIC NOISE QUARANTINE (v11.3 Apex)
         ker_value = 0.50

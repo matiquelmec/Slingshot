@@ -143,22 +143,31 @@ def run_tradfi_asset_backtest(symbol_key: str, df: pd.DataFrame, initial_balance
                         pos["is_be_activated"] = True
                         pos["stop_loss"] = entry # SL a precio de entrada
                 
-                # Check TP1 (+1.3R / 70% Volumen)
+                # Check TP1 (+1.5R / 50% Volumen Alpha Maximizer)
                 if not pos["tp1_taken"]:
                     tp1_hit = (is_long and c_high >= tp1) or (not is_long and c_low <= tp1)
                     if tp1_hit:
                         pos["tp1_taken"] = True
-                        # Tomar 70% de la posición a +1.3R
-                        gain_tp1 = (risk_usd * 1.3) * 0.70
+                        # Tomar 50% de la posición a +1.5R
+                        gain_tp1 = (risk_usd * 1.5) * 0.50
                         balance += gain_tp1
                         pos["realized_pnl"] += gain_tp1
+                        pos["stop_loss"] = entry # Breakeven asegurado
+
+                # Check TP2 (+3.0R / 30% Volumen)
+                if pos["tp1_taken"] and not pos.get("tp2_taken", False):
+                    tp2_hit = (is_long and c_high >= tp2) or (not is_long and c_low <= tp2)
+                    if tp2_hit:
+                        pos["tp2_taken"] = True
+                        gain_tp2 = (risk_usd * 3.0) * 0.30
+                        balance += gain_tp2
+                        pos["realized_pnl"] += gain_tp2
+                        pos["stop_loss"] = entry + (r_dist * 2.0) if is_long else entry - (r_dist * 2.0)
                 
-                # Check TP3 (+3.5R / Cierre Total)
+                # Check TP3 (+5.0R / Cierre Runner 20%)
                 tp3_hit = (is_long and c_high >= tp3) or (not is_long and c_low <= tp3)
                 if tp3_hit:
-                    # Cerrar el 30% restante
-                    rem_r = 3.5 if pos["tp1_taken"] else 3.5
-                    rem_gain = (risk_usd * 3.5) * (0.30 if pos["tp1_taken"] else 1.0)
+                    rem_gain = (risk_usd * 5.0) * 0.20
                     total_pnl = pos["realized_pnl"] + rem_gain
                     balance += rem_gain
                     
@@ -186,14 +195,16 @@ def run_tradfi_asset_backtest(symbol_key: str, df: pd.DataFrame, initial_balance
             continue
             
         # 2. Búsqueda de Nuevos Setups Cuantitativos SMC / Trend-Pullback
-        # Tendencia alcista: Close > EMA50 > EMA200
-        # Tendencia bajista: Close < EMA50 < EMA200
         is_bull_trend = c_close > ema50 and ema50 > ema200
         is_bear_trend = c_close < ema50 and ema50 < ema200
         
-        # Filtro de Sesión: Killzones Londres (07:00 - 11:00 UTC) o NY (13:00 - 17:00 UTC)
+        # Veto Institucional Oro: Long-Only
+        if "XAU" in symbol_key and not is_bull_trend:
+            continue
+            
+        # Filtro de Sesión: Killzones Londres (07:00 - 10:00 UTC) o NY (13:00 - 17:00 UTC)
         hour = c_time.hour
-        is_killzone = (7 <= hour <= 11) or (13 <= hour <= 17)
+        is_killzone = (7 <= hour <= 10) or (13 <= hour <= 17)
         if not is_killzone:
             continue
             
@@ -209,31 +220,31 @@ def run_tradfi_asset_backtest(symbol_key: str, df: pd.DataFrame, initial_balance
         # Setup LONG en Pullback
         if is_bull_trend:
             ote_entry = swing_high - (swing_range * 0.618)
-            # Si la vela actual retrocedió a la zona OTE
             if c_low <= ote_entry <= c_high:
                 entry_p = ote_entry
                 sl_p = swing_low - (c_atr * 0.2)
                 r_dist = abs(entry_p - sl_p)
                 
-                if r_dist > (spread * 2): # Debe superar el spread con holgura
+                if r_dist > (spread * 2):
                     risk_usd = balance * risk_pct
                     active_position = {
                         "direction": "LONG",
                         "entry_price": entry_p,
                         "stop_loss": sl_p,
                         "be_trigger": entry_p + (r_dist * 1.0),
-                        "tp1": entry_p + (r_dist * 1.3),
-                        "tp2": entry_p + (r_dist * 2.0),
-                        "tp3": entry_p + (r_dist * 3.5),
+                        "tp1": entry_p + (r_dist * 1.5),
+                        "tp2": entry_p + (r_dist * 3.0),
+                        "tp3": entry_p + (r_dist * 5.0),
                         "risk_usd": risk_usd,
                         "is_be_activated": False,
                         "tp1_taken": False,
+                        "tp2_taken": False,
                         "realized_pnl": 0.0,
                         "entry_time": c_time
                     }
                     
-        # Setup SHORT en Pullback
-        elif is_bear_trend:
+        # Setup SHORT en Pullback (Deshabilitado para Oro)
+        elif is_bear_trend and "XAU" not in symbol_key:
             ote_entry = swing_low + (swing_range * 0.618)
             if c_low <= ote_entry <= c_high:
                 entry_p = ote_entry
@@ -247,12 +258,13 @@ def run_tradfi_asset_backtest(symbol_key: str, df: pd.DataFrame, initial_balance
                         "entry_price": entry_p,
                         "stop_loss": sl_p,
                         "be_trigger": entry_p - (r_dist * 1.0),
-                        "tp1": entry_p - (r_dist * 1.3),
-                        "tp2": entry_p - (r_dist * 2.0),
-                        "tp3": entry_p - (r_dist * 3.5),
+                        "tp1": entry_p - (r_dist * 1.5),
+                        "tp2": entry_p - (r_dist * 3.0),
+                        "tp3": entry_p - (r_dist * 5.0),
                         "risk_usd": risk_usd,
                         "is_be_activated": False,
                         "tp1_taken": False,
+                        "tp2_taken": False,
                         "realized_pnl": 0.0,
                         "entry_time": c_time
                     }
