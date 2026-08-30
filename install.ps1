@@ -1,5 +1,5 @@
 # ==============================================================================
-# SLINGSHOT v22.3 APEX SOVEREIGN -- ASISTENTE AUTOMATIZADO DE INSTALACION
+# SLINGSHOT v25.6 INSTITUTIONAL FORTRESS -- ASISTENTE AUTOMATIZADO DE INSTALACION
 # ==============================================================================
 # Uso: .\install.ps1 (o doble clic en install.bat)
 # ==============================================================================
@@ -9,7 +9,7 @@ $ErrorActionPreference = "Stop"
 
 Write-Host ""
 Write-Host "  =================================================================" -ForegroundColor Cyan
-Write-Host "       SLINGSHOT v22.3 APEX SOVEREIGN -- ASISTENTE DE INSTALACION" -ForegroundColor Cyan
+Write-Host "       SLINGSHOT v25.6 INSTITUTIONAL FORTRESS -- ASISTENTE DE INSTALACION" -ForegroundColor Cyan
 Write-Host "  =================================================================" -ForegroundColor Cyan
 Write-Host ""
 
@@ -160,11 +160,11 @@ if (-not (Test-Path "$rootDir\.env")) {
     Write-Host "        [OK] Archivo .env existente preservado." -ForegroundColor Green
 }
 
-# ── PASO 6: CERTIFICACION QA OFICIAL (69/69 PRUEBAS) ────────────────────────
-Write-Host "  [6/6] Ejecutando suite de certificacion QA oficial (69 pruebas)..." -ForegroundColor Yellow
+# ── PASO 6: CERTIFICACION QA OFICIAL (100/100 PRUEBAS) ───────────────────────
+Write-Host "  [6/6] Ejecutando suite de certificacion QA oficial (100 pruebas)..." -ForegroundColor Yellow
 $qaResult = & $venvPython "$rootDir\scripts\run_qa_suite.py"
 if ($LASTEXITCODE -eq 0) {
-    Write-Host "        [OK] CERTIFICACION QA EXITOSA: 69/69 PRUEBAS APROBADAS AL 100%." -ForegroundColor Green
+    Write-Host "        [OK] CERTIFICACION QA EXITOSA: 100/100 PRUEBAS APROBADAS AL 100%." -ForegroundColor Green
 } else {
     Write-Host "        [WARN] Advertencia en suite QA. Revisa los logs de prueba." -ForegroundColor DarkYellow
 }
