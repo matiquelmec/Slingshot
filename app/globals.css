@@ -2,6 +2,8 @@
 
 @layer base {
   :root {
+    --font-sans: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+    --font-mono: 'JetBrains Mono', monospace;
     --background: #030712;
     --foreground: #F8FAFC;
     --color-neon-green: #10B981;
@@ -12,11 +14,14 @@
 }
 
 :root {
+  --font-sans: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
   --background: #030712;
   --foreground: #F8FAFC;
 }
 
 body {
+  font-family: var(--font-sans);
   color: var(--foreground);
   background: var(--background);
   background-image: 

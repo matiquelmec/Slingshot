@@ -1,18 +1,5 @@
 import type { Metadata } from "next";
-import { Plus_Jakarta_Sans, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
-
-const plusJakarta = Plus_Jakarta_Sans({
-    subsets: ["latin"],
-    variable: "--font-sans",
-    display: "swap",
-});
-
-const jetbrainsMono = JetBrains_Mono({
-    subsets: ["latin"],
-    variable: "--font-mono",
-    display: "swap",
-});
 
 export const metadata: Metadata = {
     title: "SLINGSHOT APEX | Institutional Trading Terminal",
@@ -25,7 +12,15 @@ export default function RootLayout({
     children: React.ReactNode;
 }>) {
     return (
-        <html lang="en" suppressHydrationWarning className={`${plusJakarta.variable} ${jetbrainsMono.variable}`}>
+        <html lang="en" suppressHydrationWarning>
+            <head>
+                <link rel="preconnect" href="https://fonts.googleapis.com" />
+                <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+                <link 
+                    href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,300..800;1,300..800&family=Plus+Jakarta+Sans:ital,wght@0,300..800;1,300..800&display=swap" 
+                    rel="stylesheet" 
+                />
+            </head>
             <body suppressHydrationWarning className="antialiased font-sans bg-background text-foreground h-screen w-screen overflow-hidden selection:bg-neon-cyan/20 selection:text-neon-cyan">
                 {children}
             </body>
