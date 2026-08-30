@@ -1,9 +1,10 @@
-# 🛡️ SLINGSHOT v25.4 MULTI-TIMEFRAME — Autonomous Institutional Trading Terminal
+# 🛡️ SLINGSHOT v25.5 SOVEREIGN BREATHING SHIELD — Autonomous Institutional Trading Terminal
 
-> **"Terminal Cuantitativa Autónoma de Grado Institucional. Matriz Multitemporal Híbrida: Oro Especializado en 1H Intraday / Swing secular Long-Only, Criptomonedas e Índices en 15m. Jurado de Confluencia End-to-End con Sanitización Estricta Anti-NaN. Serialización Nativa orjson en Rust (<0.08ms). Dimensionamiento Dinámico por Fases FTMO (Fase 1: 0.75% / Fase 2: 0.50% / Fondeada: 0.35%). Gating Horario de Killzones en Índices TradFi (Londres & Nueva York). Asimetría Direccional en Altcoins (Long Bias Gating >= 70). Salidas Escalonadas Alpha Maximizer (50% / 30% / 20%). Breathing Room Shield (10s de Gracia Anti-Spread). Filtros de Volumen Institucional (RVOL >= 1.30) y Eficiencia (KER >= 0.35). Kernel de Indicadores en Rust (Polars < 2.5ms). Persistencia Transaccional SQLite WAL. Puente Directo MetaTrader 5 con FTMO Guardian Shield. Suite Oficial de Certificación QA (90/90 Tests Aprobados al 100%)."**
+> **"Terminal Cuantitativa Autónoma de Grado Institucional. Sovereign Breathing Shield: Unificación Total de Trailing Stop en TradeManager (SSoT), Erradicación de Breakeven Prematuro y Blindaje de Respiro (+1.0R / +1.2R). Matriz Multitemporal Híbrida (Oro Especializado en 1H Intraday / Swing secular Long-Only, Criptomonedas e Índices en 15m). Jurado de Confluencia End-to-End con Sanitización Estricta Anti-NaN. Serialización Nativa orjson en Rust (<0.08ms). Dimensionamiento Dinámico por Fases FTMO (Fase 1: 0.75% / Fase 2: 0.50% / Fondeada: 0.35%). Gating Horario de Killzones en Índices TradFi (Londres & Nueva York). Asimetría Direccional en Altcoins (Long Bias Gating >= 70). Salidas Escalonadas Alpha Maximizer (50% / 30% / 20%). Breathing Room Shield (10s de Gracia Anti-Spread). Filtros de Volumen Institucional (RVOL >= 1.30) y Eficiencia (KER >= 0.35). Kernel de Indicadores en Rust (Polars < 2.5ms). Persistencia Transaccional SQLite WAL. Puente Directo MetaTrader 5 con FTMO Guardian Shield. Suite Oficial de Certificación QA (94/94 Tests Aprobados al 100%)."**
 
 ![Status](https://img.shields.io/badge/Status-100%25_AUTONOMOUS_&_SELF--HEALING-0d2a1a?style=for-the-badge&logo=codeproject&logoColor=fff)
-![Version](https://img.shields.io/badge/Version-25.4_Multi--Timeframe-1a3a6e?style=for-the-badge)
+![Version](https://img.shields.io/badge/Version-25.5_Breathing_Shield-1a3a6e?style=for-the-badge)
+![Breathing](https://img.shields.io/badge/Breathing_Shield-1.0R%20Lockout%20Air-emerald?style=for-the-badge)
 ![Gold](https://img.shields.io/badge/Gold_Specialization-1H_Native_Swing-gold?style=for-the-badge)
 ![Confluence](https://img.shields.io/badge/Confluence-14_Factors_End--to--End-emerald?style=for-the-badge)
 ![FTMO](https://img.shields.io/badge/FTMO_Guardian-Dynamic_Phase_Sizing-gold?style=for-the-badge)
@@ -11,7 +12,7 @@
 ![Kernel](https://img.shields.io/badge/Kernel-Polars_Rust_Sub--2.5ms-black?style=for-the-badge&logo=rust&logoColor=fff)
 ![Vault](https://img.shields.io/badge/Persistence-SQLite_WAL_ACID-003B57?style=for-the-badge&logo=sqlite&logoColor=fff)
 ![Execution](https://img.shields.io/badge/Execution-Bitunix_Live_&_MT5_Dual_Engine-orange?style=for-the-badge)
-![QA](https://img.shields.io/badge/QA_Suite-90%2F90_Passed_100%25-success?style=for-the-badge)
+![QA](https://img.shields.io/badge/QA_Suite-94%2F94_Passed_100%25-success?style=for-the-badge)
 
 ---
 

@@ -1,7 +1,7 @@
 {
   "fear_greed_value": 69,
   "fear_greed_label": "Greed",
-  "btc_dominance": 59.47,
+  "btc_dominance": 59.54,
   "funding_rate": 0.0,
   "funding_symbol": "BTCUSDT",
   "macro_bias": "NEUTRAL",
@@ -14,8 +14,8 @@
   "nasdaq_trend": "BEARISH",
   "nasdaq_change_pct": -0.19,
   "risk_appetite": "RISK_OFF",
-  "news_sentiment": 0.6,
+  "news_sentiment": 0.5,
   "active_event": "",
-  "last_updated": 1788069787.1332028,
+  "last_updated": 1788099438.126563,
   "is_stale": false
 }

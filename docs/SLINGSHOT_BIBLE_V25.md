@@ -1,9 +1,9 @@
-# 🛡️ SLINGSHOT BIBLE v25.4 — Especificación Técnica MULTI-TIMEFRAME & HFT TITAN
-## v25.4 "Multi-Timeframe Matrix: Gold 1H Specialization, orjson Rust Fast-Path & 90 QA Unit Tests" | Agosto 2026
+# 🛡️ SLINGSHOT BIBLE v25.5 — Especificación Técnica SOVEREIGN BREATHING SHIELD
+## v25.5 "Sovereign Breathing Shield: Unified Trailing SSoT, Premature BE Eradication & 94 QA Unit Tests" | Agosto 2026
 
 **Auditor:** Antigravity (Advanced AI Coding — DeepMind)  
 **Fecha:** Agosto 2026  
-**Versión del Sistema:** v25.4 Multi-Timeframe & HFT Titan  
+**Versión del Sistema:** v25.5 Sovereign Breathing Shield  
 **Paradigma Arquitectónico:**
 - **Delta (Δ) — Terminal Reactiva, Onboarding & Radar:** Next.js 15 + Zustand 5 con `LatticeScanner.tsx` reactivo al milisegundo, telemetría y WebSocket fusionado con streams de alta frecuencia para Cripto y TradFi.
 - **Sigma (Σ) — Cerebro Cuantitativo & Vault:**
@@ -12,6 +12,7 @@
   - **Gating Horario de Killzones TradFi:** Índices (`US100`, `US30`, `US500`, `GER40`) operan exclusivamente en ventanas de alta liquidez: Londres (`07:00 - 10:00 UTC`) y Nueva York (`13:00 - 17:00 UTC`).
   - **Bóveda SQLite WAL Transaccional (`vault.py`):** Persistencia ACID de sesiones, deduplicación de alertas y bitácora de auditoría inmutable.
 - **Omega (Ω) — Ejecución Autónoma, FTMO Guardian & Centinelas de Resiliencia:** 
+  - **Sovereign Breathing Shield (SSoT Trailing):** Unificación de la gestión de Breakeven y Trailing Stop en `TradeManager`. Prohibición absoluta de mover el Stop Loss antes de que el precio alcance al menos **$\ge +1.0\text{R}$ (Altcoins)** o **$\ge +1.2\text{R}$ (Megas)**.
   - **FTMO Guardian Shield Multi-Fase:**
     - **Fase 1 (Target +10%):** Riesgo fijo de **0.75% ($750 USD)** con Hard Stop Diario a **-3.5%**.
     - **Fase 2 (Target +5%):** Riesgo reducido a **0.50% ($500 USD)** con Hard Stop Diario preventivo a **-2.5%**.
@@ -23,7 +24,7 @@
   - **Breathing Room Shield (10s de Gracia):** Inmunidad de apertura contra micro-ruidos de spread y mechas de libro.
   - **Invarianza Monótona Absoluta del Stop Loss:** Bloqueo a nivel de ejecutor que prohíbe cualquier retroceso o degradación del SL ante reinicios.
 
-**Veredicto:** ✅ PRODUCCIÓN ELITE CERTIFICADA — Suite completa de 90/90 pruebas unitarias aprobadas al 100% en 8.68 segundos.
+**Veredicto:** ✅ PRODUCCIÓN ELITE CERTIFICADA — Suite completa de 94/94 pruebas unitarias aprobadas al 100% en 14.96 segundos.
 
 ---
 

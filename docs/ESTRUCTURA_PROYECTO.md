@@ -62,7 +62,7 @@ Slingshot_Trading/
 │       ├── unified_backtest_engine.py # Motor Unificado de Backtesting con Paridad 1:1 en Producción
 │       ├── data/                    # Datasets históricos binarios .parquet (51 archivos)
 │       └── reports/                 # Reportes oficiales inmutables JSON
-│   └── tests/                       # ═══ Suite Oficial de Certificación QA (90/90 Tests OK) ═══
+│   └── tests/                       # ═══ Suite Oficial de Certificación QA (94/94 Tests OK) ═══
 │       ├── test_setup_and_portability.py            # Onboarding, live test de keys, guardado atómico
 │       ├── test_post_tp3_and_trailing_invariance.py # Post-TP3 híbrido, 70% ratchet e invarianza SL
 │       ├── test_risk_and_resilience_advanced.py     # Micro-buffer BE, 50/30/20, Asymmetric Gating, KER/RVOL
@@ -81,17 +81,18 @@ Slingshot_Trading/
 │       ├── test_chart_and_telemetry_pipeline.py     # Reactividad de velas, LatticeScanner y Broadcast
 │       ├── test_auto_healing_and_telemetry.py       # Auto-Healing, Backoff y Heartbeat Telegram
 │       ├── test_confluence_end_to_end_integrity.py  # 14 factores SMC, anti-NaN y Oro 1H Long-Only
-│       └── test_backend_performance_and_security.py # Fast-path orjson Rust, Gzip, métricas y seguridad
+│       ├── test_backend_performance_and_security.py # Fast-path orjson Rust, Gzip, métricas y seguridad
+│       └── test_breathing_room_and_nexus_harmony.py # Inmunidad BE prematuro (<1.0R) y armonía SSoT
 ├── scripts/                         # ═══ HERRAMIENTAS CLI DE PRODUCCIÓN (SSoT) ═══
 │   ├── run_institutional_backtest.py# CLI Oficial de Backtesting por Símbolo / Timeframe / Cartera
-│   ├── run_qa_suite.py              # Suite Oficial de Certificación QA (90/90 Tests)
+│   ├── run_qa_suite.py              # Suite Oficial de Certificación QA (94/94 Tests)
 │   ├── historical_fetcher.py        # Descargador oficial de Parquets históricos
 │   ├── doctor.py                    # Diagnóstico y salud del sistema
 │   ├── watchdog_supervisor.py       # Monitor supervisor 24/7 en segundo plano
 │   └── archive/                     # 📦 28 scripts antiguos archivados
 ├── docs/                            # ═══ Documentación Técnica y Biblias ═══
-│   ├── ESTRUCTURA_PROYECTO.md       # Guía de arquitectura oficial v25.4 (este archivo)
-│   ├── SLINGSHOT_BIBLE_V25.md       # Biblia técnica oficial v25.4 Multi-Timeframe & HFT Titan
+│   ├── ESTRUCTURA_PROYECTO.md       # Guía de arquitectura oficial v25.5 (este archivo)
+│   ├── SLINGSHOT_BIBLE_V25.md       # Biblia técnica oficial v25.5 Breathing Shield & HFT Titan
 │   └── knowledge/                   # Base de conocimiento institucional
 ├── install.bat                      # Instalador automatizado 1-Click para Windows
 ├── install.ps1                      # Script PowerShell con winget y auto-configuración

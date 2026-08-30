@@ -225,9 +225,11 @@ class BitunixExecutor:
                 "marginCoin": "USDT"
             })
 
-            # 2. Calcular cantidad nominal ajustada (Margen * Apalancamiento)
+            # 2. Calcular cantidad nominal ajustada y precisión dinámica exacta
+            qty_decimals, price_decimals = await self.get_symbol_precision(symbol)
             nominal_usd = amount_usd * leverage
-            qty = str(round(nominal_usd / entry_price, 4))
+            raw_qty = nominal_usd / entry_price
+            qty = str(int(raw_qty)) if qty_decimals == 0 else f"{raw_qty:.{qty_decimals}f}"
             
             logger.info(f"🚀 [BITUNIX] Enviando orden {side} para {symbol} de {qty} unidades (Margen: ${amount_usd} USDT @ {leverage}x).")
             
@@ -241,8 +243,8 @@ class BitunixExecutor:
             }
             
             stop_loss = signal.get("stop_loss")
-            if stop_loss:
-                order_payload["slPrice"] = str(round(float(stop_loss), 2))
+            if stop_loss and float(stop_loss) > 0:
+                order_payload["slPrice"] = f"{float(stop_loss):.{price_decimals}f}"
                 order_payload["slStopType"] = "LAST_PRICE"
                 order_payload["slOrderType"] = "MARKET"
             
