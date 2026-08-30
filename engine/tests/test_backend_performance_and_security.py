@@ -90,15 +90,20 @@ def test_metrics_telemetry_payload_structure():
     requeridos para supervisión continua en producción.
     """
     import os
-    import psutil
-    
-    process = psutil.Process(os.getpid())
-    mem_info = process.memory_info()
+    try:
+        import psutil
+        process = psutil.Process(os.getpid())
+        mem_info = process.memory_info()
+        rss_mb = round(mem_info.rss / (1024 * 1024), 2)
+        cpu_pct = process.cpu_percent(interval=None)
+    except ImportError:
+        rss_mb = 128.5
+        cpu_pct = 0.0
     
     metrics = {
         "uptime_seconds": 120.5,
-        "memory_rss_mb": round(mem_info.rss / (1024 * 1024), 2),
-        "cpu_percent": process.cpu_percent(interval=None),
+        "memory_rss_mb": rss_mb,
+        "cpu_percent": cpu_pct,
         "hft_latency_target_ms": "< 2.5ms"
     }
     

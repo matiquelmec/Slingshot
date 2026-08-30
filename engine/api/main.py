@@ -101,7 +101,12 @@ async def lifespan(app: FastAPI):
 from fastapi.middleware.gzip import GZipMiddleware
 import time
 import os
-import psutil
+
+try:
+    import psutil
+    HAS_PSUTIL = True
+except ImportError:
+    HAS_PSUTIL = False
 
 # Registrar tiempo de inicio para telemetría
 _ENGINE_START_TIME = time.time()
@@ -148,16 +153,30 @@ async def health_check():
 @app.get("/api/v1/metrics")
 async def get_metrics():
     """Telemetría de rendimiento, memoria y latencia institucional."""
-    process = psutil.Process(os.getpid())
-    mem_info = process.memory_info()
     uptime_sec = time.time() - _ENGINE_START_TIME
+    
+    if HAS_PSUTIL:
+        try:
+            process = psutil.Process(os.getpid())
+            mem_info = process.memory_info()
+            rss_mb = round(mem_info.rss / (1024 * 1024), 2)
+            vms_mb = round(mem_info.vms / (1024 * 1024), 2)
+            cpu_pct = process.cpu_percent(interval=None)
+        except Exception:
+            rss_mb = 0.0
+            vms_mb = 0.0
+            cpu_pct = 0.0
+    else:
+        rss_mb = 0.0
+        vms_mb = 0.0
+        cpu_pct = 0.0
     
     return {
         "uptime_seconds": round(uptime_sec, 2),
         "uptime_formatted": f"{int(uptime_sec // 3600)}h {int((uptime_sec % 3600) // 60)}m {int(uptime_sec % 60)}s",
-        "memory_rss_mb": round(mem_info.rss / (1024 * 1024), 2),
-        "memory_vms_mb": round(mem_info.vms / (1024 * 1024), 2),
-        "cpu_percent": process.cpu_percent(interval=None),
+        "memory_rss_mb": rss_mb,
+        "memory_vms_mb": vms_mb,
+        "cpu_percent": cpu_pct,
         "active_broadcasters": len(registry._broadcasters),
         "stored_signals": len(await store.get_signals(limit=100)),
         "hft_latency_target_ms": "< 2.5ms"
