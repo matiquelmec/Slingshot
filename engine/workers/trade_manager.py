@@ -467,21 +467,29 @@ class TradeManager:
                 continue
 
             # Buscar si existe una señal registrada para recuperar su initial_stop_loss exacto
+            # Buscar si existe una señal registrada para recuperar su initial_stop_loss exacto
             known_signals = await store.get_signals(asset=sym)
             matched_sig = known_signals[-1] if known_signals else None
             initial_sl = float(matched_sig.get("initial_stop_loss", 0.0)) if matched_sig else 0.0
 
+            # Distancia de riesgo inicial (1R)
+            # Solo usar cur_sl si está en zona de pérdida (SL defensivo original)
+            is_defensive_sl = (side == "LONG" and 0 < cur_sl < entry_price) or (side == "SHORT" and cur_sl > entry_price)
+
             if initial_sl > 0:
                 sl_dist = abs(entry_price - initial_sl)
-            elif cur_sl > 0 and abs(entry_price - cur_sl) > (entry_price * 0.002):
+            elif is_defensive_sl and abs(entry_price - cur_sl) > (entry_price * 0.002):
                 sl_dist = abs(entry_price - cur_sl)
             else:
-                sl_dist = entry_price * 0.015
+                # Si el SL ya está en ganancia (trailing) y no hay señal en memoria,
+                # usar el riesgo estructural estándar (1.0% Megacaps, 1.5% Altcoins)
+                default_risk_pct = 0.010 if self.is_megacap(sym) else 0.015
+                sl_dist = entry_price * default_risk_pct
             
             if sl_dist <= 0:
                 sl_dist = entry_price * 0.015
 
-            # Ganancia en unidades R
+            # Ganancia en unidades R reales
             r_profit = (cur_price - entry_price) / sl_dist if side == "LONG" else (entry_price - cur_price) / sl_dist
             
             sl_at_be = (side == "LONG" and cur_sl >= entry_price * 0.999) or (side == "SHORT" and cur_sl > 0 and cur_sl <= entry_price * 1.001)
