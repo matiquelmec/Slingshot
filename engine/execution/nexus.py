@@ -488,11 +488,11 @@ class NexusNode:
 
         logger.info(f"⚡ [NEXUS] Recibida señal de alta fidelidad: {asset} {sig_type}")
 
-        # Garantizar tamaño del 5% del capital ($8.50 USDT margen a 20x)
+        # Garantizar tamaño del 5% del capital ($8.50 USDT margen a 20x) y tope de apalancamiento SOP-08 (máx 20x)
         if not signal.get("position_size") or float(signal.get("position_size", 0)) > 20.0:
             signal["position_size"] = self.DEFAULT_MARGIN_USDT
             signal["position_size_usdt"] = self.DEFAULT_MARGIN_USDT
-        signal["leverage"] = signal.get("leverage", 20)
+        signal["leverage"] = max(1, min(int(signal.get("leverage", 20)), 20))
 
         # 1. Fragmentación Apex (Delta 60/20/20)
         fragments = DeltaOrchestrator.fragment_order(signal)
