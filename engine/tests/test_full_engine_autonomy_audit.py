@@ -82,7 +82,7 @@ async def test_slot_recycling_frees_risk_on_breakeven():
          patch.object(node.executor, "get_pending_orders", new_callable=AsyncMock, return_value=[]):
         mock_limit.return_value = {"status": "success", "order_id": "dry_new_1"}
         
-        new_sig = {"asset": "RENDERUSDT", "price": 4.50, "stop_loss": 4.20, "tp1": 5.0, "type": "LONG"}
+        new_sig = {"asset": "RENDERUSDT", "price": 4.50, "stop_loss": 4.20, "tp1": 5.0, "type": "LONG", "confluence_score": 90.0}
         await node.process_limit_setup(new_sig)
         
         assert mock_limit.called, "Debe permitir colocar la 5ta orden porque hay un slot liberado por BE"

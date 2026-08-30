@@ -22,6 +22,7 @@ from engine.core.memory import blackbox
 from engine.core.store import store
 from engine.workers.trade_manager import trade_manager
 from engine.api.registry import registry
+from engine.risk.cluster_risk_guard import cluster_risk_guard
 
 
 class NexusNode:
@@ -486,6 +487,18 @@ class NexusNode:
             logger.warning(f"🛑 [NEXUS RIESGO] Límite de {self.MAX_CONCURRENT_POSITIONS} operaciones en riesgo alcanzado ({unprotected_count} activas con riesgo). Rechazando entrada en {asset}.")
             return
 
+        # ── REGLA DE CLUSTER DE CORRELACIÓN CRUZADA (v26.0 CLUSTER FORTRESS) ──
+        confluence_score = float(signal.get("confluence_score") or (signal.get("confluence") or {}).get("score", 70.0))
+        can_open, cluster_reason = cluster_risk_guard.can_open_position(
+            new_asset=asset,
+            new_direction=sig_type,
+            confluence_score=confluence_score,
+            active_positions=self._active_positions
+        )
+        if not can_open:
+            logger.warning(f"🛑 [NEXUS CLUSTER] Rechazada orden en {asset}: {cluster_reason}")
+            return
+
         logger.info(f"⚡ [NEXUS] Recibida señal de alta fidelidad: {asset} {sig_type}")
 
         # Garantizar tamaño del 5% del capital ($8.50 USDT margen a 20x) y tope de apalancamiento SOP-08 (máx 20x)
@@ -530,6 +543,18 @@ class NexusNode:
         unprotected_count = self.get_unprotected_risk_count()
         if unprotected_count >= self.MAX_CONCURRENT_POSITIONS:
             logger.info(f"🛑 [NEXUS RIESGO] Máximo de {self.MAX_CONCURRENT_POSITIONS} operaciones con riesgo alcanzado ({unprotected_count} en riesgo / {len(self._active_positions)} totales). Pausando nuevas órdenes.")
+            return
+
+        # ── REGLA DE CLUSTER DE CORRELACIÓN CRUZADA (v26.0 CLUSTER FORTRESS) ──
+        confluence_score = float(signal.get("confluence_score") or (signal.get("confluence") or {}).get("score", 70.0))
+        can_open, cluster_reason = cluster_risk_guard.can_open_position(
+            new_asset=asset,
+            new_direction=signal.get("type", signal.get("signal_type", "LONG")),
+            confluence_score=confluence_score,
+            active_positions=self._active_positions
+        )
+        if not can_open:
+            logger.info(f"🛑 [NEXUS AUTO-LIMIT] Omitida orden límite para {asset}: {cluster_reason}")
             return
 
         # Si ya tenemos una posición abierta o una orden pendiente registrada en este activo, no duplicar

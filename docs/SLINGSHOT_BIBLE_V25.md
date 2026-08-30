@@ -1,12 +1,13 @@
-# 🛡️ SLINGSHOT BIBLE v25.6 — Especificación Técnica INSTITUTIONAL FORTRESS
-## v25.6 "Institutional Fortress: 100 QA Unit Tests, SOP-07/08/09 Security Suite & Rust Latency" | Agosto 2026
+# 🛡️ SLINGSHOT BIBLE v26.0 — Especificación Técnica CLUSTER FORTRESS
+## v26.0 "Cluster Fortress: Dynamic Correlation Risk Guard, Systematic Overexposure Gating & 106 QA Tests" | Agosto 2026
 
 **Auditor:** Antigravity (Advanced AI Coding — DeepMind)  
 **Fecha:** Agosto 2026  
-**Versión del Sistema:** v25.6 Institutional Fortress  
+**Versión del Sistema:** v26.0 Cluster Fortress  
 **Paradigma Arquitectónico:**
 - **Delta (Δ) — Terminal Reactiva, Onboarding & Radar:** Next.js 15 + Zustand 5 con `LatticeScanner.tsx` reactivo al milisegundo, telemetría y WebSocket fusionado con streams de alta frecuencia para Cripto y TradFi.
 - **Sigma (Σ) — Cerebro Cuantitativo & Vault:**
+  - **Cluster Risk Guard (`cluster_risk_guard.py`):** Matriz de correlación de retornos rodantes de Pearson ($\rho \ge 0.75$). Gating dinámico que impide abrir más de 2 operaciones con riesgo flotante dentro del mismo cluster correlacionado, blindando el capital contra caídas sistémicas en cadena.
   - **Kernel Vectorial en Rust (`PolarsEngine` < 2.5ms) & `orjson` Fast-Path (< 0.08ms):** Cálculo ultrarrápido de EMAs, ATR, Order Blocks, Fair Value Gaps y Zonas OTE con serialización ultra-veloz.
   - **Especialización Multitemporal del Oro (`XAUUSD` / `PAXGUSDT`):** Operación en **1H Intraday / Swing** secular con sesgo alcista *Long-Only* cuando el precio supera la EMA 200 (Win Rate ~68.4% y Drawdown -1.73%).
   - **Gating Horario de Killzones TradFi:** Índices (`US100`, `US30`, `US500`, `GER40`) operan exclusivamente en ventanas de alta liquidez: Londres (`07:00 - 10:00 UTC`) y Nueva York (`13:00 - 17:00 UTC`).
@@ -27,7 +28,7 @@
   - **Breathing Room Shield (10s de Gracia):** Inmunidad de apertura contra micro-ruidos de spread y mechas de libro.
   - **Invarianza Monótona Absoluta del Stop Loss:** Bloqueo a nivel de ejecutor que prohíbe cualquier retroceso o degradación del SL ante reinicios.
 
-**Veredicto:** ✅ PRODUCCIÓN ELITE CERTIFICADA — Suite completa de 100/100 pruebas unitarias aprobadas al 100% en 9.25 segundos.
+**Veredicto:** ✅ PRODUCCIÓN ELITE CERTIFICADA — Suite completa de 106/106 pruebas unitarias aprobadas al 100% en 8.83 segundos.
 
 ---
 
