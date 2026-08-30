@@ -62,6 +62,22 @@ Start-Process powershell -ArgumentList `
 Start-Sleep -Seconds 3
 
 # --- Frontend (Next.js en puerto 3000) ---
+# Auto-recuperación: Si .next existe pero tiene manifiestos corruptos o vacíos, purgar preventivamente
+if (Test-Path "$PSScriptRoot\.next") {
+    $manifestFiles = Get-ChildItem -Path "$PSScriptRoot\.next" -Recurse -Filter "*manifest*.json" -ErrorAction SilentlyContinue
+    $corruptFound = $false
+    foreach ($mf in $manifestFiles) {
+        if ($mf.Length -eq 0) {
+            $corruptFound = $true
+            break
+        }
+    }
+    if ($corruptFound) {
+        Write-Host "  [AUTO-HEAL] Detectado manifiesto corrupto en .next. Purgando cache..." -ForegroundColor DarkYellow
+        Remove-Item -Path "$PSScriptRoot\.next" -Recurse -Force -ErrorAction SilentlyContinue
+    }
+}
+
 # Usa 'node ./node_modules/.bin/next dev' para evitar el wrapper .cmd de Windows
 # que genera el prompt '¿Desea terminar el trabajo por lotes?' en PowerShell
 Write-Host "  [2/2] Iniciando Frontend (http://localhost:3000)..." -ForegroundColor Yellow

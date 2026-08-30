@@ -20,8 +20,9 @@ echo [DELTA] Encendiendo Launcher Unificado (start.ps1)...
 start "Slingshot Core" powershell -ExecutionPolicy Bypass -NoProfile -File "%~dp0start.ps1"
 echo.
 
-echo [SISTEMA] Satelites en orbita. Abriendo consola tactica en 5 segundos...
-timeout /t 5 >nul
+echo [SISTEMA] Esperando inicializacion de servicios (FastAPI & Next.js)...
+powershell -Command "$ready = $false; $attempts = 0; while (-not $ready -and $attempts -lt 30) { try { $r = Invoke-WebRequest -Uri 'http://localhost:3000' -UseBasicParsing -TimeoutSec 1; if ($r.StatusCode -eq 200) { $ready = $true } } catch { Start-Sleep -Milliseconds 800; $attempts++ } }; if ($ready) { Write-Host '  [OK] Servicios listos. Abriendo terminal interactiva...' -ForegroundColor Green } else { Write-Host '  [AVISO] Abriendo navegador...' -ForegroundColor Yellow }"
+
 start http://localhost:3000
 
 echo.
