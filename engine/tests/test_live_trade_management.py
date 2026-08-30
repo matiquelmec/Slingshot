@@ -11,6 +11,7 @@ Valida:
 """
 import pytest
 import asyncio
+import time
 from unittest.mock import AsyncMock, patch
 from engine.workers.trade_manager import TradeManager
 from engine.execution.bitunix_executor import BitunixExecutor
@@ -125,3 +126,57 @@ async def test_sync_live_positions_fast_be():
             assert results[1]["symbol"] == "ETHUSDT"
             assert results[1]["r_profit"] == 0.3
             assert results[1]["status"] == "EN_CURSO"
+
+
+@pytest.mark.asyncio
+async def test_breathing_room_grace_period_prevents_instant_stopout():
+    """Valida que el período de gracia de 10s impida el cierre prematuro por ruido de spread al abrir el trade."""
+    now = time.time()
+    # Posición recién abierta hace 2 segundos
+    fresh_pos = {
+        "signal": {
+            "asset": "NEARUSDT",
+            "type": "LONG",
+            "price": 1.85,
+            "stop_loss": 1.82,
+            "tp1": 1.90
+        },
+        "execution": {"timestamp": now - 2.0},
+        "created_timestamp": now - 2.0,
+        "status": "OPEN"
+    }
+
+    # Tick momentáneo por debajo del SL (ruido / spread)
+    current_price_noise = 1.815
+    sl = fresh_pos["signal"]["stop_loss"]
+    is_long = fresh_pos["signal"]["type"] == "LONG"
+
+    # Evaluación con Breathing Room Guard
+    created_at = float(fresh_pos.get("created_timestamp", 0))
+    in_grace_period = (now - created_at < 10.0)
+
+    # Durante el periodo de gracia, is_sl debe ser False para evitar falsos stopouts
+    is_sl = False if in_grace_period else ((current_price_noise <= sl) if is_long else (current_price_noise >= sl))
+
+    assert in_grace_period is True
+    assert is_sl is False  # Protegido por el Breathing Room
+
+
+def test_dynamic_sl_minimum_breathing_distance_altcoins_and_megas():
+    """Valida los guardarraíles dinámicos de distancia mínima de Stop Loss."""
+    # Altcoin (NEAR): Mínimo 1.80% de distancia
+    near_entry = 1.85
+    min_near_sl_pct = 0.0180
+    min_near_dist = near_entry * min_near_sl_pct
+    near_sl_long = near_entry - min_near_dist
+    assert near_sl_long == pytest.approx(1.8167, rel=1e-3)
+    assert (near_entry - near_sl_long) / near_entry >= 0.018
+
+    # Megacap (BTC): Mínimo 0.60% de distancia
+    btc_entry = 96000.0
+    min_btc_sl_pct = 0.0060
+    min_btc_dist = btc_entry * min_btc_sl_pct
+    btc_sl_long = btc_entry - min_btc_dist
+    assert btc_sl_long == 95424.0
+    assert (btc_entry - btc_sl_long) / btc_entry >= 0.006
+

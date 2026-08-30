@@ -195,7 +195,20 @@ class NexusNode:
                         logger.debug(f"[NEXUS] TradeManager skip para {asset}: {tm_err}")
 
                     # 4. Verificar si la posicion se ha cerrado (SL o TP3 final hit)
-                    is_sl = (current_price <= sl) if is_long else (current_price >= sl)
+                    # 🛡️ BREATHING ROOM GUARD: Evitar stopout en los primeros 10s si el precio no es válido o es ruido de spread
+                    created_at = float(pos.get("created_timestamp", pos.get("execution", {}).get("timestamp", 0)) or 0)
+                    now_ts = time.time()
+                    in_grace_period = (now_ts - created_at < 10.0) if created_at > 0 else False
+
+                    # Si el precio actual es 0 o no válido, omitir evaluación de cierre
+                    if current_price <= 0:
+                        continue
+
+                    # Solo evaluar SL si no estamos en período de gracia de apertura
+                    is_sl = False
+                    if not in_grace_period:
+                        is_sl = (current_price <= sl) if is_long else (current_price >= sl)
+
                     is_tp = False
                     if not is_sl:
                         tp3 = sig.get('tp3', tp1 * 1.1)
@@ -451,6 +464,7 @@ class NexusNode:
                                 "asset": symbol,
                                 "protection_orders": protection_ids
                             },
+                            "created_timestamp": time.time(),
                             "status": "FILLED"
                         }
                         from engine.api.registry import registry
@@ -581,6 +595,7 @@ class NexusNode:
                 self._active_positions[asset] = {
                     "signal": signal,
                     "execution": result,
+                    "created_timestamp": time.time(),
                     "status": "OPEN"
                 }
             else:

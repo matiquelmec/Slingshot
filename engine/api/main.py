@@ -275,6 +275,21 @@ async def inject_test_signal(
     if api_key != settings.SECURITY_API_KEY:
         raise HTTPException(status_code=401, detail="API Key inválida")
 
+    # Si se pasa el default o 0, resolver precio real en vivo para evitar Stop Loss inmediato
+    from engine.execution.bitunix_executor import BitunixExecutor
+    live_executor = BitunixExecutor()
+    if price == 50000.0 and symbol.upper() != "BTCUSDT":
+        try:
+            real_p = await live_executor.get_ticker_price(symbol.upper())
+            if real_p > 0:
+                price = real_p
+        except Exception:
+            pass
+
+    # Garantizar distancia de respiración mínima de SL (1.8% para altcoins, 0.8% para megas)
+    is_mega = any(m in symbol.upper() for m in ["BTC", "ETH", "SOL", "PAXG"])
+    sl_pct = 0.008 if is_mega else 0.018
+
     tactical_mock = {
         "market_regime": "BULLISH_TREND" if direction.upper() == "LONG" else "BEARISH_TREND",
         "active_strategy": "SMC_APEX_SNIPER",
@@ -282,11 +297,11 @@ async def inject_test_signal(
             {
                 "type": direction.upper(),
                 "price": price,
-                "stop_loss": price * (0.98 if direction.upper() == "LONG" else 1.02),
-                "take_profit_3r": price * (1.05 if direction.upper() == "LONG" else 0.95),
-                "tp1": price * (1.02 if direction.upper() == "LONG" else 0.98),
-                "tp2": price * (1.035 if direction.upper() == "LONG" else 0.965),
-                "tp3": price * (1.05 if direction.upper() == "LONG" else 0.95),
+                "stop_loss": price * (1.0 - sl_pct) if direction.upper() == "LONG" else price * (1.0 + sl_pct),
+                "take_profit_3r": price * (1.0 + sl_pct * 3.0) if direction.upper() == "LONG" else price * (1.0 - sl_pct * 3.0),
+                "tp1": price * (1.0 + sl_pct * 1.5) if direction.upper() == "LONG" else price * (1.0 - sl_pct * 1.5),
+                "tp2": price * (1.0 + sl_pct * 2.5) if direction.upper() == "LONG" else price * (1.0 - sl_pct * 2.5),
+                "tp3": price * (1.0 + sl_pct * 3.5) if direction.upper() == "LONG" else price * (1.0 - sl_pct * 3.5),
                 "position_size": 5.0,
                 "position_size_usdt": 5.0,
                 "leverage": 5,
