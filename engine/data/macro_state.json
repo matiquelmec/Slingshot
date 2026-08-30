@@ -14,8 +14,8 @@
   "nasdaq_trend": "BEARISH",
   "nasdaq_change_pct": -0.19,
   "risk_appetite": "RISK_OFF",
-  "news_sentiment": 0.5,
+  "news_sentiment": 0.6,
   "active_event": "",
-  "last_updated": 1788067693.0080705,
+  "last_updated": 1788068247.1950455,
   "is_stale": false
 }

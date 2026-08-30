@@ -197,7 +197,50 @@ def test_confluence_to_telegram_and_signal_handler_coherence():
     tp1 = price + (dist_calc * 1.5 * 1.0)
     tp2 = price + (dist_calc * 3.0 * 1.0)
     tp3 = price + (dist_calc * 5.0 * 1.0)
-    
     assert tp1 == expected_tp1
     assert tp2 == expected_tp2
     assert tp3 == expected_tp3
+
+
+# ── TEST 5: ESPECIALIZACIÓN MULTITEMPORAL DEL ORO (1H NATIVO) ─────────────────
+
+def test_confluence_gold_1h_native_specialization():
+    """
+    Verifica que el Oro (PAXGUSDT / XAUUSD) evalúe con alta convicción en temporalidad 1H
+    bajo el régimen secular alcista Long-Only y rechace ventas en corto.
+    """
+    cm = ConfluenceManager()
+    df_gold_1h = _create_mock_market_dataframe(n_bars=60, is_bullish=True)
+    
+    # 1. Señal LONG en Oro 1H
+    sig_gold_long = {
+        "asset": "PAXGUSDT",
+        "symbol": "PAXGUSDT",
+        "type": "LONG",
+        "signal_type": "LONG",
+        "price": 2540.0,
+        "timeframe": "1h",
+        "interval": "1h",
+        "timestamp": df_gold_1h["timestamp"].iloc[-1].isoformat(),
+        "regime": "MARKUP"
+    }
+    
+    res_gold_long = cm.evaluate_signal(df=df_gold_1h, signal=sig_gold_long)
+    assert res_gold_long["score"] >= 60
+    assert res_gold_long["is_long"] is True
+    assert res_gold_long["conviction"] in ("ALTA CONVICCIÓN", "SÓLIDA")
+    
+    # 2. Intento de SHORT en Oro (debe ser vetado automáticamente por ATH Long-Only)
+    sig_gold_short = {
+        "asset": "PAXGUSDT",
+        "symbol": "PAXGUSDT",
+        "type": "SHORT",
+        "signal_type": "SHORT",
+        "price": 2540.0,
+        "timeframe": "1h",
+        "interval": "1h",
+        "timestamp": df_gold_1h["timestamp"].iloc[-1].isoformat(),
+        "regime": "MARKDOWN"
+    }
+    res_gold_short = cm.evaluate_signal(df=df_gold_1h, signal=sig_gold_short)
+    assert res_gold_short["score"] == 0 or res_gold_short["conviction"] == "VETADA"

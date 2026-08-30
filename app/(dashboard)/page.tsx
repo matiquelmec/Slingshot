@@ -71,18 +71,20 @@ export default function OverviewPage() {
                 console.error("Error parsing local watchlist");
             }
         } else {
-            // Default watchlist (Top 10 High-Performance Assets)
+            // Default watchlist (Top High-Performance Assets con Matriz Multitemporal)
             const defaultWatchlist: WatchlistEntry[] = [
                 { id: '1', asset: 'BTCUSDT', interval: '15m', alerts_enabled: true },
                 { id: '2', asset: 'ETHUSDT', interval: '15m', alerts_enabled: true },
-                { id: '3', asset: 'INJUSDT', interval: '15m', alerts_enabled: true },
-                { id: '4', asset: 'SUIUSDT', interval: '15m', alerts_enabled: true },
-                { id: '5', asset: 'AVAXUSDT', interval: '15m', alerts_enabled: true },
-                { id: '6', asset: 'RENDERUSDT', interval: '15m', alerts_enabled: true },
-                { id: '7', asset: 'NEARUSDT', interval: '15m', alerts_enabled: true },
-                { id: '8', asset: 'FETUSDT', interval: '15m', alerts_enabled: true },
-                { id: '9', asset: 'ATOMUSDT', interval: '15m', alerts_enabled: true },
-                { id: '10', asset: 'TIAUSDT', interval: '15m', alerts_enabled: true }
+                { id: '3', asset: 'SOLUSDT', interval: '15m', alerts_enabled: true },
+                { id: '4', asset: 'PAXGUSDT', interval: '1h', alerts_enabled: true }, // Oro nativo en 1H Intraday
+                { id: '5', asset: 'INJUSDT', interval: '15m', alerts_enabled: true },
+                { id: '6', asset: 'SUIUSDT', interval: '15m', alerts_enabled: true },
+                { id: '7', asset: 'AVAXUSDT', interval: '15m', alerts_enabled: true },
+                { id: '8', asset: 'RENDERUSDT', interval: '15m', alerts_enabled: true },
+                { id: '9', asset: 'NEARUSDT', interval: '15m', alerts_enabled: true },
+                { id: '10', asset: 'FETUSDT', interval: '15m', alerts_enabled: true },
+                { id: '11', asset: 'ATOMUSDT', interval: '15m', alerts_enabled: true },
+                { id: '12', asset: 'TIAUSDT', interval: '15m', alerts_enabled: true }
             ];
             setWatchlist(defaultWatchlist);
             localStorage.setItem('slingshot_watchlist', JSON.stringify(defaultWatchlist));

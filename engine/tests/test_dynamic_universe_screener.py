@@ -23,11 +23,15 @@ async def test_dynamic_screener_core_assets_immutable():
     independientemente de las rotaciones dinámicas.
     """
     scanner = MarketScanner()
-    core_expected = ["RENDERUSDT", "SUIUSDT", "INJUSDT", "NEARUSDT", "FETUSDT", "ATOMUSDT", "PAXGUSDT", "TIAUSDT"]
+    core_expected = ["RENDERUSDT", "SUIUSDT", "INJUSDT", "NEARUSDT", "FETUSDT", "ATOMUSDT", "TIAUSDT"]
     
     for sym in core_expected:
         assert sym in scanner.core_scalp_assets, f"Activo Core {sym} no está presente en Tier 1"
         assert sym in scanner.scalp_assets, f"Activo Core {sym} debe estar en scalp_assets activo"
+    
+    # PAXGUSDT está especializado en 1H Swing
+    assert "PAXGUSDT" in scanner.core_swing_1h_assets
+    assert "PAXGUSDT" in scanner.assets
 
 @pytest.mark.asyncio
 async def test_dynamic_screener_rotates_liquid_candidates():
@@ -72,7 +76,8 @@ async def test_dynamic_screener_graceful_api_fallback():
         # No debe lanzar excepción
         await scanner._refresh_dynamic_assets()
         
-        # Los activos Core deben permanecer intactos
-        assert len(scanner.core_scalp_assets) == 8
+        # Los activos Core deben permanecer intactos (7 en scalp + PAXGUSDT en swing)
+        assert len(scanner.core_scalp_assets) == 7
+        assert "PAXGUSDT" in scanner.core_swing_1h_assets
         assert "BTCUSDT" in scanner.assets
         assert "ETHUSDT" in scanner.assets
