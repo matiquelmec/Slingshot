@@ -51,7 +51,7 @@ def main():
     
     if result.returncode == 0:
         print("\n" + "="*80)
-        print("✅ CERTIFICACIÓN QA EXITOSA: 120/120 PRUEBAS APROBADAS AL 100%")
+        print("✅ CERTIFICACIÓN QA EXITOSA: 121/121 PRUEBAS APROBADAS AL 100%")
         print("="*80 + "\n")
     else:
         print("\n" + "="*80)

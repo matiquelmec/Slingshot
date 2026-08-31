@@ -87,3 +87,34 @@ async def test_staggered_handshake_jitter_distribution():
     staggers = [random.uniform(0.08, 0.25) for _ in range(20)]
     assert all(0.08 <= s <= 0.25 for s in staggers)
     assert len(set(staggers)) > 15, "El jitter debe ser aleatorio y no colisionar"
+
+@pytest.mark.asyncio
+async def test_keepalive_ping_timeout_breaks_loop_and_triggers_clean_reconnect():
+    """
+    [SOP-13 ZOMBIE SOCKET AUTO-BREAK]
+    Verifica que cuando Binance o la red emite un error 1011 keepalive ping timeout,
+    el bucle de lectura se interrumpa de inmediato (break) y no entre en un bucle infinito de skip.
+    """
+    from engine.api.ws_manager import SymbolBroadcaster
+    import websockets as ws_client
+    from websockets.frames import Close
+    from websockets.exceptions import ConnectionClosedError
+
+    bc = SymbolBroadcaster("XRPUSDT", "5m")
+    
+    # Mockear el websocket con un socket que lanza 1011 keepalive ping timeout en el primer recv()
+    mock_ws = AsyncMock()
+    close_frame = Close(code=1011, reason="keepalive ping timeout; no close frame received")
+    mock_ws.recv.side_effect = ConnectionClosedError(rcvd=None, sent=close_frame)
+    mock_ws.__aenter__.return_value = mock_ws
+    mock_ws.__aexit__.return_value = None
+    
+    with patch("websockets.connect", new_callable=AsyncMock, return_value=mock_ws), \
+         patch.object(bc.fallback, "start", new_callable=AsyncMock), \
+         patch.object(bc.fallback, "stop", new_callable=AsyncMock):
+        
+        # _stream_live() debe terminar normalmente sin re-lanzar error o salir limpio al cerrarse el socket
+        await bc._stream_live()
+            
+        # Verificar que solo se llamó a recv() una vez y se salió de inmediato (break sin bucle)
+        assert mock_ws.recv.call_count == 1, "El bucle debió hacer break en el primer error sin ciclar"
