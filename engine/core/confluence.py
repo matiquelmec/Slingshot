@@ -640,7 +640,7 @@ class ConfluenceManager:
             
             day_weight = 5
             total_weight += day_weight
-            if day_wk in ["Tuesday", "Thursday", "Friday"]:
+            if day_wk in ["Tuesday", "Wednesday", "Thursday", "Friday"]:
                 score += day_weight
                 checklist.append({"factor": "Día Institucional", "status": "CONFIRMADO", "detail": f"{day_wk}: Día de Alta Expansión de Tendencia (+5pts)"})
             elif day_wk == "Monday" and hr_utc < 13:
