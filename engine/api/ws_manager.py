@@ -423,10 +423,14 @@ class SymbolBroadcaster:
                         elif "depth" in s_type:
                             asyncio.create_task(self._process_depth_stream(p_load))
                             
-                    except asyncio.TimeoutError:
-                        logger.debug(f"[BROADCASTER] Timeout de datos en {self._key}. Reintentando...")
+                    except (asyncio.TimeoutError, ws_client.exceptions.ConnectionClosed):
+                        logger.debug(f"[BROADCASTER] Conexión cerrada o timeout en {self._key}. Reconectando...")
                         break
                     except Exception as loop_e:
+                        err_msg = str(loop_e).lower()
+                        if any(x in err_msg for x in ["closed", "1011", "1006", "timeout", "reset", "abort", "connection"]):
+                            logger.debug(f"[BROADCASTER] Socket finalizado en {self._key} ({loop_e}). Reconectando...")
+                            break
                         logger.debug(f"[BROADCASTER-LOOP] Mensaje skip en {self._key}: {loop_e}")
                         continue
         except Exception as e:
