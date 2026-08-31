@@ -197,13 +197,35 @@ class SymbolBroadcaster:
     async def start(self):
         if self._task and not self._task.done(): return
         self._task = asyncio.create_task(self._run(), name=f"broadcaster-{self._key}")
+        self._watchdog_task = asyncio.create_task(self._tick_watchdog_loop(), name=f"watchdog-{self._key}")
 
     async def stop(self):
         if self._task and not self._task.done():
             self._task.cancel()
             try: await self._task
             except asyncio.CancelledError: pass
+        if hasattr(self, "_watchdog_task") and self._watchdog_task and not self._watchdog_task.done():
+            self._watchdog_task.cancel()
+            try: await self._watchdog_task
+            except asyncio.CancelledError: pass
         logger.info(f"[BROADCASTER] 🛑 Detenido: {self._key}")
+
+    async def _tick_watchdog_loop(self):
+        """
+        [TICK INACTIVITY WATCHDOG v26.2]
+        Detecta si un socket se vuelve 'zombi' (TCP Half-Open sin ticks por > 30s)
+        y fuerza una reconexión limpia.
+        """
+        while True:
+            try:
+                await asyncio.sleep(15.0)
+                if self.state.is_connected and (time.time() - self._last_tick_ts > 30.0):
+                    logger.info(f"🔄 [WATCHDOG] Inactividad de ticks en {self._key} (>30s). Reciclando túnel...")
+                    self.state.is_connected = False
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                logger.debug(f"[WATCHDOG] Error en watchdog loop: {e}")
 
     async def _run(self):
         retry_delay = 2.0

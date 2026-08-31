@@ -499,6 +499,20 @@ class NexusNode:
             logger.warning(f"🛑 [NEXUS CLUSTER] Rechazada orden en {asset}: {cluster_reason}")
             return
 
+        # ── SPREAD CIRCUIT BREAKER (>0.25% VETO) ──
+        current_spread_pct = float(signal.get("spread_pct") or 0.0)
+        if current_spread_pct > 0.0025:
+            logger.warning(f"🛑 [NEXUS SPREAD GUARD] Rechazada orden a mercado en {asset}: Spread excesivo ({current_spread_pct*100:.3f}% > 0.25%).")
+            return
+
+        # ── PRE-FLIGHT MARGIN GUARD (SOP-10) ──
+        if not self.dry_run:
+            avail_margin = await self.executor.get_available_margin_usdt()
+            req_margin = float(signal.get("position_size_usdt", self.DEFAULT_MARGIN_USDT))
+            if avail_margin < req_margin:
+                logger.warning(f"🛑 [NEXUS MARGIN GUARD] Saldo insuficiente para {asset}: Disponible ${avail_margin:.2f} USDT < Requerido ${req_margin:.2f} USDT.")
+                return
+
         logger.info(f"⚡ [NEXUS] Recibida señal de alta fidelidad: {asset} {sig_type}")
 
         # Garantizar tamaño del 5% del capital ($8.50 USDT margen a 20x) y tope de apalancamiento SOP-08 (máx 20x)

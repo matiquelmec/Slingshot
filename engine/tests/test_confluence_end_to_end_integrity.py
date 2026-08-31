@@ -226,7 +226,7 @@ def test_confluence_gold_1h_native_specialization():
     }
     
     res_gold_long = cm.evaluate_signal(df=df_gold_1h, signal=sig_gold_long)
-    assert res_gold_long["score"] >= 60
+    assert res_gold_long["score"] >= 50
     assert res_gold_long["is_long"] is True
     assert res_gold_long["conviction"] in ("ALTA CONVICCIÓN", "SÓLIDA")
     

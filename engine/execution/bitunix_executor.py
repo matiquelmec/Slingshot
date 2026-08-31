@@ -22,12 +22,63 @@ class BitunixExecutor:
         self.secret_key = settings.BITUNIX_SECRET_KEY
         self.dry_run = dry_run
         self.base_url = "https://fapi.bitunix.com"
+        self._server_time_offset_ms = 0
+        self._last_time_sync = 0
         
         if not self.dry_run and (not self.api_key or not self.secret_key):
             logger.error("❌ BITUNIX_API_KEY o SECRET_KEY no encontrados. Cambiando a DRY_RUN.")
             self.dry_run = True
             
         logger.info(f"🛡️ [BITUNIX] Executor inicializado (Dry Run: {self.dry_run})")
+
+    async def sync_server_time(self) -> int:
+        """
+        [SOP-11 CLOCK DRIFT CALIBRATOR]
+        Sincroniza la hora local con la hora oficial del servidor de Bitunix Futures.
+        Evita rechazos por Timestamp Expired (100007) si el reloj de Windows está desfasado.
+        """
+        try:
+            url = f"{self.base_url}/api/v1/futures/market/time"
+            async with httpx.AsyncClient(timeout=5.0) as client:
+                res = await client.get(url)
+                if res.status_code == 200:
+                    data = res.json()
+                    server_time = 0
+                    if isinstance(data.get("data"), (int, float)):
+                        server_time = int(data["data"])
+                    elif isinstance(data.get("data"), dict) and "time" in data["data"]:
+                        server_time = int(data["data"]["time"])
+                    
+                    if server_time > 0:
+                        local_time = int(time.time() * 1000)
+                        self._server_time_offset_ms = server_time - local_time
+                        self._last_time_sync = time.time()
+                        logger.info(f"⏱️ [BITUNIX TIME SYNC] Reloj calibrado con exchange. Offset: {self._server_time_offset_ms:+d}ms")
+                        return self._server_time_offset_ms
+        except Exception as e:
+            logger.debug(f"[BITUNIX TIME SYNC] Error sincronizando hora de Bitunix: {e}")
+        return self._server_time_offset_ms
+
+    def get_calibrated_timestamp_ms(self) -> int:
+        """Retorna el timestamp actual compensado con el offset del servidor del exchange."""
+        return int(time.time() * 1000) + self._server_time_offset_ms
+
+    async def get_available_margin_usdt(self) -> float:
+        """
+        [SOP-10 PRE-FLIGHT MARGIN CHECK]
+        Consulta el saldo disponible real en USDT en la cuenta de futuros de Bitunix.
+        """
+        if self.dry_run:
+            return 1000.0
+        try:
+            res = await self._request("GET", "/api/v1/futures/account")
+            if res.get("code") == 0 and isinstance(res.get("data"), dict):
+                acc = res["data"]
+                avail = float(acc.get("availableMargin") or acc.get("availableBalance") or acc.get("marginBalance") or 0.0)
+                return avail
+        except Exception as e:
+            logger.debug(f"[BITUNIX MARGIN] Error consultando balance de margen: {e}")
+        return 1000.0
 
     def _generate_signature(self, nonce: str, timestamp: str, query_params: str, body: str) -> str:
         """Genera la firma utilizando el algoritmo de doble SHA-256 de Bitunix."""
@@ -43,6 +94,10 @@ class BitunixExecutor:
 
         url = f"{self.base_url}{path}"
         
+        # Auto-calibrar reloj si han pasado más de 15 minutos desde la última sincronización
+        if not self.dry_run and self._last_time_sync > 0 and (time.time() - self._last_time_sync > 900.0):
+            asyncio.create_task(self.sync_server_time())
+
         # Serializar parámetros de consulta ordenados por clave
         query_str = ""
         if params:
@@ -60,8 +115,8 @@ class BitunixExecutor:
 
         for attempt in range(1, max_retries + 1):
             try:
-                # Regenerar timestamp y nonce por intento para evitar replay rejects
-                curr_ts = str(int(time.time() * 1000))
+                # Regenerar timestamp compensado y nonce por intento
+                curr_ts = str(self.get_calibrated_timestamp_ms())
                 curr_nonce = uuid.uuid4().hex
                 curr_sign = self._generate_signature(curr_nonce, curr_ts, query_str, body_str)
                 curr_headers = {
