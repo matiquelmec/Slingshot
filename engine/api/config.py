@@ -53,6 +53,9 @@ class Settings(BaseSettings):
     # Strategy Delta Δ: Tiered Priority (14 Curated Institutional Assets)
     RADAR_ASSETS: str = "BTCUSDT,ETHUSDT,SOLUSDT,AVAXUSDT,LINKUSDT,XRPUSDT,PAXGUSDT,RENDERUSDT,SUIUSDT,INJUSDT,NEARUSDT,FETUSDT,ATOMUSDT,TIAUSDT"
     
+    # Cartera Suprema FTMO / MetaTrader 5 (v33.0 APEX OLYMPUS)
+    FTMO_WATCHLIST: str = "XAUUSD,XAGUSD,US100,US500,USOIL,GER40,EURUSD,USDJPY,USDCAD,GBPJPY"
+    
     # Universo Dinámico Cuantitativo v24.0 APEX ALPHA
     ENABLE_DYNAMIC_WATCHLIST: bool = True
     DYNAMIC_MIN_24H_VOL_USDT: float = 30_000_000.0  # Mínimo $30M de volumen 24h

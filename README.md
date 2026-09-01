@@ -1,9 +1,12 @@
-# 🛡️ SLINGSHOT v28.0 APEX MULTIPLIER — Autonomous Institutional Trading Terminal
+# 🛡️ SLINGSHOT v33.0 APEX OLYMPUS — Autonomous Institutional Multi-Market Terminal
 
-> **"Terminal Cuantitativa Autónoma de Grado Institucional. Apex Multiplier: Motor de Piramidación Estructural Libre de Riesgo & Free-Roll Scale-In (SOP-16 Zero-Risk Pyramiding & Structural Lockout: Inyección de +50% de Volumen en Retesteos OTE/FVG Utilizando Exclusivamente el Beneficio Acumulado como Colateral, Stop Loss Compuesto con Invarianza de PnL Neto >= $0.00, Cero Drawdown Adicional y Multiplicación del R:R a +1:4.8R en Tendencias), Apex Synapse: Pipeline de Telemetría Full-Stack Reactiva a 60 FPS (SOP-15 Resilient WebSocket Telemetry & Zero-Jitter Handshake), Instant Warmup Engine: Hidratación Instantánea de Microestructura & 500 Velas de CVD Real en el Arranque (SOP-14 Extracción Nativa de Taker Buy/Sell Volume k[9]/k[10] de Binance Futures), Apex Chronos: Motor de Estacionalidad Semanal y Time Gating (SOP-12 Weekly Liquidity Profiles), Calibrador de Reloj Automático (SOP-11 Server Time Offset), Pre-Flight Margin Guard (SOP-10 Verificación de Margen Libre Previo a Ejecución), Spread Circuit Breaker en Ejecución (Veto a Mercado ante Spread > 0.25%), Tick Inactivity Watchdog (Reciclaje Automático de Sockets Zombi > 30s) y Suite Oficial de 136/136 Pruebas Unitarias Aprobadas al 100%. Protocolos de Seguridad SOP-07 a SOP-16."**
+> **"Terminal Cuantitativa Autónoma de Grado Institucional. Apex Olympus: Arquitectura Multi-Mercado Dual (Criptomonedas Bitunix 24/7 + Cartera Suprema FTMO MetaTrader 5: Oro XAUUSD, Plata XAGUSD, Nasdaq US100, S&P US500, Petróleo USOIL, DAX GER40, USDCAD, USDJPY, EURUSD y GBPJPY), Selector Visual en Frontend (Cripto vs FTMO), Interceptor de Noticias Macro SOP-19 (Bloqueo NFP/CPI/FOMC), Ejecución Pasiva Post-Only Maker 100%, Time-Gating Cuántico SOP-18, FTMO Guardian Shield (-3.5% Kill-Switch), Entradas Límite OTE en Descuento FVG 50% con Cobro TP0 30% en +1.0R (+417.23R de Retorno Combinado), y Suite Oficial de 156/156 Pruebas Unitarias Aprobadas al 100%. Protocolos de Seguridad SOP-07 a SOP-20."**
 
-![Status](https://img.shields.io/badge/Status-100%25_AUTONOMOUS_&_SELF--HEALING-0d2a1a?style=for-the-badge&logo=codeproject&logoColor=fff)
-![Version](https://img.shields.io/badge/Version-28.0_Apex_Multiplier-1a3a6e?style=for-the-badge)
+![Status](https://img.shields.io/badge/Status-100%25_AUTONOMOUS_&_OLYMPUS_SSOT-0d2a1a?style=for-the-badge&logo=codeproject&logoColor=fff)
+![Version](https://img.shields.io/badge/Version-33.0_Apex_Olympus-1a3a6e?style=for-the-badge)
+![Olympus](https://img.shields.io/badge/Apex_Olympus-Crypto_%26_FTMO_Supreme-purple?style=for-the-badge)
+![Zenith](https://img.shields.io/badge/Apex_Zenith-Macro_News_%26_Post--Only_Maker-purple?style=for-the-badge)
+![Titan](https://img.shields.io/badge/Apex_Titan-Dynamic_Asset_Gating_%26_SOP--18-purple?style=for-the-badge)
 ![Multiplier](https://img.shields.io/badge/Apex_Multiplier-Free--Roll_Scale--In_%26_Pyramiding-purple?style=for-the-badge)
 ![Synapse](https://img.shields.io/badge/Apex_Synapse-60_FPS_Telemetry_%26_Zero--Jitter-purple?style=for-the-badge)
 ![Warmup](https://img.shields.io/badge/Instant_Warmup-500_Bars_CVD_%26_Taker_Flow-purple?style=for-the-badge)
@@ -11,7 +14,7 @@
 ![Apex](https://img.shields.io/badge/Apex_Shield-Time_Calibrator_%26_Spread_Breaker-purple?style=for-the-badge)
 ![Stream](https://img.shields.io/badge/Stream_Fortress-Staggered_Handshake_%26_Token_Bucket-purple?style=for-the-badge)
 ![Cluster](https://img.shields.io/badge/Cluster_Risk_Guard-%CF%81_%3E=_0.75_Gating-purple?style=for-the-badge)
-![Security](https://img.shields.io/badge/Security_Protocols-SOP--07%20to%20SOP--16-emerald?style=for-the-badge)
+![Security](https://img.shields.io/badge/Security_Protocols-SOP--07%20to%20SOP--20-emerald?style=for-the-badge)
 ![Breathing](https://img.shields.io/badge/Breathing_Shield-1.0R%20Lockout%20Air-emerald?style=for-the-badge)
 ![Gold](https://img.shields.io/badge/Gold_Specialization-1H_Native_Swing-gold?style=for-the-badge)
 ![Confluence](https://img.shields.io/badge/Confluence-14_Factors_End--to--End-emerald?style=for-the-badge)
@@ -20,7 +23,7 @@
 ![Kernel](https://img.shields.io/badge/Kernel-Polars_Rust_Sub--2.5ms-black?style=for-the-badge&logo=rust&logoColor=fff)
 ![Vault](https://img.shields.io/badge/Persistence-SQLite_WAL_ACID-003B57?style=for-the-badge&logo=sqlite&logoColor=fff)
 ![Execution](https://img.shields.io/badge/Execution-Bitunix_Live_&_MT5_Dual_Engine-orange?style=for-the-badge)
-![QA](https://img.shields.io/badge/QA_Suite-136%2F136_Passed_100%25-success?style=for-the-badge)
+![QA](https://img.shields.io/badge/QA_Suite-156%2F156_Passed_100%25-success?style=for-the-badge)
 
 ---
 

@@ -43,10 +43,16 @@ export default function SignalTerminal() {
 
     const [isLoadingSignals, setIsLoadingSignals] = React.useState(true);
     const [hideBlocked, setHideBlocked] = React.useState(true);
+    const [marketCategory, setMarketCategory] = React.useState<'ALL' | 'CRYPTO' | 'FTMO'>('ALL');
     const [accountProfile, setAccountProfile] = React.useState<AccountProfileType>('FTMO_100K');
     const [ftmoPhase, setFtmoPhase] = React.useState<FtmoPhase>('PHASE_1');
 
     const activeProfileConfig = PROFILES_CONFIG[accountProfile](ftmoPhase);
+
+    const isTradFiSymbol = (asset: string) => {
+        const tradfi = ['XAUUSD', 'XAGUSD', 'US100', 'US500', 'USOIL', 'GER40', 'EURUSD', 'USDJPY', 'USDCAD', 'GBPJPY'];
+        return tradfi.includes(asset?.toUpperCase());
+    };
 
     useEffect(() => {
         const symbol = searchParams.get('symbol');
@@ -80,9 +86,14 @@ export default function SignalTerminal() {
         Object.values(signalHistory).forEach(s => displayMap.set(s.id || `${s.timestamp}-${s.asset}`, s));
         Object.values(auditedSignals).forEach(s => displayMap.set(s.id || `${s.timestamp}-${s.asset}`, s));
         
-        // 1. Filtrar por activo e historial de visibilidad
+        // 1. Filtrar por activo, mercado e historial de visibilidad
         const filtered = Array.from(displayMap.values())
             .filter(s => viewMode === 'GLOBAL' || s.asset === activeSymbol)
+            .filter(s => {
+                if (marketCategory === 'CRYPTO') return !isTradFiSymbol(s.asset);
+                if (marketCategory === 'FTMO') return isTradFiSymbol(s.asset);
+                return true;
+            })
             .filter(s => {
                 if (!hideBlocked) return true;
                 const validStatuses = ['ACTIVE', 'APPROVED', 'PENDING', 'FILLED', 'BREAKEVEN', 'TRAILING', 'CLOSED_TP_MAX', 'STOPPED_OUT', 'CLOSED'];
@@ -119,7 +130,7 @@ export default function SignalTerminal() {
         });
 
         return grouped.slice(0, 50);
-    }, [signalHistory, auditedSignals, viewMode, activeSymbol, hideBlocked]);
+    }, [signalHistory, auditedSignals, viewMode, activeSymbol, hideBlocked, marketCategory]);
 
     const activeCount = React.useMemo(() => displaySignals.filter(s => s.status === 'ACTIVE').length, [displaySignals]);
     const blockedCount = React.useMemo(() => displaySignals.filter(s => s.status?.startsWith('BLOCKED')).length, [displaySignals]);
@@ -137,6 +148,28 @@ export default function SignalTerminal() {
                     </h2>
                 </div>
                 <div className="flex items-center gap-3 text-[10px] font-bold tracking-widest text-white/40">
+                    {/* Selector de Categoría de Mercado */}
+                    <div className="flex items-center bg-white/5 rounded-lg p-0.5 border border-white/5 mr-2">
+                        <button 
+                            onClick={() => setMarketCategory('ALL')}
+                            className={`px-2 py-1 rounded transition-all text-[9px] ${marketCategory === 'ALL' ? 'bg-neon-cyan/20 text-neon-cyan font-black' : 'hover:text-white/60'}`}
+                        >
+                            TODOS
+                        </button>
+                        <button 
+                            onClick={() => setMarketCategory('CRYPTO')}
+                            className={`px-2 py-1 rounded transition-all text-[9px] ${marketCategory === 'CRYPTO' ? 'bg-purple-500/20 text-purple-400 font-black' : 'hover:text-white/60'}`}
+                        >
+                            🪙 CRIPTO
+                        </button>
+                        <button 
+                            onClick={() => setMarketCategory('FTMO')}
+                            className={`px-2 py-1 rounded transition-all text-[9px] ${marketCategory === 'FTMO' ? 'bg-yellow-500/20 text-yellow-400 font-black' : 'hover:text-white/60'}`}
+                        >
+                            🏛️ FTMO
+                        </button>
+                    </div>
+
                     <div className="flex items-center bg-white/5 rounded-lg p-0.5 border border-white/5 mr-2">
                         <button 
                             onClick={() => setViewMode('SYMBOL')}

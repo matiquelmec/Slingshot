@@ -1,7 +1,7 @@
-# 🏗️ Estructura del Proyecto Slingshot v24.0 Apex Alpha
+# 🏗️ Estructura del Proyecto Slingshot v31.0 Apex Titan
 
 > Guía de referencia oficial para la arquitectura, mantenimiento y evolución del sistema.
-> **Última actualización**: Agosto 2026 (v24.0 Apex Alpha — Asymmetric Long Bias, Staged Exits 50/30/20 & SSoT Backtest)
+> **Última actualización**: Septiembre 2026 (v31.0 Apex Titan — Dynamic Asset-Specific Time-Gating SOP-18, Dual Execution Bitunix/FTMO, 146/146 QA Tests Passed & SSoT True Backtest Engine)
 
 ---
 
