@@ -1,7 +1,7 @@
-# 🏗️ Estructura del Proyecto Slingshot v31.0 Apex Titan
+# 🏗️ Estructura del Proyecto Slingshot v33.0 Apex Olympus
 
 > Guía de referencia oficial para la arquitectura, mantenimiento y evolución del sistema.
-> **Última actualización**: Septiembre 2026 (v31.0 Apex Titan — Dynamic Asset-Specific Time-Gating SOP-18, Dual Execution Bitunix/FTMO, 146/146 QA Tests Passed & SSoT True Backtest Engine)
+> **Última actualización**: Septiembre 2026 (v33.0 Apex Olympus — Multi-Market Crypto & FTMO Supreme Harmony, Selector Visual de Mercados, Protocolos SOP-07 a SOP-20, 156/156 QA Tests Passed & SSoT True Backtest Engine)
 
 ---
 

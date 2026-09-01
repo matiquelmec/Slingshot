@@ -1,69 +1,5 @@
 [
   {
-    "timestamp": "2026-08-29T19:07:45.631675+00:00",
-    "asset": "TIAUSDT",
-    "signal_type": "SHORT",
-    "result": "TAKE_PROFIT",
-    "confluence_score": 0,
-    "fingerprint": {
-      "regime": "UNKNOWN",
-      "rvol": 1.0,
-      "has_ob": false,
-      "has_sweep": false,
-      "session": "UNKNOWN",
-      "absorption_score": 0.0,
-      "is_in_ote": false
-    }
-  },
-  {
-    "timestamp": "2026-08-29T19:08:07.572787+00:00",
-    "asset": "TIAUSDT",
-    "signal_type": "SHORT",
-    "result": "TAKE_PROFIT",
-    "confluence_score": 0,
-    "fingerprint": {
-      "regime": "UNKNOWN",
-      "rvol": 1.0,
-      "has_ob": false,
-      "has_sweep": false,
-      "session": "UNKNOWN",
-      "absorption_score": 0.0,
-      "is_in_ote": false
-    }
-  },
-  {
-    "timestamp": "2026-08-29T19:08:29.393360+00:00",
-    "asset": "TIAUSDT",
-    "signal_type": "SHORT",
-    "result": "TAKE_PROFIT",
-    "confluence_score": 0,
-    "fingerprint": {
-      "regime": "UNKNOWN",
-      "rvol": 1.0,
-      "has_ob": false,
-      "has_sweep": false,
-      "session": "UNKNOWN",
-      "absorption_score": 0.0,
-      "is_in_ote": false
-    }
-  },
-  {
-    "timestamp": "2026-08-29T19:09:05.441299+00:00",
-    "asset": "TIAUSDT",
-    "signal_type": "SHORT",
-    "result": "TAKE_PROFIT",
-    "confluence_score": 0,
-    "fingerprint": {
-      "regime": "UNKNOWN",
-      "rvol": 1.0,
-      "has_ob": false,
-      "has_sweep": false,
-      "session": "UNKNOWN",
-      "absorption_score": 0.0,
-      "is_in_ote": false
-    }
-  },
-  {
     "timestamp": "2026-08-29T19:09:32.208689+00:00",
     "asset": "TIAUSDT",
     "signal_type": "SHORT",
@@ -3185,6 +3121,70 @@
   },
   {
     "timestamp": "2026-09-01T17:38:00.977012+00:00",
+    "asset": "BTCUSDT",
+    "signal_type": "SHORT",
+    "result": "TAKE_PROFIT",
+    "confluence_score": 0,
+    "fingerprint": {
+      "regime": "UNKNOWN",
+      "rvol": 1.0,
+      "has_ob": false,
+      "has_sweep": false,
+      "session": "UNKNOWN",
+      "absorption_score": 0.0,
+      "is_in_ote": false
+    }
+  },
+  {
+    "timestamp": "2026-09-01T17:38:24.362910+00:00",
+    "asset": "BTCUSDT",
+    "signal_type": "SHORT",
+    "result": "TAKE_PROFIT",
+    "confluence_score": 0,
+    "fingerprint": {
+      "regime": "UNKNOWN",
+      "rvol": 1.0,
+      "has_ob": false,
+      "has_sweep": false,
+      "session": "UNKNOWN",
+      "absorption_score": 0.0,
+      "is_in_ote": false
+    }
+  },
+  {
+    "timestamp": "2026-09-01T17:39:10.363803+00:00",
+    "asset": "BTCUSDT",
+    "signal_type": "SHORT",
+    "result": "TAKE_PROFIT",
+    "confluence_score": 0,
+    "fingerprint": {
+      "regime": "UNKNOWN",
+      "rvol": 1.0,
+      "has_ob": false,
+      "has_sweep": false,
+      "session": "UNKNOWN",
+      "absorption_score": 0.0,
+      "is_in_ote": false
+    }
+  },
+  {
+    "timestamp": "2026-09-01T17:39:24.281102+00:00",
+    "asset": "BTCUSDT",
+    "signal_type": "SHORT",
+    "result": "TAKE_PROFIT",
+    "confluence_score": 0,
+    "fingerprint": {
+      "regime": "UNKNOWN",
+      "rvol": 1.0,
+      "has_ob": false,
+      "has_sweep": false,
+      "session": "UNKNOWN",
+      "absorption_score": 0.0,
+      "is_in_ote": false
+    }
+  },
+  {
+    "timestamp": "2026-09-01T17:40:00.732982+00:00",
     "asset": "BTCUSDT",
     "signal_type": "SHORT",
     "result": "TAKE_PROFIT",
