@@ -43,6 +43,8 @@ interface FtmoStatus {
     phase_passed: boolean;
 }
 
+import { getApiBaseUrl } from '../../utils/apiUrl';
+
 export default function FtmoPage() {
     const [opportunities, setOpportunities] = useState<TradFiOpportunity[]>([]);
     const [ftmoStatus, setFtmoStatus] = useState<FtmoStatus | null>(null);
@@ -53,7 +55,7 @@ export default function FtmoPage() {
 
     const fetchTradFiData = async () => {
         try {
-            const apiHost = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+            const apiHost = getApiBaseUrl();
             const [oppsRes, statusRes] = await Promise.all([
                 fetch(`${apiHost}/api/v1/tradfi/opportunities`),
                 fetch(`${apiHost}/api/v1/ftmo/guardian`)

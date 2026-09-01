@@ -4,6 +4,7 @@ import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Database, TrendingUp, TrendingDown, Target, Clock, AlertTriangle, CheckCircle2, XCircle, RefreshCw, Info } from 'lucide-react';
 import { formatCurrency } from '../../utils/formatters';
+import { getApiBaseUrl } from '../../utils/apiUrl';
 
 
 interface SignalEvent {
@@ -36,7 +37,8 @@ export default function HistoryPage() {
     const fetchSignals = async (showLoading = false) => {
         if (showLoading) setLoading(true);
         try {
-            const res = await fetch('http://localhost:8000/api/v1/signals');
+            const BASE_URL = getApiBaseUrl();
+            const res = await fetch(`${BASE_URL}/api/v1/signals`);
             if (res.ok) {
                 const data = await res.json();
                 setSignals(data as SignalEvent[]);

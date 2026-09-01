@@ -11,6 +11,8 @@ interface RadarSignal extends Signal {
     entry_price: number; 
 }
 
+import { getApiBaseUrl } from '../../utils/apiUrl';
+
 export default function RadarFeed() {
     const [globalSignals, setGlobalSignals] = useState<RadarSignal[]>([]);
     const [loading, setLoading] = useState(true);
@@ -20,7 +22,7 @@ export default function RadarFeed() {
     const auditedSignals = useTelemetryStore(state => state.auditedSignals) as unknown as Record<string, Signal>;
 
     useEffect(() => {
-        const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000';
+        const BASE_URL = getApiBaseUrl();
         const fetchInitialHydration = async () => {
             try {
                 const res = await fetch(`${BASE_URL}/api/v1/signals?status=ALL`);

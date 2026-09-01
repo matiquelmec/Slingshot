@@ -4,6 +4,7 @@ import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Newspaper, Flame, Droplets, Zap, ExternalLink, BrainCircuit } from 'lucide-react';
 import { useTelemetryStore } from '../../store/telemetryStore';
+import { getApiBaseUrl } from '../../utils/apiUrl';
 
 export default function NewsTerminal() {
     const { news, setNews } = useTelemetryStore();
@@ -12,7 +13,7 @@ export default function NewsTerminal() {
         // Cargar historial de noticias al montar (REST fallback)
         const fetchNewsHistory = async () => {
             try {
-                const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000';
+                const BASE_URL = getApiBaseUrl();
                 const res = await fetch(`${BASE_URL}/api/v1/news`);
                 if (res.ok) {
                     const data = await res.json();

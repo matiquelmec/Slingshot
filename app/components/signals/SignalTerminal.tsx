@@ -18,6 +18,7 @@ import OnChainMetricsPanel from './OnChainMetricsPanel';
 import { AccountProfileSelector, PROFILES_CONFIG } from './AccountProfileSelector';
 import { FtmoShieldWidget } from './FtmoShieldWidget';
 import { AccountProfileType, FtmoPhase } from '../../types/signal';
+import { getApiBaseUrl } from '../../utils/apiUrl';
 
 export default function SignalTerminal() {
     const searchParams = useSearchParams();
@@ -55,8 +56,8 @@ export default function SignalTerminal() {
 
         const fetchInitialHydration = async () => {
             try {
-                // Resolver el host dinámicamente para evitar bloqueos en producción/redes locales
-                const apiHost = typeof window !== 'undefined' ? `${window.location.protocol}//${window.location.hostname}:8000` : 'http://localhost:8000';
+                // Resolver el host dinámicamente para soporte multi-dispositivo y LAN
+                const apiHost = getApiBaseUrl();
                 const res = await fetch(`${apiHost}/api/v1/signals?status=ALL`);
                 if (res.ok) {
                     const data = await res.json();

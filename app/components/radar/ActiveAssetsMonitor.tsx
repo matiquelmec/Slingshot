@@ -5,6 +5,7 @@ import { motion } from 'framer-motion';
 import { Activity, Zap, TrendingUp, TrendingDown, Minus } from 'lucide-react';
 import { formatCurrency } from '../../utils/formatters';
 import { useTelemetryStore, Timeframe, MASTER_WATCHLIST } from '../../store/telemetryStore';
+import { getApiBaseUrl } from '../../utils/apiUrl';
 
 interface MarketState {
     asset: string;
@@ -43,7 +44,8 @@ export default function ActiveAssetsMonitor() {
                 setWatchlist(userAssets);
 
                 // 2. Hidratación Base
-                const res = await fetch(`http://localhost:8000/api/v1/market-states`);
+                const BASE_URL = getApiBaseUrl();
+                const res = await fetch(`${BASE_URL}/api/v1/market-states`);
                 if (res.ok) {
                     const masterStates = await res.json();
                     const formatted = masterStates.map((s: any) => ({

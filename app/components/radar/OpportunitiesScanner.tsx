@@ -8,6 +8,7 @@ import { AccountProfileSelector, PROFILES_CONFIG } from '../signals/AccountProfi
 import { FtmoShieldWidget } from '../signals/FtmoShieldWidget';
 import { AccountProfileType, FtmoPhase } from '../../types/signal';
 import { calculateMt5Lots, MarketCategory, getAssetMarketCategory } from '../../utils/ftmoSpecs';
+import { getApiBaseUrl } from '../../utils/apiUrl';
 
 interface ChecklistItem {
     factor: string;
@@ -79,7 +80,8 @@ export default function OpportunitiesScanner() {
 
     const fetchOpps = async () => {
         try {
-            const res = await fetch('http://localhost:8000/api/v1/scanner/opportunities');
+            const BASE_URL = getApiBaseUrl();
+            const res = await fetch(`${BASE_URL}/api/v1/scanner/opportunities`);
             if (res.ok) {
                 const data = await res.json();
                 setOpportunities({

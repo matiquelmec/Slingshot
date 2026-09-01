@@ -27,32 +27,21 @@ export const createConnectionManager = (set: any, get: any) => {
 
         if (!isRetry) {
             retryCount = 0;
-            set({
+            set((state: any) => ({
                 activeSymbol: symbol,
                 activeTimeframe: timeframe,
                 activeConnectionId: connectionId,
-                candles: [],
                 isConnected: false,
                 connectionStatus: 'CONNECTING',
                 isCalibrating: true,
-                smcData: null,
-                sessionData: null,
-                latestPrice: null,
-                liquidityHeatmap: null,
-                onchainMetrics: null,
-                mlProjection: { direction: 'NEUTRAL', probability: 50, reason: "Sincronizando..." },
+                mlProjection: { direction: 'NEUTRAL', probability: 50, reason: `Sincronizando ${symbol}...` },
                 tacticalDecision: {
-                    regime: "ANALIZANDO...",
+                    ...state.tacticalDecision,
+                    regime: "SINCRONIZANDO...",
                     strategy: "STANDBY",
-                    reasoning: `Cargando telemetría para ${symbol}.`,
-                    current_price: null,
-                    nearest_support: null,
-                    nearest_resistance: null,
-                    signals: [],
-                    key_levels: { resistances: [], supports: [] }
+                    reasoning: `Cargando telemetría de alta velocidad para ${symbol} (${timeframe}).`,
                 },
-                htfBias: null,
-            });
+            }));
 
             // Rest Hydration
             // 🚀 [PLATINUM HYDRATION] Carga inmediata vía REST para evitar delay de WS

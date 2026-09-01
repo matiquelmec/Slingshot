@@ -182,19 +182,38 @@ export default function TradingChart() {
             }
         }
 
-        // 3. Price Line
-        if (priceLineRef.current) { try { s.removePriceLine(priceLineRef.current); } catch(e){} priceLineRef.current = null; }
-        const isUp = last ? latestPrice >= last.open : true;
-        try {
-            priceLineRef.current = s.createPriceLine({
-                price: latestPrice, 
-                color: isUp ? 'rgba(0,255,65,0.9)' : 'rgba(255,0,60,0.9)',
-                lineWidth: 1, 
-                lineStyle: LineStyle.Dotted, 
-                axisLabelVisible: true, 
-                title: '',
-            });
-        } catch(e){}
+        // 3. Ultra-Smooth In-Place Price Line (60 FPS without GC allocation)
+        const isUp = last ? latestPrice >= Number(last.open) : true;
+        const priceColor = isUp ? 'rgba(0,255,65,0.9)' : 'rgba(255,0,60,0.9)';
+        if (priceLineRef.current) {
+            try {
+                priceLineRef.current.applyOptions({
+                    price: latestPrice,
+                    color: priceColor
+                });
+            } catch(e) {
+                try { s.removePriceLine(priceLineRef.current); } catch(err){}
+                priceLineRef.current = s.createPriceLine({
+                    price: latestPrice,
+                    color: priceColor,
+                    lineWidth: 1,
+                    lineStyle: LineStyle.Dotted,
+                    axisLabelVisible: true,
+                    title: '',
+                });
+            }
+        } else {
+            try {
+                priceLineRef.current = s.createPriceLine({
+                    price: latestPrice,
+                    color: priceColor,
+                    lineWidth: 1,
+                    lineStyle: LineStyle.Dotted,
+                    axisLabelVisible: true,
+                    title: '',
+                });
+            } catch(e){}
+        }
     }, [latestPrice, candles]);
 
     // ── SMC & FVG ──

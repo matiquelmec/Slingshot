@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useTelemetryStore } from '../../store/telemetryStore';
 import { Shield, Zap, AlertCircle, RefreshCw, Terminal, X, Globe } from 'lucide-react';
+import { getApiBaseUrl } from '../../utils/apiUrl';
 
 export default function LatticeStatus() {
     const { tacticalDecision, isConnected, connectionStatus, connectionMode, activeSymbol, latestPrice } = useTelemetryStore();
@@ -30,8 +31,8 @@ export default function LatticeStatus() {
         setIsInjecting(true);
         try {
             const api_key = 'SLINGSHOT_INTERNAL_V6';
-            const BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-            const endpoint = `${BASE_URL.replace(/\/$/, '')}/api/v1/inject-test-signal?api_key=${api_key}&symbol=${testAsset}&direction=${testDir}&price=${testPrice}`;
+            const BASE_URL = getApiBaseUrl();
+            const endpoint = `${BASE_URL}/api/v1/inject-test-signal?api_key=${api_key}&symbol=${testAsset}&direction=${testDir}&price=${testPrice}`;
             
             const res = await fetch(endpoint, { method: 'POST' });
             if (res.ok) {
