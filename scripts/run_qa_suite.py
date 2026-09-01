@@ -40,12 +40,13 @@ MODERN_TEST_FILES = [
     "engine/tests/test_apex_shield_and_fault_tolerance.py",
     "engine/tests/test_weekly_seasonality_and_time_gating.py",
     "engine/tests/test_instant_microstructure_hydration.py",
-    "engine/tests/test_fullstack_telemetry_and_synapse_stream.py"
+    "engine/tests/test_fullstack_telemetry_and_synapse_stream.py",
+    "engine/tests/test_pyramiding_and_free_roll_scale_in.py"
 ]
 
 def main():
     print("\n" + "="*80)
-    print("🧪 SLINGSHOT v27.0 APEX SYNAPSE — SUITE OFICIAL DE CERTIFICACIÓN QA")
+    print("🧪 SLINGSHOT v28.0 APEX MULTIPLIER — SUITE OFICIAL DE CERTIFICACIÓN QA")
     print("="*80)
     
     cmd = [sys.executable, "-m", "pytest"] + MODERN_TEST_FILES + ["-v", "--tb=short"]
@@ -53,7 +54,7 @@ def main():
     
     if result.returncode == 0:
         print("\n" + "="*80)
-        print("✅ CERTIFICACIÓN QA EXITOSA: 131/131 PRUEBAS APROBADAS AL 100%")
+        print("✅ CERTIFICACIÓN QA EXITOSA: 136/136 PRUEBAS APROBADAS AL 100%")
         print("="*80 + "\n")
     else:
         print("\n" + "="*80)

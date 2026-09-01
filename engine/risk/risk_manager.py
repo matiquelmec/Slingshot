@@ -443,3 +443,76 @@ class RiskManager:
             "fib_ote": {"is_in_ote": is_in_ote},
             "sl_exceeded_max": sl_exceeded_max
         }
+
+    def calculate_scale_in_sizing(
+        self,
+        base_position_size_usdt: float,
+        base_entry_price: float,
+        current_sl: float,
+        add_on_entry_price: float,
+        new_structural_sl: float,
+        signal_type: str = "LONG",
+        scale_ratio: float = 0.50,
+    ) -> dict:
+        """
+        [SOP-16 ZERO-RISK SCALE-IN ENGINE v28.0]
+        Calcula el dimensionamiento exacto y el Stop Loss compuesto de un Add-On de piramidación.
+        
+        Garantía Matemática de Invarianza:
+        1. La posición base DEBE tener su Stop Loss actual asegurado por encima de su entrada en Longs (o por debajo en Shorts).
+        2. Al mover el Stop Loss al new_structural_sl:
+           PnL_base = base_size * (new_structural_sl - base_entry) / base_entry (en Longs)
+           Risk_addon = addon_size * (add_on_entry - new_structural_sl) / add_on_entry (en Longs)
+           Net_PnL = PnL_base - Risk_addon
+        3. El Add-on solo es aprobado si Net_PnL >= 0.00 USDT.
+        """
+        is_long = "LONG" in str(signal_type).upper()
+        
+        # Validación Base: ¿La orden primaria ya está en ganancia asegurada?
+        base_is_protected = (current_sl >= base_entry_price) if is_long else (current_sl <= base_entry_price)
+        if not base_is_protected:
+            return {
+                "approved": False,
+                "reason": "Base position is not yet protected in Breakeven/Profit",
+                "add_on_size_usdt": 0.0,
+                "net_pnl_at_sl": 0.0
+            }
+            
+        nominal_addon_size = base_position_size_usdt * scale_ratio
+        
+        # PnL de la posición base en el nuevo Stop Loss estructural
+        if is_long:
+            base_pnl_at_new_sl = base_position_size_usdt * ((new_structural_sl - base_entry_price) / base_entry_price) if base_entry_price > 0 else 0
+            addon_loss_at_sl = nominal_addon_size * ((add_on_entry_price - new_structural_sl) / add_on_entry_price) if add_on_entry_price > 0 else 0
+        else:
+            base_pnl_at_new_sl = base_position_size_usdt * ((base_entry_price - new_structural_sl) / base_entry_price) if base_entry_price > 0 else 0
+            addon_loss_at_sl = nominal_addon_size * ((new_structural_sl - add_on_entry_price) / add_on_entry_price) if add_on_entry_price > 0 else 0
+            
+        net_pnl_at_sl = round(base_pnl_at_new_sl - addon_loss_at_sl, 2)
+        
+        # Si el net_pnl_at_sl es negativo, reducimos el addon_size para garantizar que sea exactamente >= 0.0
+        if net_pnl_at_sl < 0:
+            if base_pnl_at_new_sl > 0:
+                # Ajustar addon_size para que addon_loss == base_pnl_at_new_sl
+                loss_fraction = ((add_on_entry_price - new_structural_sl) / add_on_entry_price) if is_long else ((new_structural_sl - add_on_entry_price) / add_on_entry_price)
+                if loss_fraction > 0:
+                    nominal_addon_size = round(base_pnl_at_new_sl / loss_fraction, 2)
+                    net_pnl_at_sl = 0.0
+                else:
+                    return {"approved": False, "reason": "Invalid structural SL for add-on", "add_on_size_usdt": 0.0, "net_pnl_at_sl": 0.0}
+            else:
+                return {
+                    "approved": False,
+                    "reason": f"Insufficient locked base profit (${base_pnl_at_new_sl:.2f}) to cover scale-in risk",
+                    "add_on_size_usdt": 0.0,
+                    "net_pnl_at_sl": net_pnl_at_sl
+                }
+                
+        return {
+            "approved": True,
+            "add_on_size_usdt": round(nominal_addon_size, 2),
+            "new_composite_sl": round(new_structural_sl, 5),
+            "net_pnl_at_sl": net_pnl_at_sl,
+            "scale_ratio": scale_ratio,
+            "reason": f"Scale-in approved with guaranteed Net PnL >= ${net_pnl_at_sl:.2f} USDT"
+        }

@@ -70,42 +70,66 @@ class NexusNode:
                     except Exception as tm_err:
                         logger.debug(f"[NEXUS] TradeManager skip para {asset}: {tm_err}")
 
-                    # 3. 🚀 [YOSH v13.1] AVERAGING UP (Escalado en Ganancia)
-                    # Si ya estamos en BE y el precio retrocede a una zona de VALOR, añadir contratos.
-                    can_scale = pos.get("smart_trailing", {}).get("be_active", False) and not pos.get("averaging_up_done", False)
+                    # 3. 🚀 [SOP-16 FREE-ROLL SCALE-IN ENGINE v28.0]
+                    # Solo escalar si la posición está confirmada en BREAKEVEN (Cero Riesgo de Capital) y no se ha escalado previamente
+                    is_be_active = pos.get("smart_trailing", {}).get("be_active", False) or \
+                                   sig.get("trailing_phase") in ("BREAKEVEN", "TRAILING") or \
+                                   pos.get("status") in ("BREAKEVEN", "TRAILING")
+                    can_scale = is_be_active and not pos.get("averaging_up_done", False)
+
                     if can_scale:
-                        session_state = store.get_session_state(asset)
-                        vp = (session_state or {}).get("volume_profile", {})
+                        # 🛡️ SOP-16.2: Veto Macro por Noticias de Alto Impacto
+                        from engine.indicators.ghost_data import get_ghost_state
+                        ghost = get_ghost_state()
+                        macro_risk = getattr(ghost, "macro_risk", False) if ghost else False
 
-                        if vp and vp.get("poc"):
-                            poc = vp["poc"]
+                        if not macro_risk:
+                            session_state = store.get_session_state(asset)
+                            vp = (session_state or {}).get("volume_profile", {})
+                            poc = vp.get("poc") if vp else None
 
-                            # Criterio: El precio retrocede al POC (dependiendo de la dirección)
-                            target_ref = poc # Usamos el POC como imán de valor principal
-                            retest_zone = (current_price <= target_ref * 1.001 and current_price >= target_ref) if is_long else \
-                                          (current_price >= target_ref * 0.999 and current_price <= target_ref)
+                            # Zona de Retesteo OTE / POC / FVG
+                            target_ref = poc or entry
+                            retest_zone = (current_price <= target_ref * 1.002 and current_price >= target_ref * 0.998) if is_long else \
+                                          (current_price >= target_ref * 0.998 and current_price <= target_ref * 1.002)
 
                             if retest_zone:
-                                logger.warning(f"📈 [YOSH] Retest de VALOR detectado en {asset} (${current_price:.2f}). Ejecutando AVERAGING UP...")
                                 try:
-                                    side = 'buy' if is_long else 'sell'
+                                    from engine.risk.risk_manager import RiskManager
+                                    rm = RiskManager()
                                     size_usd = float(sig.get("position_size_usdt", sig.get("position_size", 100)))
                                     leverage = int(sig.get("leverage", 1))
+                                    current_sl_val = float(sig.get("stop_loss", sl))
 
-                                    # Añadir 50% de contratos
-                                    scale_success = await self.executor.scale_position(
-                                        symbol=asset,
-                                        side=side,
-                                        amount_usd=size_usd * 0.5,
-                                        leverage=leverage
+                                    # Cálculo de Stop Loss Compuesto con Invarianza de PnL Positivo
+                                    scale_calc = rm.calculate_scale_in_sizing(
+                                        base_position_size_usdt=size_usd,
+                                        base_entry_price=entry,
+                                        current_sl=current_sl_val,
+                                        add_on_entry_price=current_price,
+                                        new_structural_sl=current_sl_val,
+                                        signal_type=sig.get("type", "LONG"),
+                                        scale_ratio=0.50
                                     )
 
-                                    if scale_success:
-                                        pos["averaging_up_done"] = True
-                                        pos["signal"]["position_size_usdt"] *= 1.5
-                                        logger.info(f"✅ [YOSH] Posición {asset} escalada de forma real. Nuevo tamaño en memoria: ${pos['signal']['position_size_usdt']:.2f}")
+                                    if scale_calc.get("approved"):
+                                        add_on_usd = scale_calc.get("add_on_size_usdt", size_usd * 0.5)
+                                        side = 'buy' if is_long else 'sell'
+                                        logger.warning(f"📈 [SOP-16 SCALE-IN] Retesteo OTE detectado en {asset} (${current_price:.2f}). Ejecutando Scale-In (+${add_on_usd:.2f} USDT, PnL Neto >= ${scale_calc.get('net_pnl_at_sl'):.2f})...")
+
+                                        scale_success = await self.executor.scale_position(
+                                            symbol=asset,
+                                            side=side,
+                                            amount_usd=add_on_usd,
+                                            leverage=leverage
+                                        )
+
+                                        if scale_success:
+                                            pos["averaging_up_done"] = True
+                                            pos["signal"]["position_size_usdt"] = size_usd + add_on_usd
+                                            logger.info(f"✅ [SOP-16 SCALE-IN] Posición {asset} escalada con éxito. Nuevo tamaño: ${pos['signal']['position_size_usdt']:.2f}")
                                 except Exception as scale_err:
-                                    logger.error(f"❌ [YOSH] Error al escalar posición: {scale_err}")
+                                    logger.error(f"❌ [SOP-16 SCALE-IN] Error al evaluar/escalar posición {asset}: {scale_err}")
 
                     # 4. Verificar si la posicion se ha cerrado (SL o TP3 final hit)
                     # 🛡️ BREATHING ROOM GUARD: Evitar stopout en los primeros 10s si el precio no es válido o es ruido de spread
