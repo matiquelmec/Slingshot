@@ -45,12 +45,13 @@ MODERN_TEST_FILES = [
     "engine/tests/test_true_backtest_ssot_parity.py",
     "engine/tests/test_apex_titan_smart_time_gating.py",
     "engine/tests/test_apex_zenith_news_and_post_only.py",
-    "engine/tests/test_multi_market_ftmo_and_crypto_harmony.py"
+    "engine/tests/test_multi_market_ftmo_and_crypto_harmony.py",
+    "engine/tests/test_realtime_candlestick_formation_and_stream.py"
 ]
 
 def main():
     print("\n" + "="*80)
-    print("🧪 SLINGSHOT v33.0 APEX OLYMPUS — SUITE OFICIAL DE CERTIFICACIÓN QA")
+    print("🧪 SLINGSHOT v34.0 APEX TITAN — SUITE OFICIAL DE CERTIFICACIÓN QA")
     print("="*80)
     
     cmd = [sys.executable, "-m", "pytest"] + MODERN_TEST_FILES + ["-v", "--tb=short"]
@@ -58,7 +59,7 @@ def main():
     
     if result.returncode == 0:
         print("\n" + "="*80)
-        print("✅ CERTIFICACIÓN QA EXITOSA: 156/156 PRUEBAS APROBADAS AL 100%")
+        print("✅ CERTIFICACIÓN QA EXITOSA: 161/161 PRUEBAS APROBADAS AL 100%")
         print("="*80 + "\n")
     else:
         print("\n" + "="*80)
