@@ -1,6 +1,7 @@
 import { TelemetryState, Timeframe } from './types';
 import { handleWsMessage } from './handlers';
 import { MAX_RETRIES } from './constants';
+import { getApiBaseUrl, getWsBaseUrl } from '../../utils/apiUrl';
 
 export const createConnectionManager = (set: any, get: any) => {
     let ws: WebSocket | null = null;
@@ -20,6 +21,9 @@ export const createConnectionManager = (set: any, get: any) => {
         }
         if (retryTimeout) clearTimeout(retryTimeout);
         if (watchdogInterval) clearInterval(watchdogInterval);
+
+        const BASE_URL = getApiBaseUrl();
+        const BASE_WS = getWsBaseUrl();
 
         if (!isRetry) {
             retryCount = 0;
@@ -51,7 +55,6 @@ export const createConnectionManager = (set: any, get: any) => {
             });
 
             // Rest Hydration
-            const BASE_URL = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000').replace(/\/$/, '');
             // 🚀 [PLATINUM HYDRATION] Carga inmediata vía REST para evitar delay de WS
             const fetchInitialData = async () => {
                 try {
@@ -117,8 +120,6 @@ export const createConnectionManager = (set: any, get: any) => {
             set({ activeConnectionId: connectionId });
         }
 
-        const BASE_URL = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000').replace(/\/$/, '');
-        const BASE_WS = (process.env.NEXT_PUBLIC_API_WS_URL || 'ws://localhost:8000').replace(/\/$/, '');
         const SECURITY_KEY = process.env.NEXT_PUBLIC_SECURITY_KEY ?? 'SLINGSHOT_INTERNAL_V6';
 
         try {

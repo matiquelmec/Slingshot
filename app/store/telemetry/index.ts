@@ -4,6 +4,7 @@ import { initialState } from './initialState';
 import { mergeSignals } from './storage';
 import { createConnectionManager } from './connection';
 import { Signal, NewsItem } from '../../types/signal';
+import { getApiBaseUrl } from '../../utils/apiUrl';
 
 export const useTelemetryStore = create<TelemetryState>((set, get) => {
     const connectionManager = createConnectionManager(set, get);
@@ -49,8 +50,8 @@ export const useTelemetryStore = create<TelemetryState>((set, get) => {
 
         fetchEconomicEvents: async () => {
             try {
-                const BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-                const endpoint = `${BASE_URL.replace(/\/$/, '')}/api/v1/calendar`;
+                const BASE_URL = getApiBaseUrl();
+                const endpoint = `${BASE_URL}/api/v1/calendar`;
                 
                 const res = await fetch(endpoint);
                 if (!res.ok) {
