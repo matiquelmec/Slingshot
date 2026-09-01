@@ -42,15 +42,35 @@ async def fetch_binance_history(symbol: str, interval: str = "15m", limit: int =
             response.raise_for_status()
             raw = response.json()
             
-            candles = [
-                {"type": "candle", "data": {
-                    "timestamp": k[0] / 1000,
-                    "open": float(k[1]), "high": float(k[2]),
-                    "low": float(k[3]),  "close": float(k[4]),
-                    "volume": float(k[5]),
-                }}
-                for k in raw
-            ]
+            candles = []
+            for k in raw:
+                vol = float(k[5])
+                taker_buy = float(k[9]) if len(k) > 9 else vol * 0.5
+                taker_buy_quote = float(k[10]) if len(k) > 10 else 0.0
+                trades_count = int(k[8]) if len(k) > 8 else 0
+                
+                # Cálculo matemático exacto de Delta (Taker Buy vs Taker Sell)
+                taker_sell = max(0.0, vol - taker_buy)
+                delta = ((taker_buy - taker_sell) / (vol + 1e-9)) if vol > 0 else 0.0
+                delta_clamped = max(-1.0, min(1.0, delta))
+                
+                candles.append({
+                    "type": "candle",
+                    "data": {
+                        "timestamp": k[0] / 1000,
+                        "open": float(k[1]),
+                        "high": float(k[2]),
+                        "low": float(k[3]),
+                        "close": float(k[4]),
+                        "volume": vol,
+                        "taker_buy_volume": taker_buy,
+                        "taker_sell_volume": taker_sell,
+                        "taker_buy_quote": taker_buy_quote,
+                        "trades_count": trades_count,
+                        "order_flow_delta": delta_clamped,
+                        "delta_ratio": delta_clamped
+                    }
+                })
             
             # ── INTEGRACIÓN DE CO-PROCESAMIENTO HFT SIDECAR ──
             # Hidratamos el cierre y volumen de la vela en desarrollo con la caché de Node.js

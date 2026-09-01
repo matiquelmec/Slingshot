@@ -79,21 +79,34 @@ def calculate_rvol(df: pd.DataFrame, window: int = 50, use_seasonality: bool = T
 
 def calculate_order_flow_delta(df: pd.DataFrame) -> pd.Series:
     """
-    Order Flow Delta Ingestion Engine v10.0.
-    Calcula la fuerza neta compradora vs vendedora a nivel de mecha, cuerpo y datos del Sidecar.
-    Retorna Series con valores entre -1.0 (Venta pura) y +1.0 (Compra pura).
+    Order Flow Delta Ingestion Engine v26.4 (Instant Warmup).
+    Calcula la fuerza neta compradora vs vendedora:
+    1. Ground Truth: Taker Buy Volume nativo (k[9] de Binance Futures) si está presente.
+    2. Sidecar Delta Ratio (HFT tick-level aggregation).
+    3. Fallback Geométrico (Cuerpo y Mechas).
+    Retorna Series con valores normalizados entre -1.0 (Venta pura) y +1.0 (Compra pura).
     """
     if df.empty or 'close' not in df.columns or 'open' not in df.columns:
         return pd.Series(0.0, index=df.index if not df.empty else None)
 
+    # 1. Ground Truth de Binance Futures: Taker Buy Volume real
+    if 'taker_buy_volume' in df.columns and 'volume' in df.columns:
+        vol = df['volume'].replace(0, 1e-9)
+        taker_buy = df['taker_buy_volume'].fillna(vol * 0.5)
+        taker_sell = (vol - taker_buy).clip(lower=0.0)
+        pure_delta = (taker_buy - taker_sell) / vol
+        return pure_delta.clip(-1.0, 1.0)
+
+    # 2. Si ya viene pre-calculada la columna order_flow_delta o delta_ratio
+    if 'order_flow_delta' in df.columns:
+        return df['order_flow_delta'].fillna(0.0).clip(-1.0, 1.0)
+
     body = df['close'] - df['open']
     high_low = df['high'] - df['low']
     high_low_safe = high_low.replace(0, 1e-9)
-
-    # Delta direccional basado en cuerpo y mechas
     wick_delta = body / high_low_safe
 
-    # Si la columna delta_ratio del Sidecar está presente, combinar con mayor peso
+    # 3. Si la columna delta_ratio del Sidecar está presente
     if 'delta_ratio' in df.columns:
         sidecar_delta = df['delta_ratio'].fillna(0.0)
         combined = (sidecar_delta * 0.6) + (wick_delta * 0.4)

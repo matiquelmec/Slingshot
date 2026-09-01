@@ -10,7 +10,7 @@
 
 Write-Host ""
 Write-Host "  ============================================" -ForegroundColor Cyan
-Write-Host "         SLINGSHOT v26.2 APEX SHIELD          " -ForegroundColor Cyan
+Write-Host "        SLINGSHOT v26.4 INSTANT WARMUP        " -ForegroundColor Cyan
 Write-Host "  ============================================" -ForegroundColor Cyan
 Write-Host ""
 
