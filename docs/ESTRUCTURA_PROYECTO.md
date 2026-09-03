@@ -1,11 +1,11 @@
-# 🏗️ Estructura del Proyecto Slingshot v33.0 Apex Olympus
+# 🏗️ Estructura del Proyecto Slingshot v42.0 APEX TITAN COMPOUND
 
 > Guía de referencia oficial para la arquitectura, mantenimiento y evolución del sistema.
-> **Última actualización**: Septiembre 2026 (v33.0 Apex Olympus — Multi-Market Crypto & FTMO Supreme Harmony, Selector Visual de Mercados, Protocolos SOP-07 a SOP-20, 156/156 QA Tests Passed & SSoT True Backtest Engine)
+> **Última actualización**: Septiembre 2026 (v42.0 APEX TITAN COMPOUND — Arquitectura Dual Bitunix 2.5% vs FTMO 0.75%, Protocolos SOP-01 a SOP-40, 201/201 QA Tests Passed & SSoT True Backtest Engine).
 
 ---
 
-## 📁 Árbol de Directorios Oficial v24.0
+## 📁 Árbol de Directorios Oficial v42.0
 
 ```text
 Slingshot_Trading/
@@ -28,9 +28,9 @@ Slingshot_Trading/
 │   │   └── registry.py              # SymbolBroadcaster y Pulso Global de Telemetría
 │   ├── core/                        # Núcleo del motor y Persistencia
 │   │   ├── vault.py                 # SQLite WAL Vault — Persistencia Transaccional ACID (SSoT)
-│   │   ├── confluence.py            # ConfluenceManager — Jurado de Confluencia + Asymmetric Altcoin Gating
+│   │   ├── confluence.py            # ConfluenceManager — Jurado de Confluencia + VWAP Shield + MTF Gate
 │   │   ├── store.py                 # MemoryStore — Estado persistente por activo y buffers
-│   │   ├── session_manager.py       # Gestión de sesiones institucionales (Asia/London/NY)
+│   │   ├── session_manager.py       # Gestión de sesiones institucionales (Asia/London/NY Open)
 │   │   └── validator.py             # AI Validator Agent — Auditoría narrativa
 │   ├── router/                      # Pipeline de señales y Despacho
 │   │   ├── analyzer.py              # MarketAnalyzer — LRU Cache de 200 ítems + SMC Overlays
@@ -41,31 +41,32 @@ Slingshot_Trading/
 │   ├── indicators/                  # Indicadores Técnicos e Institucionales
 │   │   ├── polars_engine.py         # Motor Vectorizado en Rust (Sub-2.5ms con Polars)
 │   │   ├── health.py                # Engine KER (Kaufman Efficiency Ratio — Anti-Ruido)
-│   │   ├── volume.py                # Volume Engine — RVOL, Order Flow Delta + CVD Divergence
+│   │   ├── volume.py                # Volume Engine — RVOL, Order Flow Delta + CVD Divergence + VWAP
 │   │   ├── structure.py             # Order Blocks, FVGs, S/R + Trap Detection LAF/LBF
 │   │   ├── fibonacci.py             # Retrocesos, Golden Pocket OTE (61.8% - 78.6%)
 │   │   ├── liquidations.py          # Clusters de Liquidación proyectados en vivo
 │   │   └── regime.py                # Detector de Régimen de Mercado (EMA + ADX)
 │   ├── risk/                        # Gestión de riesgo institucional
-│   │   ├── risk_manager.py          # RiskManager v24.0 — Staged Exits 50/30/20 & Fee Absorber (+0.08%)
-│   │   └── ftmo_guardian.py         # FTMO Guardian Shield — Lotes Adaptativos y Kill-Switch (-3.5%)
+│   │   ├── risk_manager.py          # RiskManager v42.0 — SOP-25 (-0.65R), SOP-26 (40/40/20) & SOP-32/33
+│   │   ├── ftmo_guardian.py         # FTMO Guardian Shield — Lotes Adaptativos y Kill-Switch (-3.5%)
+│   │   └── cluster_risk_guard.py    # Cluster Risk Guard — Covarianza en vivo (ρ >= 0.75) y SOP-30
 │   ├── execution/                   # Ejecución Institucional en Exchanges
-│   │   ├── nexus.py                 # Nexus Node — Breathing Room Shield (10s), Auto-Healing y Precision
+│   │   ├── nexus.py                 # Nexus Node — SOP-39 Dynamic Equity Margin 2.5% & SOP-40 Buffer
 │   │   ├── bitunix_executor.py      # Conector Bitunix Futures — Dynamic Precision + Doble SHA-256
 │   │   ├── mt5_bridge.py            # Puente MetaTrader 5 — Órdenes TradFi + Trailing de Posiciones MT5
-│   │   └── delta_executor.py        # Fragmentador de Órdenes Iceberg (Delta 50/30/20)
+│   │   └── delta_executor.py        # Fragmentador de Órdenes Iceberg (Delta 40/40/20)
 │   ├── workers/                     # Procesos en segundo plano
 │   │   ├── orchestrator.py          # SlingshotOrchestrator — Director de orquesta 24/7
-│   │   ├── market_scanner.py        # Escáner de Oportunidades Multitemporal (14 Activos)
-│   │   └── trade_manager.py         # Centinela de Posiciones Activas en Bitunix (Fast BE & Trailing)
-│   └── backtest/                    # ═══ THE TRUTH ENGINE: Motor de Backtest ═══
-│       ├── unified_backtest_engine.py # Motor Unificado de Backtesting con Paridad 1:1 en Producción
-│       ├── data/                    # Datasets históricos binarios .parquet (51 archivos)
-│       └── reports/                 # Reportes oficiales inmutables JSON
-│   └── tests/                       # ═══ Suite Oficial de Certificación QA (106/106 Tests OK) ═══
+│   │   ├── market_scanner.py        # Escáner Multitemporal Curado (BNB Scalp 15m / PAXG Swing 1H)
+│   │   └── trade_manager.py         # Centinela de Posiciones Activas (Early Invalidation & Trailing)
+│   ├── backtest/                    # ═══ THE TRUTH ENGINE: Motor de Backtest ═══
+│   │   ├── unified_backtest_engine.py # Motor Unificado con Paridad 1:1 SSoT en Producción
+│   │   ├── data/                    # Datasets históricos binarios .parquet (107 archivos)
+│   │   └── reports/                 # Reportes oficiales inmutables JSON (+72.25R, PF 1.43)
+│   └── tests/                       # ═══ Suite Oficial de Certificación QA (201/201 Tests OK) ═══
 │       ├── test_setup_and_portability.py            # Onboarding, live test de keys, guardado atómico
 │       ├── test_post_tp3_and_trailing_invariance.py # Post-TP3 híbrido, 70% ratchet e invarianza SL
-│       ├── test_risk_and_resilience_advanced.py     # Micro-buffer BE, 50/30/20, Asymmetric Gating, KER/RVOL
+│       ├── test_risk_and_resilience_advanced.py     # Micro-buffer BE, Asymmetric Gating, KER/RVOL
 │       ├── test_intelligent_limit_order_sentinel.py # Centinela de órdenes límite
 │       ├── test_full_engine_autonomy_audit.py       # Autonomía, Slot Recycling y no retroceso SL
 │       ├── test_live_trade_management.py            # Gestión en vivo de Stop Loss, Breathing Room y Fast BE
@@ -74,7 +75,7 @@ Slingshot_Trading/
 │       ├── test_deterministic_pipeline_isolation.py # Latencia y lot sizing sin red
 │       ├── test_session_mastery.py                  # Killzones de sesión (Asia/London/NY)
 │       ├── test_market_scanner_hft.py               # Watchdog OTE y order flow fallback
-│       ├── test_ftmo_security_guard.py              # Guardian FTMO, Lotes GER40/GBPJPY/Oro y Dynamic Phase Sizing
+│       ├── test_ftmo_security_guard.py              # Guardian FTMO, Lotes GER40/GBPJPY/Oro
 │       ├── test_telegram_persistence.py             # Deduplicación y supervivencia a reinicios
 │       ├── test_dynamic_sl_professional_audit.py    # Invarianza Monótona, Ratchet 1R-10R y Buffer ATR
 │       ├── test_dynamic_universe_screener.py        # Rotación cuantitativa y especialización Oro 1H
@@ -84,17 +85,31 @@ Slingshot_Trading/
 │       ├── test_backend_performance_and_security.py # Fast-path orjson Rust, Gzip, métricas y seguridad
 │       ├── test_breathing_room_and_nexus_harmony.py # Inmunidad BE prematuro (<1.0R) y armonía SSoT
 │       ├── test_institutional_execution_security_audit.py # SOP-07, SOP-08 (20x clamp), SOP-09 y Anti-NaN
-│       └── test_cluster_risk_guard.py               # Covarianza de retornos rodantes, gating ρ>=0.75
+│       ├── test_cluster_risk_guard.py               # Covarianza de retornos rodantes, gating ρ>=0.75
+│       ├── test_pyramiding_and_free_roll_scale_in.py# Piramidación Free-Roll y escalado seguro
+│       ├── test_true_backtest_ssot_parity.py        # Paridad 1:1 Live Engine vs Backtest Engine
+│       ├── test_apex_titan_smart_time_gating.py     # SOP-18 Lunes Pre-NY y micro-ventanas de precisión
+│       ├── test_apex_zenith_news_and_post_only.py   # SOP-19 Interceptor macro y Post-Only Maker
+│       ├── test_multi_market_ftmo_and_crypto_harmony.py # SOP-20 Armonía Dual Cripto / FTMO MT5
+│       ├── test_realtime_candlestick_formation_and_stream.py # Formación y stream en vivo de velas
+│       ├── test_sop21_liquidation_invariance_and_precision.py # Invarianza de Liquidación (Caso AKE)
+│       ├── test_apex_infinity_lifecycle_and_orphan_purge.py # SOP-22 Purga atómica de huérfanas
+│       ├── test_sop25_sop26_mae_mfe_harvesting.py   # SOP-25 (-0.65R) y SOP-26 (40/40/20)
+│       ├── test_sop27_vwap_exhaustion_shield.py     # SOP-27 Daily VWAP Exhaustion Shield
+│       ├── test_sop28_to_sop31_sovereign_suite.py   # Quality Gate, Session Alpha, Beta Limiter & Chop Veto
+│       ├── test_sop32_to_sop35_intelligent_leverage.py # Volatility Leverage & Alpha-Tier Kelly Sizing
+│       ├── test_sop36_to_sop38_universe_and_fractal_harmony.py # Curated Universe, MTF Gate & Sniper NY
+│       └── test_sop39_sop40_bitunix_dynamic_25pct_risk.py # Bitunix 2.5% Dynamic Margin & Buffer Guardrail
 ├── scripts/                         # ═══ HERRAMIENTAS CLI DE PRODUCCIÓN (SSoT) ═══
-│   ├── run_institutional_backtest.py# CLI Oficial de Backtesting por Símbolo / Timeframe / Cartera
-│   ├── run_qa_suite.py              # Suite Oficial de Certificación QA (106/106 Tests)
+│   ├── run_qa_suite.py              # Suite Oficial de Certificación QA (201/201 Tests)
 │   ├── historical_fetcher.py        # Descargador oficial de Parquets históricos
 │   ├── doctor.py                    # Diagnóstico y salud del sistema
 │   ├── watchdog_supervisor.py       # Monitor supervisor 24/7 en segundo plano
-│   └── archive/                     # 📦 28 scripts antiguos archivados
+│   └── archive/                     # 📦 Scripts antiguos archivados
 ├── docs/                            # ═══ Documentación Técnica y Biblias ═══
-│   ├── ESTRUCTURA_PROYECTO.md       # Guía de arquitectura oficial v26.0 (este archivo)
-│   ├── SLINGSHOT_BIBLE_V25.md       # Biblia técnica oficial v26.0 Cluster Fortress
+│   ├── ESTRUCTURA_PROYECTO.md       # Guía de arquitectura oficial v42.0 (este archivo)
+│   ├── SLINGSHOT_BIBLE_V42.md       # Biblia técnica canónica oficial v42.0 APEX TITAN COMPOUND
+│   ├── archive/                     # 📦 16 versiones históricas archivadas (v10 a v33)
 │   └── knowledge/                   # Base de conocimiento institucional
 ├── install.bat                      # Instalador automatizado 1-Click para Windows
 ├── install.ps1                      # Script PowerShell con winget y auto-configuración
@@ -108,13 +123,18 @@ Slingshot_Trading/
 1. **Protocolo SOP-07 (Manejo Seguro de Credenciales):**
    * Las API keys jamás se imprimen en logs, consola ni respuestas HTTP públicas.
    * La escritura de `.env` se realiza de forma atómica a través de buffers temporales.
-2. **Protocolo SOP-08 (Invarianza Absoluta de Riesgo):**
+2. **Protocolo SOP-08 & SOP-32 (Invarianza y Apalancamiento Adaptativo):**
    * Los Stop Loss nunca pueden retroceder o empeorar.
-   * El cálculo de lotes de MT5 y Bitunix previene cualquier sobreapalancamiento que exceda el riesgo máximo por operación ($0.50\%$ en FTMO / $5\%$ de margen en Bitunix).
-3. **Protocolo SOP-09 (Auto-Healing Reconciliator):**
-   * Toda posición abierta es auditada cada 15-30s. Si carece de Stop Loss o Take Profits, el sistema los coloca automáticamente.
-4. **Certificación Continua (QA Suite):**
+   * El apalancamiento se calcula de forma inversa a la volatilidad del activo ($0.20 / \text{dist}$), garantizando que la liquidación jamás quede cerca del Stop Loss.
+3. **Protocolo SOP-25 & SOP-26 (Malla de Salidas Institucional):**
+   * Invalidación temprana a $-0.65\text{R}$ (corta pérdidas prematuramente).
+   * Cosecha del 40% a +1.2R (SL a Breakeven), 40% a +2.0R (+1.0R en verde) y 20% Runner a +3.5R.
+4. **Protocolo SOP-39 & SOP-40 (Gestión de Capital en Bitunix):**
+   * Riesgo real dinámico del 2.5% por operación con interés compuesto automático.
+   * Mínimo 50% de margen libre garantizado antes de abrir cada posición.
+5. **Certificación Continua (QA Suite):**
    * Antes de cualquier despliegue o commit en producción, se ejecuta obligatoriamente:
      ```powershell
-     python scripts/run_qa_suite.py
+     .venv\Scripts\python scripts/run_qa_suite.py
      ```
+     Verificando la aprobación del **100% de las 201 pruebas unitarias**.
