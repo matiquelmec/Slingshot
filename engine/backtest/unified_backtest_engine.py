@@ -45,7 +45,7 @@ logger.setLevel("ERROR")
 DATA_DIR = os.path.join(os.path.dirname(__file__), "data")
 
 MEGA_CAPS = ["BTCUSDT", "ETHUSDT", "SOLUSDT", "XRPUSDT", "AVAXUSDT", "LINKUSDT"]
-HIGH_BETA_ALTS = ["RENDERUSDT", "SUIUSDT", "INJUSDT", "NEARUSDT", "FETUSDT", "ATOMUSDT", "BNBUSDT", "PAXGUSDT"]
+HIGH_BETA_ALTS = ["INJUSDT", "BNBUSDT", "NEARUSDT", "FETUSDT", "SUIUSDT", "RENDERUSDT", "ATOMUSDT"]
 
 
 class UnifiedBacktestEngine:
@@ -387,7 +387,7 @@ class UnifiedBacktestEngine:
         all_results = []
 
         print("="*85)
-        print("👑  AUDITORÍA OFICIAL SLINGSHOT v40.0 APEX TITAN LEVERAGE (SOP-32 A SOP-35 SSoT)")
+        print("👑  AUDITORÍA OFICIAL SLINGSHOT v41.0 APEX ZENITH SOVEREIGN (SOP-36 A SOP-38 SSoT)")
         print("="*85)
         print(f"💰 Capital Base: ${self.initial_balance:,.2f} USD | Riesgo Base: {self.risk_pct*100:.2f}% | Comisiones Bitunix Descontadas")
         print("="*85)

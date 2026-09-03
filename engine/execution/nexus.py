@@ -570,12 +570,11 @@ class NexusNode:
                 logger.warning(f"🛑 [NEXUS MARGIN GUARD] Saldo insuficiente para {asset}: Disponible ${avail_margin:.2f} USDT < Requerido ${req_margin:.2f} USDT.")
                 return
 
-        logger.info(f"⚡ [NEXUS] Recibida señal de alta fidelidad: {asset} {sig_type}")
-
-        # ── SOP-33: ALPHA-TIER KELLY SIZING ──
+        # ── SOP-33 & SOP-38: ALPHA-TIER KELLY SIZING & SNIPER NY OPEN ──
         from engine.risk.risk_manager import RiskManager
         confluence_val = float(signal.get("confluence_score", 70.0))
-        sizing_mult = RiskManager.calculate_alpha_tier_sizing(asset, confluence_val)
+        hour_now = datetime.now(timezone.utc).hour
+        sizing_mult = RiskManager.calculate_alpha_tier_sizing(asset, confluence_val, hour_utc=hour_now)
         if sizing_mult <= 0.0:
             logger.warning(f"🛑 [NEXUS SOP-33] Omitido activo descalificado: {asset}")
             return
@@ -679,10 +678,11 @@ class NexusNode:
                 self._pending_limit_symbols.add(asset)
                 return
 
-            # ── SOP-33: ALPHA-TIER KELLY SIZING ──
+            # ── SOP-33 & SOP-38: ALPHA-TIER KELLY SIZING & SNIPER NY OPEN ──
             from engine.risk.risk_manager import RiskManager
             confluence_val = float(signal.get("confluence_score", 70.0))
-            sizing_mult = RiskManager.calculate_alpha_tier_sizing(asset, confluence_val)
+            hour_now = datetime.now(timezone.utc).hour
+            sizing_mult = RiskManager.calculate_alpha_tier_sizing(asset, confluence_val, hour_utc=hour_now)
             if sizing_mult <= 0.0:
                 logger.debug(f"[NEXUS AUTO-LIMIT SOP-33] Omitido activo descalificado: {asset}")
                 return

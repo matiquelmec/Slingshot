@@ -288,11 +288,11 @@ class RiskManager:
     }
 
     @classmethod
-    def calculate_alpha_tier_sizing(cls, symbol: str, confluence_score: float = 70.0) -> float:
+    def calculate_alpha_tier_sizing(cls, symbol: str, confluence_score: float = 70.0, hour_utc: int | None = None) -> float:
         """
-        [SOP-33 & SOP-34 ASYMMETRIC SIZING ENGINE]
-        Calcula el multiplicador de asignación de capital combinando el Tier del activo (Kelly Fraccional)
-        con la puntuación de confluencia institucional.
+        [SOP-33 & SOP-34 & SOP-38 ASYMMETRIC SIZING ENGINE]
+        Calcula el multiplicador de asignación de capital combinando el Tier del activo (Kelly Fraccional),
+        la confluencia institucional y la ventana horaria (Sniper NY Open vs Asia Defense).
         """
         sym = (symbol or "").replace("/", "").upper()
         base_mult = cls.ALPHA_TIERS.get(sym, 1.0)
@@ -305,7 +305,14 @@ class RiskManager:
         elif confluence_score < 68.0:
             base_mult *= 0.80 # -20% en setups defensivos/limítrofes
             
-        return round(min(1.60, max(0.50, base_mult)), 2)
+        # SOP-38: Sniper NY Open Priority & Asia Capital Defense
+        if hour_utc is not None:
+            if 13 <= hour_utc <= 17:
+                base_mult *= 1.10 # +10% en NY Open (máxima aceleración)
+            elif 0 <= hour_utc <= 6:
+                base_mult *= 0.70 # -30% en Asia (preservación de capital)
+            
+        return round(min(1.75, max(0.40, base_mult)), 2)
 
     # --- MÓDULO SIGMA: SINTONIZADOR DE ACTIVOS INSTITUCIONAL v17.0 ---
     # Mega-Caps (BTC, ETH, SOL, XRP, AVAX, LINK): 1H OTE Swing -> Colchón SL amplio (0.60x - 2.5x ATR)

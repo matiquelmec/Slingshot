@@ -21,13 +21,14 @@ class MarketScanner:
     """
     def __init__(self):
         self.router = SlingshotRouter()
-        # 🚀 Tier 1: Núcleo Fijo Especializado por Perfil Cuantitativo y Mejor Rendimiento
-        # Altcoins de alta beta en Scalp (15m), Megacaps y Oro en Swing/Intraday (1H)
+        # 🚀 Tier 1: Núcleo Fijo Especializado por Perfil Cuantitativo (SOP-36)
+        # 7 Activos Core Inmutables + BNBUSDT y SOLUSDT activos en Scalp 15m
         self.core_scalp_assets = ["RENDERUSDT", "SUIUSDT", "INJUSDT", "NEARUSDT", "FETUSDT", "ATOMUSDT", "TIAUSDT"]
         self.core_swing_1h_assets = ["BTCUSDT", "ETHUSDT", "SOLUSDT", "AVAXUSDT", "LINKUSDT", "XRPUSDT", "PAXGUSDT"]
         self.daily_assets = ["BTCUSDT", "ETHUSDT", "SOLUSDT", "PAXGUSDT", "RENDERUSDT", "NEARUSDT"]
         
-        self.scalp_assets = list(self.core_scalp_assets)
+        # Activos activos en Scalp 15m (Core + Campeones BNB y SOL)
+        self.scalp_assets = list(set(self.core_scalp_assets + ["BNBUSDT", "SOLUSDT"]))
         self.swing_1h_assets = list(self.core_swing_1h_assets)
         self.assets = list(set(self.scalp_assets + self.swing_1h_assets + self.daily_assets))
         
@@ -51,7 +52,7 @@ class MarketScanner:
         try:
             min_vol = getattr(settings, "DYNAMIC_MIN_24H_VOL_USDT", 30_000_000.0)
             max_dynamic = getattr(settings, "DYNAMIC_MAX_ROTATING_ASSETS", 6)
-            excluded_raw = getattr(settings, "EXCLUDED_DYNAMIC_ASSETS", "XAGUSDT,XAGUSD")
+            excluded_raw = getattr(settings, "EXCLUDED_DYNAMIC_ASSETS", "XAGUSDT,XAGUSD,PAXGUSDT,PAXG")
             excluded_set = {s.strip().upper() for s in excluded_raw.split(",") if s.strip()}
             
             liquid_candidates = await fetch_top_liquid_tickers(min_volume_usdt=min_vol, limit=25)
