@@ -9,7 +9,7 @@ import {
     Crosshair, ShieldCheck 
 } from 'lucide-react';
 import { useTelemetryStore } from '../store/telemetryStore';
-import OnboardingModal from '@/components/setup/OnboardingModal';
+import OnboardingModal from '@/app/components/setup/OnboardingModal';
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
     const pathname = usePathname();

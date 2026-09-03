@@ -85,7 +85,9 @@ def train_slingshot_model(data_path: Path, model_dir: Path):
 if __name__ == "__main__":
     # Rutas relativas al proyecto
     base_dir = Path(__file__).parent.parent.parent
-    data_file = base_dir / "data" / "btcusdt_15m_1YEAR.parquet"
+    data_file = base_dir / "engine" / "backtest" / "data" / "btcusdt_15m_1YEAR.parquet"
+    if not data_file.exists():
+        data_file = base_dir / "data" / "btcusdt_15m_1YEAR.parquet"
     models_out = base_dir / "engine" / "ml" / "models"
     
     train_slingshot_model(data_file, models_out)

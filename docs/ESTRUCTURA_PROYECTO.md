@@ -54,7 +54,9 @@ Slingshot_Trading/
 │   │   ├── nexus.py                 # Nexus Node — SOP-39 Dynamic Equity Margin 2.5% & SOP-40 Buffer
 │   │   ├── bitunix_executor.py      # Conector Bitunix Futures — Dynamic Precision + Doble SHA-256
 │   │   ├── mt5_bridge.py            # Puente MetaTrader 5 — Órdenes TradFi + Trailing de Posiciones MT5
-│   │   └── delta_executor.py        # Fragmentador de Órdenes Iceberg (Delta 40/40/20)
+│   │   ├── delta_executor.py        # Fragmentador de Órdenes Iceberg (Delta 40/40/20)
+│   │   ├── omega_listener.py        # Centinela de Monitoreo y Sincronización en Vivo
+│   │   └── archive/                 # 📦 Conectores inactivos preservados (binance_executor.py)
 │   ├── workers/                     # Procesos en segundo plano
 │   │   ├── orchestrator.py          # SlingshotOrchestrator — Director de orquesta 24/7
 │   │   ├── market_scanner.py        # Escáner Multitemporal Curado (BNB Scalp 15m / PAXG Swing 1H)
@@ -99,13 +101,16 @@ Slingshot_Trading/
 │       ├── test_sop28_to_sop31_sovereign_suite.py   # Quality Gate, Session Alpha, Beta Limiter & Chop Veto
 │       ├── test_sop32_to_sop35_intelligent_leverage.py # Volatility Leverage & Alpha-Tier Kelly Sizing
 │       ├── test_sop36_to_sop38_universe_and_fractal_harmony.py # Curated Universe, MTF Gate & Sniper NY
-│       └── test_sop39_sop40_bitunix_dynamic_25pct_risk.py # Bitunix 2.5% Dynamic Margin & Buffer Guardrail
+│       ├── test_sop39_sop40_bitunix_dynamic_25pct_risk.py # Bitunix 2.5% Dynamic Margin & Buffer Guardrail
+│       └── legacy/                      # 📦 44 pruebas históricas preservadas (v5 a v17)
 ├── scripts/                         # ═══ HERRAMIENTAS CLI DE PRODUCCIÓN (SSoT) ═══
 │   ├── run_qa_suite.py              # Suite Oficial de Certificación QA (201/201 Tests)
 │   ├── historical_fetcher.py        # Descargador oficial de Parquets históricos
 │   ├── doctor.py                    # Diagnóstico y salud del sistema
 │   ├── watchdog_supervisor.py       # Monitor supervisor 24/7 en segundo plano
-│   └── archive/                     # 📦 Scripts antiguos archivados
+│   └── archive/                     # 📦 Bóveda de archivos históricos
+│       ├── explorations/            # 30 scripts de investigación y simulación
+│       └── tools/                   # Herramientas de diagnóstico tempranas
 ├── docs/                            # ═══ Documentación Técnica y Biblias ═══
 │   ├── ESTRUCTURA_PROYECTO.md       # Guía de arquitectura oficial v42.0 (este archivo)
 │   ├── SLINGSHOT_BIBLE_V42.md       # Biblia técnica canónica oficial v42.0 APEX TITAN COMPOUND
