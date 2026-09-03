@@ -1,10 +1,10 @@
 @echo off
 chcp 65001 >nul
-title Slingshot Apex Sovereign -- Master Launcher
+title Slingshot v42.0 APEX TITAN COMPOUND -- Master Launcher
 color 0A
 
 echo ===============================================================================
-echo       SLINGSHOT v22.3 APEX SOVEREIGN -- MASTER LAUNCHER (DELTA / OMEGA)          
+echo       SLINGSHOT v42.0 APEX TITAN COMPOUND -- MASTER LAUNCHER (DELTA / OMEGA)          
 echo ===============================================================================
 echo.
 

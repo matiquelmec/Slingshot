@@ -10,7 +10,7 @@
 
 Write-Host ""
 Write-Host "  ============================================" -ForegroundColor Cyan
-Write-Host "        SLINGSHOT v33.0 APEX OLYMPUS          " -ForegroundColor Cyan
+Write-Host "     SLINGSHOT v42.0 APEX TITAN COMPOUND      " -ForegroundColor Cyan
 Write-Host "  ============================================" -ForegroundColor Cyan
 Write-Host ""
 

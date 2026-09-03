@@ -1,17 +1,19 @@
 @echo off
 chcp 65001 >nul
-title Slingshot v25.6 Institutional Fortress -- Instalador Automatico 1-Click
+title Slingshot v42.0 APEX TITAN COMPOUND -- Instalador Automatico 1-Click
 color 0B
 
 echo ===============================================================================
-echo       SLINGSHOT v25.6 INSTITUTIONAL FORTRESS -- INSTALADOR AUTOMATICO 1-CLICK          
+echo       SLINGSHOT v42.0 APEX TITAN COMPOUND -- INSTALADOR UNIVERSAL 1-CLICK          
 echo ===============================================================================
 echo.
-echo [1/4] Comprobando politicas de PowerShell y permisos locales...
+echo [1/4] Comprobando entorno de ejecucion y politicas locales...
 echo.
 
 cd /d "%~dp0"
-powershell -ExecutionPolicy Bypass -NoProfile -File "%~dp0install.ps1"
+
+:: Ejecucion robusta de PowerShell con bypass explicito y soporte de codificacion UTF-8
+powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "& { [Console]::OutputEncoding = [System.Text.Encoding]::UTF8; & '%~dp0install.ps1' }"
 
 if %ERRORLEVEL% NEQ 0 (
     echo.
@@ -25,7 +27,7 @@ if %ERRORLEVEL% NEQ 0 (
 
 echo.
 echo ===============================================================================
-echo [EXITO] Slingshot Apex Sovereign ha sido instalado y verificado al 100%%.
+echo [EXITO] Slingshot v42.0 ha sido instalado y verificado al 100%%.
 echo Presiona cualquier tecla para cerrar esta ventana.
 echo ===============================================================================
 pause >nul
