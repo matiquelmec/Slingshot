@@ -148,6 +148,33 @@ class ClusterRiskGuard:
                 correlated_risk_count += 1
                 conflicting_assets.append(f"{active_sym} (ρ={corr:.2f})")
                 
+        # ── SOP-30: BETA EXPOSURE LIMITER v39.0 ──
+        # Si es un LONG en Cripto, no permitir más de 2 posiciones LONG en cripto simultáneas con riesgo flotante
+        if new_dir == "LONG" and "CRYPTO" in new_cluster:
+            crypto_longs_count = 0
+            crypto_conflicts = []
+            for act_asset, p_data in active_positions.items():
+                act_sym = self._clean_symbol(act_asset)
+                if act_sym == new_sym:
+                    continue
+                s_data = p_data.get("signal", {})
+                s_dir = str(s_data.get("type", s_data.get("signal_type", "LONG"))).upper()
+                if s_dir == "LONG" and "CRYPTO" in self.get_cluster_name(act_sym):
+                    s_sl = float(s_data.get("stop_loss", 0))
+                    s_entry = float(s_data.get("price", s_data.get("entry_price", 0)))
+                    s_be = p_data.get("smart_trailing", {}).get("be_active", False)
+                    if not (s_be or (s_entry > 0 and s_sl >= s_entry * 0.999)):
+                        crypto_longs_count += 1
+                        crypto_conflicts.append(act_sym)
+                        
+            if crypto_longs_count >= self.max_per_cluster:
+                if confluence_score >= 88.0:
+                    logger.info(f"💎 [SOP-30 BETA GUARD] Confluencia Élite ({confluence_score}%) aprueba 3er LONG en {new_sym}.")
+                    return True, f"Aprobado por Confluencia Élite ({confluence_score}% >= 88%)"
+                reason = f"Límite de cluster alcanzado (SOP-30 BETA VETO: {crypto_longs_count}/{self.max_per_cluster} en riesgo). Conflicto con: {', '.join(crypto_conflicts)}"
+                logger.warning(f"{reason} para {new_sym}")
+                return False, reason
+
         if correlated_risk_count >= self.max_per_cluster:
             # Excepción por confluencia élite si el score es excepcionalmente alto (>= 88%)
             if confluence_score >= 88.0:

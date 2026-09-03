@@ -234,6 +234,23 @@ class RiskManager:
             return False, f"🛑 [SOP-27 VWAP VETO] Short sobreextendido ({vwap_dist_pct:.2f}% < {max_short_extension:.2f}% bajo Daily VWAP)."
         return True, f"✅ [SOP-27 VWAP OK] Posición saludable ({vwap_dist_pct:+.2f}% vs VWAP)."
 
+    # ── PROTOCOLO SOP-31: REGIME QUARANTINE v39.0 ────────────────────────────
+    @staticmethod
+    def check_regime_quarantine(
+        adx: float,
+        ker: float,
+        min_adx: float = 18.0,
+        min_ker: float = 0.28
+    ) -> tuple[bool, str]:
+        """
+        [SOP-31 REGIME QUARANTINE GUARD]
+        Veta entradas en activos con compresión severa de rango y ruido muerto (ADX < 18 y KER < 0.28),
+        donde el Win Rate cae al 38% y las órdenes pagan comisiones innecesarias.
+        """
+        if adx < min_adx and ker < min_ker:
+            return False, f"🛑 [SOP-31 REGIME QUARANTINE] Mercado en compresión muerta (ADX={adx:.1f} < {min_adx:.1f}, KER={ker:.2f} < {min_ker:.2f})."
+        return True, f"✅ [SOP-31 REGIME OK] Régimen de volatilidad activo (ADX={adx:.1f}, KER={ker:.2f})."
+
     # --- MÓDULO SIGMA: SINTONIZADOR DE ACTIVOS INSTITUCIONAL v17.0 ---
     # Mega-Caps (BTC, ETH, SOL, XRP, AVAX, LINK): 1H OTE Swing -> Colchón SL amplio (0.60x - 2.5x ATR)
     # High-Beta Alts (RENDER, SUI, INJ, NEAR, FET, PAXG): 15M Scalp -> SL Ágil (0.30x - 1.8x ATR)

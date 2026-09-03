@@ -121,14 +121,18 @@ async def fetch_top_liquid_tickers(min_volume_usdt: float = 30_000_000.0, limit:
             
         if response.status_code == 200:
             data = response.json()
-            # Filtrar pares USDT con volumen quote (USDT) superior al umbral
+            # Filtrar pares USDT con volumen quote (USDT) superior al umbral y aplicar SOP-28
             candidates = []
+            min_price_usd = 0.10  # [SOP-28 QUALITY GATE] Prohibido micro-tokens con errores de decimales
             for item in data:
                 sym = item.get("symbol", "")
                 if not sym.endswith("USDT") or "_" in sym:
                     continue
                 quote_vol = float(item.get("quoteVolume", 0.0))
-                if quote_vol >= min_volume_usdt:
+                last_price = float(item.get("lastPrice", 0.0))
+                
+                # SOP-28: Exigir volumen mínimo y precio >= $0.10 USDT
+                if quote_vol >= min_volume_usdt and last_price >= min_price_usd:
                     candidates.append((sym, quote_vol))
                     
             # Ordenar de mayor a menor volumen
@@ -137,7 +141,7 @@ async def fetch_top_liquid_tickers(min_volume_usdt: float = 30_000_000.0, limit:
             
             _LIQUID_TICKERS_CACHE["timestamp"] = now
             _LIQUID_TICKERS_CACHE["tickers"] = result
-            logger.info(f"🔍 [DYNAMIC SCREENER] Descubiertos {len(result)} activos líquidos (Volumen 24h > ${min_volume_usdt/1e6:.0f}M USDT).")
+            logger.info(f"🔍 [DYNAMIC SCREENER SOP-28] Descubiertos {len(result)} activos institucionales calificados (Volumen > ${min_volume_usdt/1e6:.0f}M, Precio >= ${min_price_usd}).")
             return result
     except Exception as e:
         logger.debug(f"[DYNAMIC SCREENER] Error consultando ranking 24h: {e}")

@@ -693,6 +693,23 @@ class ConfluenceManager:
             else:
                 checklist.append({"factor": "Día Institucional", "status": "NEUTRAL", "detail": f"Sesión en {day_wk}"})
 
+            # 🚀 Rule 3.5: SOP-29 SESSION ALPHA GATING v39.0
+            # Asia (00:00 - 07:00 UTC): PF 1.10 -> Precaución por bajo recorrido
+            # NY Open (13:00 - 17:00 UTC): PF 1.29 -> Ventana dorada institucional (+5pts)
+            # Rebalanceo (21:00 - 24:00 UTC): PF 1.31 -> Reequilibrio de libros (+5pts)
+            if 13 <= hr_utc < 17:
+                score += 5
+                checklist.append({"factor": "Session Alpha Gating", "status": "ALFA_GOLDEN", "detail": "NY Open (13:00-17:00 UTC): Ventana institucional dorada (PF 1.29) (+5pts)"})
+            elif 21 <= hr_utc < 24:
+                score += 5
+                checklist.append({"factor": "Session Alpha Gating", "status": "ALFA_GOLDEN", "detail": "Rebalanceo NY Close (21:00-24:00 UTC): Reequilibrio institucional (PF 1.31) (+5pts)"})
+            elif 0 <= hr_utc < 7:
+                score -= 2
+                checklist.append({"factor": "Session Alpha Gating", "status": "PRECAUCIÓN", "detail": "Sesión Asia (00:00-07:00 UTC): Rango pasivo / Ruido (-2pts)"})
+            else:
+                score += 2
+                checklist.append({"factor": "Session Alpha Gating", "status": "NEUTRAL", "detail": f"Sesión Londres ({hr_utc:02d}:00 UTC) (+2pts)"})
+
             # 🚀 Killzone Timing Gating para Índices TradFi (v25.0 FTMO Titanium)
             # Índices (US100, US30, US500, GER40): Exclusivamente en London Open (07:00-10:00 UTC) o NY Open (13:30-16:30 UTC)
             is_tradfi_index = any(idx in asset_name for idx in ["US100", "US30", "US500", "GER40", "NQ", "YM", "ES"])

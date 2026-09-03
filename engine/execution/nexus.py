@@ -554,6 +554,14 @@ class NexusNode:
             logger.warning(f"🛑 [NEXUS SOP-27] Rechazada orden en {asset}: {vwap_msg}")
             return
 
+        # ── SOP-31: REGIME QUARANTINE GUARD (ANTI-CHOP) ──
+        adx_val = float(signal.get("adx") or 25.0)
+        ker_val = float(signal.get("ker") or 0.40)
+        is_regime_ok, regime_msg = RiskManager.check_regime_quarantine(adx_val, ker_val)
+        if not is_regime_ok:
+            logger.warning(f"🛑 [NEXUS SOP-31] Rechazada orden en {asset}: {regime_msg}")
+            return
+
         # ── PRE-FLIGHT MARGIN GUARD (SOP-10) ──
         if not self.dry_run:
             avail_margin = await self.executor.get_available_margin_usdt()
@@ -642,6 +650,14 @@ class NexusNode:
         is_vwap_ok, vwap_msg = RiskManager.check_vwap_exhaustion(sig_dir, vwap_dist)
         if not is_vwap_ok:
             logger.info(f"🛑 [NEXUS AUTO-LIMIT SOP-27] Omitida orden límite para {asset}: {vwap_msg}")
+            return
+
+        # ── SOP-31: REGIME QUARANTINE GUARD (ANTI-CHOP) ──
+        adx_val = float(signal.get("adx") or 25.0)
+        ker_val = float(signal.get("ker") or 0.40)
+        is_regime_ok, regime_msg = RiskManager.check_regime_quarantine(adx_val, ker_val)
+        if not is_regime_ok:
+            logger.info(f"🛑 [NEXUS AUTO-LIMIT SOP-31] Omitida orden límite para {asset}: {regime_msg}")
             return
 
         # Si ya tenemos una posición abierta o una orden pendiente registrada en este activo, no duplicar
