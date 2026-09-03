@@ -494,7 +494,7 @@ class NexusNode:
             await asyncio.sleep(15)
 
     MAX_CONCURRENT_POSITIONS = 4
-    DEFAULT_MARGIN_USDT = 8.50 # ~5% del capital ($170 USDT) a 20x apalancamiento aislado
+    DEFAULT_MARGIN_USDT = 17.00 # SOP-39: 2.5% de riesgo real para cuenta de $200 USD (~8.5% de margen a ~12X con SL medio)
 
     def get_unprotected_risk_count(self) -> int:
         """
@@ -562,14 +562,6 @@ class NexusNode:
             logger.warning(f"🛑 [NEXUS SOP-31] Rechazada orden en {asset}: {regime_msg}")
             return
 
-        # ── PRE-FLIGHT MARGIN GUARD (SOP-10) ──
-        if not self.dry_run:
-            avail_margin = await self.executor.get_available_margin_usdt()
-            req_margin = float(signal.get("position_size_usdt", self.DEFAULT_MARGIN_USDT))
-            if avail_margin < req_margin:
-                logger.warning(f"🛑 [NEXUS MARGIN GUARD] Saldo insuficiente para {asset}: Disponible ${avail_margin:.2f} USDT < Requerido ${req_margin:.2f} USDT.")
-                return
-
         # ── SOP-33 & SOP-38: ALPHA-TIER KELLY SIZING & SNIPER NY OPEN ──
         from engine.risk.risk_manager import RiskManager
         confluence_val = float(signal.get("confluence_score", 70.0))
@@ -578,8 +570,26 @@ class NexusNode:
         if sizing_mult <= 0.0:
             logger.warning(f"🛑 [NEXUS SOP-33] Omitido activo descalificado: {asset}")
             return
+
+        # ── SOP-39: DYNAMIC EQUITY MARGIN (2.5% RIESGO CON INTERÉS COMPUESTO) ──
+        base_margin = self.DEFAULT_MARGIN_USDT
+        if not self.dry_run:
+            avail_margin = await self.executor.get_available_margin_usdt()
+            if avail_margin > 0:
+                base_margin = max(self.DEFAULT_MARGIN_USDT, avail_margin * 0.085)
+                
+            req_margin = float(signal.get("position_size_usdt", base_margin * sizing_mult))
+            if avail_margin < req_margin:
+                logger.warning(f"🛑 [NEXUS MARGIN GUARD] Saldo insuficiente para {asset}: Disponible ${avail_margin:.2f} USDT < Requerido ${req_margin:.2f} USDT.")
+                return
+
+            # ── SOP-40: BITUNIX PRE-FLIGHT BUFFER GUARDRAIL ──
+            min_buffer = min(50.0, avail_margin * 0.50)
+            if (avail_margin - req_margin) < min_buffer:
+                logger.warning(f"🛑 [NEXUS BUFFER GUARD] Buffer insuficiente para {asset}: Remanente ${avail_margin - req_margin:.2f} < Min ${min_buffer:.2f} USDT.")
+                return
             
-        target_margin = self.DEFAULT_MARGIN_USDT * sizing_mult
+        target_margin = base_margin * sizing_mult
         signal["position_size"] = round(target_margin, 2)
         signal["position_size_usdt"] = round(target_margin, 2)
             
@@ -687,7 +697,14 @@ class NexusNode:
                 logger.debug(f"[NEXUS AUTO-LIMIT SOP-33] Omitido activo descalificado: {asset}")
                 return
                 
-            target_margin = self.DEFAULT_MARGIN_USDT * sizing_mult
+            # ── SOP-39: DYNAMIC EQUITY MARGIN ──
+            base_margin = self.DEFAULT_MARGIN_USDT
+            if not self.dry_run:
+                avail_margin = await self.executor.get_available_margin_usdt()
+                if avail_margin > 0:
+                    base_margin = max(self.DEFAULT_MARGIN_USDT, avail_margin * 0.085)
+                    
+            target_margin = base_margin * sizing_mult
             signal["position_size"] = round(target_margin, 2)
             signal["position_size_usdt"] = round(target_margin, 2)
             
