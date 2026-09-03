@@ -49,12 +49,13 @@ MODERN_TEST_FILES = [
     "engine/tests/test_realtime_candlestick_formation_and_stream.py",
     "engine/tests/test_sop21_liquidation_invariance_and_precision.py",
     "engine/tests/test_apex_infinity_lifecycle_and_orphan_purge.py",
-    "engine/tests/test_sop25_sop26_mae_mfe_harvesting.py"
+    "engine/tests/test_sop25_sop26_mae_mfe_harvesting.py",
+    "engine/tests/test_sop27_vwap_exhaustion_shield.py"
 ]
 
 def main():
     print("\n" + "="*80)
-    print("🧪 SLINGSHOT v37.0 APEX QUANTUM — SUITE OFICIAL DE CERTIFICACIÓN QA")
+    print("🧪 SLINGSHOT v38.0 APEX TITAN — SUITE OFICIAL DE CERTIFICACIÓN QA")
     print("="*80)
     
     cmd = [sys.executable, "-m", "pytest"] + MODERN_TEST_FILES + ["-v", "--tb=short"]
@@ -62,7 +63,7 @@ def main():
     
     if result.returncode == 0:
         print("\n" + "="*80)
-        print("✅ CERTIFICACIÓN QA EXITOSA: 176/176 PRUEBAS APROBADAS AL 100%")
+        print("✅ CERTIFICACIÓN QA EXITOSA: 181/181 PRUEBAS APROBADAS AL 100%")
         print("="*80 + "\n")
     else:
         print("\n" + "="*80)

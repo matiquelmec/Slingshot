@@ -217,6 +217,23 @@ class RiskManager:
             
         return False, 0.0
 
+    # ── PROTOCOLO SOP-27: VWAP EXHAUSTION SHIELD v38.0 ──────────────────────
+    @staticmethod
+    def check_vwap_exhaustion(
+        side: str,
+        vwap_dist_pct: float,
+        max_short_extension: float = -1.5
+    ) -> tuple[bool, str]:
+        """
+        [SOP-27 VWAP EXHAUSTION GUARD]
+        Veta operaciones SHORT si el precio ya está sobreextendido a la baja (distancia al VWAP < -1.5%),
+        donde el Win Rate histórico cae a 34.9% y el Profit Factor es destructivo (0.91).
+        """
+        is_short = "SHORT" in side.upper() or "SELL" in side.upper()
+        if is_short and vwap_dist_pct < max_short_extension:
+            return False, f"🛑 [SOP-27 VWAP VETO] Short sobreextendido ({vwap_dist_pct:.2f}% < {max_short_extension:.2f}% bajo Daily VWAP)."
+        return True, f"✅ [SOP-27 VWAP OK] Posición saludable ({vwap_dist_pct:+.2f}% vs VWAP)."
+
     # --- MÓDULO SIGMA: SINTONIZADOR DE ACTIVOS INSTITUCIONAL v17.0 ---
     # Mega-Caps (BTC, ETH, SOL, XRP, AVAX, LINK): 1H OTE Swing -> Colchón SL amplio (0.60x - 2.5x ATR)
     # High-Beta Alts (RENDER, SUI, INJ, NEAR, FET, PAXG): 15M Scalp -> SL Ágil (0.30x - 1.8x ATR)

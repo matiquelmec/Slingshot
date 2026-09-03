@@ -34,6 +34,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")
 
 from engine.indicators.polars_engine import polars_engine
 from engine.indicators.structure import identify_order_blocks
+from engine.indicators.volume import calculate_vwap
 from engine.strategies.smc import SMCInstitutionalStrategy
 from engine.core.confluence import confluence_manager
 from engine.risk.risk_manager import RiskManager
@@ -160,6 +161,7 @@ class UnifiedBacktestEngine:
         change = (df["close"] - df["close"].shift(10)).abs()
         vol = (df["close"] - df["close"].shift(1)).abs().rolling(10).sum()
         df["ker"] = change / (vol + 1e-9)
+        df = calculate_vwap(df)
 
         trades = []
         n = len(df)
@@ -178,8 +180,8 @@ class UnifiedBacktestEngine:
                 continue
 
             # Filtro Horario (Killzones en 15m)
-            if interval == "15m" and self.strict_killzones:
-                if not (7 <= hour <= 12 or 13 <= hour <= 18):
+            if self.strict_killzones:
+                if not (7 <= hour <= 12 or 13 <= hour <= 17):
                     continue
 
             # Filtro KER Antiruido y RVOL
@@ -208,6 +210,12 @@ class UnifiedBacktestEngine:
                 continue
 
             direction = "LONG" if has_bull else "SHORT"
+
+            # ── PROTOCOLO SOP-27: DAILY VWAP EXHAUSTION SHIELD ──
+            vwap_dist = float(row.get("vwap_dist_pct", 0.0))
+            is_vwap_ok, _ = RiskManager.check_vwap_exhaustion(direction, vwap_dist)
+            if not is_vwap_ok:
+                continue
 
             # 2. Entrada Límite en Descuento OTE / FVG (SOP-26 Grid 40/40/20)
             if direction == "LONG":

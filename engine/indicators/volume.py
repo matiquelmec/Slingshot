@@ -339,6 +339,40 @@ def confirm_trigger(df: pd.DataFrame, min_rvol_pct: float = 0.85) -> pd.DataFram
     
     return df
 
+def calculate_vwap(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    [SOP-27 DAILY ANCHORED VWAP & EXHAUSTION ENGINE v38.0]
+    Calcula el precio medio ponderado por volumen anclado a las 00:00 UTC
+    y la distancia porcentual del precio respecto al VWAP.
+    """
+    df = df.copy()
+    if df.empty or 'volume' not in df.columns or 'close' not in df.columns:
+        df['d_vwap'] = df['close'] if 'close' in df.columns else 0.0
+        df['vwap_dist_pct'] = 0.0
+        return df
+
+    ts_col = 'timestamp' if 'timestamp' in df.columns else 't'
+    if ts_col in df.columns:
+        if not pd.api.types.is_datetime64_any_dtype(df[ts_col]):
+            dt_series = pd.to_datetime(df[ts_col], unit='s' if float(df[ts_col].iloc[0]) < 1e11 else 'ms', errors='coerce')
+        else:
+            dt_series = df[ts_col]
+        dates = dt_series.dt.date
+    else:
+        # Fallback sin timestamp: bloques de 96 velas (un día de 15m)
+        dates = np.arange(len(df)) // 96
+
+    typical_price = (df['high'] + df['low'] + df['close']) / 3.0 if 'high' in df.columns else df['close']
+    tp_vol = typical_price * df['volume']
+
+    # Acumulación por jornada
+    cum_vol = df.groupby(dates)['volume'].cumsum()
+    cum_tp_vol = tp_vol.groupby(dates).cumsum()
+
+    df['d_vwap'] = cum_tp_vol / np.maximum(cum_vol, 1e-5)
+    df['vwap_dist_pct'] = (df['close'] - df['d_vwap']) / np.maximum(df['d_vwap'], 1e-5) * 100.0
+    return df
+
 if __name__ == "__main__":
     import time
     start = time.time()

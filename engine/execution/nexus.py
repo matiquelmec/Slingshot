@@ -546,6 +546,14 @@ class NexusNode:
             logger.warning(f"🛑 [NEXUS SPREAD GUARD] Rechazada orden a mercado en {asset}: Spread excesivo ({current_spread_pct*100:.3f}% > 0.25%).")
             return
 
+        # ── SOP-27: VWAP EXHAUSTION SHIELD (ANTI-SHORT TRAP) ──
+        from engine.risk.risk_manager import RiskManager
+        vwap_dist = float(signal.get("vwap_dist_pct") or 0.0)
+        is_vwap_ok, vwap_msg = RiskManager.check_vwap_exhaustion(sig_type, vwap_dist)
+        if not is_vwap_ok:
+            logger.warning(f"🛑 [NEXUS SOP-27] Rechazada orden en {asset}: {vwap_msg}")
+            return
+
         # ── PRE-FLIGHT MARGIN GUARD (SOP-10) ──
         if not self.dry_run:
             avail_margin = await self.executor.get_available_margin_usdt()
@@ -625,6 +633,15 @@ class NexusNode:
         )
         if not can_open:
             logger.info(f"🛑 [NEXUS AUTO-LIMIT] Omitida orden límite para {asset}: {cluster_reason}")
+            return
+
+        # ── SOP-27: VWAP EXHAUSTION SHIELD (ANTI-SHORT TRAP) ──
+        from engine.risk.risk_manager import RiskManager
+        sig_dir = signal.get("type", signal.get("signal_type", "LONG"))
+        vwap_dist = float(signal.get("vwap_dist_pct") or 0.0)
+        is_vwap_ok, vwap_msg = RiskManager.check_vwap_exhaustion(sig_dir, vwap_dist)
+        if not is_vwap_ok:
+            logger.info(f"🛑 [NEXUS AUTO-LIMIT SOP-27] Omitida orden límite para {asset}: {vwap_msg}")
             return
 
         # Si ya tenemos una posición abierta o una orden pendiente registrada en este activo, no duplicar

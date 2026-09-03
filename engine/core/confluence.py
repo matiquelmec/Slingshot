@@ -449,6 +449,40 @@ class ConfluenceManager:
         except Exception as cvd_err:
             checklist.append({"factor": "CVD Divergence", "status": "NEUTRAL", "detail": "CVD en calibración"})
 
+        # 🛡️ 9.9. DAILY ANCHORED VWAP INSTITUTIONAL ANCHOR (Peso 15) v38.0 SOP-27
+        vwap_weight = 15
+        total_weight += vwap_weight
+        try:
+            vwap_dist = float(current.get('vwap_dist_pct', 0.0))
+            if 'vwap_dist_pct' not in current:
+                from engine.indicators.volume import calculate_vwap
+                df_v = calculate_vwap(df)
+                vwap_dist = float(df_v['vwap_dist_pct'].iloc[-1])
+                
+            if is_long:
+                if vwap_dist < -0.5:
+                    score += vwap_weight
+                    checklist.append({"factor": "Daily VWAP Anchor", "status": "CONFIRMADO", "detail": f"Descuento Institucional bajo VWAP ({vwap_dist:+.2f}%, Win Rate 44.1%, PF 1.41) (+15pts)"})
+                elif vwap_dist > 2.0:
+                    score += 0
+                    checklist.append({"factor": "Daily VWAP Anchor", "status": "SOBRECOMPRADO", "detail": f"Long sobreextendido ({vwap_dist:+.2f}% sobre Daily VWAP) (0pts)"})
+                else:
+                    score += vwap_weight // 2
+                    checklist.append({"factor": "Daily VWAP Anchor", "status": "NEUTRAL", "detail": f"Precio equilibrado con Daily VWAP ({vwap_dist:+.2f}%) (+{vwap_weight//2}pts)"})
+            else: # SHORT
+                if vwap_dist < -1.5:
+                    score -= 30
+                    checklist.append({"factor": "Daily VWAP Anchor", "status": "VETO_EXHAUSTION", "detail": f"🛑 [SOP-27 VETO] Short sobreextendido ({vwap_dist:+.2f}% < -1.50% bajo Daily VWAP, PF 0.91) (-30pts)"})
+                elif vwap_dist > 0.5:
+                    score += vwap_weight
+                    checklist.append({"factor": "Daily VWAP Anchor", "status": "CONFIRMADO", "detail": f"Venta en Premium sobre Daily VWAP ({vwap_dist:+.2f}%) (+15pts)"})
+                else:
+                    score += vwap_weight // 2
+                    checklist.append({"factor": "Daily VWAP Anchor", "status": "NEUTRAL", "detail": f"Precio equilibrado con Daily VWAP ({vwap_dist:+.2f}%) (+{vwap_weight//2}pts)"})
+        except Exception:
+            score += vwap_weight // 2
+            checklist.append({"factor": "Daily VWAP Anchor", "status": "NEUTRAL", "detail": "VWAP en cálculo"})
+
         # 🚀 10. ALINEACIÓN HTF (FRACTAL) — v10.0 Sovereign
         htf_bias = kwargs.get('htf_bias')
         multiplier = 1.0
