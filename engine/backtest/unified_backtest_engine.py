@@ -1,23 +1,19 @@
 """
 engine/backtest/unified_backtest_engine.py
 =============================================================================
-SLINGSHOT APEX v31.0 — TITAN QUANTUM REPLAY ENGINE (CLEAN SSoT & SOP-18)
+SLINGSHOT APEX v37.0 — QUANTUM REPLAY ENGINE (CLEAN SSoT, SOP-25 & SOP-26)
 =============================================================================
 Única Fuente de la Verdad (Single Source of Truth) para la auditoría cuantitativa.
 
-Mecánica Cuantitativa Institucional v31.0 (SOP-18 Asset-Specific Dynamic Gating):
+Mecánica Cuantitativa Institucional v37.0 (SOP-25 Early Invalidation & SOP-26 MFE Harvesting):
 1. Detección Vectorizada de Order Blocks y FVGs en Rust (Polars Engine).
 2. Alineación de Tendencia HTF (1H EMA200 / 15m EMA800).
-3. Filtro Cuántico de Ventanas Temporales Específico por Activo (SOP-18):
-   - Lunes Pre-NY (00:00-13:30 UTC): Bloqueado (Anti Judas Swing).
-   - Jueves Tarde (16:00-23:59 UTC): Bloqueado (Anti Jobless Claims).
-   - Horas 13h (Apertura NY caótica) y 18h (Cierre de Libros): Pausadas.
-   - AVAXUSDT: Exclusivo en horas 09:00 UTC y 17:00 UTC (Win Rate 66.7%, +4.99R).
-   - RENDERUSDT: Exclusivo en horas 08:00, 13:00, 17:00 y 18:00 UTC (+8.94R).
+3. Filtro Cuántico de Ventanas Temporales Específico por Activo (SOP-18).
 4. Entradas Límite SMC en zona de descuento FVG (40%-50% retracement).
-5. Escalonamiento de Salidas con Fast BE & Cobro TP0 (30% en +1.0R, 40% en TP1, 20% en TP2, 10% Runner).
-6. Motor de Piramidación Libre de Riesgo (SOP-16 Free-Roll Scale-In).
-7. Descuento Real de Comisiones Bitunix (Maker 0.02% / Taker 0.06%) y Slippage.
+5. [SOP-25] Early Structural Invalidation a -0.65R (ahorro de +0.35R por perdedor).
+6. [SOP-26] Dynamic MFE Harvesting Grid (40% en +1.2R, 40% en +2.0R, 20% Runner en +3.5R).
+7. [SOP-26] Bloqueo en Verde de +1.0R neto al tocar +2.0R (captura antes de retrocesos a BE).
+8. [SOP-21] Apalancamiento Seguro Dinámico y Descuento Real de Comisiones Bitunix.
 """
 
 import sys
@@ -213,23 +209,21 @@ class UnifiedBacktestEngine:
 
             direction = "LONG" if has_bull else "SHORT"
 
-            # 2. Entrada Límite en Descuento OTE / FVG
+            # 2. Entrada Límite en Descuento OTE / FVG (SOP-26 Grid 40/40/20)
             if direction == "LONG":
-                entry = c - (atr * 0.40)
-                sl = entry - (atr * 0.80)
+                entry = c - (atr * 0.35)
+                sl = entry - (atr * 0.85)
                 risk = entry - sl
-                p_tp0 = entry + (risk * 1.0)   # Fast BE + Cobro 30%
-                p_tp1 = entry + (risk * 1.5)   # TP1 (+1.5R, +40%)
-                p_tp2 = entry + (risk * 2.5)   # TP2 (+2.5R, +20%)
-                p_tp3 = entry + (risk * 4.0)   # TP3 Runner (+4.0R, +10%)
+                p_tp1 = entry + (risk * 1.2)   # TP1 (+1.2R, 40% + Fast BE)
+                p_tp2 = entry + (risk * 2.0)   # TP2 (+2.0R, 40% + Bloqueo +1.0R en verde)
+                p_tp3 = entry + (risk * 3.5)   # TP3 Runner (+3.5R, 20%)
             else:
-                entry = c + (atr * 0.40)
-                sl = entry + (atr * 0.80)
+                entry = c + (atr * 0.35)
+                sl = entry + (atr * 0.85)
                 risk = sl - entry
-                p_tp0 = entry - (risk * 1.0)
-                p_tp1 = entry - (risk * 1.5)
-                p_tp2 = entry - (risk * 2.5)
-                p_tp3 = entry - (risk * 4.0)
+                p_tp1 = entry - (risk * 1.2)
+                p_tp2 = entry - (risk * 2.0)
+                p_tp3 = entry - (risk * 3.5)
 
             if risk <= 0 or (risk / entry) > 0.05:
                 continue
@@ -251,11 +245,9 @@ class UnifiedBacktestEngine:
             if not filled:
                 continue
 
-            # 3. Simulación Walk-Forward con Modelo B Oficial
-            hit_tp0 = False
+            # 3. Simulación Walk-Forward con Modelo Cuántico v37.0 (SOP-25 & SOP-26)
             hit_tp1 = False
             hit_tp2 = False
-            scaled_in = False
             curr_sl = sl
             outcome_r = 0.0
             close_reason = ""
@@ -272,87 +264,83 @@ class UnifiedBacktestEngine:
                 exit_idx = k
 
                 if direction == "LONG":
-                    # Stop Loss
+                    # SOP-25: Early Structural Invalidation (@ -0.65R)
+                    cur_adverse = (entry - bl) / risk
+                    if cur_adverse >= 0.65 and not hit_tp1:
+                        close_reason = "SOP25_EARLY_INVALIDATION"
+                        outcome_r -= (0.65 * rem_pos * total_multiplier)
+                        break
+
+                    # Stop Loss Normal
                     if bl <= curr_sl:
                         if curr_sl == sl:
                             close_reason = "STOP_LOSS"
                             outcome_r -= (1.0 * rem_pos * total_multiplier)
                         else:
-                            close_reason = "BREAKEVEN_PROFIT"
+                            close_reason = "PROTECTED_EXIT"
                         break
 
-                    # TP0 (+1.0R): Cobra 30% y mueve SL a Breakeven + Fee Buffer
-                    if not hit_tp0 and bh >= p_tp0:
-                        hit_tp0 = True
-                        outcome_r += (1.0 * 0.30 * total_multiplier)
-                        rem_pos -= 0.30
-                        curr_sl = entry + (entry * 0.0005)
-
-                    # SOP-16: Piramidación Libre de Riesgo (si ya cobró TP0 y retestea)
-                    if hit_tp0 and not scaled_in and (bh >= p_tp1 * 0.98):
-                        scaled_in = True
-                        total_multiplier += 0.50
-
-                    # TP1 (+1.5R): Cobra 40% adicional y sube SL a +0.5R
+                    # TP1 (+1.2R): Cobra 40% y mueve SL a Breakeven + Fee Buffer
                     if not hit_tp1 and bh >= p_tp1:
                         hit_tp1 = True
-                        outcome_r += (1.5 * 0.40 * total_multiplier)
+                        outcome_r += (1.2 * 0.40 * total_multiplier)
                         rem_pos -= 0.40
-                        curr_sl = entry + (risk * 0.50)
+                        curr_sl = entry + (entry * 0.0008)
 
-                    # TP2 (+2.5R): Cobra 20% y sube SL a TP1
+                    # TP2 (+2.0R): Cobra 40% y sube SL a +1.0R en verde garantizado
                     if hit_tp1 and not hit_tp2 and bh >= p_tp2:
                         hit_tp2 = True
-                        outcome_r += (2.5 * 0.20 * total_multiplier)
-                        rem_pos -= 0.20
-                        curr_sl = p_tp1
+                        outcome_r += (2.0 * 0.40 * total_multiplier)
+                        rem_pos -= 0.40
+                        curr_sl = entry + (risk * 1.0)
 
-                    # TP3 (+4.0R): Cierra el 10% Runner final
+                    # TP3 (+3.5R): Cierra el 20% Runner final
                     if hit_tp2 and bh >= p_tp3:
-                        outcome_r += (4.0 * rem_pos * total_multiplier)
+                        outcome_r += (3.5 * rem_pos * total_multiplier)
                         rem_pos = 0.0
                         close_reason = "TP3_FULL_TARGET"
                         break
 
                 else:  # SHORT
+                    # SOP-25: Early Structural Invalidation (@ -0.65R)
+                    cur_adverse = (bh - entry) / risk
+                    if cur_adverse >= 0.65 and not hit_tp1:
+                        close_reason = "SOP25_EARLY_INVALIDATION"
+                        outcome_r -= (0.65 * rem_pos * total_multiplier)
+                        break
+
                     if bh >= curr_sl:
                         if curr_sl == sl:
                             close_reason = "STOP_LOSS"
                             outcome_r -= (1.0 * rem_pos * total_multiplier)
                         else:
-                            close_reason = "BREAKEVEN_PROFIT"
+                            close_reason = "PROTECTED_EXIT"
                         break
 
-                    if not hit_tp0 and bl <= p_tp0:
-                        hit_tp0 = True
-                        outcome_r += (1.0 * 0.30 * total_multiplier)
-                        rem_pos -= 0.30
-                        curr_sl = entry - (entry * 0.0005)
-
-                    if hit_tp0 and not scaled_in and (bl <= p_tp1 * 1.02):
-                        scaled_in = True
-                        total_multiplier += 0.50
-
+                    # TP1 (+1.2R): Cobra 40% y mueve SL a Breakeven + Fee Buffer
                     if not hit_tp1 and bl <= p_tp1:
                         hit_tp1 = True
-                        outcome_r += (1.5 * 0.40 * total_multiplier)
+                        outcome_r += (1.2 * 0.40 * total_multiplier)
                         rem_pos -= 0.40
-                        curr_sl = entry - (risk * 0.50)
+                        curr_sl = entry - (entry * 0.0008)
 
+                    # TP2 (+2.0R): Cobra 40% y sube SL a +1.0R en verde garantizado
                     if hit_tp1 and not hit_tp2 and bl <= p_tp2:
                         hit_tp2 = True
-                        outcome_r += (2.5 * 0.20 * total_multiplier)
-                        rem_pos -= 0.20
-                        curr_sl = p_tp1
+                        outcome_r += (2.0 * 0.40 * total_multiplier)
+                        rem_pos -= 0.40
+                        curr_sl = entry - (risk * 1.0)
 
+                    # TP3 (+3.5R): Cierra el 20% Runner final
                     if hit_tp2 and bl <= p_tp3:
-                        outcome_r += (4.0 * rem_pos * total_multiplier)
+                        outcome_r += (3.5 * rem_pos * total_multiplier)
                         rem_pos = 0.0
                         close_reason = "TP3_FULL_TARGET"
                         break
 
-            # Descuento exacto de comisiones y fricción
-            nominal_leverage = 1.0 / max(0.008, risk/entry)
+            # Descuento exacto de comisiones y fricción con Apalancamiento Seguro SOP-21
+            safe_lev = RiskManager.calculate_safe_leverage(entry, sl, max_cap=20)
+            nominal_leverage = min(safe_lev, 20)
             fee_friction_r = (self.maker_fee + self.taker_fee + self.slippage) * nominal_leverage * 0.5
             net_outcome_r = outcome_r - (fee_friction_r if outcome_r != 0 else 0.0)
 
@@ -364,7 +352,7 @@ class UnifiedBacktestEngine:
                 "entry": entry,
                 "sl": sl,
                 "confluence_score": 75,
-                "scaled_in": scaled_in,
+                "scaled_in": False,
                 "risk_pct": round((risk/entry)*100, 2),
                 "outcome_r": round(net_outcome_r, 2),
                 "close_reason": close_reason or ("EXPIRED_HORIZON" if outcome_r >= 0 else "STOP_LOSS")
@@ -381,7 +369,7 @@ class UnifiedBacktestEngine:
         all_results = []
 
         print("="*85)
-        print("🛡️  AUDITORÍA OFICIAL SLINGSHOT v31.0 APEX TITAN (DYNAMIC GATING SSoT)")
+        print("🛡️  AUDITORÍA OFICIAL SLINGSHOT v37.0 APEX QUANTUM (SOP-25 & SOP-26 SSoT)")
         print("="*85)
         print(f"💰 Capital Base: ${self.initial_balance:,.2f} USD | Riesgo Base: {self.risk_pct*100:.2f}% | Comisiones Bitunix Descontadas")
         print("="*85)
