@@ -572,15 +572,22 @@ class NexusNode:
 
         logger.info(f"⚡ [NEXUS] Recibida señal de alta fidelidad: {asset} {sig_type}")
 
-        # Garantizar tamaño del 5% del capital ($8.50 USDT margen) y calcular apalancamiento dinámico SOP-21
-        if not signal.get("position_size") or float(signal.get("position_size", 0)) > 20.0:
-            signal["position_size"] = self.DEFAULT_MARGIN_USDT
-            signal["position_size_usdt"] = self.DEFAULT_MARGIN_USDT
+        # ── SOP-33: ALPHA-TIER KELLY SIZING ──
+        from engine.risk.risk_manager import RiskManager
+        confluence_val = float(signal.get("confluence_score", 70.0))
+        sizing_mult = RiskManager.calculate_alpha_tier_sizing(asset, confluence_val)
+        if sizing_mult <= 0.0:
+            logger.warning(f"🛑 [NEXUS SOP-33] Omitido activo descalificado: {asset}")
+            return
+            
+        target_margin = self.DEFAULT_MARGIN_USDT * sizing_mult
+        signal["position_size"] = round(target_margin, 2)
+        signal["position_size_usdt"] = round(target_margin, 2)
             
         entry_val = float(signal.get("price") or signal.get("entry_zone_bottom", 0))
         sl_val = float(signal.get("stop_loss", 0))
         
-        # ── SOP-21: INVARIANZA DE LIQUIDACIÓN Y APALANCAMIENTO SEGURO ──
+        # ── SOP-21 & SOP-32: INVARIANZA DE LIQUIDACIÓN Y APALANCAMIENTO SEGURO ──
         from engine.risk.risk_manager import RiskManager
         if entry_val > 0 and sl_val > 0:
             safe_lev = RiskManager.calculate_safe_leverage(entry_val, sl_val, max_cap=20)
@@ -672,9 +679,17 @@ class NexusNode:
                 self._pending_limit_symbols.add(asset)
                 return
 
-            # Asignar 5% de margen y apalancamiento seguro adaptativo SOP-21
-            signal["position_size"] = self.DEFAULT_MARGIN_USDT
-            signal["position_size_usdt"] = self.DEFAULT_MARGIN_USDT
+            # ── SOP-33: ALPHA-TIER KELLY SIZING ──
+            from engine.risk.risk_manager import RiskManager
+            confluence_val = float(signal.get("confluence_score", 70.0))
+            sizing_mult = RiskManager.calculate_alpha_tier_sizing(asset, confluence_val)
+            if sizing_mult <= 0.0:
+                logger.debug(f"[NEXUS AUTO-LIMIT SOP-33] Omitido activo descalificado: {asset}")
+                return
+                
+            target_margin = self.DEFAULT_MARGIN_USDT * sizing_mult
+            signal["position_size"] = round(target_margin, 2)
+            signal["position_size_usdt"] = round(target_margin, 2)
             
             entry_p = float(signal.get('price', 0))
             sl_p = float(signal.get('stop_loss', 0))

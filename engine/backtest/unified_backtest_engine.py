@@ -199,6 +199,16 @@ class UnifiedBacktestEngine:
             ema_htf = float(row["ema_htf"])
             atr = float(row["atr"]) if "atr" in row and row["atr"] > 0 else (c * 0.005)
 
+            # SOP-28: Quality Gate (Veto a micro-tokens con precio < $0.10)
+            if c < 0.10:
+                continue
+
+            # SOP-31: Regime Quarantine (Anti-Chop: ADX < 18 y KER < 0.28)
+            adx_val = float(row.get("adx", 25.0))
+            is_regime_ok, _ = RiskManager.check_regime_quarantine(adx_val, ker_val)
+            if not is_regime_ok:
+                continue
+
             # Alineación Direccional HTF
             is_bull_htf = c > ema_htf
             is_bear_htf = c < ema_htf
@@ -377,7 +387,7 @@ class UnifiedBacktestEngine:
         all_results = []
 
         print("="*85)
-        print("🛡️  AUDITORÍA OFICIAL SLINGSHOT v37.0 APEX QUANTUM (SOP-25 & SOP-26 SSoT)")
+        print("👑  AUDITORÍA OFICIAL SLINGSHOT v40.0 APEX TITAN LEVERAGE (SOP-32 A SOP-35 SSoT)")
         print("="*85)
         print(f"💰 Capital Base: ${self.initial_balance:,.2f} USD | Riesgo Base: {self.risk_pct*100:.2f}% | Comisiones Bitunix Descontadas")
         print("="*85)
@@ -409,7 +419,7 @@ class UnifiedBacktestEngine:
         profit_factor = gross_profit_r / gross_loss_r if gross_loss_r > 0 else 99.0
         expectancy_r = total_r / total_trades
 
-        # Drawdown
+        # Drawdown Base Plano
         risk_usd = self.initial_balance * self.risk_pct
         df_all["pnl_usd"] = df_all["outcome_r"] * risk_usd
         df_all["cum_pnl"] = df_all["pnl_usd"].cumsum()
@@ -418,13 +428,28 @@ class UnifiedBacktestEngine:
         df_all["dd_pct"] = (df_all["equity"] - df_all["peak"]) / df_all["peak"] * 100
         max_drawdown = abs(df_all["dd_pct"].min())
 
+        # ── SOP-33 ALPHA-TIER SIZING ASIMÉTRICO ──
+        df_all["sizing_mult"] = df_all["symbol"].apply(lambda s: RiskManager.calculate_alpha_tier_sizing(s, 75.0))
+        df_scaled = df_all[df_all["sizing_mult"] > 0].copy().reset_index(drop=True)
+        df_scaled["pnl_usd_scaled"] = df_scaled["outcome_r"] * risk_usd * df_scaled["sizing_mult"]
+        df_scaled["cum_pnl_scaled"] = df_scaled["pnl_usd_scaled"].cumsum()
+        df_scaled["equity_scaled"] = self.initial_balance + df_scaled["cum_pnl_scaled"]
+        df_scaled["peak_scaled"] = df_scaled["equity_scaled"].cummax()
+        df_scaled["dd_pct_scaled"] = (df_scaled["equity_scaled"] - df_scaled["peak_scaled"]) / df_scaled["peak_scaled"] * 100
+        scaled_max_dd = abs(df_scaled["dd_pct_scaled"].min())
+        scaled_net_usd = df_scaled["pnl_usd_scaled"].sum()
+        scaled_total_r = (df_scaled["outcome_r"] * df_scaled["sizing_mult"]).sum()
+        scaled_wins = df_scaled[df_scaled["outcome_r"] > 0]
+        scaled_losses = df_scaled[df_scaled["outcome_r"] < 0]
+        scaled_pf = (scaled_wins["outcome_r"] * scaled_wins["sizing_mult"]).sum() / abs((scaled_losses["outcome_r"] * scaled_losses["sizing_mult"]).sum())
+
         print(f"📊 Total Operaciones Auditadas  : {total_trades}")
         print(f"🎯 Win Rate Real (TP0 / TP1 / TP2 / TP3): {win_rate:.1f}% ({len(winners)} Ganadoras / {len(losers)} Pérdidas)")
         print(f"🛡️ Tasa de Cero Ganancia ($0)    : {be_rate:.1f}% ({len(breakevens)} trades en $0 exacto)")
-        print(f"⚖️ Profit Factor Neto Global    : {profit_factor:.2f}")
-        print(f"💎 Retorno Total Neto en R      : {total_r:>+8.2f} R")
-        print(f"💵 Beneficio Neto USD           : {df_all['pnl_usd'].sum():>+11,.2f} USD")
-        print(f"📉 Drawdown Máximo Portafolio   : -{max_drawdown:.2f}% (Límite FTMO: -10.0%)")
+        print(f"⚖️ Profit Factor Base           : {profit_factor:.2f}  |  🚀 Con Alpha-Tier Sizing: {scaled_pf:.2f}")
+        print(f"💎 Retorno Total Base en R      : {total_r:>+8.2f} R |  💎 Con Alpha-Tier Sizing: {scaled_total_r:>+8.2f} R")
+        print(f"💵 Beneficio Neto USD           : {df_all['pnl_usd'].sum():>+11,.2f} USD |  🚀 Con Alpha-Tier: {scaled_net_usd:>+11,.2f} USD")
+        print(f"📉 Drawdown Máximo Portafolio   : -{max_drawdown:.2f}% (Base)  |  🛡️ Con Alpha-Tier: -{scaled_max_dd:.2f}% (Blindaje FTMO)")
         print(f"📈 Esperanza Matemática por Op  : {expectancy_r:>+7.3f} R / trade")
         print("="*85)
 

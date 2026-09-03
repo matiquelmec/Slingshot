@@ -251,6 +251,62 @@ class RiskManager:
             return False, f"🛑 [SOP-31 REGIME QUARANTINE] Mercado en compresión muerta (ADX={adx:.1f} < {min_adx:.1f}, KER={ker:.2f} < {min_ker:.2f})."
         return True, f"✅ [SOP-31 REGIME OK] Régimen de volatilidad activo (ADX={adx:.1f}, KER={ker:.2f})."
 
+    # ── PROTOCOLO SOP-32: DYNAMIC VOLATILITY-TARGETED LEVERAGE v40.0 ─────────
+    @staticmethod
+    def calculate_volatility_targeted_leverage(symbol: str, sl_distance_pct: float) -> int:
+        """
+        [SOP-32 VOLATILITY-TARGETED LEVERAGE]
+        Calcula el apalancamiento nominal óptimo en el exchange (3X a 18X) de forma inversamente
+        proporcional a la distancia del SL, garantizando que el precio de liquidación esté al menos a 1.5x de distancia del Stop Loss.
+        """
+        dist = max(abs(float(sl_distance_pct)), 0.005)
+        # 0.20 / dist asegura: SL 0.8% -> 18X | SL 1.5% -> 13X | SL 2.5% -> 8X | SL 3.0% -> 6X
+        safe_lev = int(0.20 / dist)
+        return min(18, max(3, safe_lev))
+
+    # ── PROTOCOLO SOP-33: ALPHA-TIER SIZING ENGINE (KELLY) v40.0 ────────────
+    ALPHA_TIERS = {
+        # Tier S: Alpha Champions (PF > 2.0, WR > 55%) -> Multiplicador 1.40x
+        "FETUSDT": 1.40, "FET": 1.40,
+        # Tier A: High-Beta Performers (PF 1.50 - 1.70) -> Multiplicador 1.25x
+        "INJUSDT": 1.25, "INJ": 1.25,
+        "NEARUSDT": 1.25, "NEAR": 1.25,
+        "BNBUSDT": 1.25, "BNB": 1.25,
+        # Tier B: Core Standard (PF 1.25 - 1.47) -> Multiplicador 1.00x
+        "SOLUSDT": 1.00, "SOL": 1.00,
+        "SUIUSDT": 1.00, "SUI": 1.00,
+        "ATOMUSDT": 1.00, "ATOM": 1.00,
+        # Tier C: Macro Hedging & Lower Beta (PF 1.15 - 1.23) -> Multiplicador 0.75x
+        "BTCUSDT": 0.75, "BTC": 0.75,
+        "ETHUSDT": 0.75, "ETH": 0.75,
+        "XRPUSDT": 0.75, "XRP": 0.75,
+        "LINKUSDT": 0.75, "LINK": 0.75,
+        # Tier D: Low Conviction / Defensive Sizing -> Multiplicador 0.60x
+        "RENDERUSDT": 0.60, "RENDER": 0.60,
+        "AVAXUSDT": 0.60, "AVAX": 0.60,
+        "PAXGUSDT": 0.50, "PAXG": 0.50
+    }
+
+    @classmethod
+    def calculate_alpha_tier_sizing(cls, symbol: str, confluence_score: float = 70.0) -> float:
+        """
+        [SOP-33 & SOP-34 ASYMMETRIC SIZING ENGINE]
+        Calcula el multiplicador de asignación de capital combinando el Tier del activo (Kelly Fraccional)
+        con la puntuación de confluencia institucional.
+        """
+        sym = (symbol or "").replace("/", "").upper()
+        base_mult = cls.ALPHA_TIERS.get(sym, 1.0)
+        if base_mult <= 0.0:
+            return 0.0
+            
+        # SOP-34: Confluence Multiplier
+        if confluence_score >= 82.0:
+            base_mult *= 1.15 # +15% de asignación en setups élite
+        elif confluence_score < 68.0:
+            base_mult *= 0.80 # -20% en setups defensivos/limítrofes
+            
+        return round(min(1.60, max(0.50, base_mult)), 2)
+
     # --- MÓDULO SIGMA: SINTONIZADOR DE ACTIVOS INSTITUCIONAL v17.0 ---
     # Mega-Caps (BTC, ETH, SOL, XRP, AVAX, LINK): 1H OTE Swing -> Colchón SL amplio (0.60x - 2.5x ATR)
     # High-Beta Alts (RENDER, SUI, INJ, NEAR, FET, PAXG): 15M Scalp -> SL Ágil (0.30x - 1.8x ATR)
