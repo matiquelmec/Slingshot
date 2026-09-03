@@ -20,6 +20,7 @@ from typing import List, Dict, Any, Optional
 from engine.core.logger import logger
 from engine.core.store import store
 from engine.indicators.data_utils import fetch_binance_history
+from engine.risk.risk_manager import RiskManager
 import pandas as pd
 
 
@@ -501,7 +502,25 @@ class TradeManager:
             be_threshold = 1.2 if self.is_megacap(sym) else 1.0
             fee_buffer = entry_price * 0.0008  # Micro-Buffer de 0.08% para absorber comisiones
 
+            # ── SOP-25: EARLY STRUCTURAL INVALIDATION @ 0.65R ──
+            # Si el trade retrocede más allá de -0.65R en contra (adverse excursion),
+            # ajustar preventivamente el Stop Loss al nivel de -0.65R para ahorrar 0.35R de pérdida completa.
+            is_early_inval, early_sl = RiskManager.check_early_invalidation_candidate(
+                entry_price=entry_price,
+                current_price=cur_price,
+                sl_price=cur_sl if cur_sl > 0 else (entry_price - sl_dist),
+                side=side
+            )
+
             target_sl = None
+            if is_early_inval and not sl_at_be:
+                if side == "LONG" and (cur_sl <= 0 or early_sl > cur_sl * 1.0005):
+                    target_sl = early_sl
+                    status_msg = f"SOP25_EARLY_INVALIDATION (-0.65R / ${target_sl})"
+                elif side == "SHORT" and (cur_sl <= 0 or early_sl < cur_sl * 0.9995):
+                    target_sl = early_sl
+                    status_msg = f"SOP25_EARLY_INVALIDATION (-0.65R / ${target_sl})"
+
             if r_profit >= 5.0:
                 # Tier 4 (TP3 / Ultra Runner): Ratchet dinámico que asegura el 70% de la ganancia total
                 locked_r = r_profit * 0.70
@@ -509,17 +528,17 @@ class TradeManager:
                 target_sl = round(entry_price + profit_buffer, 4) if side == "LONG" else round(entry_price - profit_buffer, 4)
                 status_msg = f"PROTEGIDO_RUNNER_TP3 (+{locked_r:.1f}R)"
             elif r_profit >= 3.0:
-                # Tier 3 (TP2 Alcanzado / +3R): Bloquear al menos +2.0R en ganancia neta
+                # Tier 3: Bloquear al menos +2.0R en ganancia neta
                 profit_buffer = sl_dist * 2.0
                 target_sl = round(entry_price + profit_buffer, 4) if side == "LONG" else round(entry_price - profit_buffer, 4)
-                status_msg = "PROTEGIDO_TP2 (+2.0R)"
+                status_msg = "PROTEGIDO_TP3_LOCK (+2.0R)"
             elif r_profit >= 2.0:
-                # Tier 2 (TP1 Alcanzado / +2R): Bloquear +1.2R de ganancia garantizada en verde
-                profit_buffer = sl_dist * 1.2
+                # Tier 2 (SOP-26 TP2 Alcanzado / +2.0R): Bloquear +1.0R de ganancia garantizada neta
+                profit_buffer = sl_dist * 1.0
                 target_sl = round(entry_price + profit_buffer, 4) if side == "LONG" else round(entry_price - profit_buffer, 4)
-                status_msg = "PROTEGIDO_TP1 (+1.2R)"
+                status_msg = "PROTEGIDO_TP2 (+1.0R BLOQUEADO)"
             elif r_profit >= be_threshold:
-                # Tier 1 (Fast Breakeven Adaptativo): Asegurar capital con colchón de comisiones (+$0.01 a +$0.05 neto)
+                # Tier 1 (Fast Breakeven Adaptativo): Asegurar capital con colchón de comisiones (+0.08% neto)
                 target_sl = round(entry_price + fee_buffer, 4) if side == "LONG" else round(entry_price - fee_buffer, 4)
                 status_msg = f"PROTEGIDO_FAST_BE (+{be_threshold:.1f}R)"
 

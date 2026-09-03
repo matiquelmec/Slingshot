@@ -186,6 +186,37 @@ class RiskManager:
             
         return True, f"✅ [SOP-23 FUNDING OK] Tasa saludable ({funding_rate*100:.3f}% por 8h)."
 
+    # ── PROTOCOLO SOP-25: EARLY STRUCTURAL INVALIDATION v37.0 ─────────────────
+    @staticmethod
+    def check_early_invalidation_candidate(
+        entry_price: float,
+        current_price: float,
+        sl_price: float,
+        side: str
+    ) -> tuple[bool, float]:
+        """
+        [SOP-25 EARLY STRUCTURAL INVALIDATION @ 0.65R]
+        Basado en el MAE medio de 0.42R: Si una posición en curso retrocede más allá de -0.65R en contra,
+        la probabilidad de terminar en pérdida completa supera el 85%.
+        Devuelve (es_candidato, precio_sl_temprano).
+        """
+        if entry_price <= 0 or sl_price <= 0 or current_price <= 0:
+            return False, 0.0
+            
+        sl_dist = abs(entry_price - sl_price)
+        if sl_dist <= 0:
+            return False, 0.0
+            
+        is_long = "LONG" in side.upper() or "BUY" in side.upper()
+        r_profit = (current_price - entry_price) / sl_dist if is_long else (entry_price - current_price) / sl_dist
+        
+        # Si la excursión adversa supera 0.65R (r_profit <= -0.65)
+        if r_profit <= -0.65:
+            early_sl = entry_price - (sl_dist * 0.65) if is_long else entry_price + (sl_dist * 0.65)
+            return True, round(early_sl, 6)
+            
+        return False, 0.0
+
     # --- MÓDULO SIGMA: SINTONIZADOR DE ACTIVOS INSTITUCIONAL v17.0 ---
     # Mega-Caps (BTC, ETH, SOL, XRP, AVAX, LINK): 1H OTE Swing -> Colchón SL amplio (0.60x - 2.5x ATR)
     # High-Beta Alts (RENDER, SUI, INJ, NEAR, FET, PAXG): 15M Scalp -> SL Ágil (0.30x - 1.8x ATR)
@@ -447,21 +478,24 @@ class RiskManager:
                 else: tp2 = tp1 - (final_risk * 1.5)
                 
         # Red de Seguridad y Garantía Geométrica Estricta de R:R
-        # LONG:  Entry < BE (+1.0R / +1.2R) < TP1 (+1.5R) < TP2 (+3.0R) < TP3 (+5.0R)
-        # SHORT: Entry > BE (+1.0R / +1.2R) > TP1 (+1.5R) > TP2 (+3.0R) > TP3 (+5.0R)
+        # [SOP-26 DYNAMIC MFE HARVESTING GRID 40/40/20]
+        # Basado en el MFE empírico de +2.41R:
+        # TP1: +1.2R (40% volumen - cubre comisiones y asegura +0.48R neto)
+        # TP2: +2.0R (40% volumen - captura el pico óptimo antes de retrocesos a BE)
+        # TP3: +3.5R (20% runner con trailing ratchet institucional)
         if signal_type == "LONG":
-            calc_tp1 = current_price + (final_risk * 1.5)
-            calc_tp2 = current_price + (final_risk * 3.0)
-            calc_tp3 = current_price + (final_risk * 5.0)
+            calc_tp1 = current_price + (final_risk * 1.2)
+            calc_tp2 = current_price + (final_risk * 2.0)
+            calc_tp3 = current_price + (final_risk * 3.5)
             
             # Si el target magnético no respeta la jerarquía matemática, aplicamos los niveles R:R geométricos
             if tp1 <= current_price or tp1 < calc_tp1: tp1 = calc_tp1
             if tp2 <= tp1 or tp2 < calc_tp2: tp2 = max(tp2, calc_tp2)
             if tp3 <= tp2 or tp3 < calc_tp3: tp3 = max(tp3, calc_tp3)
         else: # SHORT
-            calc_tp1 = current_price - (final_risk * 1.5)
-            calc_tp2 = current_price - (final_risk * 3.0)
-            calc_tp3 = current_price - (final_risk * 5.0)
+            calc_tp1 = current_price - (final_risk * 1.2)
+            calc_tp2 = current_price - (final_risk * 2.0)
+            calc_tp3 = current_price - (final_risk * 3.5)
             
             # Si el target magnético no respeta la jerarquía matemática, aplicamos los niveles R:R geométricos
             if tp1 >= current_price or tp1 > calc_tp1: tp1 = calc_tp1

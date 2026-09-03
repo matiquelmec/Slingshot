@@ -422,18 +422,28 @@ class ConfluenceManager:
         else:
             checklist.append({"factor": "Order Flow Delta", "status": "NEUTRAL", "detail": f"Delta equilibrado ({order_flow_delta:+.2f})"})
 
-        # 🚀 9.8. CUMULATIVE VOLUME DELTA (CVD) & L2 IMPALANCE (Peso 10) v11.0 Apex
+        # 🚀 9.8. CUMULATIVE VOLUME DELTA (CVD) & L2 IMPALANCE (Peso 15) v37.0 Apex Quantum
+        cvd_weight = 15
+        total_weight += cvd_weight
         try:
             from engine.indicators.volume import calculate_cvd_divergence
             cvd_res = calculate_cvd_divergence(df)
             cvd_status = cvd_res.get("status", "IN_SYNC")
             
-            if (is_long and cvd_status == "BULLISH_DIVERGENCE") or (not is_long and cvd_status == "BEARISH_DIVERGENCE"):
-                score += 10
-                checklist.append({"factor": "CVD Divergence", "status": "CONFIRMADO", "detail": f"Absorción acumulada detectada ({cvd_status})"})
-            elif (is_long and cvd_status == "BEARISH_DIVERGENCE") or (not is_long and cvd_status == "BULLISH_DIVERGENCE"):
-                score -= 10
-                checklist.append({"factor": "CVD Divergence", "status": "DIVERGENTE", "detail": f"Distribución acumulada en contra ({cvd_status})"})
+            cvd_aligned = (is_long and cvd_status == "BULLISH_DIVERGENCE") or (not is_long and cvd_status == "BEARISH_DIVERGENCE")
+            cvd_divergent = (is_long and cvd_status == "BEARISH_DIVERGENCE") or (not is_long and cvd_status == "BULLISH_DIVERGENCE")
+            
+            if cvd_aligned:
+                score += cvd_weight
+                # Bonus de Sinergia Cuántica: Si Delta y CVD están ambos alineados a favor (+5pts)
+                if delta_aligned:
+                    score += 5
+                    checklist.append({"factor": "CVD Divergence", "status": "CONFIRMADO", "detail": f"Ultra-Confluencia: Absorción CVD ({cvd_status}) + Flujo Taker alineado (+20pts)"})
+                else:
+                    checklist.append({"factor": "CVD Divergence", "status": "CONFIRMADO", "detail": f"Absorción acumulada detectada ({cvd_status}) (+15pts)"})
+            elif cvd_divergent:
+                score -= 15
+                checklist.append({"factor": "CVD Divergence", "status": "DIVERGENTE", "detail": f"Distribución acumulada en contra ({cvd_status}) (-15pts)"})
             else:
                 checklist.append({"factor": "CVD Divergence", "status": "NEUTRAL", "detail": "CVD acumulado en sintonía"})
         except Exception as cvd_err:
