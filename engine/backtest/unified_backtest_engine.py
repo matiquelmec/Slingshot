@@ -428,8 +428,15 @@ class UnifiedBacktestEngine:
         df_all["dd_pct"] = (df_all["equity"] - df_all["peak"]) / df_all["peak"] * 100
         max_drawdown = abs(df_all["dd_pct"].min())
 
-        # ── SOP-33 ALPHA-TIER SIZING ASIMÉTRICO ──
-        df_all["sizing_mult"] = df_all["symbol"].apply(lambda s: RiskManager.calculate_alpha_tier_sizing(s, 75.0))
+        # ── SOP-33 & SOP-38: ALPHA-TIER SIZING ASIMÉTRICO & SNIPER NY OPEN ──
+        def get_trade_sizing(row):
+            sym = row["symbol"]
+            et = pd.to_datetime(row["entry_time"])
+            h = et.hour
+            cs = float(row.get("confluence_score", 75.0))
+            return RiskManager.calculate_alpha_tier_sizing(sym, confluence_score=cs, hour_utc=h)
+
+        df_all["sizing_mult"] = df_all.apply(get_trade_sizing, axis=1)
         df_scaled = df_all[df_all["sizing_mult"] > 0].copy().reset_index(drop=True)
         df_scaled["pnl_usd_scaled"] = df_scaled["outcome_r"] * risk_usd * df_scaled["sizing_mult"]
         df_scaled["cum_pnl_scaled"] = df_scaled["pnl_usd_scaled"].cumsum()
