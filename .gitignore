@@ -11,6 +11,8 @@ env/
 venv/
 ENV/
 .env
+engine/data/bitunix_accounts.json
+*bitunix_accounts.json
 
 # 📦 Node / Bun
 node_modules/

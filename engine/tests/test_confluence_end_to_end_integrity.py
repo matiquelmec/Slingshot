@@ -27,10 +27,10 @@ def _create_mock_market_dataframe(n_bars: int = 60, is_bullish: bool = True) -> 
     base_price = 2500.0
     
     timestamps = [now - pd.Timedelta(minutes=15 * i) for i in range(n_bars)][::-1]
-    closes = [base_price + (i * 2.0 if is_bullish else -i * 2.0) for i in range(n_bars)]
-    highs = [c + 3.0 for c in closes]
-    lows = [c - 3.0 for c in closes]
-    opens = [c - 1.0 if is_bullish else c + 1.0 for c in closes]
+    closes = [base_price + (i * 0.4 if is_bullish else -i * 0.4) for i in range(n_bars)]
+    highs = [c + 2.0 for c in closes]
+    lows = [c - 2.0 for c in closes]
+    opens = [c - 0.5 if is_bullish else c + 0.5 for c in closes]
     volumes = [1000.0 + (500.0 if i == n_bars - 1 else 0.0) for i in range(n_bars)]
     
     df = pd.DataFrame({
@@ -166,7 +166,8 @@ def test_confluence_checklist_status_normalization():
         "CONFIRMADO", "FAVORABLE", "PRECAUCIÓN", "DIVERGENTE", 
         "DENEGADO", "NEUTRAL", "CALIBRANDO", "FRESCO", "ALERTA",
         "OPTIMAL", "MODERATE_NOISE", "QUARANTINED", "OBSOLETO",
-        "BAJO", "PARCIAL", "VOLÁTIL", "ALINEADO", "INSTITUCIONAL", "ACTIVO", "ELITE"
+        "BAJO", "PARCIAL", "VOLÁTIL", "ALINEADO", "INSTITUCIONAL", "ACTIVO", "ELITE",
+        "ALFA_GOLDEN", "VETO_EXHAUSTION", "DEFENSIVO"
     }
     
     for item in res["checklist"]:

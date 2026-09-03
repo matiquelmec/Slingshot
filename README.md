@@ -6,7 +6,7 @@
 ![Version](https://img.shields.io/badge/Version-42.0_Apex_Titan_Compound-1a3a6e?style=for-the-badge)
 ![Dual Engine](https://img.shields.io/badge/Architecture-Bitunix_2.5%25_%26_FTMO_0.75%25_Dual-purple?style=for-the-badge)
 ![Security](https://img.shields.io/badge/Security_Protocols-SOP--01%20to%20SOP--42-emerald?style=for-the-badge)
-![QA Suite](https://img.shields.io/badge/QA_Suite-206%2F206_Passed_100%25-success?style=for-the-badge)
+![QA Suite](https://img.shields.io/badge/QA_Suite-212%2F212_Passed_100%25-success?style=for-the-badge)
 ![SSoT Return](https://img.shields.io/badge/SSoT_Return-%2B72.25_R_%28%2B$72%2C253_USD%29-gold?style=for-the-badge)
 ![Profit Factor](https://img.shields.io/badge/Profit_Factor-1.43_Institucional-blue?style=for-the-badge)
 ![Drawdown](https://img.shields.io/badge/Max_Drawdown--5.86%25_FTMO_Shield-brightgreen?style=for-the-badge)
@@ -20,6 +20,7 @@
 Slingshot es una **Terminal de Inteligencia y Ejecución Cuantitativa Institucional** diseñada para operar simultáneamente en mercados de Criptomonedas (Bitunix 24/7) y Cuentas de Fondeo (*Prop Firms* como FTMO en MetaTrader 5). El sistema combina:
 
 * **Smart Money Concepts (SMC) de Alta Fidelidad:** Identificación matemática de Fair Value Gaps (FVG), Order Blocks de alta reacción, Zonas OTE (Fibonacci 61.8% - 78.6%) y barridos de liquidez.
+* **Arquitectura Multi-Cuentas (Master Account Dispatcher):** Capacidad de despachar en paralelo una misma señal institucional hacia múltiples cuentas de Bitunix con APIs independientes, leyendo el balance en vivo de cada una y dimensionando el riesgo SOP-41 de forma completamente aislada.
 * **Arquitectura Dual de Riesgo:**
   * **Bitunix (Modo Crecimiento):** Calibrado al **2.50% de riesgo real dinámico** con **Pure Dollar-Risk Sizing (SOP-41)**, **Pre-Flight Loss Hard-Clamp (SOP-42)**, e interés compuesto automático (SOP-39) con guardián de buffer libre (SOP-40).
   * **FTMO (Modo Guardián):** Calibrado estrictamente al **0.75% por trade** con **Kill-Switch preventivo a -3.5% diario** y límite total a -7.5%, blindando la cuenta ante cualquier riesgo de descalificación.
@@ -31,7 +32,7 @@ Slingshot es una **Terminal de Inteligencia y Ejecución Cuantitativa Institucio
 * **Universo Curado Institucional (SOP-36):** Ascenso de `BNBUSDT` al Núcleo de Scalp 15m y especialización de `PAXGUSDT` (Oro) exclusivamente en 1H Swing y TradFi FTMO (`XAUUSD`).
 * **Kernel en Rust (`Polars`):** Cálculo vectorial sub-$2.5\text{ ms}$ para indicadores y confluencias.
 * **Bóveda SQLite WAL Transaccional (`vault.py`):** Persistencia ACID de sesiones y bitácora de auditoría inmutable.
-* **Suite de Certificación QA Oficial:** **206/206 pruebas unitarias aprobadas al 100%**.
+* **Suite de Certificación QA Oficial:** **212/212 pruebas unitarias aprobadas al 100%**.
 
 ---
 

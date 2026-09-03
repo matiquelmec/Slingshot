@@ -958,5 +958,9 @@
   "d1527e40327727657c9b22b552e90018": {
     "price": 0.0,
     "advice": "{\"verdict\": \"SIDEWAYS\", \"threat\": \"MEDIUM\", \"logic\": \"R\\u00e9gimen IDLE\"}"
+  },
+  "e19cf3340bea2288d85b86eff6a361ba": {
+    "price": 0.0,
+    "advice": "{\"verdict\": \"SIDEWAYS\", \"threat\": \"MEDIUM\", \"logic\": \"R\\u00e9gimen IDLE\"}"
   }
 }

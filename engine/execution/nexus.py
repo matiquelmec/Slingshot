@@ -13,7 +13,7 @@ Responsabilidad:
 import asyncio
 import time
 from datetime import datetime, timezone
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 from engine.core.logger import logger
 from engine.execution.delta_executor import DeltaOrchestrator
 from engine.execution.bitunix_executor import BitunixExecutor
@@ -23,15 +23,18 @@ from engine.core.store import store
 from engine.workers.trade_manager import trade_manager
 from engine.api.registry import registry
 from engine.risk.cluster_risk_guard import cluster_risk_guard
+from engine.risk.risk_manager import RiskManager
 
 
 class NexusNode:
     def __init__(self, dry_run: bool = True):
         self.dry_run = dry_run
-        self.executor = BitunixExecutor(dry_run=dry_run)
+        from engine.execution.account_manager import AccountManager
+        self.account_manager = AccountManager(dry_run=dry_run)
+        self.executor = self.account_manager.get_executor("primary") or BitunixExecutor(dry_run=dry_run)
         self._active_positions = {}
         self._pending_limit_symbols = set()
-        logger.info(f"🛡️ [NEXUS] Nodo de Ejecución inicializado (Dry Run: {dry_run})")
+        logger.info(f"🛡️ [NEXUS] Nodo de Ejecución Multi-Cuenta inicializado (Dry Run: {dry_run})")
 
     def start_centinels(self):
         """Inicia los procesos de monitoreo y gestión de riesgo."""
@@ -595,65 +598,117 @@ class NexusNode:
             signal["leverage"] = max(1, min(int(signal.get("leverage", 10)), 20))
             safe_lev = signal["leverage"]
 
-        # ── SOP-41: PURE DOLLAR-RISK SIZING (2.50% BASE CANÓNICO) ──
-        avail_margin = await self.executor.get_available_margin_usdt() if not self.dry_run else 82.23
-        if avail_margin <= 0:
-            logger.warning(f"🛑 [NEXUS MARGIN GUARD] Saldo insuficiente o no verificado para {asset}: ${avail_margin:.2f} USDT.")
-            return
-
-        if sl_val > 0 and entry_val > 0:
-            qty_decimals, _ = await self.executor.get_symbol_precision(asset)
-            risk_calc = RiskManager.calculate_dollar_risk_position(
-                account_balance=avail_margin,
-                risk_pct=0.025, # 2.50% Base Canónico Estricto
-                entry_price=entry_val,
-                sl_price=sl_val,
-                leverage=safe_lev,
-                max_notional_mult=5.0, # Cap de 5x balance
-                qty_decimals=qty_decimals
-            )
-            if not risk_calc["approved"]:
-                logger.warning(f"🛑 [NEXUS SOP-41] Orden rechazada para {asset}: {risk_calc['reason']}")
-                return
-
-            req_margin = risk_calc["required_margin"]
-            signal["position_size"] = req_margin
-            signal["position_size_usdt"] = req_margin
-            signal["exact_qty"] = risk_calc["qty"]
-            logger.info(f"💎 [NEXUS SOP-41] {asset} -> Qty: {risk_calc['qty']} | Margen: ${req_margin:.2f} USDT | Riesgo Max: ${risk_calc['projected_loss']:.2f} USDT")
-        else:
-            req_margin = self.DEFAULT_MARGIN_USDT
-            signal["position_size"] = req_margin
-            signal["position_size_usdt"] = req_margin
-
-        # ── SOP-40: BITUNIX PRE-FLIGHT BUFFER GUARDRAIL ──
-        if not self.dry_run:
-            min_buffer = min(50.0, avail_margin * 0.50)
-            if (avail_margin - req_margin) < min_buffer:
-                logger.warning(f"🛑 [NEXUS BUFFER GUARD] Buffer insuficiente para {asset}: Remanente ${avail_margin - req_margin:.2f} < Min ${min_buffer:.2f} USDT.")
-                return
-
         # 1. Fragmentación Apex (Delta 60/20/20)
         fragments = DeltaOrchestrator.fragment_order(signal)
 
-        # 2. Ejecución de la Grilla
+        # 2. Despacho Multi-Cuenta en Paralelo
+        enabled_accounts = self.account_manager.get_all_accounts(enabled_only=True)
+        if not enabled_accounts:
+            # Fallback a cuenta primaria (.env) si no hay registradas
+            from engine.execution.account_manager import BitunixAccountConfig
+            fallback_acc = BitunixAccountConfig(
+                account_id="primary",
+                label="Cuenta Principal",
+                api_key="",
+                secret_key="",
+                dry_run=self.dry_run,
+                is_primary=True
+            )
+            await self._execute_signal_for_account(self.executor, fallback_acc, signal, safe_lev, entry_val, sl_val, fragments)
+        else:
+            tasks = []
+            for acc in enabled_accounts:
+                ex = self.account_manager.get_executor(acc.account_id) or self.executor
+                tasks.append(self._execute_signal_for_account(ex, acc, signal, safe_lev, entry_val, sl_val, fragments))
+            await asyncio.gather(*tasks, return_exceptions=True)
+
+    async def _execute_signal_for_account(
+        self,
+        executor: BitunixExecutor,
+        account: Any,
+        signal: Dict[str, Any],
+        safe_lev: int,
+        entry_val: float,
+        sl_val: float,
+        fragments: List[Dict[str, Any]]
+    ) -> Optional[Dict[str, Any]]:
+        """Ejecuta una señal de mercado en una cuenta específica con su propio cálculo de riesgo SOP-41."""
+        acc_signal = dict(signal)
+        asset = acc_signal.get("asset")
+
         try:
-            result = await self.executor.execute_signal(signal, fragments=fragments)
+            avail_margin = await executor.get_available_margin_usdt()
+        except Exception:
+            avail_margin = 0.0
+        if avail_margin <= 0 and executor.dry_run:
+            avail_margin = 82.23
 
+        if avail_margin <= 0:
+            logger.warning(f"🛑 [NEXUS MULTI-ACCOUNT] [{account.label}] Saldo insuficiente o no verificado para {asset}: ${avail_margin:.2f} USDT.")
+            return None
+
+        if sl_val > 0 and entry_val > 0:
+            qty_decimals, _ = await executor.get_symbol_precision(asset)
+            risk_calc = RiskManager.calculate_dollar_risk_position(
+                account_balance=avail_margin,
+                risk_pct=getattr(account, "risk_pct", 0.025),
+                entry_price=entry_val,
+                sl_price=sl_val,
+                leverage=safe_lev,
+                max_notional_mult=getattr(account, "max_notional_mult", 5.0),
+                qty_decimals=qty_decimals
+            )
+            if not risk_calc["approved"]:
+                logger.warning(f"🛑 [NEXUS SOP-41] [{account.label}] Orden rechazada para {asset}: {risk_calc['reason']}")
+                return None
+
+            req_margin = risk_calc["required_margin"]
+            acc_signal["position_size"] = req_margin
+            acc_signal["position_size_usdt"] = req_margin
+            acc_signal["exact_qty"] = risk_calc["qty"]
+            acc_signal["leverage"] = safe_lev
+            logger.info(f"💎 [NEXUS SOP-41] [{account.label}] {asset} -> Qty: {risk_calc['qty']} | Margen: ${req_margin:.2f} USDT | Riesgo Max: ${risk_calc['projected_loss']:.2f} USDT")
+        else:
+            req_margin = self.DEFAULT_MARGIN_USDT
+            acc_signal["position_size"] = req_margin
+            acc_signal["position_size_usdt"] = req_margin
+            acc_signal["leverage"] = safe_lev
+
+        if getattr(account, "is_primary", False) or getattr(account, "account_id", "") in ("primary", ""):
+            signal["position_size"] = req_margin
+            signal["position_size_usdt"] = req_margin
+            if "exact_qty" in acc_signal:
+                signal["exact_qty"] = acc_signal["exact_qty"]
+            signal["leverage"] = safe_lev
+
+        # SOP-40 Buffer guardrail
+        if not executor.dry_run:
+            min_buffer = min(50.0, avail_margin * 0.50)
+            if (avail_margin - req_margin) < min_buffer:
+                logger.warning(f"🛑 [NEXUS BUFFER GUARD] [{account.label}] Buffer insuficiente para {asset}: Remanente ${avail_margin - req_margin:.2f} < Min ${min_buffer:.2f} USDT.")
+                return None
+
+        try:
+            result = await executor.execute_signal(acc_signal, fragments=fragments)
             if result.get("status") == "success":
-                logger.info(f"✅ [NEXUS] Posición abierta en {asset}. ID: {result.get('main_order_id')}")
-
-                self._active_positions[asset] = {
-                    "signal": signal,
+                logger.info(f"✅ [NEXUS] [{account.label}] Posición abierta en {asset}. ID: {result.get('main_order_id')}")
+                pos_entry = {
+                    "signal": acc_signal,
                     "execution": result,
                     "created_timestamp": time.time(),
-                    "status": "OPEN"
+                    "status": "OPEN",
+                    "account_id": getattr(account, "account_id", "primary")
                 }
+                if getattr(account, "is_primary", False) or getattr(account, "account_id", "") in ("primary", ""):
+                    self._active_positions[asset] = pos_entry
+                self._active_positions[f"{getattr(account, 'account_id', 'primary')}_{asset}"] = pos_entry
+                return result
             else:
-                logger.error(f"❌ [NEXUS] Error al abrir posición en {asset}: {result.get('message')}")
-
+                logger.error(f"❌ [NEXUS] [{account.label}] Error al abrir posición en {asset}: {result.get('message')}")
+                return result
         except Exception as e:
-            logger.error(f"💥 [NEXUS] Error crítico procesando señal: {e}")
+            logger.error(f"💥 [NEXUS] [{account.label}] Error crítico procesando señal en {asset}: {e}")
+            return None
 
     async def process_limit_setup(self, signal: Dict[str, Any]):
         """
@@ -737,47 +792,93 @@ class NexusNode:
                 signal["leverage"] = 10
                 safe_lev = 10
 
-            # ── SOP-41: PURE DOLLAR-RISK SIZING (2.50% BASE CANÓNICO) ──
-            avail_margin = await self.executor.get_available_margin_usdt() if not self.dry_run else 82.23
-            if avail_margin <= 0:
-                logger.debug(f"[NEXUS AUTO-LIMIT MARGIN GUARD] Saldo insuficiente o no verificado para {asset}: ${avail_margin:.2f} USDT.")
-                return
+            # ── DESPACHO MULTI-CUENTA EN PARALELO (AUTO-LIMIT) ──
+            enabled_accounts = self.account_manager.get_all_accounts(enabled_only=True)
+            if not enabled_accounts:
+                from engine.execution.account_manager import BitunixAccountConfig
+                fallback_acc = BitunixAccountConfig(
+                    account_id="primary",
+                    label="Cuenta Principal",
+                    api_key="",
+                    secret_key="",
+                    dry_run=self.dry_run,
+                    is_primary=True
+                )
+                await self._place_limit_for_account(self.executor, fallback_acc, signal, safe_lev, entry_p, sl_p)
+            else:
+                tasks = []
+                for acc in enabled_accounts:
+                    ex = self.account_manager.get_executor(acc.account_id) or self.executor
+                    tasks.append(self._place_limit_for_account(ex, acc, signal, safe_lev, entry_p, sl_p))
+                await asyncio.gather(*tasks, return_exceptions=True)
+        except Exception as e:
+            logger.error(f"❌ [NEXUS AUTO-LIMIT] Error colocando orden en {asset}: {e}")
 
-            qty_decimals, _ = await self.executor.get_symbol_precision(asset)
-            risk_calc = RiskManager.calculate_dollar_risk_position(
-                account_balance=avail_margin,
-                risk_pct=0.025, # 2.50% Base Canónico Estricto
-                entry_price=entry_p,
-                sl_price=sl_p,
-                leverage=safe_lev,
-                max_notional_mult=5.0, # Cap de 5x balance
-                qty_decimals=qty_decimals
-            )
-            if not risk_calc["approved"]:
-                logger.debug(f"[NEXUS AUTO-LIMIT SOP-41] Orden rechazada para {asset}: {risk_calc['reason']}")
-                return
+    async def _place_limit_for_account(
+        self,
+        executor: BitunixExecutor,
+        account: Any,
+        signal: Dict[str, Any],
+        safe_lev: int,
+        entry_p: float,
+        sl_p: float
+    ) -> Optional[Dict[str, Any]]:
+        """Coloca una orden límite en una cuenta específica con su propio cálculo de riesgo SOP-41."""
+        acc_signal = dict(signal)
+        asset = acc_signal.get("asset", acc_signal.get("symbol", "")).upper()
 
-            req_margin = risk_calc["required_margin"]
+        try:
+            avail_margin = await executor.get_available_margin_usdt()
+        except Exception:
+            avail_margin = 0.0
+        if avail_margin <= 0 and executor.dry_run:
+            avail_margin = 82.23
+
+        if avail_margin <= 0:
+            logger.debug(f"[NEXUS AUTO-LIMIT] [{account.label}] Saldo insuficiente o no verificado para {asset}: ${avail_margin:.2f} USDT.")
+            return None
+
+        qty_decimals, _ = await executor.get_symbol_precision(asset)
+        risk_calc = RiskManager.calculate_dollar_risk_position(
+            account_balance=avail_margin,
+            risk_pct=getattr(account, "risk_pct", 0.025),
+            entry_price=entry_p,
+            sl_price=sl_p,
+            leverage=safe_lev,
+            max_notional_mult=getattr(account, "max_notional_mult", 5.0),
+            qty_decimals=qty_decimals
+        )
+        if not risk_calc["approved"]:
+            logger.debug(f"[NEXUS AUTO-LIMIT] [{account.label}] Orden rechazada para {asset}: {risk_calc['reason']}")
+            return None
+
+        req_margin = risk_calc["required_margin"]
+        acc_signal["position_size"] = req_margin
+        acc_signal["position_size_usdt"] = req_margin
+        acc_signal["exact_qty"] = risk_calc["qty"]
+        acc_signal["leverage"] = safe_lev
+
+        if getattr(account, "is_primary", False) or getattr(account, "account_id", "") in ("primary", ""):
             signal["position_size"] = req_margin
             signal["position_size_usdt"] = req_margin
             signal["exact_qty"] = risk_calc["qty"]
+            signal["leverage"] = safe_lev
 
-            # ── SOP-40: BITUNIX PRE-FLIGHT BUFFER GUARDRAIL ──
-            if not self.dry_run:
-                min_buffer = min(50.0, avail_margin * 0.50)
-                if (avail_margin - req_margin) < min_buffer:
-                    logger.info(f"🛑 [NEXUS AUTO-LIMIT BUFFER GUARD] Buffer insuficiente para {asset}: Remanente ${avail_margin - req_margin:.2f} < Min ${min_buffer:.2f} USDT.")
-                    return
+        # SOP-40 Buffer guardrail
+        if not executor.dry_run:
+            min_buffer = min(50.0, avail_margin * 0.50)
+            if (avail_margin - req_margin) < min_buffer:
+                logger.info(f"🛑 [NEXUS AUTO-LIMIT BUFFER GUARD] [{account.label}] Buffer insuficiente para {asset}: Remanente ${avail_margin - req_margin:.2f} < Min ${min_buffer:.2f} USDT.")
+                return None
 
-            logger.info(f"🎯 [NEXUS AUTO-LIMIT] Enviando orden límite institucional a Bitunix para {asset} @ ${entry_p:.2f} (Qty: {risk_calc['qty']} | Margen: ${req_margin} USDT @ {signal['leverage']}x | Riesgo Max: ${risk_calc['projected_loss']:.2f} USDT)")
-            res = await self.executor.place_limit_signal(signal)
-            if res.get("status") == "success":
-                self._pending_limit_symbols.add(asset)
-                logger.info(f"✅ [NEXUS AUTO-LIMIT] Orden límite para {asset} colocada exitosamente en Bitunix! ID: {res.get('order_id')}")
-            else:
-                logger.warning(f"⚠️ [NEXUS AUTO-LIMIT] No se pudo colocar orden límite en {asset}: {res.get('message')}")
-        except Exception as e:
-            logger.error(f"❌ [NEXUS AUTO-LIMIT] Error colocando orden en {asset}: {e}")
+        logger.info(f"🎯 [NEXUS AUTO-LIMIT] [{account.label}] Enviando orden límite a Bitunix para {asset} @ ${entry_p:.2f} (Qty: {risk_calc['qty']} | Margen: ${req_margin} USDT @ {safe_lev}x | Riesgo Max: ${risk_calc['projected_loss']:.2f} USDT)")
+        res = await executor.place_limit_signal(acc_signal)
+        if res.get("status") == "success":
+            self._pending_limit_symbols.add(asset)
+            logger.info(f"✅ [NEXUS AUTO-LIMIT] [{account.label}] Orden límite para {asset} colocada exitosamente en Bitunix! ID: {res.get('order_id')}")
+        else:
+            logger.warning(f"⚠️ [NEXUS AUTO-LIMIT] [{account.label}] No se pudo colocar orden límite en {asset}: {res.get('message')}")
+        return res
 
     def remove_pending_limit_symbol(self, symbol: str):
         """Libera el activo del conjunto de órdenes pendientes en memoria."""

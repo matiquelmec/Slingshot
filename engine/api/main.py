@@ -457,6 +457,10 @@ async def websocket_stream_endpoint(
 from engine.api.setup import router as setup_router
 app.include_router(setup_router, prefix="/api/v1")
 
+# ── Multi-Account Management Router ─────────────────────────────────────────
+from engine.api.routes.accounts import router as accounts_router
+app.include_router(accounts_router, prefix="/api/v1")
+
 # ── Entry point ───────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":

@@ -1,85 +1,5 @@
 [
   {
-    "timestamp": "2026-08-29T19:48:48.047796+00:00",
-    "asset": "TIAUSDT",
-    "signal_type": "SHORT",
-    "result": "TAKE_PROFIT",
-    "confluence_score": 0,
-    "fingerprint": {
-      "regime": "UNKNOWN",
-      "rvol": 1.0,
-      "has_ob": false,
-      "has_sweep": false,
-      "session": "UNKNOWN",
-      "absorption_score": 0.0,
-      "is_in_ote": false
-    }
-  },
-  {
-    "timestamp": "2026-08-29T19:49:03.410996+00:00",
-    "asset": "TIAUSDT",
-    "signal_type": "SHORT",
-    "result": "TAKE_PROFIT",
-    "confluence_score": 0,
-    "fingerprint": {
-      "regime": "UNKNOWN",
-      "rvol": 1.0,
-      "has_ob": false,
-      "has_sweep": false,
-      "session": "UNKNOWN",
-      "absorption_score": 0.0,
-      "is_in_ote": false
-    }
-  },
-  {
-    "timestamp": "2026-08-29T19:49:27.966193+00:00",
-    "asset": "TIAUSDT",
-    "signal_type": "SHORT",
-    "result": "TAKE_PROFIT",
-    "confluence_score": 0,
-    "fingerprint": {
-      "regime": "UNKNOWN",
-      "rvol": 1.0,
-      "has_ob": false,
-      "has_sweep": false,
-      "session": "UNKNOWN",
-      "absorption_score": 0.0,
-      "is_in_ote": false
-    }
-  },
-  {
-    "timestamp": "2026-08-29T19:50:04.703350+00:00",
-    "asset": "TIAUSDT",
-    "signal_type": "SHORT",
-    "result": "TAKE_PROFIT",
-    "confluence_score": 0,
-    "fingerprint": {
-      "regime": "UNKNOWN",
-      "rvol": 1.0,
-      "has_ob": false,
-      "has_sweep": false,
-      "session": "UNKNOWN",
-      "absorption_score": 0.0,
-      "is_in_ote": false
-    }
-  },
-  {
-    "timestamp": "2026-08-29T19:50:26.309436+00:00",
-    "asset": "TIAUSDT",
-    "signal_type": "SHORT",
-    "result": "TAKE_PROFIT",
-    "confluence_score": 0,
-    "fingerprint": {
-      "regime": "UNKNOWN",
-      "rvol": 1.0,
-      "has_ob": false,
-      "has_sweep": false,
-      "session": "UNKNOWN",
-      "absorption_score": 0.0,
-      "is_in_ote": false
-    }
-  },
-  {
     "timestamp": "2026-08-29T19:50:48.095082+00:00",
     "asset": "TIAUSDT",
     "signal_type": "SHORT",
@@ -3188,6 +3108,86 @@
     "asset": "XAUUSDT",
     "signal_type": "LONG",
     "result": "TAKE_PROFIT",
+    "confluence_score": 0,
+    "fingerprint": {
+      "regime": "UNKNOWN",
+      "rvol": 1.0,
+      "has_ob": false,
+      "has_sweep": false,
+      "session": "UNKNOWN",
+      "absorption_score": 0.0,
+      "is_in_ote": false
+    }
+  },
+  {
+    "timestamp": "2026-09-03T06:34:23.192598+00:00",
+    "asset": "ATOMUSDT",
+    "signal_type": "SHORT",
+    "result": "STOP_LOSS",
+    "confluence_score": 0,
+    "fingerprint": {
+      "regime": "UNKNOWN",
+      "rvol": 1.0,
+      "has_ob": false,
+      "has_sweep": false,
+      "session": "UNKNOWN",
+      "absorption_score": 0.0,
+      "is_in_ote": false
+    }
+  },
+  {
+    "timestamp": "2026-09-03T08:06:33.882366+00:00",
+    "asset": "INJUSDT",
+    "signal_type": "SHORT",
+    "result": "STOP_LOSS",
+    "confluence_score": 0,
+    "fingerprint": {
+      "regime": "UNKNOWN",
+      "rvol": 1.0,
+      "has_ob": false,
+      "has_sweep": false,
+      "session": "UNKNOWN",
+      "absorption_score": 0.0,
+      "is_in_ote": false
+    }
+  },
+  {
+    "timestamp": "2026-09-03T11:56:31.274224+00:00",
+    "asset": "INJUSDT",
+    "signal_type": "SHORT",
+    "result": "STOP_LOSS",
+    "confluence_score": 0,
+    "fingerprint": {
+      "regime": "UNKNOWN",
+      "rvol": 1.0,
+      "has_ob": false,
+      "has_sweep": false,
+      "session": "UNKNOWN",
+      "absorption_score": 0.0,
+      "is_in_ote": false
+    }
+  },
+  {
+    "timestamp": "2026-09-03T14:28:11.427838+00:00",
+    "asset": "XRPUSDT",
+    "signal_type": "SHORT",
+    "result": "STOP_LOSS",
+    "confluence_score": 0,
+    "fingerprint": {
+      "regime": "UNKNOWN",
+      "rvol": 1.0,
+      "has_ob": false,
+      "has_sweep": false,
+      "session": "UNKNOWN",
+      "absorption_score": 0.0,
+      "is_in_ote": false
+    }
+  },
+  {
+    "timestamp": "2026-09-03T14:28:43.660257+00:00",
+    "asset": "HYPEUSDT",
+    "signal_type": "SHORT",
+    "result": "STOP_LOSS",
     "confluence_score": 0,
     "fingerprint": {
       "regime": "UNKNOWN",

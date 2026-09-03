@@ -62,7 +62,7 @@ class Settings(BaseSettings):
     DYNAMIC_MIN_RVOL: float = 1.30                 # Mínimo 1.30x volumen relativo institucional
     DYNAMIC_MIN_KER: float = 0.35                  # Mínimo 0.35 eficiencia de tendencia (filtra consolidaciones)
     DYNAMIC_MAX_ROTATING_ASSETS: int = 6           # Máximo 6 activos rotativos
-    EXCLUDED_DYNAMIC_ASSETS: str = "XAGUSDT,XAGUSD,SNDKUSDT,SKHYNIXUSDT,NVDAUSDT,TSLAUSDT,AAPLUSDT" # Excluir tokens de acciones y plata ruidosa
+    EXCLUDED_DYNAMIC_ASSETS: str = "XAGUSDT,XAGUSD,SNDKUSDT,SKHYNIXUSDT,NVDAUSDT,TSLAUSDT,AAPLUSDT,HYPEUSDT,4USDT,HYPE" # Excluir tokens de acciones, plata ruidosa y tokens hipervolátiles
     
     @property
     def MASTER_WATCHLIST(self) -> list[str]:

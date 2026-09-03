@@ -17,9 +17,18 @@ class BitunixExecutor:
     Realiza firmas de doble SHA-256 e interactúa mediante REST API directa.
     """
     
-    def __init__(self, dry_run: bool = False):
-        self.api_key = settings.BITUNIX_API_KEY
-        self.secret_key = settings.BITUNIX_SECRET_KEY
+    def __init__(
+        self,
+        api_key: Optional[str] = None,
+        secret_key: Optional[str] = None,
+        account_id: str = "primary",
+        account_label: str = "Cuenta Principal",
+        dry_run: bool = False
+    ):
+        self.account_id = account_id
+        self.account_label = account_label
+        self.api_key = api_key or settings.BITUNIX_API_KEY
+        self.secret_key = secret_key or settings.BITUNIX_SECRET_KEY
         self.dry_run = dry_run
         self.base_url = "https://fapi.bitunix.com"
         self._server_time_offset_ms = 0
@@ -28,10 +37,10 @@ class BitunixExecutor:
         self._last_balance_ts = 0.0
         
         if not self.dry_run and (not self.api_key or not self.secret_key):
-            logger.error("❌ BITUNIX_API_KEY o SECRET_KEY no encontrados. Cambiando a DRY_RUN.")
+            logger.error(f"❌ [{self.account_label}] BITUNIX_API_KEY o SECRET_KEY no encontrados. Cambiando a DRY_RUN.")
             self.dry_run = True
             
-        logger.info(f"🛡️ [BITUNIX] Executor inicializado (Dry Run: {self.dry_run})")
+        logger.info(f"🛡️ [BITUNIX] Executor '{self.account_label}' inicializado (Dry Run: {self.dry_run})")
 
     async def sync_server_time(self) -> int:
         """

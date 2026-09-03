@@ -158,9 +158,13 @@ Pérdida Media por Trade Perdedor    | -1.00 R (Pérdida Total) | -0.65 R (Corte
 
 ---
 
+38. **Arquitectura Multi-Cuentas Bitunix (Master Account Dispatcher):** Permite registrar, supervisar y despachar señales simultáneamente hacia múltiples cuentas de Bitunix con credenciales API independientes. Cada cuenta lee su propio saldo en vivo, calcula su propio dimensionamiento SOP-41 (2.50% de riesgo por cuenta) y gestiona sus órdenes de forma aislada. Tolerancia a fallos: el error o desconexión en una cuenta secundaria no interrumpe la operativa de las demás.
+
+---
+
 ## 🧪 4. Certificación QA Oficial
 
-* **Total de Pruebas Unitarias:** **206/206 pruebas aprobadas al 100% (20.47s)**.
+* **Total de Pruebas Unitarias:** **212/212 pruebas aprobadas al 100% (19.53s)**.
 * **Compilación Frontend:** TypeScript verificado con **0 errores** (`npx tsc --noEmit`).
 * **Persistencia Transaccional:** SQLite WAL ACID en [`engine/core/vault.py`](file:///c:/Users/Mat%C3%ADas%20Riquelme/Desktop/Proyectos%20documentados/Slingshot_Trading/engine/core/vault.py).
 * **Script de Ejecución:** `python scripts/run_qa_suite.py` o `pytest`.
