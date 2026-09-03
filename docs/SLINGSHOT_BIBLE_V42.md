@@ -128,8 +128,10 @@ graph TD
 33. **SOP-38 (Sniper NY Open Priority & Asia Capital Defense):**
     * **NY Open (13:00-17:00 UTC):** Bono del **$+10\%$ de asignación de margen** para maximizar retornos en la ventana dorada de Wall Street (PF 1.29 - 1.43).
     * **Asia (00:00-07:00 UTC):** Modo defensivo al **$0.70\text{x}$** para proteger la cuenta del choppiness.
-34. **SOP-39 (Dynamic Account-Equity Sizing Engine):** En Bitunix, calcula en tiempo real el margen base como el **8.5% del saldo disponible** (`avail_margin * 0.085`), asegurando un riesgo real exacto del **2.50% por trade** y habilitando el **interés compuesto automático**.
+34. **SOP-39 (Dynamic Account-Equity Sizing Engine):** En Bitunix, calcula en tiempo real el dimensionamiento basado en el balance disponible verificado, asegurando un riesgo exacto del **2.50% por trade** con **interés compuesto automático**.
 35. **SOP-40 (Bitunix Pre-Flight Free Margin Buffer Guardrail):** Garantiza que tras abrir una orden quede siempre al menos un **50% de saldo libre en la cuenta** (o mínimo $50 USD), blindando la cuenta ante cualquier tensión de margen.
+36. **SOP-41 (Pure Dollar-Risk Position Sizing & Notional Cap):** Erradica el dimensionamiento por margen fijo. La cantidad (`qty`) se deriva estrictamente de $\text{Qty} = (\text{Balance} \times 0.025) / |\text{Entry} - \text{SL}|$, garantizando que la pérdida al tocar el Stop Loss sea invariablemente el **2.50% de la cuenta ($2.05 USD / ~1,970 CLP)**. Incorpora un techo de valor nocional máximo de **5 veces el balance** ($\le \$410 \text{ USD}$ en cuentas retail) para evitar sobreapalancamiento.
+37. **SOP-42 (Pre-Flight Risk Hard-Clamp Circuit Breaker & Fail-Closed):** Centinela desacoplado en el ejecutor de Bitunix que evalúa en el último milisegundo pre-envío que $\text{Qty} \times |\text{Entry} - \text{SL}| \le \text{Balance} \times 0.026$. Si la orden está sobredimensionada, auto-clampa forzosamente la cantidad a la cota segura o la cancela. Erradica cualquier fallback ficticio ($1,000 USD) en caso de fallos de red.
 
 ---
 
@@ -158,7 +160,7 @@ Pérdida Media por Trade Perdedor    | -1.00 R (Pérdida Total) | -0.65 R (Corte
 
 ## 🧪 4. Certificación QA Oficial
 
-* **Total de Pruebas Unitarias:** **201/201 pruebas aprobadas al 100% (17.24s)**.
+* **Total de Pruebas Unitarias:** **206/206 pruebas aprobadas al 100% (20.47s)**.
 * **Compilación Frontend:** TypeScript verificado con **0 errores** (`npx tsc --noEmit`).
 * **Persistencia Transaccional:** SQLite WAL ACID en [`engine/core/vault.py`](file:///c:/Users/Mat%C3%ADas%20Riquelme/Desktop/Proyectos%20documentados/Slingshot_Trading/engine/core/vault.py).
-* **Script de Ejecución:** `python scripts/run_qa_suite.py`.
+* **Script de Ejecución:** `python scripts/run_qa_suite.py` o `pytest`.

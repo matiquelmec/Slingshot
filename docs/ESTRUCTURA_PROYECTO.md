@@ -65,7 +65,7 @@ Slingshot_Trading/
 │   │   ├── unified_backtest_engine.py # Motor Unificado con Paridad 1:1 SSoT en Producción
 │   │   ├── data/                    # Datasets históricos binarios .parquet (107 archivos)
 │   │   └── reports/                 # Reportes oficiales inmutables JSON (+72.25R, PF 1.43)
-│   └── tests/                       # ═══ Suite Oficial de Certificación QA (201/201 Tests OK) ═══
+│   └── tests/                       # ═══ Suite Oficial de Certificación QA (206/206 Tests OK) ═══
 │       ├── test_setup_and_portability.py            # Onboarding, live test de keys, guardado atómico
 │       ├── test_post_tp3_and_trailing_invariance.py # Post-TP3 híbrido, 70% ratchet e invarianza SL
 │       ├── test_risk_and_resilience_advanced.py     # Micro-buffer BE, Asymmetric Gating, KER/RVOL
@@ -102,9 +102,10 @@ Slingshot_Trading/
 │       ├── test_sop32_to_sop35_intelligent_leverage.py # Volatility Leverage & Alpha-Tier Kelly Sizing
 │       ├── test_sop36_to_sop38_universe_and_fractal_harmony.py # Curated Universe, MTF Gate & Sniper NY
 │       ├── test_sop39_sop40_bitunix_dynamic_25pct_risk.py # Bitunix 2.5% Dynamic Margin & Buffer Guardrail
+│       ├── test_sop41_sop42_dollar_risk_shield.py   # SOP-41 Pure Dollar-Risk Sizing & SOP-42 Pre-Flight Hard-Clamp
 │       └── legacy/                      # 📦 44 pruebas históricas preservadas (v5 a v17)
 ├── scripts/                         # ═══ HERRAMIENTAS CLI DE PRODUCCIÓN (SSoT) ═══
-│   ├── run_qa_suite.py              # Suite Oficial de Certificación QA (201/201 Tests)
+│   ├── run_qa_suite.py              # Suite Oficial de Certificación QA (206/206 Tests)
 │   ├── historical_fetcher.py        # Descargador oficial de Parquets históricos
 │   ├── doctor.py                    # Diagnóstico y salud del sistema
 │   ├── watchdog_supervisor.py       # Monitor supervisor 24/7 en segundo plano

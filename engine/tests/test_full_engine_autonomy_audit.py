@@ -79,7 +79,8 @@ async def test_slot_recycling_frees_risk_on_breakeven():
     
     # Al simular una 5ta orden (RENDERUSDT), no debe ser rechazada por límite de 4
     with patch.object(node.executor, "place_limit_signal", new_callable=AsyncMock) as mock_limit, \
-         patch.object(node.executor, "get_pending_orders", new_callable=AsyncMock, return_value=[]):
+         patch.object(node.executor, "get_pending_orders", new_callable=AsyncMock, return_value=[]), \
+         patch.object(node.executor, "get_available_margin_usdt", new_callable=AsyncMock, return_value=82.23):
         mock_limit.return_value = {"status": "success", "order_id": "dry_new_1"}
         
         new_sig = {"asset": "RENDERUSDT", "price": 4.50, "stop_loss": 4.20, "tp1": 5.0, "type": "LONG", "confluence_score": 90.0}

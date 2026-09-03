@@ -5,8 +5,8 @@
 ![Status](https://img.shields.io/badge/Status-100%25_AUTONOMOUS_&_SSOT_VERIFIED-0d2a1a?style=for-the-badge&logo=codeproject&logoColor=fff)
 ![Version](https://img.shields.io/badge/Version-42.0_Apex_Titan_Compound-1a3a6e?style=for-the-badge)
 ![Dual Engine](https://img.shields.io/badge/Architecture-Bitunix_2.5%25_%26_FTMO_0.75%25_Dual-purple?style=for-the-badge)
-![Security](https://img.shields.io/badge/Security_Protocols-SOP--01%20to%20SOP--40-emerald?style=for-the-badge)
-![QA Suite](https://img.shields.io/badge/QA_Suite-201%2F201_Passed_100%25-success?style=for-the-badge)
+![Security](https://img.shields.io/badge/Security_Protocols-SOP--01%20to%20SOP--42-emerald?style=for-the-badge)
+![QA Suite](https://img.shields.io/badge/QA_Suite-206%2F206_Passed_100%25-success?style=for-the-badge)
 ![SSoT Return](https://img.shields.io/badge/SSoT_Return-%2B72.25_R_%28%2B$72%2C253_USD%29-gold?style=for-the-badge)
 ![Profit Factor](https://img.shields.io/badge/Profit_Factor-1.43_Institucional-blue?style=for-the-badge)
 ![Drawdown](https://img.shields.io/badge/Max_Drawdown--5.86%25_FTMO_Shield-brightgreen?style=for-the-badge)
@@ -21,16 +21,17 @@ Slingshot es una **Terminal de Inteligencia y Ejecución Cuantitativa Institucio
 
 * **Smart Money Concepts (SMC) de Alta Fidelidad:** Identificación matemática de Fair Value Gaps (FVG), Order Blocks de alta reacción, Zonas OTE (Fibonacci 61.8% - 78.6%) y barridos de liquidez.
 * **Arquitectura Dual de Riesgo:**
-  * **Bitunix (Modo Crecimiento):** Calibrado al **2.50% de riesgo real dinámico** con interés compuesto automático (SOP-39) y guardián de margen libre (SOP-40). Proyección a 3 meses: **+$169.22 USD (+84.6%)** en cuenta de $200 USD.
+  * **Bitunix (Modo Crecimiento):** Calibrado al **2.50% de riesgo real dinámico** con **Pure Dollar-Risk Sizing (SOP-41)**, **Pre-Flight Loss Hard-Clamp (SOP-42)**, e interés compuesto automático (SOP-39) con guardián de buffer libre (SOP-40).
   * **FTMO (Modo Guardián):** Calibrado estrictamente al **0.75% por trade** con **Kill-Switch preventivo a -3.5% diario** y límite total a -7.5%, blindando la cuenta ante cualquier riesgo de descalificación.
 * **Malla de Salidas Dinámica (SOP-26):** Cosecha institucional del **40% a +1.2R** (mueve SL a Breakeven $+0.08\%$), **40% a +2.0R** (asegura $+1.0\text{R}$ en verde) y **20% restante como Runner a +3.5R**.
 * **Invalidación Temprana (SOP-25):** Si el precio retrocede $-0.65\text{R}$ en contra, corta la operación anticipadamente, **ahorrando un 35% del Stop Loss**.
+* **Pure Dollar-Risk Sizing & Hard-Clamp (SOP-41 & SOP-42):** Cálculo matemático riguroso donde la cantidad se deriva de $\text{Qty} = (\text{Balance} \times 0.025) / |\text{Entry} - \text{SL}|$, garantizando que el Stop Loss cueste invariablemente el $2.50\%$ de la cuenta ($2.05 USD / ~1,970 CLP para una cuenta de $82 USD). Cap nocional de 5x y centinela final en el ejecutor.
 * **Asignación Asimétrica Alpha-Tier Kelly (SOP-33):** Asignación ponderada según el rendimiento histórico auditado (1.40x a campeones como FET, 1.25x a BNB/INJ/NEAR, 0.75x a BTC/ETH).
 * **Priorización Francotirador NY Open (SOP-38):** Asignación bonificada (+10%) durante la apertura de Wall Street (**13:00-17:00 UTC**, donde el Profit Factor histórico es de 1.29 - 1.43) y modo defensivo (0.70x) en Asia.
 * **Universo Curado Institucional (SOP-36):** Ascenso de `BNBUSDT` al Núcleo de Scalp 15m y especialización de `PAXGUSDT` (Oro) exclusivamente en 1H Swing y TradFi FTMO (`XAUUSD`).
 * **Kernel en Rust (`Polars`):** Cálculo vectorial sub-$2.5\text{ ms}$ para indicadores y confluencias.
 * **Bóveda SQLite WAL Transaccional (`vault.py`):** Persistencia ACID de sesiones y bitácora de auditoría inmutable.
-* **Suite de Certificación QA Oficial:** **201/201 pruebas unitarias aprobadas al 100%**.
+* **Suite de Certificación QA Oficial:** **206/206 pruebas unitarias aprobadas al 100%**.
 
 ---
 

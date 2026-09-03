@@ -24,6 +24,8 @@ class BitunixExecutor:
         self.base_url = "https://fapi.bitunix.com"
         self._server_time_offset_ms = 0
         self._last_time_sync = 0
+        self._last_verified_balance = 0.0
+        self._last_balance_ts = 0.0
         
         if not self.dry_run and (not self.api_key or not self.secret_key):
             logger.error("❌ BITUNIX_API_KEY o SECRET_KEY no encontrados. Cambiando a DRY_RUN.")
@@ -65,20 +67,28 @@ class BitunixExecutor:
 
     async def get_available_margin_usdt(self) -> float:
         """
-        [SOP-10 PRE-FLIGHT MARGIN CHECK]
+        [SOP-10 PRE-FLIGHT MARGIN CHECK & SOP-41 ZERO FAKE FALLBACK]
         Consulta el saldo disponible real en USDT en la cuenta de futuros de Bitunix.
         """
         if self.dry_run:
             return 1000.0
         try:
-            res = await self._request("GET", "/api/v1/futures/account")
+            res = await self._request("GET", "/api/v1/futures/account", params={"marginCoin": "USDT"})
             if res.get("code") == 0 and isinstance(res.get("data"), dict):
                 acc = res["data"]
-                avail = float(acc.get("availableMargin") or acc.get("availableBalance") or acc.get("marginBalance") or 0.0)
-                return avail
+                avail = float(acc.get("available") or acc.get("availableMargin") or acc.get("availableBalance") or acc.get("marginBalance") or 0.0)
+                if avail > 0:
+                    self._last_verified_balance = avail
+                    self._last_balance_ts = time.time()
+                    return avail
         except Exception as e:
             logger.debug(f"[BITUNIX MARGIN] Error consultando balance de margen: {e}")
-        return 1000.0
+            
+        if self._last_verified_balance > 0 and (time.time() - self._last_balance_ts) < 120.0:
+            logger.info(f"🛡️ [BITUNIX MARGIN] Usando último saldo verificado en caché: ${self._last_verified_balance:.2f} USDT")
+            return self._last_verified_balance
+            
+        return 0.0
 
     def _generate_signature(self, nonce: str, timestamp: str, query_params: str, body: str) -> str:
         """Genera la firma utilizando el algoritmo de doble SHA-256 de Bitunix."""
@@ -286,9 +296,32 @@ class BitunixExecutor:
 
             # 2. Calcular cantidad nominal ajustada y precisión dinámica exacta
             qty_decimals, price_decimals = await self.get_symbol_precision(symbol)
-            nominal_usd = amount_usd * leverage
-            raw_qty = nominal_usd / entry_price
+            
+            # Prioridad 1: Si la señal ya trae exact_qty calculada bajo SOP-41, respetarla
+            if signal.get("exact_qty") and float(signal.get("exact_qty")) > 0:
+                raw_qty = float(signal.get("exact_qty"))
+            else:
+                nominal_usd = amount_usd * leverage
+                raw_qty = nominal_usd / entry_price
+
+            # ── PROTOCOLO SOP-42: PRE-FLIGHT RISK HARD-CLAMP (CIRCUIT BREAKER) ──
+            stop_loss = signal.get("stop_loss")
+            if stop_loss and float(stop_loss) > 0 and entry_price and float(entry_price) > 0:
+                sl_dist = abs(float(entry_price) - float(stop_loss))
+                projected_loss = raw_qty * sl_dist
+                
+                verified_bal = self._last_verified_balance if self._last_verified_balance > 0 else await self.get_available_margin_usdt()
+                if verified_bal > 0:
+                    max_loss_allowed = verified_bal * 0.026 # Tolerancia máxima 2.6% ($2.13 USD en $82 USD)
+                    if projected_loss > max_loss_allowed:
+                        safe_qty = (verified_bal * 0.025) / sl_dist
+                        logger.warning(f"🛑 [SOP-42 HARD-CLAMP] Orden sobredimensionada en {symbol}! Pérdida proyectada: ${projected_loss:.2f} USDT > Límite: ${max_loss_allowed:.2f} USDT. Clampando Qty de {raw_qty:.4f} -> {safe_qty:.4f}")
+                        raw_qty = safe_qty
+
             qty = str(int(raw_qty)) if qty_decimals == 0 else f"{raw_qty:.{qty_decimals}f}"
+            if float(qty) <= 0:
+                logger.warning(f"🛑 [SOP-42] Cantidad calculada ({qty}) es 0 o menor al mínimo permitido para {symbol}. Cancelando orden.")
+                return {"status": "rejected", "reason": "SOP-42: Qty below minimum exchange limit"}
             
             logger.info(f"🚀 [BITUNIX] Enviando orden {side} para {symbol} de {qty} unidades (Margen: ${amount_usd} USDT @ {leverage}x).")
             
@@ -410,11 +443,33 @@ class BitunixExecutor:
             })
 
             # 2. Calcular cantidad nominal ajustada y precisión dinámica exacta de Bitunix
-            nominal_usd = amount_usd * leverage
-            raw_qty = nominal_usd / entry_price
             qty_decimals, price_decimals = await self.get_symbol_precision(symbol)
+            
+            # Prioridad 1: Si la señal ya trae exact_qty calculada bajo SOP-41, respetarla
+            if signal.get("exact_qty") and float(signal.get("exact_qty")) > 0:
+                raw_qty = float(signal.get("exact_qty"))
+            else:
+                nominal_usd = amount_usd * leverage
+                raw_qty = nominal_usd / entry_price
+
+            # ── PROTOCOLO SOP-42: PRE-FLIGHT RISK HARD-CLAMP (CIRCUIT BREAKER) ──
+            if stop_loss > 0 and entry_price > 0:
+                sl_dist = abs(entry_price - stop_loss)
+                projected_loss = raw_qty * sl_dist
+                
+                verified_bal = self._last_verified_balance if self._last_verified_balance > 0 else await self.get_available_margin_usdt()
+                if verified_bal > 0:
+                    max_loss_allowed = verified_bal * 0.026 # Tolerancia máxima 2.6% ($2.13 USD en $82 USD)
+                    if projected_loss > max_loss_allowed:
+                        safe_qty = (verified_bal * 0.025) / sl_dist
+                        logger.warning(f"🛑 [SOP-42 LIMIT HARD-CLAMP] Orden límite sobredimensionada en {symbol}! Pérdida proyectada: ${projected_loss:.2f} USDT > Límite: ${max_loss_allowed:.2f} USDT. Clampando Qty de {raw_qty:.4f} -> {safe_qty:.4f}")
+                        raw_qty = safe_qty
 
             qty = str(int(raw_qty)) if qty_decimals == 0 else f"{raw_qty:.{qty_decimals}f}"
+            if float(qty) <= 0:
+                logger.warning(f"🛑 [SOP-42 LIMIT] Cantidad calculada ({qty}) es 0 o menor al mínimo permitido para {symbol}. Cancelando orden.")
+                return {"status": "rejected", "reason": "SOP-42: Qty below minimum exchange limit"}
+            
             price_str = f"{entry_price:.{price_decimals}f}"
 
             # 3. Payload orden límite en Bitunix
@@ -781,12 +836,20 @@ class BitunixExecutor:
             res = await self._request("GET", "/api/v1/futures/account", params={"marginCoin": "USDT"})
             if res.get("code") == 0 and res.get("data"):
                 data = res.get("data")
+                avail = 0.0
                 if isinstance(data, list) and len(data) > 0:
-                    return float(data[0].get("available", 1000.0))
+                    avail = float(data[0].get("available", 0.0))
                 elif isinstance(data, dict):
-                    return float(data.get("available", 1000.0))
+                    avail = float(data.get("available", 0.0))
+                if avail > 0:
+                    self._last_verified_balance = avail
+                    self._last_balance_ts = time.time()
+                    return avail
         except Exception as e:
             logger.error(f"❌ Error al obtener balance de Bitunix: {e}")
-        return 1000.0
+            
+        if self._last_verified_balance > 0 and (time.time() - self._last_balance_ts) < 120.0:
+            return self._last_verified_balance
+        return 0.0
 
 

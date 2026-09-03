@@ -1,4 +1,5 @@
 from engine.api.config import settings
+from typing import Dict, Any, Optional, Tuple, List
 import math
 
 # El factor estático original se ha movido al módulo SIGMA (ASSET_TUNING) para control dinámico
@@ -746,4 +747,101 @@ class RiskManager:
             "net_pnl_at_sl": net_pnl_at_sl,
             "scale_ratio": scale_ratio,
             "reason": f"Scale-in approved with guaranteed Net PnL >= ${net_pnl_at_sl:.2f} USDT"
+        }
+
+    # ── PROTOCOLO SOP-41: PURE DOLLAR-RISK POSITION SIZING (v42.0 APEX TITAN) ──
+    @staticmethod
+    def calculate_dollar_risk_position(
+        account_balance: float,
+        risk_pct: float,
+        entry_price: float,
+        sl_price: float,
+        leverage: int = 20,
+        max_notional_mult: float = 5.0,
+        qty_decimals: int = 2
+    ) -> Dict[str, Any]:
+        """
+        Calcula la cantidad exacta de monedas (qty) y margen requerido para garantizar
+        que la pérdida máxima proyectada al tocar Stop Loss sea estrictamente igual a:
+            Pérdida Máxima = account_balance * risk_pct (ej. 2.50% = $2.05 USD en $82 USD).
+            
+        Invariantes:
+        1. projected_loss <= account_balance * (risk_pct + 0.001)
+        2. notional_value <= account_balance * max_notional_mult (techo 5x)
+        """
+        if account_balance <= 0 or entry_price <= 0 or sl_price <= 0:
+            return {
+                "approved": False,
+                "reason": "Parámetros inválidos (balance o precios <= 0)",
+                "qty": 0.0,
+                "required_margin": 0.0,
+                "projected_loss": 0.0
+            }
+            
+        sl_dist = abs(entry_price - sl_price)
+        if sl_dist <= 0:
+            return {
+                "approved": False,
+                "reason": "Distancia al Stop Loss es cero",
+                "qty": 0.0,
+                "required_margin": 0.0,
+                "projected_loss": 0.0
+            }
+            
+        # Riesgo estricto en dólares
+        target_risk_usd = account_balance * risk_pct
+        
+        # Cantidad matemática necesaria para perder exactamente target_risk_usd al tocar SL
+        raw_qty = target_risk_usd / sl_dist
+        notional_val = raw_qty * entry_price
+        
+        # Techo Nocional de Cuenta (Máximo 5x balance en cuentas retail)
+        max_notional = account_balance * max_notional_mult
+        is_notional_capped = False
+        if notional_val > max_notional:
+            raw_qty = max_notional / entry_price
+            notional_val = max_notional
+            is_notional_capped = True
+            
+        # Formatear QTY según los decimales del símbolo (floor para no exceder riesgo)
+        factor = 10 ** qty_decimals
+        safe_qty = math.floor(raw_qty * factor) / factor
+        if qty_decimals == 0:
+            safe_qty = int(safe_qty)
+            
+        # Recalcular métricas finales post-redondeo
+        final_notional = safe_qty * entry_price
+        lev = max(1, min(int(leverage), 50))
+        required_margin = round(final_notional / lev, 2)
+        projected_loss = round(safe_qty * sl_dist, 4)
+        
+        # Verificar que el margen no exceda el balance total disponible
+        if required_margin > account_balance:
+            return {
+                "approved": False,
+                "reason": f"Margen requerido (${required_margin:.2f} USDT) excede balance (${account_balance:.2f} USDT)",
+                "qty": 0.0,
+                "required_margin": 0.0,
+                "projected_loss": 0.0
+            }
+            
+        if safe_qty <= 0:
+            return {
+                "approved": False,
+                "reason": f"Cantidad calculada ({safe_qty}) es 0 tras aplicar precisión ({qty_decimals} dec)",
+                "qty": 0.0,
+                "required_margin": 0.0,
+                "projected_loss": 0.0
+            }
+            
+        return {
+            "approved": True,
+            "qty": safe_qty,
+            "notional_value": round(final_notional, 2),
+            "required_margin": required_margin,
+            "projected_loss": projected_loss,
+            "target_risk_usd": round(target_risk_usd, 2),
+            "is_notional_capped": is_notional_capped,
+            "effective_leverage": round(final_notional / account_balance, 2) if account_balance > 0 else 0.0,
+            "reason": f"SOP-41 Aprobado: Qty {safe_qty} con riesgo max ${projected_loss:.2f} USDT ({projected_loss/account_balance*100:.2f}%)"
         }

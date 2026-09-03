@@ -571,28 +571,13 @@ class NexusNode:
             logger.warning(f"🛑 [NEXUS SOP-33] Omitido activo descalificado: {asset}")
             return
 
-        # ── SOP-39: DYNAMIC EQUITY MARGIN (2.5% RIESGO CON INTERÉS COMPUESTO) ──
-        base_margin = self.DEFAULT_MARGIN_USDT
-        if not self.dry_run:
-            avail_margin = await self.executor.get_available_margin_usdt()
-            if avail_margin > 0:
-                base_margin = max(self.DEFAULT_MARGIN_USDT, avail_margin * 0.085)
-                
-            req_margin = float(signal.get("position_size_usdt", base_margin * sizing_mult))
-            if avail_margin < req_margin:
-                logger.warning(f"🛑 [NEXUS MARGIN GUARD] Saldo insuficiente para {asset}: Disponible ${avail_margin:.2f} USDT < Requerido ${req_margin:.2f} USDT.")
-                return
+        # ── PROTOCOLO DE SEGURIDAD SOP-08: CLAMP PREVENTIVO DE RIESGO ──
+        if float(signal.get("position_size", 0)) > self.DEFAULT_MARGIN_USDT:
+            signal["position_size"] = self.DEFAULT_MARGIN_USDT
+            signal["position_size_usdt"] = self.DEFAULT_MARGIN_USDT
+        if int(signal.get("leverage", 1)) > 20:
+            signal["leverage"] = 20
 
-            # ── SOP-40: BITUNIX PRE-FLIGHT BUFFER GUARDRAIL ──
-            min_buffer = min(50.0, avail_margin * 0.50)
-            if (avail_margin - req_margin) < min_buffer:
-                logger.warning(f"🛑 [NEXUS BUFFER GUARD] Buffer insuficiente para {asset}: Remanente ${avail_margin - req_margin:.2f} < Min ${min_buffer:.2f} USDT.")
-                return
-            
-        target_margin = base_margin * sizing_mult
-        signal["position_size"] = round(target_margin, 2)
-        signal["position_size_usdt"] = round(target_margin, 2)
-            
         entry_val = float(signal.get("price") or signal.get("entry_zone_bottom", 0))
         sl_val = float(signal.get("stop_loss", 0))
         
@@ -608,6 +593,45 @@ class NexusNode:
                 return
         else:
             signal["leverage"] = max(1, min(int(signal.get("leverage", 10)), 20))
+            safe_lev = signal["leverage"]
+
+        # ── SOP-41: PURE DOLLAR-RISK SIZING (2.50% BASE CANÓNICO) ──
+        avail_margin = await self.executor.get_available_margin_usdt() if not self.dry_run else 82.23
+        if avail_margin <= 0:
+            logger.warning(f"🛑 [NEXUS MARGIN GUARD] Saldo insuficiente o no verificado para {asset}: ${avail_margin:.2f} USDT.")
+            return
+
+        if sl_val > 0 and entry_val > 0:
+            qty_decimals, _ = await self.executor.get_symbol_precision(asset)
+            risk_calc = RiskManager.calculate_dollar_risk_position(
+                account_balance=avail_margin,
+                risk_pct=0.025, # 2.50% Base Canónico Estricto
+                entry_price=entry_val,
+                sl_price=sl_val,
+                leverage=safe_lev,
+                max_notional_mult=5.0, # Cap de 5x balance
+                qty_decimals=qty_decimals
+            )
+            if not risk_calc["approved"]:
+                logger.warning(f"🛑 [NEXUS SOP-41] Orden rechazada para {asset}: {risk_calc['reason']}")
+                return
+
+            req_margin = risk_calc["required_margin"]
+            signal["position_size"] = req_margin
+            signal["position_size_usdt"] = req_margin
+            signal["exact_qty"] = risk_calc["qty"]
+            logger.info(f"💎 [NEXUS SOP-41] {asset} -> Qty: {risk_calc['qty']} | Margen: ${req_margin:.2f} USDT | Riesgo Max: ${risk_calc['projected_loss']:.2f} USDT")
+        else:
+            req_margin = self.DEFAULT_MARGIN_USDT
+            signal["position_size"] = req_margin
+            signal["position_size_usdt"] = req_margin
+
+        # ── SOP-40: BITUNIX PRE-FLIGHT BUFFER GUARDRAIL ──
+        if not self.dry_run:
+            min_buffer = min(50.0, avail_margin * 0.50)
+            if (avail_margin - req_margin) < min_buffer:
+                logger.warning(f"🛑 [NEXUS BUFFER GUARD] Buffer insuficiente para {asset}: Remanente ${avail_margin - req_margin:.2f} < Min ${min_buffer:.2f} USDT.")
+                return
 
         # 1. Fragmentación Apex (Delta 60/20/20)
         fragments = DeltaOrchestrator.fragment_order(signal)
@@ -697,17 +721,6 @@ class NexusNode:
                 logger.debug(f"[NEXUS AUTO-LIMIT SOP-33] Omitido activo descalificado: {asset}")
                 return
                 
-            # ── SOP-39: DYNAMIC EQUITY MARGIN ──
-            base_margin = self.DEFAULT_MARGIN_USDT
-            if not self.dry_run:
-                avail_margin = await self.executor.get_available_margin_usdt()
-                if avail_margin > 0:
-                    base_margin = max(self.DEFAULT_MARGIN_USDT, avail_margin * 0.085)
-                    
-            target_margin = base_margin * sizing_mult
-            signal["position_size"] = round(target_margin, 2)
-            signal["position_size_usdt"] = round(target_margin, 2)
-            
             entry_p = float(signal.get('price', 0))
             sl_p = float(signal.get('stop_loss', 0))
 
@@ -722,8 +735,41 @@ class NexusNode:
                     return
             else:
                 signal["leverage"] = 10
+                safe_lev = 10
 
-            logger.info(f"🎯 [NEXUS AUTO-LIMIT] Enviando orden límite institucional automática a Bitunix para {asset} @ ${entry_p:.2f} (Margen: ${self.DEFAULT_MARGIN_USDT} USDT [5%] @ {signal['leverage']}x)")
+            # ── SOP-41: PURE DOLLAR-RISK SIZING (2.50% BASE CANÓNICO) ──
+            avail_margin = await self.executor.get_available_margin_usdt() if not self.dry_run else 82.23
+            if avail_margin <= 0:
+                logger.debug(f"[NEXUS AUTO-LIMIT MARGIN GUARD] Saldo insuficiente o no verificado para {asset}: ${avail_margin:.2f} USDT.")
+                return
+
+            qty_decimals, _ = await self.executor.get_symbol_precision(asset)
+            risk_calc = RiskManager.calculate_dollar_risk_position(
+                account_balance=avail_margin,
+                risk_pct=0.025, # 2.50% Base Canónico Estricto
+                entry_price=entry_p,
+                sl_price=sl_p,
+                leverage=safe_lev,
+                max_notional_mult=5.0, # Cap de 5x balance
+                qty_decimals=qty_decimals
+            )
+            if not risk_calc["approved"]:
+                logger.debug(f"[NEXUS AUTO-LIMIT SOP-41] Orden rechazada para {asset}: {risk_calc['reason']}")
+                return
+
+            req_margin = risk_calc["required_margin"]
+            signal["position_size"] = req_margin
+            signal["position_size_usdt"] = req_margin
+            signal["exact_qty"] = risk_calc["qty"]
+
+            # ── SOP-40: BITUNIX PRE-FLIGHT BUFFER GUARDRAIL ──
+            if not self.dry_run:
+                min_buffer = min(50.0, avail_margin * 0.50)
+                if (avail_margin - req_margin) < min_buffer:
+                    logger.info(f"🛑 [NEXUS AUTO-LIMIT BUFFER GUARD] Buffer insuficiente para {asset}: Remanente ${avail_margin - req_margin:.2f} < Min ${min_buffer:.2f} USDT.")
+                    return
+
+            logger.info(f"🎯 [NEXUS AUTO-LIMIT] Enviando orden límite institucional a Bitunix para {asset} @ ${entry_p:.2f} (Qty: {risk_calc['qty']} | Margen: ${req_margin} USDT @ {signal['leverage']}x | Riesgo Max: ${risk_calc['projected_loss']:.2f} USDT)")
             res = await self.executor.place_limit_signal(signal)
             if res.get("status") == "success":
                 self._pending_limit_symbols.add(asset)
