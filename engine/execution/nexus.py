@@ -239,6 +239,18 @@ class NexusNode:
 
                 for asset in closed_assets:
                     del self._active_positions[asset]
+                    self.remove_pending_limit_symbol(asset)
+                    # 🧹 [SOP-22 PURGA ATÓMICA] Cancelar inmediatamente el 100% de las órdenes huérfanas de ese activo
+                    try:
+                        await self.executor.cancel_all_orders_for_symbol(asset)
+                    except Exception as purge_err:
+                        logger.error(f"❌ [NEXUS SOP-22] Error purgando órdenes huérfanas para {asset}: {purge_err}")
+
+                # 2.1 🛡️ [SOP-22 GHOST ERADICATOR] Purgar cualquier orden CLOSE huérfana de monedas sin posición
+                try:
+                    await self.executor.purge_orphaned_close_orders(active_symbols=set(real_positions_map.keys()))
+                except Exception as ghost_err:
+                    logger.debug(f"[NEXUS SOP-22] Skip erradicación de órdenes fantasma: {ghost_err}")
 
                 # 3. Añadir a memoria posiciones abiertas en Bitunix que no tenemos registradas
                 for symbol, p in real_positions_map.items():
@@ -380,6 +392,11 @@ class NexusNode:
                                     tp_payload["positionId"] = str(position_id)
 
                                 tp_res = await self.executor._request("POST", "/api/v1/futures/trade/place_order", json_body=tp_payload)
+                                # Fallback resiliente: Si Bitunix rechaza por positionId, reintentar orden CLOSE pura
+                                if tp_res.get("code") != 0 and "positionId" in tp_payload:
+                                    del tp_payload["positionId"]
+                                    tp_res = await self.executor._request("POST", "/api/v1/futures/trade/place_order", json_body=tp_payload)
+
                                 if tp_res.get("code") == 0:
                                     tp_order_id = tp_res.get("data", {}).get("orderId")
                                     logger.info(f"🎯 [NEXUS SYNC] Orden de {label} límite colocada a ${tp_val:.{p_dec}f} ({tp_qty} unidades) | ID: {tp_order_id}")
@@ -539,11 +556,26 @@ class NexusNode:
 
         logger.info(f"⚡ [NEXUS] Recibida señal de alta fidelidad: {asset} {sig_type}")
 
-        # Garantizar tamaño del 5% del capital ($8.50 USDT margen a 20x) y tope de apalancamiento SOP-08 (máx 20x)
+        # Garantizar tamaño del 5% del capital ($8.50 USDT margen) y calcular apalancamiento dinámico SOP-21
         if not signal.get("position_size") or float(signal.get("position_size", 0)) > 20.0:
             signal["position_size"] = self.DEFAULT_MARGIN_USDT
             signal["position_size_usdt"] = self.DEFAULT_MARGIN_USDT
-        signal["leverage"] = max(1, min(int(signal.get("leverage", 20)), 20))
+            
+        entry_val = float(signal.get("price") or signal.get("entry_zone_bottom", 0))
+        sl_val = float(signal.get("stop_loss", 0))
+        
+        # ── SOP-21: INVARIANZA DE LIQUIDACIÓN Y APALANCAMIENTO SEGURO ──
+        from engine.risk.risk_manager import RiskManager
+        if entry_val > 0 and sl_val > 0:
+            safe_lev = RiskManager.calculate_safe_leverage(entry_val, sl_val, max_cap=20)
+            signal["leverage"] = safe_lev
+            is_safe, liq_msg, cl_ratio = RiskManager.verify_liquidation_clearance(entry_val, sl_val, safe_lev)
+            logger.info(f"🛡️ [NEXUS SOP-21] {asset} -> {liq_msg}")
+            if not is_safe and cl_ratio < 1.10:
+                logger.warning(f"🛑 [NEXUS LIQ GUARD] Orden rechazada para {asset}: Riesgo inminente de liquidación antes de SL.")
+                return
+        else:
+            signal["leverage"] = max(1, min(int(signal.get("leverage", 10)), 20))
 
         # 1. Fragmentación Apex (Delta 60/20/20)
         fragments = DeltaOrchestrator.fragment_order(signal)
@@ -607,13 +639,26 @@ class NexusNode:
                 self._pending_limit_symbols.add(asset)
                 return
 
-            # Asignar 5% de margen y 20x de apalancamiento
+            # Asignar 5% de margen y apalancamiento seguro adaptativo SOP-21
             signal["position_size"] = self.DEFAULT_MARGIN_USDT
             signal["position_size_usdt"] = self.DEFAULT_MARGIN_USDT
-            signal["leverage"] = 20
-
+            
             entry_p = float(signal.get('price', 0))
-            logger.info(f"🎯 [NEXUS AUTO-LIMIT] Enviando orden límite institucional automática a Bitunix para {asset} @ ${entry_p:.2f} (Margen: ${self.DEFAULT_MARGIN_USDT} USDT [5%] @ 20x)")
+            sl_p = float(signal.get('stop_loss', 0))
+
+            from engine.risk.risk_manager import RiskManager
+            if entry_p > 0 and sl_p > 0:
+                safe_lev = RiskManager.calculate_safe_leverage(entry_p, sl_p, max_cap=20)
+                signal["leverage"] = safe_lev
+                is_safe, liq_msg, cl_ratio = RiskManager.verify_liquidation_clearance(entry_p, sl_p, safe_lev)
+                logger.info(f"🛡️ [NEXUS AUTO-LIMIT SOP-21] {asset} -> {liq_msg}")
+                if not is_safe and cl_ratio < 1.10:
+                    logger.warning(f"🛑 [NEXUS AUTO-LIMIT LIQ GUARD] Orden límite rechazada para {asset}: Riesgo inminente de liquidación antes de SL.")
+                    return
+            else:
+                signal["leverage"] = 10
+
+            logger.info(f"🎯 [NEXUS AUTO-LIMIT] Enviando orden límite institucional automática a Bitunix para {asset} @ ${entry_p:.2f} (Margen: ${self.DEFAULT_MARGIN_USDT} USDT [5%] @ {signal['leverage']}x)")
             res = await self.executor.place_limit_signal(signal)
             if res.get("status") == "success":
                 self._pending_limit_symbols.add(asset)

@@ -576,6 +576,11 @@ class TradeManager:
             if not pending_orders:
                 return []
 
+            # ── SOP-22: PURGA ATÓMICA DE ÓRDENES CLOSE HUÉRFANAS ──
+            # Si hay órdenes límite de cierre ('CLOSE') para monedas que NO tienen posición abierta, erradicarlas
+            active_symbols = {p.get("symbol") for p in (await bitunix.get_pending_positions() or []) if p.get("symbol")}
+            await bitunix.purge_orphaned_close_orders(active_symbols=active_symbols)
+
             # Filtrar solo órdenes que abren posiciones (tradeSide == 'OPEN' o reduceOnly == False)
             open_limits = [
                 o for o in pending_orders 

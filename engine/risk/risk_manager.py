@@ -89,6 +89,103 @@ class RiskManager:
         take_profit = current_price + (risk_dist * 2.0) if signal_type == "LONG" else current_price - (risk_dist * 2.0)
         return stop_loss, take_profit, 2.0
 
+    # ── PROTOCOLO SOP-21: LIQUIDATION INVARIANCE ENGINE v35.0 ─────────────────
+    @staticmethod
+    def calculate_safe_leverage(
+        entry_price: float,
+        sl_price: float,
+        mmr: float = 0.015,
+        safety_factor: float = 1.50,
+        max_cap: int = 20
+    ) -> int:
+        """
+        [SOP-21 LIQUIDATION INVARIANCE]
+        Calcula el apalancamiento máximo permitido garantizando que el Precio de Liquidación
+        esté estrictamente más lejos que el Stop Loss por al menos un safety_factor (default 1.5x / +50%).
+        
+        Fórmula:
+            sl_dist_pct = |Entry - SL| / Entry
+            required_liq_dist = sl_dist_pct * safety_factor + MMR
+            safe_leverage = floor(1 / required_liq_dist)
+        """
+        if entry_price <= 0 or sl_price <= 0 or entry_price == sl_price:
+            return min(max_cap, 10)
+            
+        sl_dist_pct = abs(entry_price - sl_price) / entry_price
+        
+        # Distancia de liquidación requerida para que el SL nunca colisione con el motor del broker
+        required_liq_dist = (sl_dist_pct * safety_factor) + mmr
+        if required_liq_dist <= 0:
+            return max_cap
+            
+        raw_leverage = math.floor(1.0 / required_liq_dist)
+        # Acotar entre 1x y max_cap (20x)
+        safe_lev = max(1, min(int(raw_leverage), max_cap))
+        return safe_lev
+
+    @staticmethod
+    def verify_liquidation_clearance(
+        entry_price: float,
+        sl_price: float,
+        leverage: int,
+        mmr: float = 0.015,
+        min_clearance_ratio: float = 1.40
+    ) -> tuple[bool, str, float]:
+        """
+        [SOP-21 PRE-FLIGHT CLEARANCE GUARD]
+        Verifica si la orden cumple con el ratio de supervivencia mínimo:
+        clearance_ratio = liq_dist_pct / sl_dist_pct >= min_clearance_ratio (1.40x).
+        """
+        if entry_price <= 0 or sl_price <= 0 or leverage <= 0:
+            return False, "Parámetros inválidos para cálculo de liquidación", 0.0
+            
+        sl_dist_pct = abs(entry_price - sl_price) / entry_price
+        liq_dist_pct = max(0.0, (1.0 / leverage) - mmr)
+        
+        if sl_dist_pct <= 0:
+            return True, "SL en punto cero", 99.0
+            
+        clearance_ratio = liq_dist_pct / sl_dist_pct
+        is_safe = clearance_ratio >= min_clearance_ratio
+        
+        if not is_safe:
+            msg = (
+                f"🛑 [SOP-21 VETO] Colisión de Liquidación detectada: SL dist {sl_dist_pct*100:.2f}% vs "
+                f"Liq dist {liq_dist_pct*100:.2f}% a {leverage}x (Ratio {clearance_ratio:.2f}x < {min_clearance_ratio:.2f}x requerido)."
+            )
+        else:
+            msg = (
+                f"✅ [SOP-21 CLEARANCE OK] Buffer de Liquidación {clearance_ratio:.2f}x: "
+                f"SL dist {sl_dist_pct*100:.2f}% | Liq dist {liq_dist_pct*100:.2f}% a {leverage}x."
+            )
+            
+        return is_safe, msg, round(clearance_ratio, 2)
+
+    # ── PROTOCOLO SOP-23: FUNDING RATE CIRCUIT BREAKER v36.0 ─────────────────
+    @staticmethod
+    def check_funding_rate_impact(
+        symbol: str,
+        side: str,
+        funding_rate: float,
+        max_adverse_rate: float = 0.0005
+    ) -> tuple[bool, str]:
+        """
+        [SOP-23 FUNDING RATE CIRCUIT BREAKER]
+        Veta operaciones si la tasa de financiación por 8h es excesivamente adversa (> +0.05% en LONG o < -0.05% en SHORT),
+        evitando que el coste de mantenimiento drene las ganancias del trade.
+        """
+        is_long = "LONG" in side.upper() or "BUY" in side.upper()
+        
+        # En LONG: pagamos si funding_rate es positivo
+        if is_long and funding_rate > max_adverse_rate:
+            return False, f"🛑 [SOP-23 FUNDING VETO] Tasa de financiación excesiva para LONG ({funding_rate*100:.3f}% > {max_adverse_rate*100:.3f}% por 8h)."
+            
+        # En SHORT: pagamos si funding_rate es negativo
+        if not is_long and funding_rate < -max_adverse_rate:
+            return False, f"🛑 [SOP-23 FUNDING VETO] Tasa de financiación excesiva para SHORT ({funding_rate*100:.3f}% < -{max_adverse_rate*100:.3f}% por 8h)."
+            
+        return True, f"✅ [SOP-23 FUNDING OK] Tasa saludable ({funding_rate*100:.3f}% por 8h)."
+
     # --- MÓDULO SIGMA: SINTONIZADOR DE ACTIVOS INSTITUCIONAL v17.0 ---
     # Mega-Caps (BTC, ETH, SOL, XRP, AVAX, LINK): 1H OTE Swing -> Colchón SL amplio (0.60x - 2.5x ATR)
     # High-Beta Alts (RENDER, SUI, INJ, NEAR, FET, PAXG): 15M Scalp -> SL Ágil (0.30x - 1.8x ATR)
@@ -376,7 +473,10 @@ class RiskManager:
 
         sl_dist_pct = final_risk / current_price if current_price > 0 else 0.01
         pos_size_nominal = risk_amount_usdt / max(0.001, sl_dist_pct)
-        leverage = min(50, math.ceil(pos_size_nominal / self.account_balance))
+        raw_leverage = min(50, math.ceil(pos_size_nominal / self.account_balance))
+        # [SOP-21] Asegurar que el apalancamiento nunca exceda el umbral de liquidación segura
+        safe_leverage = self.calculate_safe_leverage(current_price, sl, max_cap=20)
+        leverage = min(raw_leverage, safe_leverage)
         
         # [SNIPER v10.0] Validación OTE (Optimal Trade Entry) / Premium-Discount Zone (200 IQ Adaptive Entry)
         is_in_ote = False

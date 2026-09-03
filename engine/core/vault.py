@@ -186,5 +186,27 @@ class SlingshotVault:
                     return None
             return None
 
+    def vacuum_and_purge_maintenance(self, retention_days: int = 7) -> Dict[str, int]:
+        """
+        [SOP-22 INFINITE RESILIENCE]
+        Mantenimiento periódico de ciclo infinito para SQLite WAL:
+        1. Purga despachos viejos (> retention_days).
+        2. Ejecuta PRAGMA incremental_vacuum / optimize para evitar fragmentación.
+        """
+        deleted_stats = {"telegram_dispatches": 0}
+        try:
+            with self._get_connection() as conn:
+                cutoff = time.time() - (retention_days * 86400)
+                cur = conn.execute("DELETE FROM telegram_dispatches WHERE timestamp < ?", (cutoff,))
+                deleted_stats["telegram_dispatches"] = cur.rowcount
+                conn.commit()
+                # Optimizar índices y compactar espacio WAL
+                conn.execute("PRAGMA optimize;")
+                conn.execute("PRAGMA wal_checkpoint(PASSIVE);")
+            logger.info(f"🧹 [VAULT MAINTENANCE] Mantenimiento ejecutado: {deleted_stats['telegram_dispatches']} registros purgados.")
+        except Exception as e:
+            logger.error(f"❌ [VAULT MAINTENANCE] Error en mantenimiento de SQLite: {e}")
+        return deleted_stats
+
 # Instancia global singleton
 vault = SlingshotVault()

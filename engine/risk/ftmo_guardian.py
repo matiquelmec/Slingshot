@@ -102,6 +102,22 @@ class FtmoGuardianShield:
             "progress_pct": min(100.0, max(0.0, progress_pct)),
             "phase_passed": profit_usd >= (self.account_size * (target_pct / 100.0)) and target_pct > 0
         }
+
+    # ── PROTOCOLO SOP-24: MIDNIGHT ROLL-OVER SHIELD v36.0 ─────────────────────
+    def check_midnight_rollover_risk(self, hour_utc: int, minute: int) -> bool:
+        """
+        [SOP-24 MIDNIGHT ROLL-OVER SHIELD]
+        FTMO resetea su pérdida máxima diaria a las 00:00 hora de Praga (CE(S)T).
+        En UTC estándar, la ventana crítica de corte bancario ocurre entre 21:50 y 22:05 UTC.
+        Durante estos 15 minutos, se bloquean nuevas aperturas y se exige protección estricta
+        del flotante positivo para que el reseteo diario no castigue la equidad pico.
+        """
+        # Ventana de 15 minutos de corte bancario interbancario
+        if hour_utc == 21 and minute >= 50:
+            return True
+        if hour_utc == 22 and minute <= 5:
+            return True
+        return False
         
     def calculate_mt5_lots(self, symbol: str, entry_price: float, stop_loss: float, risk_usd_override: Optional[float] = None) -> Dict[str, Any]:
         """

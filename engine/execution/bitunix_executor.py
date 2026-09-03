@@ -181,14 +181,18 @@ class BitunixExecutor:
         except Exception as e:
             logger.debug(f"[BITUNIX] Error cargando precisiones de mercado: {e}")
             
-        # Fallback inteligente
+        # Fallback inteligente con soporte nativo de micro-tokens
         fallback_map = {
             "BTCUSDT": (4, 1), "ETHUSDT": (3, 2), "SOLUSDT": (2, 2), "PAXGUSDT": (3, 2),
             "AVAXUSDT": (2, 2), "LINKUSDT": (2, 2), "NEARUSDT": (1, 3), "RENDERUSDT": (1, 3),
             "SUIUSDT": (1, 4), "INJUSDT": (2, 3), "FETUSDT": (0, 4), "ATOMUSDT": (2, 3),
-            "TIAUSDT": (1, 3), "XRPUSDT": (0, 4), "TRUMPUSDT": (2, 3)
+            "TIAUSDT": (1, 3), "XRPUSDT": (0, 4), "TRUMPUSDT": (2, 3), "AKEUSDT": (0, 6)
         }
-        return fallback_map.get(sym, (2, 2))
+        if sym in fallback_map:
+            return fallback_map[sym]
+            
+        # Para tokens micro desconocidos (< $0.10), usar 6 decimales de precio
+        return (0, 6) if any(m in sym for m in ["AKE", "PEPE", "SHIB", "FLOKI", "BONK"]) else (2, 2)
 
     async def get_ticker_price(self, symbol: str) -> float:
         """Obtiene el último precio de mercado para un símbolo en Bitunix (con fallback institucional)."""
@@ -319,37 +323,47 @@ class BitunixExecutor:
                 tp3 = signal.get("tp3") or signal.get("take_profit_3r")
                 
                 if tp1 and tp2 and tp3:
-                    # Determinar precisión de cantidad y precio dinámicamente
-                    qty_decimals = 0 if qty_float >= 100 or "." not in str(qty) else 2
-                    price_decimals = 4 if float(entry_price) < 10.0 else 2
+                    # [SOP-21] Respetar la precisión dinámica exacta del símbolo (ej. 6 decimales en micro-tokens)
+                    qty_decimals, price_decimals = await self.get_symbol_precision(symbol)
 
-                    f1 = round(qty_float * 0.60, qty_decimals)
-                    f2 = round(qty_float * 0.20, qty_decimals)
-                    f3 = round(qty_float - f1 - f2, qty_decimals)
                     if qty_decimals == 0:
-                        f1, f2, f3 = int(f1), int(f2), int(f3)
+                        f1 = int(round(qty_float * 0.60))
+                        f2 = int(round(qty_float * 0.20))
+                        f3 = int(round(qty_float - f1 - f2))
+                    else:
+                        f1 = round(qty_float * 0.60, qty_decimals)
+                        f2 = round(qty_float * 0.20, qty_decimals)
+                        f3 = round(qty_float - f1 - f2, qty_decimals)
 
                     tps = [(tp1, f1, "TP1"), (tp2, f2, "TP2"), (tp3, f3, "TP3")]
                     for tp_price, tp_qty, label in tps:
                         if tp_qty <= 0:
                             continue
+                        formatted_tp_qty = str(int(tp_qty) if qty_decimals == 0 else f"{tp_qty:.{qty_decimals}f}")
+                        formatted_tp_price = f"{float(tp_price):.{price_decimals}f}"
                         tp_payload = {
                             "symbol": symbol,
-                            "qty": str(tp_qty),
-                            "price": f"{float(tp_price):.{price_decimals}f}",
+                            "qty": formatted_tp_qty,
+                            "price": formatted_tp_price,
                             "side": close_side,
                             "tradeSide": "CLOSE",
                             "orderType": "LIMIT",
-                            "effect": "GTC",
-                            "positionId": str(order_id)
+                            "effect": "GTC"
                         }
+                        # Intentar primero orden límite de cierre directa
                         tp_res = await self._request("POST", "/api/v1/futures/trade/place_order", json_body=tp_payload)
+                        
+                        # Fallback resiliente: si Bitunix exige positionId o falla, reintentar con positionId
+                        if tp_res.get("code") != 0 and order_id:
+                            tp_payload["positionId"] = str(order_id)
+                            tp_res = await self._request("POST", "/api/v1/futures/trade/place_order", json_body=tp_payload)
+
                         if tp_res.get("code") == 0:
                             tp_order_id = tp_res.get("data", {}).get("orderId")
-                            logger.info(f"🎯 [BITUNIX] Orden de {label} límite colocada a ${tp_price} | ID: {tp_order_id}")
+                            logger.info(f"🎯 [BITUNIX] Orden de {label} límite colocada a ${formatted_tp_price} ({formatted_tp_qty} u) | ID: {tp_order_id}")
                             protection_ids.append(tp_order_id)
                         else:
-                            logger.error(f"❌ [BITUNIX] Error al colocar {label}: {tp_res.get('msg')}")
+                            logger.error(f"❌ [BITUNIX] Error al colocar {label} a ${formatted_tp_price}: {tp_res.get('msg')}")
                 
                 return {
                     "status": "success",
@@ -674,7 +688,90 @@ class BitunixExecutor:
                 return False
         except Exception as e:
             logger.error(f"❌ [BITUNIX] Error cancelando orden {order_id} en {sym}: {e}")
-            return False
+    async def cancel_all_orders_for_symbol(self, symbol: str) -> int:
+        """
+        [SOP-22 ATOMIC ORPHAN PURGE]
+        Cancela de forma atómica el 100% de las órdenes pendientes (tanto OPEN como CLOSE)
+        para un activo específico en Bitunix.
+        """
+        sym = symbol.replace('/', '').upper()
+        if self.dry_run:
+            logger.info(f"🧪 [BITUNIX DRY RUN] Cancelando todas las órdenes pendientes para {sym}")
+            return 0
+
+        try:
+            pending = await self.get_pending_orders(sym)
+            if not pending:
+                return 0
+                
+            order_ids = [str(o.get("orderId")) for o in pending if o.get("orderId")]
+            if not order_ids:
+                return 0
+                
+            logger.info(f"🧹 [SOP-22 PURGE] Purgando {len(order_ids)} órdenes huérfanas/pendientes para {sym}...")
+            
+            # Enviar cancelación masiva en lotes de 10
+            cancelled_count = 0
+            for i in range(0, len(order_ids), 10):
+                batch = order_ids[i:i+10]
+                res = await self._request("POST", "/api/v1/futures/trade/cancel_orders", json_body={
+                    "symbol": sym,
+                    "orderList": [{"orderId": oid} for oid in batch]
+                })
+                if res.get("code") == 0:
+                    cancelled_count += len(batch)
+                else:
+                    logger.warning(f"⚠️ [SOP-22 PURGE] Error en lote de cancelación para {sym}: {res.get('msg')}")
+                    
+            logger.info(f"✅ [SOP-22 PURGE] {cancelled_count} órdenes huérfanas eliminadas exitosamente para {sym}.")
+            return cancelled_count
+        except Exception as e:
+            logger.error(f"❌ [SOP-22 PURGE] Excepción purgando órdenes para {sym}: {e}")
+            return 0
+
+    async def purge_orphaned_close_orders(self, active_symbols: set) -> int:
+        """
+        [SOP-22 GHOST ORDER ERADICATOR]
+        Audita todas las órdenes en Bitunix y cancela aquellas órdenes límite de cierre ('CLOSE')
+        que pertenezcan a monedas que YA NO tienen una posición abierta.
+        """
+        if self.dry_run:
+            return 0
+            
+        try:
+            all_pending = await self.get_pending_orders()
+            if not all_pending:
+                return 0
+                
+            active_clean = {s.replace('/', '').upper() for s in active_symbols}
+            ghost_orders_by_sym = {}
+            
+            for o in all_pending:
+                sym = str(o.get("symbol", "")).upper()
+                is_close = o.get("tradeSide") == "CLOSE" or bool(o.get("reduceOnly"))
+                # Si es una orden de cierre pero no hay posición viva para ese símbolo -> ES HUÉRFANA FANTASMA
+                if is_close and sym not in active_clean:
+                    oid = str(o.get("orderId"))
+                    if sym not in ghost_orders_by_sym:
+                        ghost_orders_by_sym[sym] = []
+                    ghost_orders_by_sym[sym].append(oid)
+                    
+            total_ghosts_purged = 0
+            for sym, oids in ghost_orders_by_sym.items():
+                logger.warning(f"👻 [SOP-22 GHOST ALERT] Encontradas {len(oids)} órdenes huérfanas de cierre en {sym} sin posición abierta. Erradicando...")
+                res = await self._request("POST", "/api/v1/futures/trade/cancel_orders", json_body={
+                    "symbol": sym,
+                    "orderList": [{"orderId": oid} for oid in oids]
+                })
+                if res.get("code") == 0:
+                    total_ghosts_purged += len(oids)
+                    
+            if total_ghosts_purged > 0:
+                logger.info(f"🛡️ [SOP-22 GHOST ERADICATOR] Total de órdenes fantasma erradicadas: {total_ghosts_purged}")
+            return total_ghosts_purged
+        except Exception as e:
+            logger.error(f"❌ [SOP-22 GHOST ERADICATOR] Error en auditoría de órdenes fantasma: {e}")
+            return 0
 
     async def get_balance(self) -> float:
         """Obtiene el balance disponible real en USDT de la cuenta."""
