@@ -112,14 +112,20 @@ export default function LatticeScanner() {
                 </div>
             </div>
 
-            {/* List Header */}
-            <div className="grid grid-cols-12 px-4 py-1.5 border-b border-white/5 text-[7px] font-black text-white/15 tracking-wider uppercase">
-                <div className="col-span-3">SÍMBOLO</div>
-                <div className="col-span-2 text-center">RÉGIMEN</div>
-                <div className="col-span-2 text-center">SESGO</div>
-                <div className="col-span-2 text-center">FUNDING</div>
-                <div className="col-span-1 text-center">OI Δ</div>
-                <div className="col-span-2 text-right">PRECIO</div>
+            {/* List Header Desktop */}
+            <div className="hidden sm:flex items-center px-4 py-1.5 border-b border-white/5 text-[7px] font-black text-white/20 tracking-wider uppercase">
+                <div className="w-24 shrink-0">SÍMBOLO</div>
+                <div className="w-20 shrink-0 text-center">RÉGIMEN</div>
+                <div className="w-16 shrink-0 text-center">SESGO</div>
+                <div className="w-20 shrink-0 text-center">FUNDING</div>
+                <div className="w-16 shrink-0 text-center">OI Δ</div>
+                <div className="flex-1 text-right">PRECIO</div>
+            </div>
+
+            {/* List Header Mobile */}
+            <div className="flex sm:hidden items-center justify-between px-3 py-1.5 border-b border-white/5 text-[7px] font-black text-white/20 tracking-wider uppercase">
+                <div>ACTIVO / RÉGIMEN</div>
+                <div className="text-right">PRECIO / DELTA</div>
             </div>
 
             {/* Virtualized Container */}
@@ -144,16 +150,16 @@ export default function LatticeScanner() {
                             const biasColor = pair.bias === 'BULLISH' ? 'text-neon-green' 
                                 : pair.bias === 'BEARISH' ? 'text-neon-red' : 'text-white/30';
                             const regimeColor = pair.regime === 'MARKUP' || pair.regime === 'ACCUMULATION' 
-                                ? 'text-neon-green/70' 
+                                ? 'text-neon-green/80' 
                                 : pair.regime === 'MARKDOWN' || pair.regime === 'DISTRIBUTION' 
-                                    ? 'text-neon-red/70' 
-                                    : pair.regime === 'CHOPPY' ? 'text-purple-400/70' : 'text-white/30';
+                                    ? 'text-neon-red/80' 
+                                    : pair.regime === 'CHOPPY' ? 'text-purple-400/80' : 'text-white/30';
 
                             return (
                                 <div 
                                     key={pair.asset}
                                     onClick={() => handlePairClick(pair.asset)}
-                                    className={`absolute left-0 w-full grid grid-cols-12 px-4 items-center cursor-pointer transition-all duration-200 select-none ${
+                                    className={`absolute left-0 w-full cursor-pointer transition-all duration-200 select-none ${
                                         isActive 
                                             ? 'bg-gradient-to-r from-neon-cyan/25 via-neon-cyan/10 to-transparent border-l-4 border-neon-cyan shadow-[inset_0_0_20px_rgba(6,182,212,0.15)] ring-1 ring-neon-cyan/30' 
                                             : 'border-b border-white/[0.03] hover:bg-white/[0.05]'
@@ -163,53 +169,90 @@ export default function LatticeScanner() {
                                         top: actualIndex * ROW_HEIGHT,
                                     }}
                                 >
-                                    {/* Symbol */}
-                                    <div className="col-span-3 flex items-center gap-1.5">
-                                        <span className={`text-[11px] font-black font-mono tracking-tight flex items-center gap-1.5 ${isActive ? 'text-white drop-shadow-[0_0_8px_rgba(6,182,212,0.8)]' : 'text-white/70'}`}>
-                                            {pair.asset.replace('USDT', '')}
-                                            {isActive && (
-                                                <span className="text-[7px] font-sans font-black bg-neon-cyan text-black px-1.5 py-0.2 rounded-full uppercase tracking-tighter shadow-[0_0_8px_rgba(6,182,212,0.8)] animate-pulse">
-                                                    ACTIVO
+                                    {/* Desktop Row (>= 640px) */}
+                                    <div className="hidden sm:flex items-center w-full h-full px-4">
+                                        <div className="w-24 shrink-0 flex items-center gap-1.5">
+                                            <span className={`text-[11px] font-black font-mono tracking-tight flex items-center gap-1.5 ${isActive ? 'text-white drop-shadow-[0_0_8px_rgba(6,182,212,0.8)]' : 'text-white/80'}`}>
+                                                {pair.asset.replace('USDT', '')}
+                                                {isActive && (
+                                                    <span className="text-[7px] font-sans font-black bg-neon-cyan text-black px-1.5 py-0.2 rounded-full uppercase tracking-tighter shadow-[0_0_8px_rgba(6,182,212,0.8)]">
+                                                        ACTIVO
+                                                    </span>
+                                                )}
+                                            </span>
+                                            {!isActive && <span className="text-[7px] text-white/20 font-bold">/USDT</span>}
+                                        </div>
+
+                                        <div className="w-20 shrink-0 flex items-center justify-center">
+                                            <span className={`text-[8px] font-bold tracking-wider ${regimeColor}`}>
+                                                {pair.regime || '—'}
+                                            </span>
+                                        </div>
+
+                                        <div className="w-16 shrink-0 flex items-center justify-center gap-1">
+                                            <span className={`w-1.5 h-1.5 rounded-full ${pair.bias?.includes('BULLISH') ? 'bg-neon-green' : pair.bias?.includes('BEARISH') ? 'bg-neon-red' : 'bg-white/20'}`} />
+                                            <span className={`text-[8px] font-bold ${pair.bias?.includes('BULLISH') ? 'text-neon-green' : pair.bias?.includes('BEARISH') ? 'text-neon-red' : 'text-white/40'}`}>
+                                                {pair.bias?.split('_')[0] || '—'}
+                                            </span>
+                                        </div>
+
+                                        <div className="w-20 shrink-0 flex items-center justify-center">
+                                            <span className={`text-[9px] font-mono font-bold tabular-nums ${pair.funding > 0 ? 'text-neon-red' : pair.funding < 0 ? 'text-neon-green' : 'text-white/20'}`}>
+                                                {pair.funding ? `${pair.funding.toFixed(4)}%` : '0.0000%'}
+                                            </span>
+                                        </div>
+
+                                        <div className="w-16 shrink-0 flex items-center justify-center">
+                                            <span className={`text-[9px] font-mono font-bold tabular-nums ${pair.oi > 0 ? 'text-neon-green' : pair.oi < 0 ? 'text-neon-red' : 'text-white/20'}`}>
+                                                {pair.oi ? `${pair.oi > 0 ? '+' : ''}${pair.oi.toFixed(2)}%` : '0.00%'}
+                                            </span>
+                                        </div>
+
+                                        <div className="flex-1 text-right">
+                                            <span className="text-[10px] font-black font-mono tabular-nums text-white/90">
+                                                {formatCurrency(pair.price || 0)}
+                                            </span>
+                                        </div>
+                                    </div>
+
+                                    {/* Mobile Row (< 640px) */}
+                                    <div className="flex sm:hidden items-center justify-between w-full h-full px-3">
+                                        <div className="flex flex-col">
+                                            <div className="flex items-center gap-1.5">
+                                                <span className={`text-xs font-black font-mono tracking-tight ${isActive ? 'text-white font-bold' : 'text-white/80'}`}>
+                                                    {pair.asset.replace('USDT', '')}
                                                 </span>
-                                            )}
-                                        </span>
-                                        {!isActive && <span className="text-[7px] text-white/20 font-bold">/USDT</span>}
-                                    </div>
-
-                                    {/* Regime */}
-                                    <div className="col-span-2 flex items-center justify-center">
-                                        <span className={`text-[8px] font-bold tracking-wider ${regimeColor}`}>
-                                            {pair.regime || '—'}
-                                        </span>
-                                    </div>
-
-                                    {/* Bias */}
-                                    <div className="col-span-2 flex items-center justify-center gap-1">
-                                        <span className={`w-1 h-1 rounded-full ${pair.bias?.includes('BULLISH') ? 'bg-neon-green' : pair.bias?.includes('BEARISH') ? 'bg-neon-red' : 'bg-white/20'}`} />
-                                        <span className={`text-[8px] font-bold ${pair.bias?.includes('BULLISH') ? 'text-neon-green' : pair.bias?.includes('BEARISH') ? 'text-neon-red' : 'text-white/40'}`}>
-                                            {pair.bias?.split('_')[0] || '—'}
-                                        </span>
-                                    </div>
-
-                                    {/* Funding */}
-                                    <div className="col-span-2 flex items-center justify-center">
-                                        <span className={`text-[9px] font-mono font-bold ${pair.funding > 0 ? 'text-neon-red' : pair.funding < 0 ? 'text-neon-green' : 'text-white/20'}`}>
-                                            {pair.funding ? `${pair.funding.toFixed(4)}%` : '0.0000%'}
-                                        </span>
-                                    </div>
-
-                                    {/* OI Delta */}
-                                    <div className="col-span-1 flex items-center justify-center">
-                                        <span className={`text-[9px] font-mono font-bold ${pair.oi > 0 ? 'text-neon-green' : pair.oi < 0 ? 'text-neon-red' : 'text-white/20'}`}>
-                                            {pair.oi ? `${pair.oi > 0 ? '+' : ''}${pair.oi.toFixed(2)}%` : '0.00%'}
-                                        </span>
-                                    </div>
-
-                                    {/* Price */}
-                                    <div className="col-span-2 text-right">
-                                        <span className="text-[10px] font-black font-mono text-white/70">
-                                            {formatCurrency(pair.price || 0)}
-                                        </span>
+                                                <span className="text-[8px] text-white/20 font-mono">/USDT</span>
+                                                {isActive && (
+                                                    <span className="text-[6.5px] font-sans font-black bg-neon-cyan text-black px-1 rounded-full uppercase">
+                                                        ON
+                                                    </span>
+                                                )}
+                                            </div>
+                                            <div className="flex items-center gap-1.5 mt-0.5">
+                                                <span className={`text-[7.5px] font-bold ${regimeColor}`}>
+                                                    {pair.regime || 'NEUTRAL'}
+                                                </span>
+                                                <span className="text-white/10 text-[8px]">•</span>
+                                                <span className={`text-[7.5px] font-bold ${pair.bias?.includes('BULLISH') ? 'text-neon-green' : pair.bias?.includes('BEARISH') ? 'text-neon-red' : 'text-white/40'}`}>
+                                                    {pair.bias?.split('_')[0] || 'NEUT'}
+                                                </span>
+                                            </div>
+                                        </div>
+                                        <div className="flex flex-col items-end">
+                                            <span className="text-xs font-black font-mono tabular-nums text-white">
+                                                {formatCurrency(pair.price || 0)}
+                                            </span>
+                                            <div className="flex items-center gap-1 mt-0.5">
+                                                <span className={`text-[8px] font-mono font-bold tabular-nums ${pair.oi > 0 ? 'text-neon-green' : pair.oi < 0 ? 'text-neon-red' : 'text-white/30'}`}>
+                                                    {pair.oi ? `${pair.oi > 0 ? '+' : ''}${pair.oi.toFixed(2)}%` : '0.00%'}
+                                                </span>
+                                                <span className="text-white/10 text-[7px]">•</span>
+                                                <span className={`text-[7.5px] font-mono ${pair.funding > 0 ? 'text-neon-red/80' : 'text-neon-green/80'}`}>
+                                                    {pair.funding ? `${pair.funding.toFixed(3)}%` : '0.00%'}
+                                                </span>
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
                             );

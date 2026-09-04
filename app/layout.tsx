@@ -1,9 +1,18 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
     title: "SLINGSHOT APEX | Institutional Trading Terminal",
     description: "Capa 5: Quantitative & Algorithmic Execution System",
+};
+
+export const viewport: Viewport = {
+    width: "device-width",
+    initialScale: 1,
+    maximumScale: 1,
+    userScalable: false,
+    viewportFit: "cover",
+    themeColor: "#02040A",
 };
 
 export default function RootLayout({
@@ -21,7 +30,7 @@ export default function RootLayout({
                     rel="stylesheet" 
                 />
             </head>
-            <body suppressHydrationWarning className="antialiased font-sans bg-background text-foreground h-screen w-screen overflow-hidden selection:bg-neon-cyan/20 selection:text-neon-cyan">
+            <body suppressHydrationWarning className="antialiased font-sans bg-background text-foreground min-h-screen w-full selection:bg-neon-cyan/20 selection:text-neon-cyan">
                 {children}
             </body>
         </html>

@@ -83,27 +83,27 @@ export default function FtmoPage() {
     }, []);
 
     return (
-        <div className="h-full w-full flex flex-col p-6 overflow-y-auto custom-scrollbar bg-[#030712]">
+        <div className="h-full w-full flex flex-col p-3 lg:p-6 overflow-y-auto custom-scrollbar bg-[#030712]">
             {/* Header */}
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-6 border-b border-white/5">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 lg:pb-6 border-b border-white/5">
                 <div>
                     <div className="flex items-center gap-3">
-                        <div className="p-2.5 rounded-xl bg-neon-cyan/10 border border-neon-cyan/30 shadow-[0_0_15px_rgba(6,182,212,0.2)]">
-                            <Award className="text-neon-cyan" size={24} />
+                        <div className="p-2 lg:p-2.5 rounded-xl bg-neon-cyan/10 border border-neon-cyan/30 shadow-[0_0_15px_rgba(6,182,212,0.2)]">
+                            <Award className="text-neon-cyan" size={22} />
                         </div>
                         <div>
-                            <h1 className="text-xl font-black tracking-widest text-white uppercase flex items-center gap-2">
-                                FTMO ALPHA TERMINAL <span className="text-white/20 font-light">|</span> <span className="text-neon-cyan text-sm">METATRADER 5</span>
+                            <h1 className="text-base lg:text-xl font-black tracking-wider lg:tracking-widest text-white uppercase flex items-center gap-2">
+                                FTMO ALPHA TERMINAL <span className="text-white/20 font-light hidden sm:inline">|</span> <span className="text-neon-cyan text-xs lg:text-sm hidden sm:inline">METATRADER 5</span>
                             </h1>
-                            <p className="text-xs text-white/40 font-mono mt-0.5">
-                                Activos Tradicionales de Alta Beta: Oro Spot (XAUUSD), Nasdaq (US100), Dow Jones (US30) y GBPUSD
+                            <p className="text-[10px] lg:text-xs text-white/40 font-mono mt-0.5">
+                                Activos Tradicionales: Oro Spot (XAUUSD), Nasdaq (US100), Dow Jones (US30) y GBPUSD
                             </p>
                         </div>
                     </div>
                 </div>
 
                 {/* Account Sizer Selector */}
-                <div className="flex items-center gap-2 bg-black/40 p-1.5 rounded-2xl border border-white/10">
+                <div className="flex flex-wrap items-center gap-2 bg-black/40 p-1.5 rounded-2xl border border-white/10">
                     {[50000, 100000, 200000].map((size) => (
                         <button
                             key={size}
@@ -117,7 +117,7 @@ export default function FtmoPage() {
                             ${size / 1000}K
                         </button>
                     ))}
-                    <div className="h-4 w-px bg-white/10 mx-1" />
+                    <div className="h-4 w-px bg-white/10 mx-1 hidden sm:block" />
                     <button
                         onClick={() => setSelectedPhase(selectedPhase === 'PHASE_1' ? 'PHASE_2' : 'PHASE_1')}
                         className="px-3 py-1.5 rounded-xl text-[10px] font-mono font-black bg-purple-500/20 text-purple-300 border border-purple-500/30 hover:bg-purple-500/30 transition-all cursor-pointer"
@@ -128,7 +128,7 @@ export default function FtmoPage() {
             </div>
 
             {/* FTMO Guardian Telemetry Bar */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 my-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 lg:gap-4 my-4 lg:my-6">
                 <div className="bg-[#0B132B]/60 border border-white/10 rounded-2xl p-4 flex flex-col justify-between">
                     <span className="text-[9px] font-mono font-bold text-white/40 uppercase">Balance Base Cuenta</span>
                     <span className="text-xl font-black font-mono text-white mt-1">

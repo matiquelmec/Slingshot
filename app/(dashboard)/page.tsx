@@ -38,6 +38,7 @@ export default function OverviewPage() {
     const [availableSymbols, setAvailableSymbols] = useState<string[]>([]);
     const [filteredSymbols, setFilteredSymbols] = useState<string[]>([]);
     const [sidePanelMode, setSidePanelMode] = useState<'LOGS' | 'NEWS' | 'LIQS' | 'CAL' | 'OMEGA' | 'PLAN'>('LIQS');
+    const [mobileSection, setMobileSection] = useState<'MARKET' | 'DIAGNOSTIC' | 'STRATEGY'>('MARKET');
 
     const { 
         activeSymbol, 
@@ -255,14 +256,51 @@ export default function OverviewPage() {
                 )}
             </AnimatePresence>
             
+            {/* Selector de Vistas Móvil */}
+            <div className="lg:hidden flex items-center justify-between p-1 bg-white/5 border border-white/10 rounded-2xl mx-4 mt-3 mb-1 gap-1">
+                <button
+                    onClick={() => setMobileSection('MARKET')}
+                    className={`flex-1 py-2 px-1 text-[10px] font-mono font-bold rounded-xl transition-all ${
+                        mobileSection === 'MARKET'
+                            ? 'bg-neon-cyan/20 text-neon-cyan border border-neon-cyan/30 shadow-[0_0_10px_rgba(0,229,255,0.2)]'
+                            : 'text-white/40 hover:text-white'
+                    }`}
+                >
+                    📊 SCANNER
+                </button>
+                <button
+                    onClick={() => setMobileSection('DIAGNOSTIC')}
+                    className={`flex-1 py-2 px-1 text-[10px] font-mono font-bold rounded-xl transition-all ${
+                        mobileSection === 'DIAGNOSTIC'
+                            ? 'bg-neon-cyan/20 text-neon-cyan border border-neon-cyan/30 shadow-[0_0_10px_rgba(0,229,255,0.2)]'
+                            : 'text-white/40 hover:text-white'
+                    }`}
+                >
+                    🔬 DIAGNÓSTICO
+                </button>
+                <button
+                    onClick={() => setMobileSection('STRATEGY')}
+                    className={`flex-1 py-2 px-1 text-[10px] font-mono font-bold rounded-xl transition-all ${
+                        mobileSection === 'STRATEGY'
+                            ? 'bg-neon-cyan/20 text-neon-cyan border border-neon-cyan/30 shadow-[0_0_10px_rgba(0,229,255,0.2)]'
+                            : 'text-white/40 hover:text-white'
+                    }`}
+                >
+                    ⚡ TÁCTICA & LIQS
+                </button>
+            </div>
+
             <motion.div
                 variants={containerVariants}
                 initial="hidden"
                 animate="show"
-                className="grid grid-cols-12 gap-5 p-5"
+                className="grid grid-cols-12 gap-4 lg:gap-5 p-3 lg:p-5"
             >
                 {/* Left Column: GLOBAL SELECTOR & TIME (v5.7.6) */}
-                <motion.section variants={itemVariants} className="col-span-12 lg:col-span-4 flex flex-col gap-4 min-h-[750px]">
+                <motion.section 
+                    variants={itemVariants} 
+                    className={`col-span-12 lg:col-span-4 flex-col gap-4 lg:min-h-[750px] ${mobileSection === 'MARKET' ? 'flex' : 'hidden lg:flex'}`}
+                >
                     <div className="h-[420px] flex flex-col min-h-0">
                         <LatticeScanner />
                     </div>
@@ -274,20 +312,26 @@ export default function OverviewPage() {
                 </motion.section>
 
                 {/* Middle Column: MARCO GLOBAL -> RETINA TÉCNICA */}
-                <motion.section variants={itemVariants} className="col-span-12 lg:col-span-4 flex flex-col gap-4 min-h-[750px]">
+                <motion.section 
+                    variants={itemVariants} 
+                    className={`col-span-12 lg:col-span-4 flex-col gap-4 lg:min-h-[750px] ${mobileSection === 'DIAGNOSTIC' ? 'flex' : 'hidden lg:flex'}`}
+                >
                     {/* ── MACRO RADAR (Contexto Anterior al Análisis) ── */}
                     <div className="h-[200px] flex-shrink-0">
                         <MacroRadar />
                     </div>
 
                     {/* Retina Técnica — Expansión Máxima */}
-                    <div className="flex-1 overflow-y-auto custom-scrollbar min-h-0 bg-[#05111B]/40 backdrop-blur-xl border border-white/5 rounded-2xl shadow-2xl">
+                    <div className="flex-1 overflow-y-auto custom-scrollbar min-h-[400px] lg:min-h-0 bg-[#05111B]/40 backdrop-blur-xl border border-white/5 rounded-2xl shadow-2xl">
                         <QuantDiagnosticPanel />
                     </div>
                 </motion.section>
 
                 {/* Right Column */}
-                <motion.section variants={itemVariants} className="col-span-12 lg:col-span-4 flex flex-col gap-5 min-h-[600px]">
+                <motion.section 
+                    variants={itemVariants} 
+                    className={`col-span-12 lg:col-span-4 flex-col gap-5 lg:min-h-[600px] ${mobileSection === 'STRATEGY' ? 'flex' : 'hidden lg:flex'}`}
+                >
                     <div className="h-44 bg-gradient-to-br from-[#050B14] to-black backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl flex flex-col justify-between p-5 relative overflow-hidden flex-shrink-0">
                         <div className={`absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(${mlProjection.direction === 'ALCISTA' ? '0,255,65' : mlProjection.direction === 'BAJISTA' ? '255,0,60' : '100,100,100'},0.1),transparent_50%)] pointer-events-none transition-colors duration-1000`} />
                         <div className="flex justify-between items-start z-10">
@@ -352,45 +396,25 @@ export default function OverviewPage() {
                         </div>
                     </div>
 
-                    <div className="bg-[#050B14]/60 backdrop-blur-xl border border-white/5 rounded-2xl shadow-[0_10px_40px_rgba(0,0,0,0.5)] flex-1 flex flex-col overflow-hidden relative">
-                        {/* Header Controls (Global for Side Panel) */}
-                        <div className="absolute top-4 right-4 flex items-center gap-1.5 z-50 bg-black/40 p-1 rounded-xl border border-white/10 backdrop-blur-md">
-                            <button
-                                onClick={() => setSidePanelMode('LOGS')}
-                                className={`px-3 py-1.5 rounded-lg text-[9px] font-black tracking-widest transition-all ${sidePanelMode === 'LOGS' ? 'bg-neon-cyan/20 text-neon-cyan border border-neon-cyan/30 shadow-[0_0_10px_rgba(0,229,255,0.2)]' : 'text-white/30 hover:text-white/60'}`}
-                            >
-                                LOGS
-                            </button>
-                            <button
-                                onClick={() => setSidePanelMode('NEWS')}
-                                className={`px-3 py-1.5 rounded-lg text-[9px] font-black tracking-widest transition-all ${sidePanelMode === 'NEWS' ? 'bg-neon-purple/20 text-neon-purple border border-neon-purple/30 shadow-[0_0_10px_rgba(191,0,255,0.2)]' : 'text-white/30 hover:text-white/60'}`}
-                            >
-                                NEWS
-                            </button>
-                            <button
-                                onClick={() => setSidePanelMode('PLAN')}
-                                className={`px-3 py-1.5 rounded-lg text-[9px] font-black tracking-widest transition-all ${sidePanelMode === 'PLAN' ? 'bg-neon-cyan/20 text-neon-cyan border border-neon-cyan/30 shadow-[0_0_10px_rgba(0,229,255,0.2)]' : 'text-white/30 hover:text-white/60'}`}
-                            >
-                                PLAN
-                            </button>
-                            <button
-                                onClick={() => setSidePanelMode('LIQS')}
-                                className={`px-3 py-1.5 rounded-lg text-[9px] font-black tracking-widest transition-all ${sidePanelMode === 'LIQS' ? 'bg-neon-red/20 text-neon-red border border-neon-red/30 shadow-[0_0_10px_rgba(255,0,60,0.2)]' : 'text-white/30 hover:text-white/60'}`}
-                            >
-                                LIQS
-                            </button>
-                            <button
-                                onClick={() => setSidePanelMode('CAL')}
-                                className={`px-3 py-1.5 rounded-lg text-[9px] font-black tracking-widest transition-all ${sidePanelMode === 'CAL' ? 'bg-amber-500/20 text-amber-500 border border-amber-500/30 shadow-[0_0_10px_rgba(245,158,11,0.2)]' : 'text-white/30 hover:text-white/60'}`}
-                            >
-                                CAL
-                            </button>
-                            <button
-                                onClick={() => setSidePanelMode('OMEGA')}
-                                className={`px-3 py-1.5 rounded-lg text-[9px] font-black tracking-widest transition-all ${sidePanelMode === 'OMEGA' ? 'bg-white/20 text-white border border-white/40 shadow-[0_0_10px_rgba(255,255,255,0.2)]' : 'text-white/30 hover:text-white/60'}`}
-                            >
-                                OMEGA
-                            </button>
+                    <div className="bg-[#050B14]/60 backdrop-blur-xl border border-white/5 rounded-2xl shadow-[0_10px_40px_rgba(0,0,0,0.5)] flex-1 flex flex-col overflow-hidden min-h-[450px]">
+                        {/* Header Controls (Global for Side Panel) - Clean Non-overlapping layout */}
+                        <div className="p-3 border-b border-white/5 flex flex-wrap items-center justify-between gap-2 bg-black/40">
+                            <span className="text-[9px] font-black text-white/50 tracking-widest uppercase">PANEL MULTI-SENSOR</span>
+                            <div className="flex items-center gap-1 bg-black/50 p-1 rounded-xl border border-white/10 overflow-x-auto no-scrollbar max-w-full">
+                                {(['LOGS', 'NEWS', 'PLAN', 'LIQS', 'CAL', 'OMEGA'] as const).map(mode => (
+                                    <button
+                                        key={mode}
+                                        onClick={() => setSidePanelMode(mode)}
+                                        className={`px-2.5 py-1 rounded-lg text-[9px] font-black tracking-widest transition-all ${
+                                            sidePanelMode === mode 
+                                                ? 'bg-neon-cyan/20 text-neon-cyan border border-neon-cyan/30 shadow-[0_0_8px_rgba(0,229,255,0.2)]' 
+                                                : 'text-white/30 hover:text-white/60'
+                                        }`}
+                                    >
+                                        {mode}
+                                    </button>
+                                ))}
+                            </div>
                         </div>
 
                         <div className="flex-1 flex flex-col overflow-hidden">

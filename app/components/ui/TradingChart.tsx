@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
+import { HelpCircle } from 'lucide-react';
 import {
     createChart,
     CandlestickSeries,
@@ -23,6 +24,7 @@ import { useIndicatorsStore } from '../../store/indicatorsStore';
  */
 
 export default function TradingChart() {
+    const [showMobileLegends, setShowMobileLegends] = useState(false);
     const chartContainerRef = useRef<HTMLDivElement>(null);
     const chartRef = useRef<IChartApi | null>(null);
     const candleSeriesRef = useRef<ISeriesApi<'Candlestick'> | null>(null);
@@ -675,9 +677,18 @@ export default function TradingChart() {
                 </div>
             )}
 
+            {/* Mobile Toggle Button for Legends */}
+            <button
+                onClick={() => setShowMobileLegends(prev => !prev)}
+                className="md:hidden absolute top-3 right-3 z-30 px-2.5 py-1 bg-black/80 backdrop-blur-md border border-white/10 rounded-lg text-[9px] font-mono font-bold text-white/70 hover:text-white flex items-center gap-1.5 cursor-pointer shadow-lg"
+            >
+                <HelpCircle size={11} className="text-neon-cyan" />
+                <span>{showMobileLegends ? 'Cerrar Leyenda' : 'Leyenda'}</span>
+            </button>
+
             {/* S/R Legend Overlay */}
             {isEnabled('sr') && tacticalDecision?.key_levels && (
-                <div className="absolute top-4 left-4 z-20 pointer-events-none bg-[#050B14]/80 backdrop-blur-md border border-white/10 rounded-lg p-3 max-w-[280px] shadow-2xl">
+                <div className={`absolute top-12 md:top-4 left-3 md:left-4 z-20 pointer-events-none bg-[#050B14]/95 md:bg-[#050B14]/80 backdrop-blur-md border border-white/10 rounded-lg p-3 max-w-[280px] shadow-2xl ${showMobileLegends ? 'block' : 'hidden md:block'}`}>
                     <p className="text-[10px] font-bold text-white/80 mb-2 border-b border-white/10 pb-1 flex items-center justify-between">
                         <span>Leyes de S/R Institucional</span>
                         <span className="text-neon-cyan">SMC</span>
@@ -695,7 +706,7 @@ export default function TradingChart() {
 
             {/* Session Legend Overlay */}
             {isEnabled('session') && sessionData && (
-                <div className="absolute bottom-4 left-4 z-20 pointer-events-none bg-[#050B14]/80 backdrop-blur-md border border-white/10 rounded-lg p-3 shadow-2xl">
+                <div className={`absolute bottom-12 md:bottom-4 left-3 md:left-4 z-20 pointer-events-none bg-[#050B14]/95 md:bg-[#050B14]/80 backdrop-blur-md border border-white/10 rounded-lg p-3 shadow-2xl ${showMobileLegends ? 'block' : 'hidden md:block'}`}>
                     <p className="text-[10px] font-bold text-white/80 mb-2 border-b border-white/10 pb-1 text-center">
                         Sesiones Institucionales
                     </p>
@@ -721,7 +732,7 @@ export default function TradingChart() {
                 </div>
             )}
 
-            <div className="absolute top-4 right-4 z-20 pointer-events-none opacity-30 flex flex-col items-end">
+            <div className="hidden md:flex absolute top-4 right-4 z-20 pointer-events-none opacity-30 flex-col items-end">
                 <p className="text-[10px] font-black tracking-widest text-white/50">SLINGSHOT V13.2</p>
                 <p className="text-[8px] font-bold text-neon-cyan uppercase">Sovereign Intelligence</p>
             </div>

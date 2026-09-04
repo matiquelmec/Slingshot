@@ -55,17 +55,27 @@ export default function ChartPage() {
             </div>
 
             {/* Chart Toolbar */}
-            <div className="h-12 border-b border-white/5 bg-gradient-to-r from-white/[0.03] to-transparent flex items-center px-5 gap-6 z-20 relative">
+            <div className="h-12 border-b border-white/5 bg-gradient-to-r from-white/[0.03] to-transparent flex items-center px-3 lg:px-5 gap-3 lg:gap-5 z-20 relative overflow-x-auto no-scrollbar">
+                {/* Active Symbol Display */}
+                <div className="flex items-center gap-1.5 shrink-0">
+                    <span className="text-xs font-black text-white font-mono tracking-wider">{activeSymbol || 'Ninguno'}</span>
+                    <span className="text-[9px] font-bold text-neon-cyan font-mono px-1.5 py-0.5 rounded bg-neon-cyan/10 border border-neon-cyan/30">
+                        {activeTimeframe}
+                    </span>
+                </div>
+
+                <div className="h-4 w-px bg-white/10 shrink-0" />
+
                 {/* Timeframe Selector */}
-                <div className="flex gap-1.5">
+                <div className="flex items-center gap-1 shrink-0">
                     {TIMEFRAMES.map(tf => {
                         const isActiveTf = tf === activeTimeframe;
                         return (
                             <button
                                 key={tf}
                                 onClick={() => handleTimeframeClick(tf)}
-                                className={`text-[11px] font-bold px-3 py-1.5 rounded-md transition-all ${isActiveTf
-                                    ? 'bg-neon-cyan/15 text-neon-cyan border border-neon-cyan/40 shadow-[0_0_10px_rgba(0,229,255,0.2)]'
+                                className={`text-[10px] lg:text-[11px] font-bold px-2 lg:px-2.5 py-1 rounded-md transition-all shrink-0 ${isActiveTf
+                                    ? 'bg-neon-cyan/20 text-neon-cyan border border-neon-cyan/40 shadow-[0_0_10px_rgba(0,229,255,0.2)]'
                                     : 'text-white/40 hover:text-white/90 hover:bg-white/5 border border-transparent'
                                     }`}
                             >
@@ -75,15 +85,10 @@ export default function ChartPage() {
                     })}
                 </div>
 
-                <div className="h-4 w-px bg-white/10" />
-
-                {/* Active Symbol Display */}
-                <span className="text-xs font-bold text-white/60 tracking-widest">{activeSymbol || 'Ninguno'}</span>
-
-                <div className="h-4 w-px bg-white/10" />
+                <div className="h-4 w-px bg-white/10 shrink-0" />
 
                 {/* Indicators Button */}
-                <div className="relative" ref={indicatorsPanelRef}>
+                <div className="relative shrink-0" ref={indicatorsPanelRef}>
                     <button
                         onClick={() => setShowIndicators(v => !v)}
                         className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-md border transition-all ${showIndicators

@@ -53,21 +53,22 @@ export default function LatticeStatus() {
     };
 
     return (
-        <div className="flex items-center gap-4 px-6 h-14 bg-[#050B14]/80 backdrop-blur-md border-b border-white/5 relative z-50">
-            {/* 1. Brand / Mode */}
-            <div className="flex items-center gap-2.5">
-                <div className="relative">
-                    <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-neon-cyan to-blue-600 flex items-center justify-center shadow-[0_0_15px_rgba(0,229,255,0.3)]">
-                        <Zap size={16} className="text-white fill-white" />
+        <div className="w-full bg-[#050B14]/80 backdrop-blur-md border-b border-white/5 relative z-20 overflow-x-auto no-scrollbar py-2 px-3 lg:px-6">
+            <div className="flex items-center gap-3 lg:gap-4 min-w-max">
+                {/* 1. Brand / Mode */}
+                <div className="flex items-center gap-2">
+                    <div className="relative">
+                        <div className="w-7 h-7 lg:w-8 lg:h-8 rounded-lg bg-gradient-to-br from-neon-cyan to-blue-600 flex items-center justify-center shadow-[0_0_15px_rgba(0,229,255,0.3)]">
+                            <Zap size={14} className="text-white fill-white" />
+                        </div>
+                    </div>
+                    <div>
+                        <h1 className="text-[10px] font-black tracking-[0.25em] text-white/90">SLINGSHOT</h1>
+                        <p className="text-[7.5px] font-bold text-neon-cyan/70 tracking-wider">GEN 1 PLATINUM</p>
                     </div>
                 </div>
-                <div>
-                    <h1 className="text-[10px] font-black tracking-[0.3em] text-white/90">SLINGSHOT</h1>
-                    <p className="text-[8px] font-bold text-neon-cyan/60 tracking-widest">GEN 1 PLATINUM</p>
-                </div>
-            </div>
 
-            <div className="h-6 w-px bg-white/5 mx-2" />
+                <div className="h-5 w-px bg-white/10" />
 
             {/* 2. System Status Badge */}
             <AnimatePresence mode="wait">
@@ -208,6 +209,7 @@ export default function LatticeStatus() {
                     SANDBOX
                 </button>
             </div>
+        </div>
 
             {/* Sandbox Playground Modal */}
             <AnimatePresence>
