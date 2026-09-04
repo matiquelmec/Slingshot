@@ -6,25 +6,25 @@
  */
 
 export function getApiBaseUrl(): string {
-    if (process.env.NEXT_PUBLIC_API_URL) {
-        return process.env.NEXT_PUBLIC_API_URL.replace(/\/$/, '');
-    }
     if (typeof window !== 'undefined') {
         const protocol = window.location.protocol;
         const host = window.location.hostname;
         return `${protocol}//${host}:8000`;
     }
+    if (process.env.NEXT_PUBLIC_API_URL) {
+        return process.env.NEXT_PUBLIC_API_URL.replace(/\/$/, '');
+    }
     return 'http://localhost:8000';
 }
 
 export function getWsBaseUrl(): string {
-    if (process.env.NEXT_PUBLIC_API_WS_URL) {
-        return process.env.NEXT_PUBLIC_API_WS_URL.replace(/\/$/, '');
-    }
     if (typeof window !== 'undefined') {
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
         const host = window.location.hostname;
         return `${protocol}//${host}:8000`;
+    }
+    if (process.env.NEXT_PUBLIC_API_WS_URL) {
+        return process.env.NEXT_PUBLIC_API_WS_URL.replace(/\/$/, '');
     }
     return 'ws://localhost:8000';
 }
