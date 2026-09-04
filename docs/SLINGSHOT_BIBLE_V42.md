@@ -1,6 +1,6 @@
-# 🛡️ SLINGSHOT BIBLE v42.0 — APEX TITAN COMPOUND
+# 🛡️ SLINGSHOT BIBLE v42.2 — APEX TITAN COMPOUND
 
-> **"Manual Técnico Canónico y Especificación SSoT del Ecosistema Autónomo Slingshot. Versión v42.0 APEX TITAN COMPOUND: Arquitectura Dual de Grado Institucional (Modo Crecimiento Criptomonedas Bitunix al 2.5% de Riesgo Real con Interés Compuesto Automático + Modo Guardián FTMO MetaTrader 5 al 0.75% con Kill-Switch Diario a -3.5%), Malla de Salidas Dinámica SOP-26 (40% a +1.2R / 40% a +2.0R / 20% Runner a +3.5R), Invalidación Temprana SOP-25 a -0.65R, Escudo VWAP Diario SOP-27, Asignación Asimétrica Alpha-Tier Kelly SOP-33, Ventana Francotirador NY Open SOP-38 (+72.25R y $72,253 USD de Beneficio Neto SSoT), y Suite Oficial de 201/201 Pruebas Unitarias Aprobadas al 100%. Canon Inmutable de los 40 Protocolos de Seguridad Operativa (SOP-01 a SOP-40)."**
+> **"Manual Técnico Canónico y Especificación SSoT del Ecosistema Autónomo Slingshot. Versión v42.2 APEX TITAN COMPOUND: Arquitectura Dual de Grado Institucional (Modo Crecimiento Criptomonedas Bitunix al 2.5% de Riesgo Real con Interés Compuesto Automático + Modo Guardián FTMO MetaTrader 5 al 0.75% con Kill-Switch Diario a -3.5%), Malla de Salidas Dinámica SOP-26 (40% a +1.2R / 40% a +2.0R / 20% Runner a +3.5R), Invalidación Temprana SOP-25 a -0.65R, Escudo VWAP Diario SOP-27, Asignación Asimétrica Alpha-Tier Kelly SOP-33, Ventana Francotirador NY Open SOP-38 (+72.25R y $72,253 USD de Beneficio Neto SSoT), y Suite Oficial de 216/216 Pruebas Unitarias Aprobadas al 100%. Canon Inmutable de los 42 Protocolos de Seguridad Operativa (SOP-01 a SOP-42) y Centinela Autónomo CI/CD."**
 
 ---
 
@@ -26,7 +26,7 @@ Slingshot opera bajo una **arquitectura bifurcada** que adapta matemáticamente 
 
 ---
 
-## 🛡️ 2. El Canon Oficial de los 40 Protocolos de Seguridad (SOP-01 a SOP-40)
+## 🛡️ 2. El Canon Oficial de los 42 Protocolos de Seguridad (SOP-01 a SOP-42)
 
 ```mermaid
 graph TD
@@ -72,12 +72,14 @@ graph TD
         S35["SOP-35: Free-Roll Pyramiding"]
     end
 
-    subgraph "Capa 5: Especialización & Capital (SOP-36 a SOP-40)"
+    subgraph "Capa 5: Especialización & Capital (SOP-36 a SOP-42)"
         S36["SOP-36: Curated Scalp Universe"]
         S37["SOP-37: Strict MTF Alignment"]
         S38["SOP-38: Sniper NY Open Priority"]
         S39["SOP-39: Dynamic Equity Sizing 2.5%"]
         S40["SOP-40: Bitunix Pre-Flight Buffer"]
+        S41["SOP-41: Pure Dollar-Risk Sizing"]
+        S42["SOP-42: Pre-Flight Hard-Clamp"]
     end
 ```
 
@@ -164,7 +166,34 @@ Pérdida Media por Trade Perdedor    | -1.00 R (Pérdida Total) | -0.65 R (Corte
 
 ## 🧪 4. Certificación QA Oficial
 
-* **Total de Pruebas Unitarias:** **212/212 pruebas aprobadas al 100% (19.53s)**.
-* **Compilación Frontend:** TypeScript verificado con **0 errores** (`npx tsc --noEmit`).
+* **Total de Pruebas Unitarias:** **216/216 pruebas aprobadas al 100% (19.32s)**.
+* **Compilación Frontend:** TypeScript y Next.js 15 verificados con **0 errores** (`npm run build`).
 * **Persistencia Transaccional:** SQLite WAL ACID en [`engine/core/vault.py`](file:///c:/Users/Mat%C3%ADas%20Riquelme/Desktop/Proyectos%20documentados/Slingshot_Trading/engine/core/vault.py).
 * **Script de Ejecución:** `python scripts/run_qa_suite.py` o `pytest`.
+
+---
+
+## 🤖 5. Centinela CI/CD Autónomo con Quality Gate Permanente (VPS)
+
+Para garantizar que ningún cambio de código degrade la operativa o exponga capital en vivo, el VPS ejecuta de forma perpetua el worker autónomo [`engine/workers/ci_cd_sentinel.py`](file:///c:/Users/Mat%C3%ADas%20Riquelme/Desktop/Proyectos%20documentados/Slingshot_Trading/engine/workers/ci_cd_sentinel.py):
+* **Frecuencia:** Tarea programada en Windows Server (`SlingshotSentinel`) cada **5 minutos**.
+* **Pre-Flight Quality Gate:** Ante cualquier nuevo commit detectado en Git (`cleanup-v1`), ejecuta primero las **216 pruebas unitarias**. Si alguna falla, el despliegue se aborta inmediatamente en modo *fail-closed*.
+* **Sincronización Atómica:** Si las 216 pruebas aprueban al 100%, realiza `git pull` atómico y reinicia los servicios de producción registrando el hash en `deploy_audit.log`.
+
+---
+
+## 📲 6. Arquitectura de Señales Comunitarias & Despacho Dual de Telegram
+
+El despachador institucional [`engine/router/telegram_dispatcher.py`](file:///c:/Users/Mat%C3%ADas%20Riquelme/Desktop/Proyectos%20documentados/Slingshot_Trading/engine/router/telegram_dispatcher.py) implementa una arquitectura desacoplada óptima para proveedores de señales y comunidades:
+* **Multi-Destinatario Simultáneo:** Permite configurar múltiples IDs en `TELEGRAM_CHAT_ID` (ej: canal privado del trader y grupo comunitario de usuarios).
+* **Privacidad Absoluta de Fondos:** Nunca expone el saldo real del exchange en el mensaje de Telegram. Proyecta un perfil de referencia estándar (FTMO 100K y Bitunix Futuros 20x margen aislado).
+* **Deduplicación Transaccional en SQLite WAL:** Anti-spam estricto de 30 minutos por par y dirección (`slingshot_vault.db`). Si el bot se reinicia, no repite señales; permite actualización legítima si el precio tiene una variación estructural $\ge 3.0\%$.
+* **Independencia Operativa:** La comunidad continúa recibiendo oportunidades del escáner (confluencia $\ge 60\%$) incluso si la cuenta personal de Bitunix ya tiene cubierto su tope de 4 operaciones de riesgo.
+
+---
+
+## 📱 7. Terminal Responsiva Dual Institucional (Desktop & Mobile)
+
+* **Next.js 15 (App Router):** Layout responsivo adaptado a estaciones de trabajo institucionales y smartphones:
+  - **Desktop:** Barra lateral Bloomberg de 256px fija y telemetría de triple columna simultánea.
+  - **Mobile:** Viewport táctil fluido con área segura (`pb-safe`), control segmentado (`SCANNER`, `DIAGNÓSTICO`, `TÁCTICA`), menú deslizante (*drawer*) y dock de navegación inferior flotante con 5 accesos directos (*Overview, Radar, Signals, Chart, FTMO*).

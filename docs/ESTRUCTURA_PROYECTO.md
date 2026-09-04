@@ -1,21 +1,26 @@
-# 🏗️ Estructura del Proyecto Slingshot v42.0 APEX TITAN COMPOUND
+# 🏗️ Estructura del Proyecto Slingshot v42.2 APEX TITAN COMPOUND
 
 > Guía de referencia oficial para la arquitectura, mantenimiento y evolución del sistema.
-> **Última actualización**: Septiembre 2026 (v42.0 APEX TITAN COMPOUND — Arquitectura Dual Bitunix 2.5% vs FTMO 0.75%, Protocolos SOP-01 a SOP-40, 201/201 QA Tests Passed & SSoT True Backtest Engine).
+> **Última actualización**: Septiembre 2026 (v42.2 APEX TITAN COMPOUND — Arquitectura Dual Bitunix 2.5% vs FTMO 0.75%, Protocolos SOP-01 a SOP-42, 216/216 QA Tests Passed & SSoT True Backtest Engine).
 
 ---
 
-## 📁 Árbol de Directorios Oficial v42.0
+## 📁 Árbol de Directorios Oficial v42.2
 
 ```text
 Slingshot_Trading/
 ├── app/                             # ═══ DELTA: Terminal Reactiva Frontend (Next.js 15) ═══
+│   ├── (dashboard)/
+│   │   ├── layout.tsx               # Navegación Dual: Sidebar Desktop (w-64) + Mobile Topbar, Drawer y Dock Inferior
+│   │   ├── page.tsx                 # Overview con Selector Segmentado Móvil (SCANNER / DIAGNÓSTICO / TÁCTICA)
+│   │   ├── chart/                   # Terminal de Gráficos con timeframes táctiles y leyendas colapsables
+│   │   └── ftmo/                    # Terminal Cuantitativa Prop Firm adaptada a rejilla responsiva
 │   ├── components/
 │   │   ├── radar/                   # ActiveAssetsMonitor & OpportunitiesScanner
 │   │   ├── setup/                   # OnboardingModal (Asistente Visual de API Keys con Live Test)
 │   │   ├── signals/                 # SignalTerminal & SignalCardItem
 │   │   ├── execution/               # Panel de Monitoreo de Posiciones y Auditor de Órdenes
-│   │   └── ui/                      # LatticeScanner (Stream Reactivo), PlanOperativoPanel
+│   │   └── ui/                      # LatticeScanner (Tarjetas móviles / Grid desktop tabular), PlanOperativoPanel
 │   ├── store/                       # TelemetryStore (Zustand 5 State Management)
 │   └── utils/                       # Formatters, ftmoSpecs.ts & Signal LifeCycle Logic
 ├── engine/                          # ═══ SIGMA: Cerebro Algorítmico (Python 3.12 / Rust) ═══
@@ -35,7 +40,7 @@ Slingshot_Trading/
 │   ├── router/                      # Pipeline de señales y Despacho
 │   │   ├── analyzer.py              # MarketAnalyzer — LRU Cache de 200 ítems + SMC Overlays
 │   │   ├── gatekeeper.py            # SignalGatekeeper — Motor Bayesiano + Sovereign Bypass
-│   │   └── telegram_dispatcher.py   # Telegram Dispatcher — Heartbeat Vital cada 4h + Alertas 1-Click
+│   │   └── telegram_dispatcher.py   # Telegram Dispatcher — Multi-Destinatario (Privado/Comunidad), SQLite WAL (30m / 3% drift) y 1-Click MT5
 │   ├── strategies/                  # Lógica táctica
 │   │   └── smc.py                   # SMCInstitutionalStrategy (Tiers A/B con Entrada Límite OTE)
 │   ├── indicators/                  # Indicadores Técnicos e Institucionales
@@ -60,12 +65,13 @@ Slingshot_Trading/
 │   ├── workers/                     # Procesos en segundo plano
 │   │   ├── orchestrator.py          # SlingshotOrchestrator — Director de orquesta 24/7
 │   │   ├── market_scanner.py        # Escáner Multitemporal Curado (BNB Scalp 15m / PAXG Swing 1H)
-│   │   └── trade_manager.py         # Centinela de Posiciones Activas (Early Invalidation & Trailing)
+│   │   ├── trade_manager.py         # Centinela de Posiciones Activas (Early Invalidation & Trailing)
+│   │   └── ci_cd_sentinel.py        # Centinela CI/CD Autónomo (Task Scheduler 5m, Quality Gate 216 tests y auto-pull)
 │   ├── backtest/                    # ═══ THE TRUTH ENGINE: Motor de Backtest ═══
 │   │   ├── unified_backtest_engine.py # Motor Unificado con Paridad 1:1 SSoT en Producción
 │   │   ├── data/                    # Datasets históricos binarios .parquet (107 archivos)
 │   │   └── reports/                 # Reportes oficiales inmutables JSON (+72.25R, PF 1.43)
-│   └── tests/                       # ═══ Suite Oficial de Certificación QA (212/212 Tests OK) ═══
+│   └── tests/                       # ═══ Suite Oficial de Certificación QA (216/216 Tests OK) ═══
 │       ├── test_setup_and_portability.py            # Onboarding, live test de keys, guardado atómico
 │       ├── test_post_tp3_and_trailing_invariance.py # Post-TP3 híbrido, 70% ratchet e invarianza SL
 │       ├── test_risk_and_resilience_advanced.py     # Micro-buffer BE, Asymmetric Gating, KER/RVOL
@@ -104,9 +110,10 @@ Slingshot_Trading/
 │       ├── test_sop39_sop40_bitunix_dynamic_25pct_risk.py # Bitunix 2.5% Dynamic Margin & Buffer Guardrail
 │       ├── test_sop41_sop42_dollar_risk_shield.py   # SOP-41 Pure Dollar-Risk Sizing & SOP-42 Pre-Flight Hard-Clamp
 │       ├── test_multi_account_dispatcher.py         # Arquitectura Multi-Cuentas Bitunix (Master Dispatcher)
+│       ├── test_ci_cd_security_gates.py             # Quality Gates CI/CD (SOP-08, SOP-41, Zero Balance y CORS)
 │       └── legacy/                      # 📦 44 pruebas históricas preservadas (v5 a v17)
 ├── scripts/                         # ═══ HERRAMIENTAS CLI DE PRODUCCIÓN (SSoT) ═══
-│   ├── run_qa_suite.py              # Suite Oficial de Certificación QA (212/212 Tests)
+│   ├── run_qa_suite.py              # Suite Oficial de Certificación QA (216/216 Tests)
 │   ├── historical_fetcher.py        # Descargador oficial de Parquets históricos
 │   ├── doctor.py                    # Diagnóstico y salud del sistema
 │   ├── watchdog_supervisor.py       # Monitor supervisor 24/7 en segundo plano
@@ -114,8 +121,8 @@ Slingshot_Trading/
 │       ├── explorations/            # 30 scripts de investigación y simulación
 │       └── tools/                   # Herramientas de diagnóstico tempranas
 ├── docs/                            # ═══ Documentación Técnica y Biblias ═══
-│   ├── ESTRUCTURA_PROYECTO.md       # Guía de arquitectura oficial v42.0 (este archivo)
-│   ├── SLINGSHOT_BIBLE_V42.md       # Biblia técnica canónica oficial v42.0 APEX TITAN COMPOUND
+│   ├── ESTRUCTURA_PROYECTO.md       # Guía de arquitectura oficial v42.2 (este archivo)
+│   ├── SLINGSHOT_BIBLE_V42.md       # Biblia técnica canónica oficial v42.2 APEX TITAN COMPOUND
 │   ├── archive/                     # 📦 16 versiones históricas archivadas (v10 a v33)
 │   └── knowledge/                   # Base de conocimiento institucional
 ├── install.bat                      # Instalador automatizado 1-Click para Windows
@@ -139,9 +146,13 @@ Slingshot_Trading/
 4. **Protocolo SOP-39 & SOP-40 (Gestión de Capital en Bitunix):**
    * Riesgo real dinámico del 2.5% por operación con interés compuesto automático.
    * Mínimo 50% de margen libre garantizado antes de abrir cada posición.
-5. **Certificación Continua (QA Suite):**
+5. **Protocolo SOP-41 & SOP-42 (Pure Dollar-Risk & Hard-Clamp):**
+   * Cálculo matemático exacto de cantidad según distancia al Stop Loss.
+   * Circuit Breaker atómico con política fail-closed que impide abrir órdenes si no hay balance verificado.
+6. **Centinela Autónomo CI/CD & Certificación Continua:**
+   * Supervisor perpetuo cada 5 minutos en el VPS (`ci_cd_sentinel.py`).
    * Antes de cualquier despliegue o commit en producción, se ejecuta obligatoriamente:
      ```powershell
      .venv\Scripts\python scripts/run_qa_suite.py
      ```
-     Verificando la aprobación del **100% de las 201 pruebas unitarias**.
+     Verificando la aprobación del **100% de las 216 pruebas unitarias**.

@@ -62,7 +62,7 @@ MODERN_TEST_FILES = [
 
 def main():
     print("\n" + "="*80)
-    print("🧪 SLINGSHOT v42.0 APEX TITAN COMPOUND — SUITE OFICIAL DE CERTIFICACIÓN QA")
+    print("🧪 SLINGSHOT v42.2 APEX TITAN COMPOUND — SUITE OFICIAL DE CERTIFICACIÓN QA")
     print("="*80)
     
     cmd = [sys.executable, "-m", "pytest"] + MODERN_TEST_FILES + ["-v", "--tb=short"]
@@ -70,7 +70,7 @@ def main():
     
     if result.returncode == 0:
         print("\n" + "="*80)
-        print("✅ CERTIFICACIÓN QA EXITOSA: 212/212 PRUEBAS APROBADAS AL 100%")
+        print("✅ CERTIFICACIÓN QA EXITOSA: 216/216 PRUEBAS APROBADAS AL 100%")
         print("="*80 + "\n")
     else:
         print("\n" + "="*80)

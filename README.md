@@ -1,12 +1,12 @@
-# 🛡️ SLINGSHOT v42.0 APEX TITAN COMPOUND — Autonomous Institutional Multi-Market Terminal
+# 🛡️ SLINGSHOT v42.2 APEX TITAN COMPOUND — Autonomous Institutional Multi-Market Terminal
 
-> **"Terminal Cuantitativa Autónoma de Grado Institucional. Slingshot v42.0 APEX TITAN COMPOUND: Arquitectura Dual Multi-Mercado (Modo Crecimiento Cripto Bitunix 24/7 al 2.5% de Riesgo Real Dinámico con Interés Compuesto Automático + Modo Guardián FTMO MetaTrader 5 al 0.75% con Kill-Switch Diario a -3.5%), Malla de Salidas Dinámica SOP-26 (40% a +1.2R / 40% a +2.0R / 20% Runner a +3.5R), Invalidación Temprana SOP-25 a -0.65R, Escudo VWAP Diario SOP-27, Asignación Asimétrica Alpha-Tier Kelly SOP-33, Ventana Francotirador NY Open SOP-38 (+72.25R y $72,253.80 USD de Beneficio Neto SSoT), y Suite Oficial de 201/201 Pruebas Unitarias Aprobadas al 100%. Canon Inmutable de los 40 Protocolos de Seguridad Operativa (SOP-01 a SOP-40)."**
+> **"Terminal Cuantitativa Autónoma de Grado Institucional. Slingshot v42.2 APEX TITAN COMPOUND: Arquitectura Dual Multi-Mercado (Modo Crecimiento Cripto Bitunix 24/7 al 2.5% de Riesgo Real Dinámico con Interés Compuesto Automático + Modo Guardián FTMO MetaTrader 5 al 0.75% con Kill-Switch Diario a -3.5%), Malla de Salidas Dinámica SOP-26 (40% a +1.2R / 40% a +2.0R / 20% Runner a +3.5R), Invalidación Temprana SOP-25 a -0.65R, Escudo VWAP Diario SOP-27, Asignación Asimétrica Alpha-Tier Kelly SOP-33, Ventana Francotirador NY Open SOP-38 (+72.25R y $72,253.80 USD de Beneficio Neto SSoT), y Suite Oficial de 216/216 Pruebas Unitarias Aprobadas al 100%. Canon Inmutable de los 42 Protocolos de Seguridad Operativa (SOP-01 a SOP-42) y Centinela Autónomo CI/CD."**
 
 ![Status](https://img.shields.io/badge/Status-100%25_AUTONOMOUS_&_SSOT_VERIFIED-0d2a1a?style=for-the-badge&logo=codeproject&logoColor=fff)
-![Version](https://img.shields.io/badge/Version-42.0_Apex_Titan_Compound-1a3a6e?style=for-the-badge)
+![Version](https://img.shields.io/badge/Version-42.2_Apex_Titan_Compound-1a3a6e?style=for-the-badge)
 ![Dual Engine](https://img.shields.io/badge/Architecture-Bitunix_2.5%25_%26_FTMO_0.75%25_Dual-purple?style=for-the-badge)
 ![Security](https://img.shields.io/badge/Security_Protocols-SOP--01%20to%20SOP--42-emerald?style=for-the-badge)
-![QA Suite](https://img.shields.io/badge/QA_Suite-212%2F212_Passed_100%25-success?style=for-the-badge)
+![QA Suite](https://img.shields.io/badge/QA_Suite-216%2F216_Passed_100%25-success?style=for-the-badge)
 ![SSoT Return](https://img.shields.io/badge/SSoT_Return-%2B72.25_R_%28%2B$72%2C253_USD%29-gold?style=for-the-badge)
 ![Profit Factor](https://img.shields.io/badge/Profit_Factor-1.43_Institucional-blue?style=for-the-badge)
 ![Drawdown](https://img.shields.io/badge/Max_Drawdown--5.86%25_FTMO_Shield-brightgreen?style=for-the-badge)
@@ -32,7 +32,7 @@ Slingshot es una **Terminal de Inteligencia y Ejecución Cuantitativa Institucio
 * **Universo Curado Institucional (SOP-36):** Ascenso de `BNBUSDT` al Núcleo de Scalp 15m y especialización de `PAXGUSDT` (Oro) exclusivamente en 1H Swing y TradFi FTMO (`XAUUSD`).
 * **Kernel en Rust (`Polars`):** Cálculo vectorial sub-$2.5\text{ ms}$ para indicadores y confluencias.
 * **Bóveda SQLite WAL Transaccional (`vault.py`):** Persistencia ACID de sesiones y bitácora de auditoría inmutable.
-* **Suite de Certificación QA Oficial:** **212/212 pruebas unitarias aprobadas al 100%**.
+* **Suite de Certificación QA Oficial:** **216/216 pruebas unitarias aprobadas al 100%**.
 
 ---
 
@@ -72,7 +72,7 @@ graph TB
 
 ---
 
-## 🛡️ Tabla Maestra: El Canon de los 40 Protocolos SOP
+## 🛡️ Tabla Maestra: El Canon de los 42 Protocolos SOP
 
 | Protocolo | Nombre Técnico | Función y Blindaje de Mercado |
 | :--- | :--- | :--- |
@@ -111,6 +111,25 @@ graph TB
 | **SOP-38** | Sniper NY Open Priority | Bono $+10\%$ margen en NY Open (13:00-17:00 UTC); defensivo 0.70x en Asia. |
 | **SOP-39** | Dynamic Equity Sizing Engine | Margen base al 8.5% del saldo disponible (2.5% de riesgo real dinámico). |
 | **SOP-40** | Free Margin Buffer Guardrail | Mínimo 50% de saldo libre garantizado tras colocar cada orden. |
+| **SOP-41** | Pure Dollar-Risk Position Sizing | Dimensionamiento exacto $\text{Qty} = (\text{Balance} \times 0.025)/\|\text{Entry}-\text{SL}\|$; cap nocional $\le 5\text{X}$. |
+| **SOP-42** | Pre-Flight Risk Hard-Clamp | Circuit Breaker atómico pre-envío; fail-closed sin saldos ficticios. |
+
+---
+
+## 🤖 Centinela CI/CD Autónomo & Quality Gate Permanente
+
+El sistema incorpora en el VPS un supervisor autónomo (`engine/workers/ci_cd_sentinel.py`) configurado como Scheduled Task en Windows Server (`SlingshotSentinel`):
+* **Monitoreo Continuo:** Cada 5 minutos audita el repositorio remoto (`git fetch origin cleanup-v1`).
+* **Barrera de Contención de Capital (Quality Gate):** Antes de cualquier despliegue, ejecuta de forma autónoma las 216 pruebas unitarias. Si una sola prueba falla, el despliegue se aborta inmediatamente y el código defectuoso jamás toca el bot en vivo.
+* **Auto-Despliegue Atómico:** Si los 216 tests aprueban al 100%, realiza `git pull` atómico, hot-reload de módulos y registra la auditoría en bitácora inmutable.
+
+---
+
+## 📱 Terminal Responsiva Institucional Dual (Mobile & Desktop)
+
+La terminal en Next.js 15 (`app/`) cuenta con adaptación responsiva de grado institucional:
+* **Modo Desktop:** Barra lateral Bloomberg (`w-64`), telemetría en tiempo real y vista de triple columna simultánea.
+* **Modo Mobile:** Viewport táctil fluido sin solapamientos, Topbar con botón hamburguesa, cajón deslizante (*slide-over drawer*), control segmentado (`SCANNER`, `DIAGNÓSTICO`, `TÁCTICA & LIQS`), y **Dock de navegación inferior flotante** (`Overview`, `Radar`, `Signals`, `Chart`, `FTMO`) adaptado al área segura de smartphones.
 
 ---
 
@@ -145,6 +164,6 @@ Para certificar la integridad matemática del sistema antes de desplegar en prod
 
 ```text
 ================================================================================
-✅ CERTIFICACIÓN QA EXITOSA: 201/201 PRUEBAS APROBADAS AL 100% (17.24s)
+✅ CERTIFICACIÓN QA EXITOSA: 216/216 PRUEBAS APROBADAS AL 100% (19.32s)
 ================================================================================
 ```

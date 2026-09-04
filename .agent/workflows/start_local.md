@@ -1,8 +1,8 @@
 ---
-description: Cómo iniciar el proyecto Slingshot Gen 1 en local (backend + frontend)
+description: Cómo iniciar el proyecto Slingshot v42.2 Apex Titan en local (backend + frontend)
 ---
 
-# Iniciar Slingshot Gen 1 en Local
+# Iniciar Slingshot v42.2 Apex Titan en Local
 
 ## ⚡ Forma rápida (recomendada): Un solo comando
 
@@ -21,9 +21,9 @@ Esto abre automáticamente dos ventanas de PowerShell separadas:
 
 ### Paso 1: Backend (FastAPI)
 // turbo
-1. Activar el entorno virtual e iniciar el motor Python:
+1. Activar el entorno virtual e iniciar el motor Python con Uvicorn:
 ```powershell
-. .\.venv\Scripts\Activate.ps1; python run_engine.py
+.\.venv\Scripts\python.exe -m uvicorn engine.api.main:app --host 0.0.0.0 --port 8000
 ```
 - Verificar: `[SLINGSHOT ENGINE] Iniciando en http://0.0.0.0:8000`
 
