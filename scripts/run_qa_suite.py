@@ -56,7 +56,8 @@ MODERN_TEST_FILES = [
     "engine/tests/test_sop36_to_sop38_universe_and_fractal_harmony.py",
     "engine/tests/test_sop39_sop40_bitunix_dynamic_25pct_risk.py",
     "engine/tests/test_sop41_sop42_dollar_risk_shield.py",
-    "engine/tests/test_multi_account_dispatcher.py"
+    "engine/tests/test_multi_account_dispatcher.py",
+    "engine/tests/test_ci_cd_security_gates.py"
 ]
 
 def main():

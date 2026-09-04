@@ -74,7 +74,9 @@ async def test_spread_circuit_breaker_approves_healthy_spread():
         "confluence_score": 80.0
     }
     
-    with patch.object(node.executor, "execute_signal", new_callable=AsyncMock) as mock_exec:
+    primary_exec = node.account_manager.get_executor("primary") or node.executor
+    with patch.object(primary_exec, "execute_signal", new_callable=AsyncMock) as mock_exec, \
+         patch.object(primary_exec, "get_available_margin_usdt", new_callable=AsyncMock, return_value=150.0):
         mock_exec.return_value = {"status": "success", "main_order_id": "mock_order_123"}
         await node.process_signal(healthy_signal)
         assert mock_exec.called, "Orden debió ser aprobada con spread saludable"
