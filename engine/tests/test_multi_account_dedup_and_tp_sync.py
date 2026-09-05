@@ -136,3 +136,40 @@ async def test_sync_loop_protects_paused_account_positions(mock_nexus):
     pos = await executors['cliente_2'].get_pending_positions()
     assert len(pos) == 1
     assert pos[0]['symbol'] == 'ETHUSDT'
+
+@pytest.mark.asyncio
+async def test_tp_grid_consolidates_under_min_trade_volume():
+    from engine.execution.bitunix_executor import BitunixExecutor
+    ex = BitunixExecutor(dry_run=True)
+    ex._symbol_rules_cache = {
+        "NEARUSDT": {
+            "qty_precision": 0,
+            "price_precision": 3,
+            "min_trade_volume": 10.0
+        }
+    }
+    rules = await ex.get_symbol_rules("NEARUSDT")
+    assert rules["min_trade_volume"] == 10.0
+    
+    qty = 34.0
+    min_vol = rules["min_trade_volume"]
+    f1 = int(round(qty * 0.60)) # 20
+    f2 = int(round(qty * 0.20)) # 7
+    f3 = int(round(qty - f1 - f2)) # 7
+    
+    if min_vol > 0:
+        if f1 < min_vol:
+            f1 = qty
+            f2 = 0
+            f3 = 0
+        elif f2 < min_vol:
+            f1 = round(f1 + f2 + f3, 0)
+            f2 = 0
+            f3 = 0
+        elif f3 < min_vol:
+            f2 = round(f2 + f3, 0)
+            f3 = 0
+
+    assert f1 == 34.0 # Consolidado a 34 porque f2 < 10
+    assert f2 == 0
+    assert f3 == 0

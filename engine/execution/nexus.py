@@ -387,7 +387,10 @@ class NexusNode:
                             existing_close_orders = []
 
                         if not existing_close_orders:
-                            q_dec, p_dec = await target_ex.get_symbol_precision(symbol)
+                            rules = await target_ex.get_symbol_rules(symbol)
+                            q_dec = rules["qty_precision"]
+                            p_dec = rules["price_precision"]
+                            min_vol = rules["min_trade_volume"]
                             
                             if q_dec == 0:
                                 f1 = int(round(qty * 0.60))
@@ -398,8 +401,24 @@ class NexusNode:
                                 f2 = round(qty * 0.20, q_dec)
                                 f3 = round(qty * 0.10, q_dec)
 
-                            # 60% TP1, 20% TP2, 10% TP3 límite (el 10% restante queda libre como ULTRA-RUNNER con Trailing Ratchet)
-                            tps = [(tp1, f1, "TP1 (60%)"), (tp2, f2, "TP2 (20%)"), (tp3, f3, "TP3 (10% Límite)")]
+                            # Si alguna fracción es menor al mínimo volumen exigido por Bitunix, consolidar hacia arriba
+                            tps = []
+                            if min_vol > 0:
+                                if f1 < min_vol:
+                                    f1 = qty
+                                    f2 = 0
+                                    f3 = 0
+                                elif f2 < min_vol:
+                                    f1 = round(f1 + f2 + f3, q_dec if q_dec > 0 else 0)
+                                    f2 = 0
+                                    f3 = 0
+                                elif f3 < min_vol:
+                                    f2 = round(f2 + f3, q_dec if q_dec > 0 else 0)
+                                    f3 = 0
+
+                            if f1 > 0: tps.append((tp1, f1, "TP1 (60%)"))
+                            if f2 > 0: tps.append((tp2, f2, "TP2 (20%)"))
+                            if f3 > 0: tps.append((tp3, f3, "TP3 (10% Límite)"))
                             close_side = "SELL" if side == "LONG" else "BUY"
 
                             for tp_val, tp_qty, label in tps:
@@ -497,7 +516,10 @@ class NexusNode:
                             # Si no hay órdenes de cierre y aún no hemos alcanzado TP1, re-colocar la grilla 60/20/20
                             if close_count == 0 and not pos_data.get("smart_trailing", {}).get("be_active"):
                                 logger.warning(f"🩹 [AUTO-HEALING] [{target_ex.account_label}] Posición {symbol} no tiene órdenes límite TP en Bitunix. Auto-reparando salidas escalonadas...")
-                                q_dec, p_dec = await target_ex.get_symbol_precision(symbol)
+                                rules = await target_ex.get_symbol_rules(symbol)
+                                q_dec = rules["qty_precision"]
+                                p_dec = rules["price_precision"]
+                                min_vol = rules["min_trade_volume"]
                                 if q_dec == 0:
                                     f1 = int(round(pos_qty * 0.60))
                                     f2 = int(round(pos_qty * 0.20))
@@ -507,7 +529,24 @@ class NexusNode:
                                     f2 = round(pos_qty * 0.20, q_dec)
                                     f3 = round(pos_qty * 0.10, q_dec)
 
-                                tps = [(tp1_val, f1, "TP1 (60%)"), (tp2_val, f2, "TP2 (20%)"), (tp3_val, f3, "TP3 (10% Límite)")]
+                                # Consolidar si queda por debajo de minTradeVolume
+                                tps = []
+                                if min_vol > 0:
+                                    if f1 < min_vol:
+                                        f1 = pos_qty
+                                        f2 = 0
+                                        f3 = 0
+                                    elif f2 < min_vol:
+                                        f1 = round(f1 + f2 + f3, q_dec if q_dec > 0 else 0)
+                                        f2 = 0
+                                        f3 = 0
+                                    elif f3 < min_vol:
+                                        f2 = round(f2 + f3, q_dec if q_dec > 0 else 0)
+                                        f3 = 0
+
+                                if f1 > 0: tps.append((tp1_val, f1, "TP1 (60%)"))
+                                if f2 > 0: tps.append((tp2_val, f2, "TP2 (20%)"))
+                                if f3 > 0: tps.append((tp3_val, f3, "TP3 (10% Límite)"))
                                 close_side = "SELL" if "LONG" in side.upper() else "BUY"
                                 for p_val, q_val, lbl in tps:
                                     if q_val <= 0 or p_val <= 0: continue

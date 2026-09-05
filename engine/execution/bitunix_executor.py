@@ -188,6 +188,39 @@ class BitunixExecutor:
 
         return {"code": -1, "msg": str(last_err), "data": {}}
 
+    async def get_symbol_rules(self, symbol: str) -> dict:
+        """
+        Devuelve información de trading del par: {'qty_precision': int, 'price_precision': int, 'min_trade_volume': float}
+        """
+        sym = symbol.replace('/', '').upper()
+        if not hasattr(self, "_symbol_rules_cache"):
+            self._symbol_rules_cache = {}
+        if sym in self._symbol_rules_cache:
+            return self._symbol_rules_cache[sym]
+
+        try:
+            r = await self._request("GET", "/api/v1/futures/market/trading_pairs")
+            if r.get("code") == 0 and isinstance(r.get("data"), list):
+                for item in r["data"]:
+                    s = item.get("symbol")
+                    bp = int(item.get("basePrecision", 2))
+                    qp = int(item.get("quotePrecision", 2))
+                    min_vol = float(item.get("minTradeVolume", 0.0) or 0.0)
+                    self._symbol_rules_cache[s] = {
+                        "qty_precision": bp,
+                        "price_precision": qp,
+                        "min_trade_volume": min_vol
+                    }
+            if sym in self._symbol_rules_cache:
+                return self._symbol_rules_cache[sym]
+        except Exception as e:
+            logger.debug(f"[BITUNIX] Error cargando reglas de mercado: {e}")
+
+        bp, qp = await self.get_symbol_precision(sym)
+        rules = {"qty_precision": bp, "price_precision": qp, "min_trade_volume": 0.0}
+        self._symbol_rules_cache[sym] = rules
+        return rules
+
     async def get_symbol_precision(self, symbol: str) -> tuple[int, int]:
         """
         Devuelve (qty_precision, price_precision) consultando la API de Bitunix o desde la caché en memoria.
@@ -378,8 +411,11 @@ class BitunixExecutor:
                 tp3 = signal.get("tp3") or signal.get("take_profit_3r")
                 
                 if tp1 and tp2 and tp3:
-                    # [SOP-21] Respetar la precisión dinámica exacta del símbolo (ej. 6 decimales en micro-tokens)
-                    qty_decimals, price_decimals = await self.get_symbol_precision(symbol)
+                    # [SOP-21] Respetar la precisión dinámica exacta del símbolo y el volumen mínimo de Bitunix
+                    rules = await self.get_symbol_rules(symbol)
+                    qty_decimals = rules["qty_precision"]
+                    price_decimals = rules["price_precision"]
+                    min_vol = rules["min_trade_volume"]
 
                     if qty_decimals == 0:
                         f1 = int(round(qty_float * 0.60))
@@ -389,6 +425,25 @@ class BitunixExecutor:
                         f1 = round(qty_float * 0.60, qty_decimals)
                         f2 = round(qty_float * 0.20, qty_decimals)
                         f3 = round(qty_float - f1 - f2, qty_decimals)
+
+                    # Si alguna fracción queda por debajo del minTradeVolume del exchange, consolidar hacia TP1 o TP2
+                    tps = []
+                    if min_vol > 0:
+                        if f1 < min_vol:
+                            f1 = qty_float
+                            f2 = 0
+                            f3 = 0
+                        elif f2 < min_vol:
+                            f1 = round(f1 + f2 + f3, qty_decimals if qty_decimals > 0 else 0)
+                            f2 = 0
+                            f3 = 0
+                        elif f3 < min_vol:
+                            f2 = round(f2 + f3, qty_decimals if qty_decimals > 0 else 0)
+                            f3 = 0
+
+                    if f1 > 0: tps.append((tp1, f1, "TP1"))
+                    if f2 > 0: tps.append((tp2, f2, "TP2"))
+                    if f3 > 0: tps.append((tp3, f3, "TP3"))
 
                     # Obtener el positionId real recién creado en Bitunix para asociar las órdenes de cierre
                     real_position_id = None
@@ -400,8 +455,6 @@ class BitunixExecutor:
                                 break
                     except Exception as pos_chk_err:
                         logger.debug(f"[BITUNIX] Error consultando positionId para TP: {pos_chk_err}")
-
-                    tps = [(tp1, f1, "TP1"), (tp2, f2, "TP2"), (tp3, f3, "TP3")]
                     for tp_price, tp_qty, label in tps:
                         if tp_qty <= 0:
                             continue
