@@ -784,17 +784,11 @@ class NexusNode:
             logger.info(f"🛑 [NEXUS AUTO-LIMIT SOP-31] Omitida orden límite para {asset}: {regime_msg}")
             return
 
-        # Si ya tenemos una posición abierta o una orden pendiente registrada en este activo, no duplicar
-        if asset in self._active_positions or asset in self._pending_limit_symbols:
+        # Si ya tenemos una posición activa en este activo, no duplicar
+        if asset in self._active_positions:
             return
 
         try:
-            # Verificar órdenes pendientes en Bitunix para no saturar el libro
-            pending_orders = await self.executor.get_pending_orders(asset)
-            if pending_orders:
-                logger.debug(f"[NEXUS AUTO-LIMIT] Ya existe orden límite pendiente en Bitunix para {asset}.")
-                self._pending_limit_symbols.add(asset)
-                return
 
             # ── SOP-33 & SOP-38: ALPHA-TIER KELLY SIZING & SNIPER NY OPEN ──
             from engine.risk.risk_manager import RiskManager
@@ -855,6 +849,16 @@ class NexusNode:
         """Coloca una orden límite en una cuenta específica con su propio cálculo de riesgo SOP-41."""
         acc_signal = dict(signal)
         asset = acc_signal.get("asset", acc_signal.get("symbol", "")).upper()
+
+        # Verificar órdenes pendientes en Bitunix para esta cuenta específica para no duplicar en el libro
+        try:
+            acc_pending = await executor.get_pending_orders(asset)
+            if acc_pending:
+                logger.debug(f"[NEXUS AUTO-LIMIT] [{account.label}] Ya existe orden límite pendiente en Bitunix para {asset}.")
+                self._pending_limit_symbols.add(asset)
+                return None
+        except Exception as pe_err:
+            logger.debug(f"[NEXUS AUTO-LIMIT] [{account.label}] Error verificando órdenes pendientes: {pe_err}")
 
         try:
             avail_margin = await executor.get_available_margin_usdt()
