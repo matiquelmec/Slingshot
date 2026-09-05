@@ -620,6 +620,42 @@ class NexusNode:
                 unprotected += 1
         return unprotected
 
+    @staticmethod
+    def _fragment_order(signal: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """Fragmentación Alpha Maximizer 50/30/20 (v24.0 APEX ALPHA)."""
+        total_size = signal.get("position_size_usdt", signal.get("position_size", 0))
+        tp1_vol_pct = signal.get("tp1_vol_pct", 0.50)
+        vol_tp1 = total_size * tp1_vol_pct
+        remaining = total_size - vol_tp1
+        vol_tp2 = remaining * 0.60
+        vol_tp3 = remaining - vol_tp2
+        return [
+            {
+                "id": "TP1_PEAJE",
+                "volume_usdt": round(vol_tp1, 2),
+                "tp_price": signal.get("tp1"),
+                "sl_price": signal.get("stop_loss"),
+                "is_entry_risk": True,
+                "label": f"Tramo 1 ({int(tp1_vol_pct*100)}%)"
+            },
+            {
+                "id": "TP2_RUNNER",
+                "volume_usdt": round(vol_tp2, 2),
+                "tp_price": signal.get("tp2"),
+                "sl_price": signal.get("stop_loss"),
+                "is_entry_risk": False,
+                "label": "Tramo 2 (30%)"
+            },
+            {
+                "id": "TP3_MOONBAG",
+                "volume_usdt": round(vol_tp3, 2),
+                "tp_price": signal.get("tp3"),
+                "sl_price": signal.get("stop_loss"),
+                "is_entry_risk": False,
+                "label": "Tramo 3 (20%)"
+            }
+        ]
+
     async def process_signal(self, signal: Dict[str, Any]):
         """
         Punto de entrada para señales de ejecución directa a mercado.
@@ -694,8 +730,8 @@ class NexusNode:
             signal["leverage"] = max(1, min(int(signal.get("leverage", 10)), 20))
             safe_lev = signal["leverage"]
 
-        # 1. Fragmentación Apex (Delta 60/20/20)
-        fragments = DeltaOrchestrator.fragment_order(signal)
+        # 1. Fragmentación Apex (Delta 50/30/20)
+        fragments = self._fragment_order(signal)
 
         # 2. Despacho Multi-Cuenta en Paralelo
         enabled_accounts = self.account_manager.get_all_accounts(enabled_only=True)

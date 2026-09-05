@@ -170,7 +170,7 @@ async def test_sentinel_purges_limits_when_max_risk_slots_filled():
         cancelled = await tm.sync_live_bitunix_pending_orders()
 
         assert cancelled == []
-        mock_purge.assert_called_once_with(reason="MAX_4_RISK_SLOTS_REACHED")
+        mock_purge.assert_called_once_with(reason="MAX_4_RISK_SLOTS_REACHED_primary", account_id="primary")
 
 
 @pytest.mark.asyncio
