@@ -5,7 +5,7 @@ Validador de higiene de raíz del repositorio Slingshot.
 import sys
 from pathlib import Path
 
-ROOT_DIR = Path(r"C:\Slingshot")
+ROOT_DIR = Path(r"C:\Slingshot") if Path(r"C:\Slingshot").exists() else Path(__file__).resolve().parent.parent.parent
 
 def main():
     forbidden_prefixes = ("view_", "audit_", "check_", "patch_", "test_")

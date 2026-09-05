@@ -674,10 +674,12 @@ class BitunixExecutor:
                 })
                 logger.info(f"🛡️ [BITUNIX] SL antiguo cancelado: {old_order_id}")
 
-            # 2. Colocar nueva orden de Stop Loss
+            # 2. Colocar nueva orden de Stop Loss con precisión dinámica
+            qty_precision, _ = await self.get_symbol_precision(sym)
+            formatted_qty = f"{int(amount)}" if qty_precision == 0 else f"{float(amount):.{qty_precision}f}"
             sl_payload = {
                 "symbol": sym,
-                "qty": str(round(amount, 4)),
+                "qty": formatted_qty,
                 "side": side.upper(),
                 "tradeSide": "CLOSE",
                 "orderType": "MARKET",
@@ -715,13 +717,15 @@ class BitunixExecutor:
             if price <= 0:
                 return False
                 
-            qty = str(round(amount_usd / price, 4))
+            qty_precision, _ = await self.get_symbol_precision(sym)
+            raw_qty = amount_usd / price
+            formatted_qty = f"{int(raw_qty)}" if qty_precision == 0 else f"{float(raw_qty):.{qty_precision}f}"
             
-            logger.info(f"🚀 [BITUNIX] Escalando posición en {sym}: +{qty} unidades.")
+            logger.info(f"🚀 [BITUNIX] Escalando posición en {sym}: +{formatted_qty} unidades.")
             
             order_payload = {
                 "symbol": sym,
-                "qty": qty,
+                "qty": formatted_qty,
                 "side": side.upper(),
                 "tradeSide": "OPEN",
                 "orderType": "MARKET"
@@ -806,14 +810,33 @@ class BitunixExecutor:
             payload["tpPrice"] = formatted_tp
             payload["tpStopType"] = "LAST_PRICE"
 
-        res = await self._request("POST", "/api/v1/futures/tpsl/position/place_order", json_body=payload)
-        if res.get("code") == 0:
-            order_id = res.get("data", {}).get("orderId")
-            logger.info(f"✅ [BITUNIX] TP/SL de posicion colocado con exito para {sym}. Order ID: {order_id}")
-            return order_id
-        else:
-            logger.error(f"❌ [BITUNIX] Error al colocar TP/SL de posicion {sym}: {res.get('msg')}")
-            return None
+        max_tpsl_attempts = 3
+        order_id = None
+        last_res = {}
+        for attempt in range(1, max_tpsl_attempts + 1):
+            last_res = await self._request("POST", "/api/v1/futures/tpsl/position/place_order", json_body=payload)
+            if last_res.get("code") == 0:
+                order_id = last_res.get("data", {}).get("orderId")
+                logger.info(f"✅ [BITUNIX] TP/SL de posicion colocado con exito para {sym}. Order ID: {order_id}")
+                return order_id
+            else:
+                logger.warning(f"⚠️ [BITUNIX] Intento {attempt}/{max_tpsl_attempts} fallo al colocar TP/SL para {sym}: {last_res.get('msg')}")
+                if attempt < max_tpsl_attempts:
+                    await asyncio.sleep(0.3 * attempt)
+
+        # Si se canceló una orden previa y los reintentos fallaron, la posición está desprotegida
+        if eo_id:
+            logger.critical(f"🚨 [EMERGENCY SL ALERT] Posición {sym} quedó sin Stop Loss tras cancelar {eo_id} y fallar {max_tpsl_attempts} reintentos!")
+            try:
+                from engine.router.telegram_dispatcher import telegram_dispatcher
+                asyncio.create_task(telegram_dispatcher.send_system_alert(
+                    title=f"CRITICAL: SL DESPROTEGIDO EN {sym}",
+                    details=f"Cuenta: {self.account_label}\nPosId: {position_id}\nTarget SL: {formatted_sl}\nError: {last_res.get('msg')}",
+                    severity="CRITICAL"
+                ))
+            except Exception:
+                pass
+        return None
 
     async def get_pending_positions(self) -> Optional[List[Dict[str, Any]]]:
         """Obtiene las posiciones abiertas actuales desde Bitunix."""

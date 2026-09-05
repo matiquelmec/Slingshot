@@ -18,7 +18,6 @@ import time
 from datetime import datetime, timezone
 from typing import Dict, Any, List, Optional
 from engine.core.logger import logger
-from engine.execution.delta_executor import DeltaOrchestrator
 from engine.execution.bitunix_executor import BitunixExecutor
 from engine.api.config import settings
 from engine.core.memory import blackbox
@@ -1231,16 +1230,23 @@ class NexusNode:
         sym_clean = symbol.replace('/', '').upper()
         self._pending_limit_symbols.discard(sym_clean)
 
-    async def purge_all_pending_limit_orders(self, reason: str = "SLOT_OVERLOAD"):
+    async def purge_all_pending_limit_orders(self, reason: str = "SLOT_OVERLOAD", account_id: Optional[str] = None):
         """
         [SAFETY PURGE] Cancela todas las órdenes límite pendientes en Bitunix
-        cuando se alcanza el límite de riesgo o por invalidación global en todas las cuentas (SOP-45).
+        cuando se alcanza el límite de riesgo (por cuenta si se especifica account_id o globalmente) (SOP-45/SOP-57).
         """
-        logger.warning(f"🛡️ [NEXUS PURGE] Iniciando purga de órdenes límite pendientes. Razón: {reason}")
+        logger.warning(f"🛡️ [NEXUS PURGE] Iniciando purga de órdenes límite pendientes (Cuenta: {account_id or 'GLOBAL'}). Razón: {reason}")
         try:
             executors = self.account_manager.get_all_executors(enabled_only=True)
             if not executors:
                 executors = {"primary": self.executor}
+
+            if account_id:
+                if account_id in executors:
+                    executors = {account_id: executors[account_id]}
+                else:
+                    logger.warning(f"🛡️ [NEXUS PURGE] Cuenta {account_id} no encontrada en ejecutores activos.")
+                    return
 
             for acc_id, ex in executors.items():
                 try:

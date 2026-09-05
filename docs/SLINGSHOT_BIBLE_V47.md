@@ -31,10 +31,11 @@
 | **SOP-55** | Non-Blocking Async Ingestor | Eliminación total de `urllib.request` síncrono. Migración a `httpx.AsyncClient` con timeout estricto de $2.5\text{s}$ y fallback instantáneo a RAM. |
 | **SOP-56** | Repository Hygiene & SSoT | Raíz desprovista de scripts efímeros. Centralización de herramientas de diagnóstico en `scripts/diagnostic/`, pruebas en `engine/tests/` y validación estricta de `.gitignore`. |
 | **SOP-57** | Multi-Account Isolation & Cryptographic Vault | Despacho concurrente no bloqueante mediante `asyncio.gather(*tasks, return_exceptions=True)`. Cuotas de riesgo SOP-41/45 y buffers desacoplados por `account_id`. Cifrado de credenciales secundarias con AES-Fernet (`enc:v1:`) y enmascaramiento estricto en logs (`to_dict(mask_secrets=True)`). |
+| **SOP-58** | Capital Risk Invariance & Atomic SL Guardian | Validación estricta booleana en Bitunix antes de liberar cupos en Fast BE (+1.0R), reintentos forzados de emergencia ante fallos en colocación de SL, aislamiento estricto de purgas de órdenes límite por cuenta (`account_id`), y formateo dinámico de lotes según `qty_decimals` del libro de especificaciones. |
 
 ---
 
-## 3. Matriz de Pruebas Unitarias Institucionales (29/29 PASSED - 100%)
+## 3. Matriz de Pruebas Unitarias Institucionales (34/34 PASSED - 100%)
 
 1. `test_multi_asset_feed_async_non_blocking` (PASSED)
 2. `test_multi_asset_feed_sync_fallback` (PASSED)
@@ -65,6 +66,11 @@
 27. `test_multi_account_buffer_isolation` (PASSED)
 28. `test_multi_account_fault_tolerance_isolation` (PASSED)
 29. `test_multi_account_encryption_and_secret_masking` (PASSED)
+30. `test_fast_be_does_not_release_risk_on_bitunix_failure` (PASSED)
+31. `test_fast_be_releases_risk_only_on_bitunix_success` (PASSED)
+32. `test_atomic_tpsl_emergency_fallback_and_alert` (PASSED)
+33. `test_limit_order_purge_isolated_to_saturated_account` (PASSED)
+34. `test_lot_precision_dynamic_formatting_respects_specs` (PASSED)
 
 ---
 

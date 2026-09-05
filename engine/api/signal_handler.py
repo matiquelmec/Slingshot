@@ -21,7 +21,6 @@ from engine.api.registry import registry
 from engine.core.logger import logger
 from engine.core.store import store
 from engine.indicators.ghost_data import get_ghost_state, filter_signals_by_macro
-from engine.notifications.telegram import send_signal_async
 from engine.notifications.filter import signal_filter
 
 if TYPE_CHECKING:

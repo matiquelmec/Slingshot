@@ -1,4 +1,4 @@
-﻿"""
+"""
 engine/workers/trade_manager.py â€” Trailing Stop Estructural Slingshot v1.0
 ===========================================================================
 Gestiona el ciclo de vida de seÃ±ales activas despuÃ©s de su activaciÃ³n.
@@ -545,12 +545,16 @@ class TradeManager:
                             should_update_sl = True
 
                     if should_update_sl:
-                        await bitunix.modify_position_tpsl(symbol=sym, position_id=pos_id, sl_price=target_sl, tp_price=None)
-                        action_taken = f"SL_ACTUALIZADO (${target_sl})"
-                        logger.info(f"ðŸ›¡ï¸ [TRADE_MANAGER] [{bitunix.account_label}] PosiciÃ³n {sym} {side} (+{r_profit:.2f}R) protegida con SL=${target_sl} ({status_msg}).")
-                        if "FAST_BE" in status_msg or "PROTEGIDO" in status_msg:
-                            from engine.execution.nexus import nexus
-                            asyncio.create_task(nexus.on_risk_released(acc_id, reason=f"FAST_BE_ACTIVADO_{sym}"))
+                        success = await bitunix.modify_position_tpsl(symbol=sym, position_id=pos_id, sl_price=target_sl, tp_price=None)
+                        if success:
+                            action_taken = f"SL_ACTUALIZADO (${target_sl})"
+                            logger.info(f"🛡️  [TRADE_MANAGER] [{bitunix.account_label}] Posición {sym} {side} (+{r_profit:.2f}R) protegida con SL=${target_sl} ({status_msg}).")
+                            if "FAST_BE" in status_msg or "PROTEGIDO" in status_msg:
+                                from engine.execution.nexus import nexus
+                                asyncio.create_task(nexus.on_risk_released(acc_id, reason=f"FAST_BE_ACTIVADO_{sym}"))
+                        else:
+                            action_taken = f"ERROR_ACTUALIZANDO_SL (${target_sl})"
+                            logger.error(f"❌ [TRADE_MANAGER] [{bitunix.account_label}] Falló actualización de SL para {sym} en Bitunix. Reteniendo cupo de riesgo.")
                     elif sl_at_be:
                         status_msg = "YA_PROTEGIDO"
 
@@ -602,8 +606,8 @@ class TradeManager:
                 # 1. Regla D: Si la cuenta ya tiene 4 posiciones con riesgo, purgar Ã³rdenes lÃ­mite de esa cuenta
                 unprotected_risk = nexus.get_unprotected_risk_count(account_id=acc_id)
                 if unprotected_risk >= nexus.MAX_CONCURRENT_POSITIONS:
-                    logger.info(f"ðŸ›‘ [LIMIT SENTINEL] [{bitunix.account_label}] MÃ¡ximo de {nexus.MAX_CONCURRENT_POSITIONS} operaciones con riesgo alcanzado ({unprotected_risk} en riesgo). Purgando lÃ­mites.")
-                    await nexus.purge_all_pending_limit_orders(reason="MAX_4_RISK_SLOTS_REACHED")
+                    logger.info(f"🛑 [LIMIT SENTINEL] [{bitunix.account_label}] Máximo de {nexus.MAX_CONCURRENT_POSITIONS} operaciones con riesgo alcanzado ({unprotected_risk} en riesgo). Purgando límites.")
+                    await nexus.purge_all_pending_limit_orders(reason=f"MAX_4_RISK_SLOTS_REACHED_{acc_id}", account_id=acc_id)
                     # Protected TPs: only entry limits purged
                     continue
 

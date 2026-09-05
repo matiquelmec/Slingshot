@@ -293,6 +293,29 @@ class TelegramDispatcher:
         except Exception:
             return False
 
+    async def send_raw_message(self, text: str, parse_mode: str = "HTML") -> bool:
+        """Envía un mensaje de texto directo a todos los destinatarios configurados."""
+        if not self.enabled:
+            return False
+        url = f"https://api.telegram.org/bot{self.bot_token}/sendMessage"
+        any_success = False
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                for cid in self.chat_ids:
+                    payload = {"chat_id": cid, "text": text, "parse_mode": parse_mode}
+                    resp = await client.post(url, json=payload)
+                    if resp.status_code == 200:
+                        any_success = True
+                    else:
+                        payload.pop("parse_mode", None)
+                        retry_resp = await client.post(url, json=payload)
+                        if retry_resp.status_code == 200:
+                            any_success = True
+            return any_success
+        except Exception as e:
+            logger.debug(f"[TELEGRAM] Error en send_raw_message: {e}")
+            return False
+
 # Instancia singleton para importación
 telegram_dispatcher = TelegramDispatcher()
 
