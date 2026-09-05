@@ -22,6 +22,10 @@ build/
 dist/
 .DS_Store
 *.log
+*.log*
+*.pid
+scripts/deploy/installers/
+engine/tests/archive/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
