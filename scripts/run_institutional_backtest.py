@@ -54,14 +54,40 @@ def main():
         default=60,
         help="Puntuación mínima de confluencia para aprobar entradas (default: 60)"
     )
+    parser.add_argument(
+        "--mode",
+        type=str,
+        default="chronological",
+        choices=["chronological", "isolated"],
+        help="Modo de ejecución: 'chronological' (Event-Driven SSoT con límites de slots y macro) o 'isolated' (R plano por activo)"
+    )
+    parser.add_argument(
+        "--max-slots",
+        type=int,
+        default=2,
+        help="Máximo de posiciones LONG simultáneas con riesgo flotante (SOP-30, default: 2)"
+    )
+    parser.add_argument(
+        "--compounding-usd",
+        type=float,
+        default=1000.0,
+        help="Capital inicial para simulación de interés compuesto al 2.5% Bitunix (default: $1,000 USD)"
+    )
 
     args = parser.parse_args()
 
     engine = UnifiedBacktestEngine(min_confluence_score=args.min_score)
 
     if args.portfolio or (not args.symbol):
-        print("\n🚀 Ejecutando Auditoría Oficial de Cartera Completa (180 Días)...")
-        summary = engine.run_adaptive_portfolio_audit()
+        if args.mode == "chronological":
+            print("\n🚀 Ejecutando Auditoría Oficial Cronológica Unificada (Event-Driven SSoT)...")
+            summary = engine.run_chronological_portfolio_replay(
+                max_concurrent_longs=args.max_slots,
+                compounding_initial_usd=args.compounding_usd
+            )
+        else:
+            print("\n🚀 Ejecutando Auditoría Oficial de Cartera Aislada por Activo (Legacy SSoT)...")
+            summary = engine.run_adaptive_portfolio_audit()
         return
 
     # Evaluación de un solo activo

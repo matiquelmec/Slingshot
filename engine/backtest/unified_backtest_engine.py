@@ -266,6 +266,8 @@ class UnifiedBacktestEngine:
             # 3. Simulación Walk-Forward con Modelo Cuántico v37.0 (SOP-25 & SOP-26)
             hit_tp1 = False
             hit_tp2 = False
+            tp1_idx = None
+            tp2_idx = None
             curr_sl = sl
             outcome_r = 0.0
             close_reason = ""
@@ -301,6 +303,7 @@ class UnifiedBacktestEngine:
                     # TP1 (+1.2R): Cobra 40% y mueve SL a Breakeven + Fee Buffer
                     if not hit_tp1 and bh >= p_tp1:
                         hit_tp1 = True
+                        tp1_idx = k
                         outcome_r += (1.2 * 0.40 * total_multiplier)
                         rem_pos -= 0.40
                         curr_sl = entry + (entry * 0.0008)
@@ -308,6 +311,7 @@ class UnifiedBacktestEngine:
                     # TP2 (+2.0R): Cobra 40% y sube SL a +1.0R en verde garantizado
                     if hit_tp1 and not hit_tp2 and bh >= p_tp2:
                         hit_tp2 = True
+                        tp2_idx = k
                         outcome_r += (2.0 * 0.40 * total_multiplier)
                         rem_pos -= 0.40
                         curr_sl = entry + (risk * 1.0)
@@ -338,6 +342,7 @@ class UnifiedBacktestEngine:
                     # TP1 (+1.2R): Cobra 40% y mueve SL a Breakeven + Fee Buffer
                     if not hit_tp1 and bl <= p_tp1:
                         hit_tp1 = True
+                        tp1_idx = k
                         outcome_r += (1.2 * 0.40 * total_multiplier)
                         rem_pos -= 0.40
                         curr_sl = entry - (entry * 0.0008)
@@ -345,6 +350,7 @@ class UnifiedBacktestEngine:
                     # TP2 (+2.0R): Cobra 40% y sube SL a +1.0R en verde garantizado
                     if hit_tp1 and not hit_tp2 and bl <= p_tp2:
                         hit_tp2 = True
+                        tp2_idx = k
                         outcome_r += (2.0 * 0.40 * total_multiplier)
                         rem_pos -= 0.40
                         curr_sl = entry - (risk * 1.0)
@@ -366,6 +372,9 @@ class UnifiedBacktestEngine:
                 "symbol": symbol,
                 "interval": interval,
                 "entry_time": str(df.iloc[fill_idx]["timestamp"]),
+                "exit_time": str(df.iloc[exit_idx]["timestamp"]),
+                "tp1_time": str(df.iloc[tp1_idx]["timestamp"]) if hit_tp1 and tp1_idx is not None else None,
+                "bars_held": exit_idx - fill_idx,
                 "direction": direction,
                 "entry": entry,
                 "sl": sl,
@@ -496,7 +505,239 @@ class UnifiedBacktestEngine:
         print(f"💾 Reporte Oficial Inmutable guardado en: {report_path}\n")
         return summary_payload
 
+    def run_chronological_portfolio_replay(
+        self,
+        max_concurrent_longs: int = 2,
+        max_heat_pct: float = 7.5,
+        strict_btc_macro: bool = True,
+        enable_compounding: bool = True,
+        dynamic_risk_pct: float = 0.025,
+        compounding_initial_usd: float = 1_000.0,
+    ) -> Dict[str, Any]:
+        """
+        [EVENT-DRIVEN TIMELINE REPLAY v46.0]
+        Simulador Cronológico Unificado de Cartera con Réplica 1-a-1 de Producción:
+        - Reloj Global Unificado cruzando todos los activos en el tiempo.
+        - Filtro Macro BTC dinámico en tiempo real (btc_aligned).
+        - Concurrencia de cartera y reciclaje dinámico de slots (SOP-30 & SOP-44).
+        - Modo Dual: R Base / Alpha-Tier (1% plano) e Interés Compuesto Dinámico (2.5% Bitunix).
+        - Embudo de telemetría de señales.
+        """
+        btc_map = self._load_btc_macro_map()
+        all_assets = MEGA_CAPS + HIGH_BETA_ALTS
+        all_results = []
+        seen = set()
+
+        print("=" * 88)
+        print("🏛️  SIMULADOR CRONOLÓGICO UNIFICADO DE CARTERA (EVENT-DRIVEN SSoT v46.0)")
+        print("=" * 88)
+        print(f"⚙️  Concurrencia Máxima Longs : {max_concurrent_longs} posiciones simultáneas (SOP-30)")
+        print(f"🛡️  Calor Máximo de Cartera   : {max_heat_pct}% (SOP-44 Directional Heat Guardrail)")
+        print(f"🧭  Filtro Macro BTC         : {'ACTIVO (btc_aligned dinámico)' if strict_btc_macro else 'DESACTIVADO'}")
+        print(f"🔄  Reciclaje de Slots       : ACTIVO (Liberación de riesgo al tocar TP1 @ Breakeven)")
+        print("=" * 88)
+
+        # 1. Extracción de setups brutos
+        for sym in all_assets:
+            if sym in seen:
+                continue
+            seen.add(sym)
+            t_list = self.run_single_asset(sym, interval="15m", btc_map=btc_map)
+            all_results.extend(t_list)
+
+        df_all = pd.DataFrame(all_results)
+        if df_all.empty:
+            print("⚠️ No se encontraron operaciones para los criterios seleccionados.")
+            return {}
+
+        df_all = df_all.sort_values("entry_time").reset_index(drop=True)
+        raw_signal_count = len(df_all)
+
+        # 2. Replay Cronológico con Máquina de Estados
+        active_risk_positions = []
+        executed_trades = []
+        rejected_macro_btc = 0
+        rejected_max_slots = 0
+        rejected_portfolio_heat = 0
+
+        for idx, tr in df_all.iterrows():
+            entry_dt = pd.to_datetime(tr["entry_time"])
+            exit_dt = pd.to_datetime(tr["exit_time"])
+            tp1_time = tr.get("tp1_time")
+            risk_freed_dt = pd.to_datetime(tp1_time) if tp1_time and str(tp1_time) != "None" else exit_dt
+
+            sym = tr["symbol"]
+            direction = tr["direction"]
+
+            # Veto Macro BTC en Vivo (btc_aligned)
+            if strict_btc_macro and sym != "BTCUSDT":
+                btc_trend = btc_map.get(entry_dt, "NEUTRAL")
+                aligned = (direction == "LONG" and btc_trend == "BULLISH") or (direction == "SHORT" and btc_trend == "BEARISH")
+                if not aligned:
+                    rejected_macro_btc += 1
+                    continue
+
+            # Limpiar posiciones que ya liberaron su riesgo antes de este timestamp
+            active_risk_positions = [p for p in active_risk_positions if p["risk_freed_time"] > entry_dt]
+
+            # Verificación de Concurrencia de Cartera (SOP-30)
+            same_dir_active = [p for p in active_risk_positions if p["direction"] == direction]
+            if direction == "LONG" and len(same_dir_active) >= max_concurrent_longs:
+                rejected_max_slots += 1
+                continue
+
+            # Verificación de Calor de Cartera (SOP-44)
+            current_heat = len(active_risk_positions) * (self.risk_pct * 100)
+            if current_heat + (self.risk_pct * 100) > max_heat_pct:
+                rejected_portfolio_heat += 1
+                continue
+
+            # Registrar posición activa en riesgo (libera slot al tocar TP1 @ Breakeven)
+            active_risk_positions.append({
+                "symbol": sym,
+                "direction": direction,
+                "entry_time": entry_dt,
+                "risk_freed_time": risk_freed_dt,
+                "exit_time": exit_dt
+            })
+            executed_trades.append(tr)
+
+        df_exec = pd.DataFrame(executed_trades).reset_index(drop=True)
+        executed_count = len(df_exec)
+
+        if df_exec.empty:
+            print("⚠️ Ninguna operación superó los filtros de concurrencia y macro.")
+            return {}
+
+        # 3. Métricas Modo 1: Institucional R Base & Alpha-Tier (Riesgo 1.0% Plano)
+        def get_trade_sizing(row):
+            s = row["symbol"]
+            et = pd.to_datetime(row["entry_time"])
+            h = et.hour
+            cs = float(row.get("confluence_score", 75.0))
+            return RiskManager.calculate_alpha_tier_sizing(s, confluence_score=cs, hour_utc=h)
+
+        df_exec["sizing_mult"] = df_exec.apply(get_trade_sizing, axis=1)
+
+        winners = df_exec[df_exec["outcome_r"] > 0]
+        losers = df_exec[df_exec["outcome_r"] < 0]
+        breakevens = df_exec[df_exec["outcome_r"] == 0]
+
+        win_rate = (len(winners) / executed_count) * 100
+        be_rate = (len(breakevens) / executed_count) * 100
+        total_r_base = df_exec["outcome_r"].sum()
+        total_r_alpha = (df_exec["outcome_r"] * df_exec["sizing_mult"]).sum()
+
+        gp_base = winners["outcome_r"].sum() if len(winners) > 0 else 0.0
+        gl_base = abs(losers["outcome_r"].sum()) if len(losers) > 0 else 1.0
+        pf_base = gp_base / gl_base if gl_base > 0 else 99.0
+
+        gp_alpha = (winners["outcome_r"] * winners["sizing_mult"]).sum() if len(winners) > 0 else 0.0
+        gl_alpha = abs((losers["outcome_r"] * losers["sizing_mult"]).sum()) if len(losers) > 0 else 1.0
+        pf_alpha = gp_alpha / gl_alpha if gl_alpha > 0 else 99.0
+
+        # Drawdowns Modo 1 ($100k capital base)
+        risk_usd_base = self.initial_balance * self.risk_pct
+        df_exec["cum_pnl_base"] = (df_exec["outcome_r"] * risk_usd_base).cumsum()
+        df_exec["equity_base"] = self.initial_balance + df_exec["cum_pnl_base"]
+        df_exec["peak_base"] = df_exec["equity_base"].cummax()
+        max_dd_base = abs(((df_exec["equity_base"] - df_exec["peak_base"]) / df_exec["peak_base"] * 100).min())
+
+        df_exec["cum_pnl_alpha"] = (df_exec["outcome_r"] * risk_usd_base * df_exec["sizing_mult"]).cumsum()
+        df_exec["equity_alpha"] = self.initial_balance + df_exec["cum_pnl_alpha"]
+        df_exec["peak_alpha"] = df_exec["equity_alpha"].cummax()
+        max_dd_alpha = abs(((df_exec["equity_alpha"] - df_exec["peak_alpha"]) / df_exec["peak_alpha"] * 100).min())
+
+        # 4. Métricas Modo 2: Crecimiento Cripto Bitunix (Interés Compuesto Automático SOP-39)
+        cap = compounding_initial_usd
+        peak_cap = compounding_initial_usd
+        max_comp_dd = 0.0
+        comp_equity_curve = [cap]
+
+        for _, r in df_exec.iterrows():
+            trade_risk = cap * dynamic_risk_pct
+            trade_pnl = r["outcome_r"] * trade_risk * r["sizing_mult"]
+            cap += trade_pnl
+            comp_equity_curve.append(cap)
+            if cap > peak_cap:
+                peak_cap = cap
+            dd = (peak_cap - cap) / peak_cap * 100.0
+            if dd > max_comp_dd:
+                max_comp_dd = dd
+
+        comp_roi_pct = ((cap - compounding_initial_usd) / compounding_initial_usd) * 100.0
+
+        # 5. Impresión de Resultados Institucionales
+        print("\n📊 1. EMBUDO DE SELECCIÓN Y FILTRADO INSTITUCIONAL:")
+        print("-" * 88)
+        print(f" • Señales Estructurales Brutas Detectadas : {raw_signal_count}")
+        print(f" • Vetadas por Filtro Macro BTC (btc_aligned): {rejected_macro_btc:>4} ({rejected_macro_btc/raw_signal_count*100:.1f}%)")
+        print(f" • Vetadas por Límite de Slots (SOP-30)     : {rejected_max_slots:>4} ({rejected_max_slots/raw_signal_count*100:.1f}%)")
+        print(f" • Vetadas por Calor de Cartera (SOP-44)   : {rejected_portfolio_heat:>4} ({rejected_portfolio_heat/raw_signal_count*100:.1f}%)")
+        print(f" • Operaciones Reales Ejecutadas            : {executed_count:>4} ({executed_count/raw_signal_count*100:.1f}%)")
+        print("=" * 88)
+
+        print("💎 2. RENDIMIENTO MODO AUDITORÍA (RIESGO PLANO 1.00% / PROP FIRM SSoT):")
+        print("-" * 88)
+        print(f" • Total Operaciones Auditadas  : {executed_count}")
+        print(f" • Win Rate Real (TP1 / TP2 / TP3): {win_rate:.1f}% ({len(winners)} Ganadoras / {len(losers)} Pérdidas)")
+        print(f" • Tasa de Cero Ganancia ($0)    : {be_rate:.1f}% ({len(breakevens)} Breakevens)")
+        print(f" • Profit Factor Base           : {pf_base:.2f}  |  🚀 Con Alpha-Tier Sizing: {pf_alpha:.2f}")
+        print(f" • Retorno Total Base en R      : {total_r_base:>+8.2f} R |  💎 Con Alpha-Tier Sizing: {total_r_alpha:>+8.2f} R")
+        print(f" • Drawdown Máximo Portafolio   : -{max_dd_base:.2f}% (Base)  |  🛡️ Con Alpha-Tier: -{max_dd_alpha:.2f}% (Blindaje FTMO)")
+        print(f" • Esperanza Matemática por Op  : {total_r_base/executed_count:>+7.3f} R / trade")
+        print("=" * 88)
+
+        print(f"🚀 3. RENDIMIENTO MODO CRECIMIENTO BITUNIX (INTERÉS COMPUESTO 2.50% SOP-39):")
+        print("-" * 88)
+        print(f" • Capital Inicial Simulado     : ${compounding_initial_usd:,.2f} USD")
+        print(f" • Capital Final Acumulado      : ${cap:,.2f} USD")
+        print(f" • Retorno Neto Compuesto (ROI) : +{comp_roi_pct:,.1f}% (x{cap/compounding_initial_usd:.1f} de multiplicación)")
+        print(f" • Drawdown Máximo Compuesto    : -{max_comp_dd:.2f}%")
+        print("=" * 88)
+
+        # Exportar reporte inmutable
+        reports_dir = os.path.join(os.path.dirname(__file__), "reports")
+        os.makedirs(reports_dir, exist_ok=True)
+        report_path = os.path.join(reports_dir, "chronological_backtest_report.json")
+
+        summary_payload = {
+            "audit_date": datetime.now().isoformat(),
+            "engine_version": "v46.0 EVENT-DRIVEN TIMELINE SSoT",
+            "telemetry_funnel": {
+                "raw_signals": raw_signal_count,
+                "rejected_macro_btc": rejected_macro_btc,
+                "rejected_max_slots": rejected_max_slots,
+                "rejected_portfolio_heat": rejected_portfolio_heat,
+                "executed_trades": executed_count
+            },
+            "institutional_mode": {
+                "total_trades": executed_count,
+                "win_rate": round(win_rate, 2),
+                "breakeven_rate": round(be_rate, 2),
+                "total_r_base": round(total_r_base, 2),
+                "total_r_alpha": round(total_r_alpha, 2),
+                "profit_factor_base": round(pf_base, 2),
+                "profit_factor_alpha": round(pf_alpha, 2),
+                "max_drawdown_base_pct": round(max_dd_base, 2),
+                "max_drawdown_alpha_pct": round(max_dd_alpha, 2)
+            },
+            "compounding_mode": {
+                "initial_usd": compounding_initial_usd,
+                "final_usd": round(cap, 2),
+                "roi_pct": round(comp_roi_pct, 2),
+                "max_drawdown_pct": round(max_comp_dd, 2)
+            },
+            "trades": df_exec.to_dict(orient="records")
+        }
+        with open(report_path, "w", encoding="utf-8") as f:
+            json.dump(summary_payload, f, indent=4, default=str)
+
+        print(f"💾 Reporte Cronológico Inmutable guardado en: {report_path}\n")
+        return summary_payload
+
 
 if __name__ == "__main__":
     engine = UnifiedBacktestEngine()
-    engine.run_adaptive_portfolio_audit()
+    engine.run_chronological_portfolio_replay()
+
