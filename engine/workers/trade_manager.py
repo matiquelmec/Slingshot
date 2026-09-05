@@ -37,6 +37,7 @@ class TradeManager:
     def __init__(self):
         self._stop_event = asyncio.Event()
         self._task: Optional[asyncio.Task] = None
+        self._last_active_positions: Dict[str, set] = {}
 
     def start(self):
         logger.info("[TRADE_MANAGER] Iniciando Trailing Stop Estructural v1.0...")
@@ -615,9 +616,32 @@ class TradeManager:
                 if not pending_orders:
                     continue
 
-                # SOP-22: Purga atÃ³mica de Ã³rdenes CLOSE huÃ©rfanas en esta cuenta
+                # SOP-22: Purga atómica de órdenes CLOSE huérfanas en esta cuenta
                 active_symbols = {p.get("symbol") for p in (await bitunix.get_pending_positions() or []) if p.get("symbol")}
                 await bitunix.purge_orphaned_close_orders(active_symbols=active_symbols)
+
+                # SOP-59: Sentinela de Intervención Manual de Cliente (Anti-Desincronización)
+                prev_active = self._last_active_positions.get(acc_id, set())
+                if prev_active:
+                    closed_symbols = prev_active - active_symbols
+                    for csym in closed_symbols:
+                        try:
+                            # Auditar si la última orden de cierre fue manual (clientId == None)
+                            hist_res = await bitunix._request("GET", "/api/v1/futures/trade/get_history_orders", params={"symbol": csym, "pageSize": 3})
+                            hist_orders = hist_res.get("data", {}).get("orderList", []) if isinstance(hist_res.get("data"), dict) else []
+                            is_manual = any(o.get("clientId") is None and o.get("status") == "FILLED" for o in hist_orders[:2])
+                            if is_manual:
+                                logger.info(f"🛑 [SOP-59 SENTINEL] [{bitunix.account_label}] Cierre manual detectado en {csym}. Purgando órdenes pendientes asociadas...")
+                                purged_cnt = await bitunix.cancel_all_orders_for_symbol(csym)
+                                from engine.router.telegram_dispatcher import telegram_dispatcher
+                                asyncio.create_task(telegram_dispatcher.send_system_alert(
+                                    title=f"CIERRE MANUAL DETECTADO ({csym})",
+                                    details=f"Cuenta: {bitunix.account_label}\nSe detectó cierre manual desde la interfaz.\nÓrdenes residuales canceladas: {purged_cnt}\nMargen blindado.",
+                                    severity="INFO"
+                                ))
+                        except Exception as manual_err:
+                            logger.debug(f"[SOP-59 SENTINEL] Error auditando cierre manual para {csym}: {manual_err}")
+                self._last_active_positions[acc_id] = active_symbols
 
                 open_limits = [
                     o for o in pending_orders 

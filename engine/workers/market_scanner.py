@@ -312,12 +312,22 @@ class MarketScanner:
                         if "ema200" not in btc_df.columns:
                             btc_df["ema200"] = btc_df["close"].ewm(span=200, adjust=False).mean()
                         btc_price = float(btc_df["close"].iloc[-1])
-                        btc_ema200 = float(btc_df["ema200"].iloc[-1])
                         btc_aligned = (direction == "LONG" and btc_price > btc_ema200) or (direction == "SHORT" and btc_price < btc_ema200)
+
+                    # Inferencia Neural Meta-Labeling (XGBoost / ONNX)
+                    ml_projection = None
+                    try:
+                        if not hasattr(self, "_ml_engine"):
+                            from engine.ml.inference import SlingshotML
+                            self._ml_engine = SlingshotML()
+                        ml_projection = self._ml_engine.predict_live(df)
+                    except Exception as ml_err:
+                        logger.debug(f"[MARKET_SCANNER] Inferencia ML no disponible para {symbol}: {ml_err}")
 
                     conf_res = confluence_manager.evaluate_signal(
                         df,
                         virtual_sig,
+                        ml_projection=ml_projection,
                         smc_map=result.get("smc", {}),
                         fib_data=fib_data,
                         session_data=session_data,

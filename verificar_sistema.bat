@@ -9,7 +9,7 @@ cd /d C:\Slingshot
 set PYTHONPATH=C:\Slingshot
 
 echo.
-echo [1/4] Ejecutando bateria completa de 34 tests institucionales...
+echo [1/4] Ejecutando bateria completa de 38 tests institucionales...
 C:\Slingshot\.venv\Scripts\pytest ^
     engine/tests/test_async_feed.py ^
     engine/tests/test_institutional_security_and_hygiene.py ^
@@ -20,12 +20,13 @@ C:\Slingshot\.venv\Scripts\pytest ^
     engine/tests/test_multi_account_stress_and_isolation_suite.py ^
     engine/tests/test_maintenance_suite.py ^
     engine/tests/test_tactical_and_telemetry_suite.py ^
-    engine/tests/test_institutional_vulnerabilities_and_risk_fixes.py -q
+    engine/tests/test_institutional_vulnerabilities_and_risk_fixes.py ^
+    engine/tests/test_quantum_ai_and_sentinel_suite.py -q
 if %ERRORLEVEL% NEQ 0 (
     echo [ERROR] Fallaron los tests unitarios. Despliegue abortado.
     exit /b 1
 )
-echo [OK] 34/34 tests aprobados al 100%%.
+echo [OK] 38/38 tests aprobados al 100%%.
 
 echo.
 echo [2/4] Verificando higiene de raiz y seguridad (.env)...

@@ -647,6 +647,43 @@ class ConfluenceManager:
                 total_weight += 5
                 checklist.append({"factor": "Risk Appetite", "status": "FAVORABLE", "detail": f"{risk_appetite} (+5 pts)"})
 
+        # 🚀 11.55. MACHINE LEARNING META-LABELING BOOST (v49.0 APEX QUANTUM)
+        if ml_projection and isinstance(ml_projection, dict) and ml_projection.get('status') != 'error':
+            # Soporta tanto formato SlingshotML (probability 0-100, direction ALCISTA/BAJISTA) como normalizado (confidence 0-1)
+            raw_prob = ml_projection.get('probability', ml_projection.get('confidence', 0.0))
+            ml_conf = (float(raw_prob) / 100.0) if float(raw_prob) > 1.0 else float(raw_prob)
+            
+            ml_dir = str(ml_projection.get('direction', '')).upper()
+            ml_pred = ml_projection.get('prediction', None)
+            
+            is_bullish_ml = (ml_dir in ('ALCISTA', 'BUY', 'LONG')) or (ml_pred == 1)
+            is_bearish_ml = (ml_dir in ('BAJISTA', 'SELL', 'SHORT')) or (ml_pred == -1 or (ml_pred == 0 and ml_conf > 0.5))
+            
+            ml_weight = 10
+            total_weight += ml_weight
+            is_ml_aligned = (is_long and is_bullish_ml) or (not is_long and is_bearish_ml)
+            
+            if is_ml_aligned and ml_conf >= 0.60:
+                score += ml_weight
+                checklist.append({
+                    "factor": "ML Meta-Labeling",
+                    "status": "CONFIRMADO",
+                    "detail": f"ML XGBoost Confianza ({ml_conf*100:.1f}%) alineado (+{ml_weight}pts)"
+                })
+            elif not is_ml_aligned and ml_conf >= 0.70:
+                score -= 5
+                checklist.append({
+                    "factor": "ML Meta-Labeling",
+                    "status": "DIVERGENTE",
+                    "detail": f"ML XGBoost Divergente con alta confianza ({ml_conf*100:.1f}%) (-5pts)"
+                })
+            else:
+                checklist.append({
+                    "factor": "ML Meta-Labeling",
+                    "status": "NEUTRAL",
+                    "detail": f"ML XGBoost Confianza moderada ({ml_conf*100:.1f}%)"
+                })
+
         # 🚀 11.6. GOLDEN RULES QUANT (v11.2 APEX GOLDEN RULES)
         # Rule 1: Bono por Activos Majores de Liquidez Profunda (BTC, ETH, SOL)
         asset_name = str(signal.get('asset', signal.get('symbol', ''))).upper()
