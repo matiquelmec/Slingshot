@@ -461,9 +461,16 @@ class NexusNode:
                         target_ex = executors.get(pos_acc) or self.executor
                         sig = pos_data.get("signal", {})
                         symbol = sig.get("asset", sig.get("symbol", key.split("_")[-1])).upper()
-                        entry_p = float(sig.get("entry_price") or sig.get("price", 0))
                         pos_id = str(pos_data.get("execution", {}).get("main_order_id", ""))
+                        # SOP-45: Extraer el positionId real del exchange si existe en el mapa en vivo
+                        acc_active_map = all_account_positions.get(pos_acc, {})
+                        live_pos = acc_active_map.get(symbol)
+                        if live_pos and live_pos.get("positionId"):
+                            pos_id = str(live_pos["positionId"])
+                            pos_data.setdefault("execution", {})["main_order_id"] = pos_id
                         pos_qty = float(pos_data.get("execution", {}).get("amount", 0))
+                        if live_pos and float(live_pos.get("qty", 0)) > 0:
+                            pos_qty = float(live_pos["qty"])
                         sl_p = float(sig.get("stop_loss", 0))
                         side = sig.get("signal_type", sig.get("type", "LONG"))
 

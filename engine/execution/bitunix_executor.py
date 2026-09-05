@@ -390,6 +390,17 @@ class BitunixExecutor:
                         f2 = round(qty_float * 0.20, qty_decimals)
                         f3 = round(qty_float - f1 - f2, qty_decimals)
 
+                    # Obtener el positionId real recién creado en Bitunix para asociar las órdenes de cierre
+                    real_position_id = None
+                    try:
+                        open_p = await self.get_pending_positions()
+                        for pos_item in (open_p or []):
+                            if pos_item.get("symbol") == symbol:
+                                real_position_id = pos_item.get("positionId")
+                                break
+                    except Exception as pos_chk_err:
+                        logger.debug(f"[BITUNIX] Error consultando positionId para TP: {pos_chk_err}")
+
                     tps = [(tp1, f1, "TP1"), (tp2, f2, "TP2"), (tp3, f3, "TP3")]
                     for tp_price, tp_qty, label in tps:
                         if tp_qty <= 0:
@@ -405,12 +416,12 @@ class BitunixExecutor:
                             "orderType": "LIMIT",
                             "effect": "GTC"
                         }
-                        # Intentar primero orden límite de cierre directa
+                        if real_position_id:
+                            tp_payload["positionId"] = str(real_position_id)
+
                         tp_res = await self._request("POST", "/api/v1/futures/trade/place_order", json_body=tp_payload)
-                        
-                        # Fallback resiliente: si Bitunix exige positionId o falla, reintentar con positionId
-                        if tp_res.get("code") != 0 and order_id:
-                            tp_payload["positionId"] = str(order_id)
+                        if tp_res.get("code") != 0 and "positionId" in tp_payload:
+                            del tp_payload["positionId"]
                             tp_res = await self._request("POST", "/api/v1/futures/trade/place_order", json_body=tp_payload)
 
                         if tp_res.get("code") == 0:
@@ -423,7 +434,7 @@ class BitunixExecutor:
                 return {
                     "status": "success",
                     "exchange": "bitunix_futures",
-                    "main_order_id": order_id,
+                    "main_order_id": real_position_id or order_id,
                     "protection_orders": protection_ids,
                     "amount": qty_float,
                     "entry_price": entry_price,
