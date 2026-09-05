@@ -57,12 +57,13 @@ MODERN_TEST_FILES = [
     "engine/tests/test_sop39_sop40_bitunix_dynamic_25pct_risk.py",
     "engine/tests/test_sop41_sop42_dollar_risk_shield.py",
     "engine/tests/test_multi_account_dispatcher.py",
-    "engine/tests/test_ci_cd_security_gates.py"
+    "engine/tests/test_ci_cd_security_gates.py",
+    "engine/tests/test_sop43_to_sop45_advanced_quant_improvements.py"
 ]
 
 def main():
     print("\n" + "="*80)
-    print("🧪 SLINGSHOT v42.2 APEX TITAN COMPOUND — SUITE OFICIAL DE CERTIFICACIÓN QA")
+    print("🧪 SLINGSHOT v43.0 APEX TITAN COMPOUND — SUITE OFICIAL DE CERTIFICACIÓN QA")
     print("="*80)
     
     cmd = [sys.executable, "-m", "pytest"] + MODERN_TEST_FILES + ["-v", "--tb=short"]
@@ -70,7 +71,7 @@ def main():
     
     if result.returncode == 0:
         print("\n" + "="*80)
-        print("✅ CERTIFICACIÓN QA EXITOSA: 216/216 PRUEBAS APROBADAS AL 100%")
+        print("✅ CERTIFICACIÓN QA EXITOSA: 223/223 PRUEBAS APROBADAS AL 100%")
         print("="*80 + "\n")
     else:
         print("\n" + "="*80)

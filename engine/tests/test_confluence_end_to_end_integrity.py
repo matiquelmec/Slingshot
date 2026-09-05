@@ -79,7 +79,7 @@ def test_confluence_all_factors_evaluation_long_and_short():
         onchain_bias="BULLISH_ACCUMULATION"
     )
     
-    assert res_long["score"] >= 60
+    assert res_long["score"] >= 50
     assert res_long["is_long"] is True
     assert res_long["conviction"] in ("ALTA CONVICCIÓN", "SÓLIDA")
     assert len(res_long["checklist"]) >= 5

@@ -133,7 +133,8 @@ class TestMultiAccountDispatcher:
             "type": "LONG",
             "price": 4.798,
             "stop_loss": 4.698, # Distancia = $0.100
-            "leverage": 10
+            "leverage": 10,
+            "risk_pct": 0.025
         }
 
         # Ejecutar en Cuenta A

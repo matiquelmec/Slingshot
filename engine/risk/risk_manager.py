@@ -845,3 +845,90 @@ class RiskManager:
             "effective_leverage": round(final_notional / account_balance, 2) if account_balance > 0 else 0.0,
             "reason": f"SOP-41 Aprobado: Qty {safe_qty} con riesgo max ${projected_loss:.2f} USDT ({projected_loss/account_balance*100:.2f}%)"
         }
+
+    # ── PROTOCOLO SOP-43: ASYMMETRIC QUARTER-KELLY ENGINE v43.0 ──────────────
+    @classmethod
+    def calculate_quarter_kelly_risk(
+        cls,
+        base_risk_pct: float,
+        symbol: str,
+        confluence_score: float = 70.0,
+        hour_utc: Optional[int] = None
+    ) -> float:
+        """
+        [SOP-43 ASYMMETRIC QUARTER-KELLY SCALING]
+        Modula el riesgo base (ej. 2.50%) dentro de un rango seguro de [1.25%, 3.25%].
+        - Tier S / Confluencia >= 85% + NY Open (13-17 UTC): Acelera hasta ~3.25%.
+        - Tier Base / Confluencia 70-84%: Mantiene riesgo base (~2.50%).
+        - Sesión Asiática o Confluencia < 68%: Reduce para preservar capital (~1.25% - 1.50%).
+        """
+        mult = cls.calculate_alpha_tier_sizing(symbol, confluence_score, hour_utc)
+        adjusted = base_risk_pct * mult
+        # Hard limits institucionales: mínimo 1.25%, máximo 3.25%
+        return round(min(0.0325, max(0.0125, adjusted)), 4)
+
+    # ── PROTOCOLO SOP-44: DIRECTIONAL PORTFOLIO HEAT GUARD v43.0 ─────────────
+    @staticmethod
+    def check_portfolio_heat(
+        active_positions: Dict[str, Any],
+        new_direction: str,
+        new_trade_risk_usd: float,
+        account_balance: float,
+        max_heat_pct: float = 0.075
+    ) -> Tuple[bool, str, float]:
+        """
+        [SOP-44 PORTFOLIO HEAT CAP @ 7.5%]
+        Calcula la suma del riesgo en dólares de todas las posiciones desprotegidas en la misma dirección.
+        Las posiciones en Breakeven (Fast BE o SL >= Entry) tienen riesgo = $0.00.
+        Si (calor_actual + nuevo_riesgo) > account_balance * max_heat_pct, rechaza la entrada.
+        Retorna: (aprobado, razon, heat_actual_usd)
+        """
+        if account_balance <= 0:
+            return False, "Saldo de cuenta <= 0", 0.0
+
+        is_new_long = "LONG" in str(new_direction).upper() or "BUY" in str(new_direction).upper()
+        current_heat_usd = 0.0
+
+        for sym, pos in active_positions.items():
+            sig = pos.get("signal", {})
+            sig_side = str(sig.get("type", sig.get("signal_type", "LONG"))).upper()
+            is_pos_long = "LONG" in sig_side or "BUY" in sig_side
+
+            # Solo medimos correlación direccional en el mismo sentido
+            if is_pos_long != is_new_long:
+                continue
+
+            # Revisar si el Stop Loss ya está en Breakeven (riesgo cero)
+            be_active = pos.get("smart_trailing", {}).get("be_active", False)
+            entry = float(sig.get("price", 0))
+            sl = float(sig.get("stop_loss", 0))
+            sl_at_be = (is_pos_long and entry > 0 and sl >= entry * 0.999) or (not is_pos_long and entry > 0 and sl > 0 and sl <= entry * 1.001)
+
+            if be_active or sl_at_be:
+                continue # Riesgo $0.00 (Slot liberado)
+
+            # Si no está en BE, sumamos el riesgo en dólares proyectado
+            pos_risk = float(pos.get("risk_usd") or (pos.get("position_size_usdt", 0) * 0.025))
+            if pos_risk <= 0 and entry > 0 and sl > 0:
+                qty = float(pos.get("exact_qty", 0))
+                if qty > 0:
+                    pos_risk = qty * abs(entry - sl)
+            current_heat_usd += pos_risk
+
+        projected_heat = current_heat_usd + new_trade_risk_usd
+        max_allowed_heat = account_balance * max_heat_pct
+
+        if projected_heat > max_allowed_heat * 1.001:
+            side_str = "LONGS" if is_new_long else "SHORTS"
+            return (
+                False,
+                f"🛑 [SOP-44 HEAT VETO] Exposición direccional en {side_str} excedida: "
+                f"${projected_heat:.2f} > límite de ${max_allowed_heat:.2f} USDT ({max_heat_pct*100:.1f}%).",
+                current_heat_usd
+            )
+
+        return (
+            True,
+            f"✅ [SOP-44 HEAT OK] Calor direccional proyectado: ${projected_heat:.2f} / ${max_allowed_heat:.2f} USDT.",
+            current_heat_usd
+        )

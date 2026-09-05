@@ -649,9 +649,24 @@ class NexusNode:
 
         if sl_val > 0 and entry_val > 0:
             qty_decimals, _ = await executor.get_symbol_precision(asset)
+            
+            # SOP-43: Quarter-Kelly Asymmetric Risk Scaling (unless explicitly overridden in signal/account)
+            base_acc_risk = getattr(account, "risk_pct", 0.025)
+            if "risk_pct" in signal and signal.get("risk_pct") is not None:
+                dyn_risk_pct = float(signal["risk_pct"])
+            else:
+                confluence_score = float(signal.get("confluence_score", 70.0))
+                hour_now = datetime.now(timezone.utc).hour
+                dyn_risk_pct = RiskManager.calculate_quarter_kelly_risk(
+                    base_risk_pct=base_acc_risk,
+                    symbol=asset,
+                    confluence_score=confluence_score,
+                    hour_utc=hour_now
+                )
+            
             risk_calc = RiskManager.calculate_dollar_risk_position(
                 account_balance=avail_margin,
-                risk_pct=getattr(account, "risk_pct", 0.025),
+                risk_pct=dyn_risk_pct,
                 entry_price=entry_val,
                 sl_price=sl_val,
                 leverage=safe_lev,
@@ -662,12 +677,26 @@ class NexusNode:
                 logger.warning(f"🛑 [NEXUS SOP-41] [{account.label}] Orden rechazada para {asset}: {risk_calc['reason']}")
                 return None
 
+            # SOP-44: Portfolio Heat Check (Directional Heat Cap @ 7.5%)
+            pos_risk_usd = risk_calc["projected_loss"]
+            sig_side = str(signal.get("type", signal.get("signal_type", "LONG"))).upper()
+            is_heat_ok, heat_msg, _ = RiskManager.check_portfolio_heat(
+                active_positions=self._active_positions,
+                new_direction=sig_side,
+                new_trade_risk_usd=pos_risk_usd,
+                account_balance=avail_margin,
+                max_heat_pct=0.075
+            )
+            if not is_heat_ok:
+                logger.warning(f"🛑 [NEXUS SOP-44] [{account.label}] {heat_msg}")
+                return None
+
             req_margin = risk_calc["required_margin"]
             acc_signal["position_size"] = req_margin
             acc_signal["position_size_usdt"] = req_margin
             acc_signal["exact_qty"] = risk_calc["qty"]
             acc_signal["leverage"] = safe_lev
-            logger.info(f"💎 [NEXUS SOP-41] [{account.label}] {asset} -> Qty: {risk_calc['qty']} | Margen: ${req_margin:.2f} USDT | Riesgo Max: ${risk_calc['projected_loss']:.2f} USDT")
+            logger.info(f"💎 [NEXUS SOP-41/43/44] [{account.label}] {asset} -> Qty: {risk_calc['qty']} | Margen: ${req_margin:.2f} USDT | Riesgo Dinámico: {dyn_risk_pct*100:.2f}% (${risk_calc['projected_loss']:.2f} USDT)")
         else:
             req_margin = self.DEFAULT_MARGIN_USDT
             acc_signal["position_size"] = req_margin

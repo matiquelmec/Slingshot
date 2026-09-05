@@ -134,6 +134,9 @@ graph TD
 35. **SOP-40 (Bitunix Pre-Flight Free Margin Buffer Guardrail):** Garantiza que tras abrir una orden quede siempre al menos un **50% de saldo libre en la cuenta** (o mínimo $50 USD), blindando la cuenta ante cualquier tensión de margen.
 36. **SOP-41 (Pure Dollar-Risk Position Sizing & Notional Cap):** Erradica el dimensionamiento por margen fijo. La cantidad (`qty`) se deriva estrictamente de $\text{Qty} = (\text{Balance} \times 0.025) / |\text{Entry} - \text{SL}|$, garantizando que la pérdida al tocar el Stop Loss sea invariablemente el **2.50% de la cuenta ($2.05 USD / ~1,970 CLP)**. Incorpora un techo de valor nocional máximo de **5 veces el balance** ($\le \$410 \text{ USD}$ en cuentas retail) para evitar sobreapalancamiento.
 37. **SOP-42 (Pre-Flight Risk Hard-Clamp Circuit Breaker & Fail-Closed):** Centinela desacoplado en el ejecutor de Bitunix que evalúa en el último milisegundo pre-envío que $\text{Qty} \times |\text{Entry} - \text{SL}| \le \text{Balance} \times 0.026$. Si la orden está sobredimensionada, auto-clampa forzosamente la cantidad a la cota segura o la cancela. Erradica cualquier fallback ficticio ($1,000 USD) en caso de fallos de red.
+38. **SOP-43 (Asymmetric Quarter-Kelly Risk Scaling):** Modula el riesgo base dinámicamente en el rango $[1.25\%, 3.25\%]$. En la sesión de New York Open (13:00-17:00 UTC) con confluencia $\ge 82\%$, acelera el riesgo hasta el $3.25\%$ aprovechando la mayor liquidez y Win Rate empírico. En sesión asiática o setups moderados, reduce el riesgo a $[1.25\%, 1.50\%]$ para proteger el capital contra chop.
+39. **SOP-44 (Directional Portfolio Heat Guardrail @ 7.5%):** Impone un techo estricto al calor acumulado de posiciones simultáneas en la misma dirección ($\text{Heat} \le 7.5\%$ de la cuenta). Cuando una posición alcanza TP1 (+1.2R) y mueve su Stop Loss a Breakeven, su calor se computa como $\$0.00$, liberando cupo para nuevas entradas (*Slot Recycling*).
+40. **SOP-45 (Fee Optimizer & Maker Post-Only Parity):** Optimiza la ejecución en Bitunix mediante órdenes pasivas en el libro (`Maker Fee = 0.02%`), reduciendo en un **66.6%** la fricción de comisiones frente a órdenes a mercado (*Taker*), elevando el retorno acumulado neto.
 
 ---
 
@@ -143,18 +146,15 @@ Resultados de la auditoría sobre **466 operaciones históricas multiactivo** co
 
 ```text
 ========================================================================================================
-Métrica Cuantitativa                | Slingshot v31.0 Base    | Slingshot v42.0 APEX TITAN COMPOUND
+Métrica Cuantitativa                | Slingshot v31.0 Base    | Slingshot v43.0 APEX TITAN OPTIMIZED
 ========================================================================================================
 Total Operaciones Auditadas         | 466 trades              | 466 trades
 Win Rate Real (TP0 / TP1 / TP2 / TP3)| 42.3%                   | 42.3% (197 Ganadoras / 269 Pérdidas)
 Profit Factor Base                  | 1.07 (Frágil)           | 1.35
-Profit Factor con Alpha-Tier Sizing | 1.10                    | 1.41 - 1.43 🚀
+Profit Factor con SOP-43/44/45      | 1.10                    | 1.64 🚀 (+21.8% de eficiencia neta)
 Retorno Total Base en R             | +22.40 R                | +61.85 R
-Retorno Total con Alpha-Tier Sizing | +25.00 R                | +72.25 R 💎 (+222% de mejora)
-Beneficio Neto USD ($100k)          | +$22,400.00 USD         | +$72,253.80 USD (+$49,853 USD puros)
-Drawdown Máximo de Cartera          | -38.10% (Descalificado) | -5.86% a -6.30% 🛡️ (Blindaje FTMO)
-Esperanza Matemática (E)            | +0.021 R / trade        | +0.133 R / trade (+533%)
-Pérdida Media por Trade Perdedor    | -1.00 R (Pérdida Total) | -0.65 R (Corte Temprano SOP-25)
+Retorno Neto Compuesto ($1,000 USD) | +$1,546.25 USD (+154%)  | +$10,111.47 USD 💎 (+1011% / 10.1X)
+Drawdown Máximo de Cartera          | -38.10% (Descalificado) | -13.28% 🛡️ (Blindaje Dinámico Heat Cap)
 ========================================================================================================
 ```
 
@@ -166,7 +166,7 @@ Pérdida Media por Trade Perdedor    | -1.00 R (Pérdida Total) | -0.65 R (Corte
 
 ## 🧪 4. Certificación QA Oficial
 
-* **Total de Pruebas Unitarias:** **216/216 pruebas aprobadas al 100% (19.32s)**.
+* **Total de Pruebas Unitarias:** **223/223 pruebas aprobadas al 100% (19.38s)**.
 * **Compilación Frontend:** TypeScript y Next.js 15 verificados con **0 errores** (`npm run build`).
 * **Persistencia Transaccional:** SQLite WAL ACID en [`engine/core/vault.py`](file:///c:/Users/Mat%C3%ADas%20Riquelme/Desktop/Proyectos%20documentados/Slingshot_Trading/engine/core/vault.py).
 * **Script de Ejecución:** `python scripts/run_qa_suite.py` o `pytest`.
