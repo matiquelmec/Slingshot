@@ -115,3 +115,24 @@ async def test_place_limit_dedup_guard_exchange(mock_nexus):
 
     assert res is None
     mock_executor.place_limit_signal.assert_not_called()
+
+@pytest.mark.asyncio
+async def test_sync_loop_protects_paused_account_positions(mock_nexus):
+    ex_sec = AsyncMock()
+    ex_sec.account_label = 'Cliente 2'
+    ex_sec.get_pending_positions.return_value = [{
+        'symbol': 'ETHUSDT',
+        'qty': '0.382',
+        'avgOpenPrice': '2456.63',
+        'side': 'BUY',
+        'leverage': 20,
+        'margin': 46.92,
+        'positionId': '552934383104417917'
+    }]
+    mock_nexus.account_manager.get_all_executors.return_value = {'cliente_2': ex_sec}
+    
+    executors = mock_nexus.account_manager.get_all_executors(enabled_only=False)
+    assert 'cliente_2' in executors
+    pos = await executors['cliente_2'].get_pending_positions()
+    assert len(pos) == 1
+    assert pos[0]['symbol'] == 'ETHUSDT'
