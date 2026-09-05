@@ -73,8 +73,38 @@ def main():
         default=1000.0,
         help="Capital inicial para simulación de interés compuesto al 2.5% Bitunix (default: $1,000 USD)"
     )
+    parser.add_argument(
+        "--enable-alpha-cycle",
+        action="store_true",
+        help="Activa la modulación de riesgo por días de la semana (SOP-46: Martes/Miércoles 1.20x, Jueves/Viernes 0.80x)"
+    )
+    parser.add_argument(
+        "--enable-trinity-boost",
+        action="store_true",
+        help="Activa el multiplicador Kelly 1.20x de convicción en la Trinidad del Alfa: BNB, SOL, FET (SOP-47)"
+    )
+    parser.add_argument(
+        "--enable-elastic-runner",
+        action="store_true",
+        help="Activa el Runner elástico dinámico a 5.0R con KER >= 0.50 y Ratchet Lock (SOP-48)"
+    )
+    parser.add_argument(
+        "--enable-golden-hours",
+        action="store_true",
+        help="Activa el multiplicador 1.15x en las ventanas horarias 09:00 y 11:00 UTC (SOP-49)"
+    )
+    parser.add_argument(
+        "--all-advanced",
+        action="store_true",
+        help="Activa simultáneamente todas las innovaciones cuantitativas avanzadas (SOP-46 a SOP-49)"
+    )
 
     args = parser.parse_args()
+
+    alpha_cycle = args.enable_alpha_cycle or args.all_advanced
+    trinity_boost = args.enable_trinity_boost or args.all_advanced
+    elastic_runner = args.enable_elastic_runner or args.all_advanced
+    golden_hours = args.enable_golden_hours or args.all_advanced
 
     engine = UnifiedBacktestEngine(min_confluence_score=args.min_score)
 
@@ -83,7 +113,11 @@ def main():
             print("\n🚀 Ejecutando Auditoría Oficial Cronológica Unificada (Event-Driven SSoT)...")
             summary = engine.run_chronological_portfolio_replay(
                 max_concurrent_longs=args.max_slots,
-                compounding_initial_usd=args.compounding_usd
+                compounding_initial_usd=args.compounding_usd,
+                enable_alpha_cycle=alpha_cycle,
+                enable_trinity_boost=trinity_boost,
+                enable_elastic_runner=elastic_runner,
+                enable_golden_hours=golden_hours
             )
         else:
             print("\n🚀 Ejecutando Auditoría Oficial de Cartera Aislada por Activo (Legacy SSoT)...")
@@ -99,7 +133,7 @@ def main():
     
     btc_map = engine._load_btc_macro_map() if hasattr(engine, '_load_btc_macro_map') else {}
     
-    trades = engine.run_single_asset(sym, interval=args.timeframe, btc_map=btc_map)
+    trades = engine.run_single_asset(sym, interval=args.timeframe, btc_map=btc_map, enable_elastic_runner=elastic_runner)
 
     if not trades:
         print(f"❌ No se generaron operaciones para {sym} en {args.timeframe}.")

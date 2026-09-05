@@ -117,7 +117,13 @@ class UnifiedBacktestEngine:
 
         return True
 
-    def run_single_asset(self, symbol: str, interval: str = "15m", btc_map: dict = None) -> List[Dict[str, Any]]:
+    def run_single_asset(
+        self,
+        symbol: str,
+        interval: str = "15m",
+        btc_map: dict = None,
+        enable_elastic_runner: bool = False
+    ) -> List[Dict[str, Any]]:
         """
         Ejecuta la simulación cuantitativa institucional v31.0.
         """
@@ -227,21 +233,28 @@ class UnifiedBacktestEngine:
             if not is_vwap_ok:
                 continue
 
-            # 2. Entrada Límite en Descuento OTE / FVG (SOP-26 Grid 40/40/20)
+            # 2. Entrada Límite en Descuento OTE / FVG (SOP-26 Grid 40/40/20 & SOP-48 Elastic Runner)
+            ker_val = float(row.get("ker", 0.0))
+            is_elastic = False
+            target_tp3_r = 3.5
+            if enable_elastic_runner and ker_val >= 0.50:
+                is_elastic = True
+                target_tp3_r = 5.0
+
             if direction == "LONG":
                 entry = c - (atr * 0.35)
                 sl = entry - (atr * 0.85)
                 risk = entry - sl
                 p_tp1 = entry + (risk * 1.2)   # TP1 (+1.2R, 40% + Fast BE)
                 p_tp2 = entry + (risk * 2.0)   # TP2 (+2.0R, 40% + Bloqueo +1.0R en verde)
-                p_tp3 = entry + (risk * 3.5)   # TP3 Runner (+3.5R, 20%)
+                p_tp3 = entry + (risk * target_tp3_r)   # TP3 Runner (+3.5R o +5.0R)
             else:
                 entry = c + (atr * 0.35)
                 sl = entry + (atr * 0.85)
                 risk = sl - entry
                 p_tp1 = entry - (risk * 1.2)
                 p_tp2 = entry - (risk * 2.0)
-                p_tp3 = entry - (risk * 3.5)
+                p_tp3 = entry - (risk * target_tp3_r)
 
             if risk <= 0 or (risk / entry) > 0.05:
                 continue
@@ -263,7 +276,7 @@ class UnifiedBacktestEngine:
             if not filled:
                 continue
 
-            # 3. Simulación Walk-Forward con Modelo Cuántico v37.0 (SOP-25 & SOP-26)
+            # 3. Simulación Walk-Forward con Modelo Cuántico v37.0 (SOP-25 & SOP-26 & SOP-48)
             hit_tp1 = False
             hit_tp2 = False
             tp1_idx = None
@@ -291,13 +304,18 @@ class UnifiedBacktestEngine:
                         outcome_r -= (0.65 * rem_pos * total_multiplier)
                         break
 
-                    # Stop Loss Normal
+                    # Stop Loss Normal o Salida Protegida
                     if bl <= curr_sl:
                         if curr_sl == sl:
                             close_reason = "STOP_LOSS"
                             outcome_r -= (1.0 * rem_pos * total_multiplier)
                         else:
                             close_reason = "PROTECTED_EXIT"
+                            if hit_tp2:
+                                # Capturar la ganancia bloqueada en verde del runner (ej: +1.0R o +2.5R Ratchet)
+                                lock_r = (curr_sl - entry) / risk
+                                if lock_r > 0:
+                                    outcome_r += (lock_r * rem_pos * total_multiplier)
                         break
 
                     # TP1 (+1.2R): Cobra 40% y mueve SL a Breakeven + Fee Buffer
@@ -316,9 +334,16 @@ class UnifiedBacktestEngine:
                         rem_pos -= 0.40
                         curr_sl = entry + (risk * 1.0)
 
-                    # TP3 (+3.5R): Cierra el 20% Runner final
+                    # SOP-48: Dynamic Elastic Ratchet Lock (@ +3.5R -> Stop a +2.5R)
+                    if hit_tp2 and is_elastic:
+                        if bh >= (entry + risk * 3.5):
+                            ratchet_sl = entry + (risk * 2.5)
+                            if ratchet_sl > curr_sl:
+                                curr_sl = ratchet_sl
+
+                    # TP3 (+3.5R o +5.0R): Cierra el 20% Runner final
                     if hit_tp2 and bh >= p_tp3:
-                        outcome_r += (3.5 * rem_pos * total_multiplier)
+                        outcome_r += (target_tp3_r * rem_pos * total_multiplier)
                         rem_pos = 0.0
                         close_reason = "TP3_FULL_TARGET"
                         break
@@ -337,6 +362,10 @@ class UnifiedBacktestEngine:
                             outcome_r -= (1.0 * rem_pos * total_multiplier)
                         else:
                             close_reason = "PROTECTED_EXIT"
+                            if hit_tp2:
+                                lock_r = (entry - curr_sl) / risk
+                                if lock_r > 0:
+                                    outcome_r += (lock_r * rem_pos * total_multiplier)
                         break
 
                     # TP1 (+1.2R): Cobra 40% y mueve SL a Breakeven + Fee Buffer
@@ -355,9 +384,16 @@ class UnifiedBacktestEngine:
                         rem_pos -= 0.40
                         curr_sl = entry - (risk * 1.0)
 
-                    # TP3 (+3.5R): Cierra el 20% Runner final
+                    # SOP-48: Dynamic Elastic Ratchet Lock (@ -3.5R -> Stop a -2.5R)
+                    if hit_tp2 and is_elastic:
+                        if bl <= (entry - risk * 3.5):
+                            ratchet_sl = entry - (risk * 2.5)
+                            if ratchet_sl < curr_sl:
+                                curr_sl = ratchet_sl
+
+                    # TP3 (+3.5R o +5.0R): Cierra el 20% Runner final
                     if hit_tp2 and bl <= p_tp3:
-                        outcome_r += (3.5 * rem_pos * total_multiplier)
+                        outcome_r += (target_tp3_r * rem_pos * total_multiplier)
                         rem_pos = 0.0
                         close_reason = "TP3_FULL_TARGET"
                         break
@@ -379,6 +415,8 @@ class UnifiedBacktestEngine:
                 "entry": entry,
                 "sl": sl,
                 "confluence_score": 75,
+                "ker": round(ker_val, 3),
+                "is_elastic": is_elastic,
                 "scaled_in": False,
                 "risk_pct": round((risk/entry)*100, 2),
                 "outcome_r": round(net_outcome_r, 2),
@@ -515,6 +553,10 @@ class UnifiedBacktestEngine:
         enable_compounding: bool = True,
         dynamic_risk_pct: float = 0.025,
         compounding_initial_usd: float = 1_000.0,
+        enable_alpha_cycle: bool = False,
+        enable_trinity_boost: bool = False,
+        enable_elastic_runner: bool = False,
+        enable_golden_hours: bool = False,
     ) -> Dict[str, Any]:
         """
         [EVENT-DRIVEN TIMELINE REPLAY v46.0]
@@ -542,6 +584,9 @@ class UnifiedBacktestEngine:
         print(f"⏳  Quirófano Horario        : Vetadas horas {toxic_hours} UTC (Trampa Londres & Apertura NY)")
         print(f"✂️  Poda de Activos Tóxicos  : Excluidos {excluded_assets}")
         print(f"🔄  Reciclaje de Slots       : ACTIVO (Liberación de riesgo al tocar TP1 @ Breakeven)")
+        adv_active = enable_alpha_cycle or enable_trinity_boost or enable_elastic_runner or enable_golden_hours
+        if adv_active:
+            print(f"🌟  Protocolos Alpha Avanzados: SOP-46 Cycle: {enable_alpha_cycle} | SOP-47 Trinity: {enable_trinity_boost} | SOP-48 KER: {enable_elastic_runner} | SOP-49 Hours: {enable_golden_hours}")
         print("=" * 88)
 
         # 1. Extracción de setups brutos
@@ -549,7 +594,12 @@ class UnifiedBacktestEngine:
             if sym in seen:
                 continue
             seen.add(sym)
-            t_list = self.run_single_asset(sym, interval="15m", btc_map=btc_map)
+            t_list = self.run_single_asset(
+                sym,
+                interval="15m",
+                btc_map=btc_map,
+                enable_elastic_runner=enable_elastic_runner
+            )
             all_results.extend(t_list)
 
         df_all = pd.DataFrame(all_results)
@@ -632,8 +682,17 @@ class UnifiedBacktestEngine:
             s = row["symbol"]
             et = pd.to_datetime(row["entry_time"])
             h = et.hour
+            dow = et.day_name()
             cs = float(row.get("confluence_score", 75.0))
-            return RiskManager.calculate_alpha_tier_sizing(s, confluence_score=cs, hour_utc=h)
+            return RiskManager.calculate_alpha_tier_sizing(
+                s,
+                confluence_score=cs,
+                hour_utc=h,
+                day_of_week=dow,
+                apply_alpha_cycle=enable_alpha_cycle,
+                apply_trinity_boost=enable_trinity_boost,
+                apply_golden_hours=enable_golden_hours
+            )
 
         df_exec["sizing_mult"] = df_exec.apply(get_trade_sizing, axis=1)
 
@@ -723,6 +782,12 @@ class UnifiedBacktestEngine:
         summary_payload = {
             "audit_date": datetime.now().isoformat(),
             "engine_version": "v46.0 EVENT-DRIVEN TIMELINE SSoT",
+            "advanced_protocols": {
+                "alpha_cycle_sop46": enable_alpha_cycle,
+                "trinity_boost_sop47": enable_trinity_boost,
+                "elastic_runner_sop48": enable_elastic_runner,
+                "golden_hours_sop49": enable_golden_hours
+            },
             "telemetry_funnel": {
                 "raw_signals": raw_signal_count,
                 "rejected_macro_btc": rejected_macro_btc,

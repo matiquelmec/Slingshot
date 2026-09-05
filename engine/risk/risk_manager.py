@@ -289,11 +289,22 @@ class RiskManager:
     }
 
     @classmethod
-    def calculate_alpha_tier_sizing(cls, symbol: str, confluence_score: float = 70.0, hour_utc: int | None = None) -> float:
+    def calculate_alpha_tier_sizing(
+        cls,
+        symbol: str,
+        confluence_score: float = 70.0,
+        hour_utc: int | None = None,
+        day_of_week: str | None = None,
+        apply_alpha_cycle: bool = False,
+        apply_trinity_boost: bool = False,
+        apply_golden_hours: bool = False
+    ) -> float:
         """
         [SOP-33 & SOP-34 & SOP-38 ASYMMETRIC SIZING ENGINE]
         Calcula el multiplicador de asignación de capital combinando el Tier del activo (Kelly Fraccional),
-        la confluencia institucional y la ventana horaria (Sniper NY Open vs Asia Defense).
+        la confluencia institucional, la ventana horaria (Sniper NY Open vs Asia Defense),
+        y las extensiones cuantitativas SOP-46 (Weekly Alpha Cycle), SOP-47 (Trinidad del Alfa)
+        y SOP-49 (Golden Hours Tuning).
         """
         sym = (symbol or "").replace("/", "").upper()
         base_mult = cls.ALPHA_TIERS.get(sym, 1.0)
@@ -312,8 +323,26 @@ class RiskManager:
                 base_mult *= 1.10 # +10% en NY Open (máxima aceleración)
             elif 0 <= hour_utc <= 6:
                 base_mult *= 0.70 # -30% en Asia (preservación de capital)
+
+        # SOP-46: Modulación Cíclica Semanal de Liquidez (Weekly Alpha Cycle)
+        if apply_alpha_cycle and day_of_week is not None:
+            dow = str(day_of_week).capitalize()
+            if dow in ["Tuesday", "Wednesday", "Martes", "Miércoles", "Miercoles"]:
+                base_mult *= 1.20 # Expansión institucional de liquidez
+            elif dow in ["Thursday", "Friday", "Jueves", "Viernes"]:
+                base_mult *= 0.80 # Defensa de capital ante toma de ganancias institucional
+            elif dow in ["Saturday", "Sunday", "Sábado", "Sabado", "Domingo"]:
+                base_mult *= 0.70 # Preservación en fines de semana de bajo volumen
+
+        # SOP-47: Asignación de Convicción Cuantitativa Trinidad del Alfa (BNB, SOL, FET)
+        if apply_trinity_boost and sym in ["BNBUSDT", "SOLUSDT", "FETUSDT", "BNB", "SOL", "FET"]:
+            base_mult *= 1.20
+
+        # SOP-49: Sintonización de Golden Hours Intradía (09:00 UTC y 11:00 UTC)
+        if apply_golden_hours and hour_utc in [9, 11]:
+            base_mult *= 1.15
             
-        return round(min(1.75, max(0.40, base_mult)), 2)
+        return round(min(1.85, max(0.40, base_mult)), 2)
 
     # --- MÓDULO SIGMA: SINTONIZADOR DE ACTIVOS INSTITUCIONAL v17.0 ---
     # Mega-Caps (BTC, ETH, SOL, XRP, AVAX, LINK): 1H OTE Swing -> Colchón SL amplio (0.60x - 2.5x ATR)
