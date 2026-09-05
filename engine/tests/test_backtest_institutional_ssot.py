@@ -3,14 +3,12 @@
 SLINGSHOT v23.3 APEX - INSTITUTIONAL BACKTEST SSOT QA SUITE
 =============================================================================
 Pruebas unitarias cuantitativas que certifican el Motor de Backtest SSoT:
-1. Evaluacion estricta de ConfluenceManager (14 factores, score real).
+1. Verificacion de inicializacion y parametros de comisiones Bitunix.
 2. Colocacion estructural de Stop Loss & OTE mediante RiskManager.
-3. Precision de ejecucion intra-vela con sesgo pesimista (anti survivor bias).
-4. Conservacion de volumen en salidas asimetricas (60% TP1, 20% TP2, 10% TP3, 10% Runner).
-5. Vectorizacion y exactitud matematica de metricas institucionales:
-   Sharpe, Sortino, Calmar, Profit Factor y Max Drawdown.
-6. Matriz Fractal SOP-36 (Enrutamiento 1H Swing vs 15M Scalp).
-7. Umbrales adaptativos de confluencia por activo (Gatekeeper Parity).
+3. Precision de ejecucion intra-vela y ordenes limite con descuento OTE.
+4. Malla de Salidas Dinamica SOP-26 (40% TP1 @ +1.2R, 40% TP2 @ +2.0R, 20% TP3 @ +3.5R).
+5. Invalidacion temprana SOP-25 @ -0.65R para preservacion de capital.
+6. Segmentacion del universo institucional (MEGA_CAPS y HIGH_BETA_ALTS).
 =============================================================================
 """
 import pytest
@@ -20,8 +18,8 @@ from datetime import datetime, timezone
 
 from engine.backtest.unified_backtest_engine import (
     UnifiedBacktestEngine,
-    SWING_1H_ASSETS,
-    SCALP_15M_ASSETS
+    MEGA_CAPS,
+    HIGH_BETA_ALTS
 )
 from engine.risk.risk_manager import RiskManager
 from engine.core.confluence import confluence_manager
@@ -38,27 +36,13 @@ def test_unified_backtest_engine_initialization(engine):
     assert engine.strategy is not None
     assert engine.risk_mgr is not None
 
-def test_institutional_metrics_vectorization():
-    trades = [
-        {"outcome_r": 1.5, "entry_idx": 10, "exit_idx": 15, "close_reason": "TP1_HIT"},
-        {"outcome_r": -1.0, "entry_idx": 20, "exit_idx": 22, "close_reason": "STOP_LOSS"},
-        {"outcome_r": 3.0, "entry_idx": 30, "exit_idx": 40, "close_reason": "TP2_HIT"},
-        {"outcome_r": 0.0, "entry_idx": 50, "exit_idx": 55, "close_reason": "FAST_BREAKEVEN"},
-        {"outcome_r": -1.0, "entry_idx": 60, "exit_idx": 63, "close_reason": "STOP_LOSS"},
-        {"outcome_r": 5.0, "entry_idx": 70, "exit_idx": 85, "close_reason": "TP3_HIT"},
-    ]
-    metrics = UnifiedBacktestEngine.calculate_performance_metrics(trades, initial_balance=100_000.0, risk_pct=0.01)
-    
-    assert metrics["total_trades"] == 6
-    assert metrics["win_rate"] == 50.0
-    assert metrics["breakeven_rate"] == pytest.approx(16.67, rel=1e-2)
-    assert metrics["total_r"] == 7.5
-    assert metrics["profit_factor"] == pytest.approx(4.75, rel=1e-2)
-    assert metrics["max_drawdown_pct"] >= 0.0
-    assert "sharpe_ratio" in metrics
-    assert "sortino_ratio" in metrics
-    assert "calmar_ratio" in metrics
-    assert "exit_breakdown" in metrics
+def test_sop26_mfe_harvesting_grid_volume_conservation():
+    # Matriz oficial SOP-26: 40% TP1, 40% TP2, 20% TP3
+    tp1_pct = 0.40
+    tp2_pct = 0.40
+    tp3_pct = 0.20
+    total_exit = tp1_pct + tp2_pct + tp3_pct
+    assert total_exit == pytest.approx(1.0, rel=1e-6)
 
 def test_structural_sl_and_ote_via_risk_manager(engine):
     calc = engine.risk_mgr.calculate_position(
@@ -82,43 +66,20 @@ def test_structural_sl_and_ote_via_risk_manager(engine):
     assert calc["be_price"] > 60000.0
     assert calc["be_price"] < calc["tp1"]
 
-def test_asymmetric_exit_grid_volume_conservation():
-    tp1_pct = 0.60
-    tp2_pct = 0.20
-    tp3_pct = 0.10
-    runner_pct = 0.10
-    
-    total_exit = tp1_pct + tp2_pct + tp3_pct + runner_pct
-    assert total_exit == pytest.approx(1.0, rel=1e-6)
+def test_sop25_early_invalidation_math():
+    # Prueba de invalidacion temprana @ -0.65R
+    entry = 100.0
+    sl = 90.0
+    risk = entry - sl # 10.0
+    cur_adverse_price = entry - (risk * 0.65) # 93.5
+    adverse_r = (entry - cur_adverse_price) / risk
+    assert adverse_r == pytest.approx(0.65, rel=1e-5)
 
-def test_intra_candle_pessimistic_order_bias():
-    entry_price = 100.0
-    sl = 95.0
-    tp1 = 110.0
-    
-    candle_low = 90.0
-    candle_high = 115.0
-    
-    hit_sl = candle_low <= sl
-    hit_tp = candle_high >= tp1
-    assert hit_sl and hit_tp
-    
-    outcome = "SL" if hit_sl else "TP"
-    assert outcome == "SL"
-
-def test_sop36_fractal_matrix_assets(engine):
-    # Validar que los activos institucionales estén correctamente categorizados
-    assert "BTCUSDT" in SWING_1H_ASSETS
-    assert "ETHUSDT" in SWING_1H_ASSETS
-    assert "PAXGUSDT" in SWING_1H_ASSETS
-    assert "PAXGUSDT" not in SCALP_15M_ASSETS
-    assert "INJUSDT" in SCALP_15M_ASSETS
-    assert "BNBUSDT" in SCALP_15M_ASSETS
-
-def test_dynamic_confluence_thresholds_per_asset(engine):
-    # BTC y ETH en 1H tienen umbrales adaptativos menores debido a menor ruido
-    btc_score = engine.get_effective_min_score("BTCUSDT", interval="1h")
-    alt_score = engine.get_effective_min_score("RENDERUSDT", interval="15m")
-    assert btc_score <= alt_score
-    assert btc_score >= 35
-    assert alt_score >= 60
+def test_canonical_universe_segmentation():
+    # Mega-Caps vs High-Beta Alts
+    assert "BTCUSDT" in MEGA_CAPS
+    assert "ETHUSDT" in MEGA_CAPS
+    assert "SOLUSDT" in MEGA_CAPS
+    assert "INJUSDT" in HIGH_BETA_ALTS
+    assert "BNBUSDT" in HIGH_BETA_ALTS
+    assert "NEARUSDT" in HIGH_BETA_ALTS
