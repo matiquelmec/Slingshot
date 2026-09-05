@@ -443,10 +443,13 @@ class NexusNode:
                         await registry.broadcast_global({"type": "signal_auditor_update", "data": reconstructed_signal})
 
                 # 4. 🛡️ [AUTO-HEALING RECONCILIATOR]
-                # Auditar posiciones activas existentes para auto-reparar cualquier SL o TP faltante
-                for symbol, pos_data in list(self._active_positions.items()):
+                # Auditar posiciones activas existentes para auto-reparar cualquier SL o TP faltante en la cuenta correspondiente
+                for key, pos_data in list(self._active_positions.items()):
                     try:
+                        pos_acc = pos_data.get("account_id", "primary")
+                        target_ex = executors.get(pos_acc) or self.executor
                         sig = pos_data.get("signal", {})
+                        symbol = sig.get("asset", sig.get("symbol", key.split("_")[-1])).upper()
                         entry_p = float(sig.get("entry_price") or sig.get("price", 0))
                         pos_id = str(pos_data.get("execution", {}).get("main_order_id", ""))
                         pos_qty = float(pos_data.get("execution", {}).get("amount", 0))
@@ -455,12 +458,12 @@ class NexusNode:
 
                         # 4.1 Comprobar y auto-reparar Stop Loss si falta
                         if sl_p > 0 and pos_id:
-                            chk_tpsl = await self.executor._request("GET", "/api/v1/futures/tpsl/get_pending_orders", params={"symbol": symbol})
+                            chk_tpsl = await target_ex._request("GET", "/api/v1/futures/tpsl/get_pending_orders", params={"symbol": symbol})
                             t_orders = chk_tpsl.get("data", []) or []
                             has_active_sl = any(t.get("slPrice") or t.get("triggerPrice") for t in t_orders) if isinstance(t_orders, list) else False
                             if not has_active_sl:
-                                logger.warning(f"🩹 [AUTO-HEALING] Posición {symbol} carece de Stop Loss activo en Bitunix. Auto-reparando SL @ ${sl_p}...")
-                                await self.executor.place_position_tpsl(symbol=symbol, position_id=pos_id, sl_price=sl_p)
+                                logger.warning(f"🩹 [AUTO-HEALING] [{target_ex.account_label}] Posición {symbol} carece de Stop Loss activo en Bitunix. Auto-reparando SL @ ${sl_p}...")
+                                await target_ex.place_position_tpsl(symbol=symbol, position_id=pos_id, sl_price=sl_p)
 
                         # 4.2 Comprobar y auto-reparar Take Profits límites si faltan
                         tp1_val = float(sig.get("tp1", 0))
@@ -468,15 +471,15 @@ class NexusNode:
                         tp3_val = float(sig.get("tp3") or sig.get("take_profit_3r", 0))
 
                         if tp1_val > 0 and pos_qty > 0 and pos_id:
-                            chk_orders_res = await self.executor._request("GET", "/api/v1/futures/trade/get_pending_orders", params={"symbol": symbol})
+                            chk_orders_res = await target_ex._request("GET", "/api/v1/futures/trade/get_pending_orders", params={"symbol": symbol})
                             chk_data = chk_orders_res.get("data", {})
                             cur_orders = chk_data.get("orderList", []) if isinstance(chk_data, dict) else (chk_data if isinstance(chk_data, list) else [])
                             close_count = sum(1 for o in cur_orders if o.get("tradeSide") == "CLOSE" or o.get("reduceOnly"))
                             
                             # Si no hay órdenes de cierre y aún no hemos alcanzado TP1, re-colocar la grilla 60/20/20
                             if close_count == 0 and not pos_data.get("smart_trailing", {}).get("be_active"):
-                                logger.warning(f"🩹 [AUTO-HEALING] Posición {symbol} no tiene órdenes límite TP en Bitunix. Auto-reparando salidas escalonadas...")
-                                q_dec, p_dec = await self.executor.get_symbol_precision(symbol)
+                                logger.warning(f"🩹 [AUTO-HEALING] [{target_ex.account_label}] Posición {symbol} no tiene órdenes límite TP en Bitunix. Auto-reparando salidas escalonadas...")
+                                q_dec, p_dec = await target_ex.get_symbol_precision(symbol)
                                 if q_dec == 0:
                                     f1 = int(round(pos_qty * 0.60))
                                     f2 = int(round(pos_qty * 0.20))
@@ -500,11 +503,11 @@ class NexusNode:
                                         "effect": "GTC",
                                         "positionId": str(pos_id)
                                     }
-                                    res_heal = await self.executor._request("POST", "/api/v1/futures/trade/place_order", json_body=tp_pld)
+                                    res_heal = await target_ex._request("POST", "/api/v1/futures/trade/place_order", json_body=tp_pld)
                                     if res_heal.get("code") == 0:
-                                        logger.info(f"✅ [AUTO-HEALING] {symbol} {lbl} colocado a ${p_val:.{p_dec}f} ({q_val} u)")
+                                        logger.info(f"✅ [AUTO-HEALING] [{target_ex.account_label}] {symbol} {lbl} colocado a ${p_val:.{p_dec}f} ({q_val} u)")
                     except Exception as heal_err:
-                        logger.debug(f"[AUTO-HEALING] Skip reconciliación para {symbol}: {heal_err}")
+                        logger.debug(f"[AUTO-HEALING] Skip reconciliación: {heal_err}")
 
             except Exception as e:
                 logger.error(f"❌ [NEXUS SYNC] Error en auto-sincronización: {e}")
@@ -514,14 +517,29 @@ class NexusNode:
     MAX_CONCURRENT_POSITIONS = 4
     DEFAULT_MARGIN_USDT = 17.00 # SOP-39: 2.5% de riesgo real para cuenta de $200 USD (~8.5% de margen a ~12X con SL medio)
 
-    def get_unprotected_risk_count(self) -> int:
+    def get_unprotected_risk_count(self, account_id: Optional[str] = None) -> int:
         """
         Calcula cuántas posiciones abiertas tienen riesgo real flotante.
         Las posiciones en Breakeven (Fast BE / $0.00 riesgo) LIBERAN su slot de riesgo.
+        SOP-45: Soporta aislamiento estricto por account_id.
         """
         unprotected = 0
-        for asset, pos in self._active_positions.items():
+        counted_symbols = set()
+
+        for key, pos in self._active_positions.items():
+            pos_acc = pos.get("account_id", "primary")
+            if account_id is not None and pos_acc != account_id:
+                continue
+
             sig = pos.get("signal", {})
+            sym = sig.get("asset", sig.get("symbol", key.split("_")[-1])).upper()
+
+            # Evitar contar doble si la posición está registrada como 'XRPUSDT' y 'primary_XRPUSDT'
+            acc_sym_key = f"{pos_acc}_{sym}"
+            if acc_sym_key in counted_symbols:
+                continue
+            counted_symbols.add(acc_sym_key)
+
             be_active = pos.get("smart_trailing", {}).get("be_active", False)
             is_long = "LONG" in str(sig.get("type", sig.get("signal_type", "LONG"))).upper()
             entry = float(sig.get("price", 0))
@@ -539,12 +557,6 @@ class NexusNode:
         """
         asset = signal.get("asset")
         sig_type = signal.get("type", "LONG")
-
-        # ── REGLA INSTITUCIONAL DE RIESGO: MÁXIMO 4 OPERACIONES EN RIESGO (SLOT RECYCLING) ──
-        unprotected_count = self.get_unprotected_risk_count()
-        if unprotected_count >= self.MAX_CONCURRENT_POSITIONS:
-            logger.warning(f"🛑 [NEXUS RIESGO] Límite de {self.MAX_CONCURRENT_POSITIONS} operaciones en riesgo alcanzado ({unprotected_count} activas con riesgo). Rechazando entrada en {asset}.")
-            return
 
         # ── REGLA DE CLUSTER DE CORRELACIÓN CRUZADA (v26.0 CLUSTER FORTRESS) ──
         confluence_score = float(signal.get("confluence_score") or (signal.get("confluence") or {}).get("score", 70.0))
@@ -650,6 +662,13 @@ class NexusNode:
         """Ejecuta una señal de mercado en una cuenta específica con su propio cálculo de riesgo SOP-41."""
         acc_signal = dict(signal)
         asset = acc_signal.get("asset")
+        acc_id = getattr(account, "account_id", "primary")
+
+        # 1. Regla de Riesgo Aislada por Cuenta: Máximo 4 operaciones con riesgo flotante
+        unprotected_count = self.get_unprotected_risk_count(account_id=acc_id)
+        if unprotected_count >= self.MAX_CONCURRENT_POSITIONS:
+            logger.warning(f"🛑 [NEXUS RIESGO] [{account.label}] Límite de {self.MAX_CONCURRENT_POSITIONS} operaciones en riesgo alcanzado ({unprotected_count} activas). Rechazando entrada en {asset}.")
+            return None
 
         try:
             avail_margin = await executor.get_available_margin_usdt()
@@ -801,12 +820,7 @@ class NexusNode:
             logger.info(f"🛑 [NEXUS AUTO-LIMIT SOP-31] Omitida orden límite para {asset}: {regime_msg}")
             return
 
-        # Si ya tenemos una posición activa en este activo, no duplicar
-        if asset in self._active_positions:
-            return
-
         try:
-
             # ── SOP-33 & SOP-38: ALPHA-TIER KELLY SIZING & SNIPER NY OPEN ──
             from engine.risk.risk_manager import RiskManager
             confluence_val = float(signal.get("confluence_score", 70.0))
@@ -866,6 +880,19 @@ class NexusNode:
         """Coloca una orden límite en una cuenta específica con su propio cálculo de riesgo SOP-41."""
         acc_signal = dict(signal)
         asset = acc_signal.get("asset", acc_signal.get("symbol", "")).upper()
+        acc_id = getattr(account, "account_id", "primary")
+
+        # 1. Regla de Riesgo por cuenta: Máximo 4 operaciones con riesgo flotante para esta cuenta
+        unprotected_count = self.get_unprotected_risk_count(account_id=acc_id)
+        if unprotected_count >= self.MAX_CONCURRENT_POSITIONS:
+            logger.info(f"🛑 [NEXUS AUTO-LIMIT RIESGO] [{account.label}] Máximo de {self.MAX_CONCURRENT_POSITIONS} operaciones con riesgo alcanzado ({unprotected_count} activas). Pausando nuevas órdenes.")
+            return None
+
+        # 2. Verificar si esta cuenta específica ya tiene una posición activa en este activo
+        acc_pos_key = f"{acc_id}_{asset}"
+        if acc_pos_key in self._active_positions or (acc_id == "primary" and asset in self._active_positions):
+            logger.debug(f"[NEXUS AUTO-LIMIT] [{account.label}] Omitiendo orden límite: Posición ya activa para {asset}.")
+            return None
 
         # Verificar órdenes pendientes en Bitunix para esta cuenta específica para no duplicar en el libro
         try:

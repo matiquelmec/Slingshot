@@ -57,6 +57,8 @@ MODERN_TEST_FILES = [
     "engine/tests/test_sop39_sop40_bitunix_dynamic_25pct_risk.py",
     "engine/tests/test_sop41_sop42_dollar_risk_shield.py",
     "engine/tests/test_multi_account_dispatcher.py",
+    "engine/tests/test_multi_account_lifecycle_parity.py",
+    "engine/tests/test_multi_account_advanced_security_and_resilience.py",
     "engine/tests/test_ci_cd_security_gates.py",
     "engine/tests/test_sop43_to_sop45_advanced_quant_improvements.py"
 ]
@@ -71,7 +73,7 @@ def main():
     
     if result.returncode == 0:
         print("\n" + "="*80)
-        print("✅ CERTIFICACIÓN QA EXITOSA: 223/223 PRUEBAS APROBADAS AL 100%")
+        print("✅ CERTIFICACIÓN QA EXITOSA: 235/235 PRUEBAS APROBADAS AL 100%")
         print("="*80 + "\n")
     else:
         print("\n" + "="*80)

@@ -426,259 +426,258 @@ class TradeManager:
 
     async def sync_live_bitunix_positions(self) -> List[Dict[str, Any]]:
         """
-        Consulta las posiciones reales abiertas en Bitunix, calcula su avance en R
-        y actualiza automáticamente a Breakeven aquellas que hayan avanzado >= +1.0R.
+        Consulta las posiciones reales abiertas en Bitunix para todas las cuentas activas (SOP-45 Multi-Cuenta),
+        calcula su avance en R y actualiza automáticamente a Breakeven aquellas que hayan avanzado >= +1.0R.
         """
-        try:
-            from engine.execution.bitunix_executor import BitunixExecutor
-            bitunix = BitunixExecutor()
-            positions = await bitunix.get_pending_positions()
-            
-            # Consultar órdenes TPSL activas en Bitunix para conocer el SL real configurado
-            tpsl_res = await bitunix._request("GET", "/api/v1/futures/tpsl/get_pending_orders")
-            tpsl_map = {}
-            if tpsl_res.get("code") == 0 and isinstance(tpsl_res.get("data"), list):
-                for to in tpsl_res["data"]:
-                    sym_key = to.get("symbol")
-                    raw_val = to.get("slPrice") or to.get("triggerPrice")
-                    if sym_key and raw_val:
-                        try:
-                            tpsl_map[sym_key] = float(raw_val)
-                        except (ValueError, TypeError):
-                            pass
-        except Exception as e:
-            logger.warning(f"[TRADE_MANAGER] Error de red al consultar posiciones en Bitunix: {e}")
-            return []
-
         managed_results = []
-
-        if positions is None:
-            logger.warning("[TRADE_MANAGER] ⚠️ Error de autenticación/comunicación con Bitunix. Reintentando en el próximo ciclo.")
+        try:
+            from engine.execution.account_manager import AccountManager
+            mgr = AccountManager()
+            executors = mgr.get_all_executors(enabled_only=True)
+            if not executors:
+                from engine.execution.bitunix_executor import BitunixExecutor
+                executors = {"primary": BitunixExecutor()}
+        except Exception as e:
+            logger.warning(f"[TRADE_MANAGER] Error obteniendo ejecutores de cuentas: {e}")
             return []
 
-        if len(positions) == 0:
-            logger.info("[TRADE_MANAGER] No hay posiciones abiertas actualmente en Bitunix.")
-            return []
+        for acc_id, bitunix in executors.items():
+            try:
+                positions = await bitunix.get_pending_positions()
+                if positions is None or len(positions) == 0:
+                    continue
 
-        for pos in positions:
-            sym = pos.get("symbol", "UNKNOWN")
-            side = "LONG" if pos.get("side") in ("BUY", "LONG", "1") else "SHORT"
-            entry_price = float(pos.get("avgOpenPrice") or pos.get("entryPrice") or pos.get("avgPrice") or 0.0)
-            cur_price = float(pos.get("lastPrice") or pos.get("markPrice") or (await bitunix.get_ticker_price(sym)))
-            cur_sl = float(pos.get("slPrice") or pos.get("stopLoss") or tpsl_map.get(sym) or 0.0)
-            pos_id = str(pos.get("positionId") or pos.get("id") or "")
-            
-            if entry_price <= 0 or cur_price <= 0:
-                continue
+                # Consultar órdenes TPSL activas en Bitunix para conocer el SL real configurado
+                tpsl_res = await bitunix._request("GET", "/api/v1/futures/tpsl/get_pending_orders")
+                tpsl_map = {}
+                if tpsl_res.get("code") == 0 and isinstance(tpsl_res.get("data"), list):
+                    for to in tpsl_res["data"]:
+                        sym_key = to.get("symbol")
+                        raw_val = to.get("slPrice") or to.get("triggerPrice")
+                        if sym_key and raw_val:
+                            try:
+                                tpsl_map[sym_key] = float(raw_val)
+                            except (ValueError, TypeError):
+                                pass
 
-            # Buscar si existe una señal registrada para recuperar su initial_stop_loss exacto
-            # Buscar si existe una señal registrada para recuperar su initial_stop_loss exacto
-            known_signals = await store.get_signals(asset=sym)
-            matched_sig = known_signals[-1] if known_signals else None
-            initial_sl = float(matched_sig.get("initial_stop_loss", 0.0)) if matched_sig else 0.0
+                for pos in positions:
+                    sym = pos.get("symbol", "UNKNOWN")
+                    side = "LONG" if pos.get("side") in ("BUY", "LONG", "1") else "SHORT"
+                    entry_price = float(pos.get("avgOpenPrice") or pos.get("entryPrice") or pos.get("avgPrice") or 0.0)
+                    cur_price = float(pos.get("lastPrice") or pos.get("markPrice") or (await bitunix.get_ticker_price(sym)))
+                    cur_sl = float(pos.get("slPrice") or pos.get("stopLoss") or tpsl_map.get(sym) or 0.0)
+                    pos_id = str(pos.get("positionId") or pos.get("id") or "")
+                    
+                    if entry_price <= 0 or cur_price <= 0:
+                        continue
 
-            # Distancia de riesgo inicial (1R)
-            # Solo usar cur_sl si está en zona de pérdida (SL defensivo original)
-            is_defensive_sl = (side == "LONG" and 0 < cur_sl < entry_price) or (side == "SHORT" and cur_sl > entry_price)
+                    # Buscar si existe una señal registrada para recuperar su initial_stop_loss exacto
+                    known_signals = await store.get_signals(asset=sym)
+                    matched_sig = known_signals[-1] if known_signals else None
+                    initial_sl = float(matched_sig.get("initial_stop_loss", 0.0)) if matched_sig else 0.0
 
-            if initial_sl > 0:
-                sl_dist = abs(entry_price - initial_sl)
-            elif is_defensive_sl and abs(entry_price - cur_sl) > (entry_price * 0.002):
-                sl_dist = abs(entry_price - cur_sl)
-            else:
-                # Si el SL ya está en ganancia (trailing) y no hay señal en memoria,
-                # usar el riesgo estructural estándar (1.0% Megacaps, 1.5% Altcoins)
-                default_risk_pct = 0.010 if self.is_megacap(sym) else 0.015
-                sl_dist = entry_price * default_risk_pct
-            
-            if sl_dist <= 0:
-                sl_dist = entry_price * 0.015
+                    # Distancia de riesgo inicial (1R)
+                    is_defensive_sl = (side == "LONG" and 0 < cur_sl < entry_price) or (side == "SHORT" and cur_sl > entry_price)
 
-            # Ganancia en unidades R reales
-            r_profit = (cur_price - entry_price) / sl_dist if side == "LONG" else (entry_price - cur_price) / sl_dist
-            
-            sl_at_be = (side == "LONG" and cur_sl >= entry_price * 0.999) or (side == "SHORT" and cur_sl > 0 and cur_sl <= entry_price * 1.001)
-            status_msg = "EN_CURSO"
-            action_taken = "NINGUNA"
+                    if initial_sl > 0:
+                        sl_dist = abs(entry_price - initial_sl)
+                    elif is_defensive_sl and abs(entry_price - cur_sl) > (entry_price * 0.002):
+                        sl_dist = abs(entry_price - cur_sl)
+                    else:
+                        default_risk_pct = 0.010 if self.is_megacap(sym) else 0.015
+                        sl_dist = entry_price * default_risk_pct
+                    
+                    if sl_dist <= 0:
+                        sl_dist = entry_price * 0.015
 
-            # ── ESCALERA INSTITUCIONAL DE TRAILING STOP (TIER 1 A TIER 4) ──
-            # Umbral adaptativo: 1.2R en Megacaps (BTC, ETH, SOL) para absorber re-tests, 1.0R en Altcoins
-            be_threshold = 1.2 if self.is_megacap(sym) else 1.0
-            fee_buffer = entry_price * 0.0008  # Micro-Buffer de 0.08% para absorber comisiones
+                    # Ganancia en unidades R reales
+                    r_profit = (cur_price - entry_price) / sl_dist if side == "LONG" else (entry_price - cur_price) / sl_dist
+                    
+                    sl_at_be = (side == "LONG" and cur_sl >= entry_price * 0.999) or (side == "SHORT" and cur_sl > 0 and cur_sl <= entry_price * 1.001)
+                    status_msg = "EN_CURSO"
+                    action_taken = "NINGUNA"
 
-            # ── SOP-25: EARLY STRUCTURAL INVALIDATION @ 0.65R ──
-            # Si el trade retrocede más allá de -0.65R en contra (adverse excursion),
-            # ajustar preventivamente el Stop Loss al nivel de -0.65R para ahorrar 0.35R de pérdida completa.
-            is_early_inval, early_sl = RiskManager.check_early_invalidation_candidate(
-                entry_price=entry_price,
-                current_price=cur_price,
-                sl_price=cur_sl if cur_sl > 0 else (entry_price - sl_dist),
-                side=side
-            )
+                    be_threshold = 1.2 if self.is_megacap(sym) else 1.0
+                    fee_buffer = entry_price * 0.0008
 
-            target_sl = None
-            if is_early_inval and not sl_at_be:
-                if side == "LONG" and (cur_sl <= 0 or early_sl > cur_sl * 1.0005):
-                    target_sl = early_sl
-                    status_msg = f"SOP25_EARLY_INVALIDATION (-0.65R / ${target_sl})"
-                elif side == "SHORT" and (cur_sl <= 0 or early_sl < cur_sl * 0.9995):
-                    target_sl = early_sl
-                    status_msg = f"SOP25_EARLY_INVALIDATION (-0.65R / ${target_sl})"
+                    # SOP-25: Early Structural Invalidation @ 0.65R
+                    is_early_inval, early_sl = RiskManager.check_early_invalidation_candidate(
+                        entry_price=entry_price,
+                        current_price=cur_price,
+                        sl_price=cur_sl if cur_sl > 0 else (entry_price - sl_dist),
+                        side=side
+                    )
 
-            if r_profit >= 5.0:
-                # Tier 4 (TP3 / Ultra Runner): Ratchet dinámico que asegura el 70% de la ganancia total
-                locked_r = r_profit * 0.70
-                profit_buffer = sl_dist * locked_r
-                target_sl = round(entry_price + profit_buffer, 4) if side == "LONG" else round(entry_price - profit_buffer, 4)
-                status_msg = f"PROTEGIDO_RUNNER_TP3 (+{locked_r:.1f}R)"
-            elif r_profit >= 3.0:
-                # Tier 3: Bloquear al menos +2.0R en ganancia neta
-                profit_buffer = sl_dist * 2.0
-                target_sl = round(entry_price + profit_buffer, 4) if side == "LONG" else round(entry_price - profit_buffer, 4)
-                status_msg = "PROTEGIDO_TP3_LOCK (+2.0R)"
-            elif r_profit >= 2.0:
-                # Tier 2 (SOP-26 TP2 Alcanzado / +2.0R): Bloquear +1.0R de ganancia garantizada neta
-                profit_buffer = sl_dist * 1.0
-                target_sl = round(entry_price + profit_buffer, 4) if side == "LONG" else round(entry_price - profit_buffer, 4)
-                status_msg = "PROTEGIDO_TP2 (+1.0R BLOQUEADO)"
-            elif r_profit >= be_threshold:
-                # Tier 1 (Fast Breakeven Adaptativo): Asegurar capital con colchón de comisiones (+0.08% neto)
-                target_sl = round(entry_price + fee_buffer, 4) if side == "LONG" else round(entry_price - fee_buffer, 4)
-                status_msg = f"PROTEGIDO_FAST_BE (+{be_threshold:.1f}R)"
+                    target_sl = None
+                    if is_early_inval and not sl_at_be:
+                        if side == "LONG" and (cur_sl <= 0 or early_sl > cur_sl * 1.0005):
+                            target_sl = early_sl
+                            status_msg = f"SOP25_EARLY_INVALIDATION (-0.65R / ${target_sl})"
+                        elif side == "SHORT" and (cur_sl <= 0 or early_sl < cur_sl * 0.9995):
+                            target_sl = early_sl
+                            status_msg = f"SOP25_EARLY_INVALIDATION (-0.65R / ${target_sl})"
 
-            should_update_sl = False
-            if target_sl is not None:
-                if side == "LONG" and (cur_sl <= 0 or target_sl > cur_sl * 1.0005):
-                    should_update_sl = True
-                elif side == "SHORT" and (cur_sl <= 0 or target_sl < cur_sl * 0.9995):
-                    should_update_sl = True
+                    if r_profit >= 5.0:
+                        locked_r = r_profit * 0.70
+                        profit_buffer = sl_dist * locked_r
+                        target_sl = round(entry_price + profit_buffer, 4) if side == "LONG" else round(entry_price - profit_buffer, 4)
+                        status_msg = f"PROTEGIDO_RUNNER_TP3 (+{locked_r:.1f}R)"
+                    elif r_profit >= 3.0:
+                        profit_buffer = sl_dist * 2.0
+                        target_sl = round(entry_price + profit_buffer, 4) if side == "LONG" else round(entry_price - profit_buffer, 4)
+                        status_msg = "PROTEGIDO_TP3_LOCK (+2.0R)"
+                    elif r_profit >= 2.0:
+                        profit_buffer = sl_dist * 1.0
+                        target_sl = round(entry_price + profit_buffer, 4) if side == "LONG" else round(entry_price - profit_buffer, 4)
+                        status_msg = "PROTEGIDO_TP2 (+1.0R BLOQUEADO)"
+                    elif r_profit >= be_threshold:
+                        target_sl = round(entry_price + fee_buffer, 4) if side == "LONG" else round(entry_price - fee_buffer, 4)
+                        status_msg = f"PROTEGIDO_FAST_BE (+{be_threshold:.1f}R)"
 
-            if should_update_sl:
-                await bitunix.modify_position_tpsl(symbol=sym, position_id=pos_id, sl_price=target_sl, tp_price=None)
-                action_taken = f"SL_ACTUALIZADO (${target_sl})"
-                logger.info(f"🛡️ [TRADE_MANAGER] Posición {sym} {side} (+{r_profit:.2f}R) protegida con SL=${target_sl} ({status_msg}).")
-            elif sl_at_be:
-                status_msg = "YA_PROTEGIDO"
+                    should_update_sl = False
+                    if target_sl is not None:
+                        if side == "LONG" and (cur_sl <= 0 or target_sl > cur_sl * 1.0005):
+                            should_update_sl = True
+                        elif side == "SHORT" and (cur_sl <= 0 or target_sl < cur_sl * 0.9995):
+                            should_update_sl = True
 
-            managed_results.append({
-                "symbol": sym,
-                "side": side,
-                "entry_price": entry_price,
-                "current_price": cur_price,
-                "current_sl": cur_sl,
-                "r_profit": round(r_profit, 2),
-                "status": status_msg,
-                "action": action_taken
-            })
+                    if should_update_sl:
+                        await bitunix.modify_position_tpsl(symbol=sym, position_id=pos_id, sl_price=target_sl, tp_price=None)
+                        action_taken = f"SL_ACTUALIZADO (${target_sl})"
+                        logger.info(f"🛡️ [TRADE_MANAGER] [{bitunix.account_label}] Posición {sym} {side} (+{r_profit:.2f}R) protegida con SL=${target_sl} ({status_msg}).")
+                    elif sl_at_be:
+                        status_msg = "YA_PROTEGIDO"
+
+                    managed_results.append({
+                        "account_id": acc_id,
+                        "account_label": bitunix.account_label,
+                        "symbol": sym,
+                        "side": side,
+                        "entry_price": entry_price,
+                        "current_price": cur_price,
+                        "current_sl": cur_sl,
+                        "r_profit": round(r_profit, 2),
+                        "status": status_msg,
+                        "action": action_taken
+                    })
+            except Exception as acc_err:
+                logger.warning(f"[TRADE_MANAGER] [{bitunix.account_label}] Error en sincronización de posiciones: {acc_err}")
 
         return managed_results
 
     async def sync_live_bitunix_pending_orders(self) -> List[Dict[str, Any]]:
         """
         [APEX LIMIT SENTINEL v22.0]
-        Audita de forma autónoma todas las órdenes límite pendientes en Bitunix.
+        Audita de forma autónoma todas las órdenes límite pendientes en Bitunix para todas las cuentas activas.
         Ejecuta auto-cancelación inteligente por:
           1. Objetivo alcanzado sin activación (Missed Target Kill-Switch: precio >= TP1)
           2. Invalidación previa de estructura (Pre-Entry SL Breach: precio <= SL)
           3. Expiración de tiempo de vida (TTL > 3h / 10800s desfasado)
           4. Capacidad máxima de riesgo (Auto-Purge si 4 posiciones en riesgo)
         """
+        cancelled_results = []
         try:
-            from engine.execution.bitunix_executor import BitunixExecutor
+            from engine.execution.account_manager import AccountManager
             from engine.execution.nexus import nexus
-            bitunix = BitunixExecutor()
-            
-            # 1. Regla D: Si ya hay 4 posiciones vivas con riesgo, purgar todas las órdenes límite
-            unprotected_risk = nexus.get_unprotected_risk_count()
-            if unprotected_risk >= nexus.MAX_CONCURRENT_POSITIONS:
-                logger.info(f"🛑 [LIMIT SENTINEL] Máximo de {nexus.MAX_CONCURRENT_POSITIONS} operaciones con riesgo alcanzado ({unprotected_risk} en riesgo). Purgando límites sobrantes.")
-                await nexus.purge_all_pending_limit_orders(reason="MAX_4_RISK_SLOTS_REACHED")
-                return []
-
-            pending_orders = await bitunix.get_pending_orders()
-            if not pending_orders:
-                return []
-
-            # ── SOP-22: PURGA ATÓMICA DE ÓRDENES CLOSE HUÉRFANAS ──
-            # Si hay órdenes límite de cierre ('CLOSE') para monedas que NO tienen posición abierta, erradicarlas
-            active_symbols = {p.get("symbol") for p in (await bitunix.get_pending_positions() or []) if p.get("symbol")}
-            await bitunix.purge_orphaned_close_orders(active_symbols=active_symbols)
-
-            # Filtrar solo órdenes que abren posiciones (tradeSide == 'OPEN' o reduceOnly == False)
-            open_limits = [
-                o for o in pending_orders 
-                if (o.get("tradeSide") == "OPEN" or not o.get("reduceOnly")) and o.get("orderType") == "LIMIT"
-            ]
-
-            all_opps = store.get_scanner_opportunities("scalp") + store.get_scanner_opportunities("swing")
-            now_ms = time.time() * 1000
-            cancelled_results = []
-
-            for ord_item in open_limits:
-                sym = ord_item.get("symbol", "UNKNOWN")
-                oid = ord_item.get("orderId")
-                side_raw = ord_item.get("side", "BUY").upper()
-                is_long = side_raw in ("BUY", "LONG")
-                entry_price = float(ord_item.get("price") or 0.0)
-                sl_price = float(ord_item.get("slPrice") or 0.0)
-                ctime = float(ord_item.get("ctime") or now_ms)
-                
-                if entry_price <= 0 or not oid:
-                    continue
-
-                cur_price = await bitunix.get_ticker_price(sym)
-                if cur_price <= 0:
-                    continue
-
-                # Buscar TP1 proyectado en el escáner o calcularlo por defecto
-                matching_setup = next((o for o in all_opps if o.get("asset") == sym and ("LONG" if is_long else "SHORT") in str(o.get("direction", "")).upper()), None)
-                if matching_setup:
-                    tp1_target = float(matching_setup.get("tp1") or 0.0)
-                    if sl_price <= 0:
-                        sl_price = float(matching_setup.get("stop_loss") or 0.0)
-                else:
-                    dist_sl = abs(entry_price - sl_price) if sl_price > 0 else entry_price * 0.015
-                    tp1_target = entry_price + (dist_sl * 1.3) if is_long else entry_price - (dist_sl * 1.3)
-
-                cancel_reason = None
-
-                # ── Chequeo 1: Missed Target (El precio tocó TP1 sin llenar la entrada) ──
-                if tp1_target > 0:
-                    if is_long and cur_price >= tp1_target:
-                        cancel_reason = f"MISSED_TARGET (Precio actual ${cur_price:.4f} superó TP1 ${tp1_target:.4f} sin retroceder a entrada ${entry_price:.4f})"
-                    elif not is_long and cur_price <= tp1_target:
-                        cancel_reason = f"MISSED_TARGET (Precio actual ${cur_price:.4f} perforó TP1 ${tp1_target:.4f} sin retroceder a entrada ${entry_price:.4f})"
-
-                # ── Chequeo 2: Pre-Entry SL Breach (El precio rompió el SL antes de llenarse) ──
-                if not cancel_reason and sl_price > 0:
-                    if is_long and cur_price <= (sl_price * 0.9995):
-                        cancel_reason = f"PRE_ENTRY_SL_BREACH (Precio actual ${cur_price:.4f} perforó el Stop Loss ${sl_price:.4f} antes de activar entrada)"
-                    elif not is_long and cur_price >= (sl_price * 1.0005):
-                        cancel_reason = f"PRE_ENTRY_SL_BREACH (Precio actual ${cur_price:.4f} superó el Stop Loss ${sl_price:.4f} antes de activar entrada)"
-
-                # ── Chequeo 3: Expiración TTL (> 3 horas y precio desfasado > 1.5%) ──
-                if not cancel_reason:
-                    age_seconds = (now_ms - ctime) / 1000
-                    price_drift_pct = abs(cur_price - entry_price) / entry_price
-                    if age_seconds > 10800 and price_drift_pct > 0.015:
-                        cancel_reason = f"TTL_EXPIRED (Orden con {age_seconds/3600:.1f}h de antigüedad y precio desfasado {price_drift_pct*100:.1f}%)"
-
-                # Ejecutar auto-cancelación si se disparó alguna regla
-                if cancel_reason:
-                    logger.warning(f"🚫 [LIMIT SENTINEL] Auto-cancelando orden límite {oid} en {sym}: {cancel_reason}")
-                    success = await bitunix.cancel_limit_order(sym, oid)
-                    if success:
-                        nexus.remove_pending_limit_symbol(sym)
-                        cancelled_results.append({
-                            "symbol": sym,
-                            "order_id": oid,
-                            "reason": cancel_reason
-                        })
-
-            return cancelled_results
+            mgr = AccountManager()
+            executors = mgr.get_all_executors(enabled_only=True)
+            if not executors:
+                from engine.execution.bitunix_executor import BitunixExecutor
+                executors = {"primary": BitunixExecutor()}
         except Exception as e:
-            logger.error(f"❌ [LIMIT SENTINEL] Error en auditoría de órdenes límite: {e}")
+            logger.error(f"❌ [LIMIT SENTINEL] Error obteniendo ejecutores: {e}")
             return []
+
+        all_opps = store.get_scanner_opportunities("scalp") + store.get_scanner_opportunities("swing")
+        now_ms = time.time() * 1000
+
+        for acc_id, bitunix in executors.items():
+            try:
+                # 1. Regla D: Si la cuenta ya tiene 4 posiciones con riesgo, purgar órdenes límite de esa cuenta
+                unprotected_risk = nexus.get_unprotected_risk_count(account_id=acc_id)
+                if unprotected_risk >= nexus.MAX_CONCURRENT_POSITIONS:
+                    logger.info(f"🛑 [LIMIT SENTINEL] [{bitunix.account_label}] Máximo de {nexus.MAX_CONCURRENT_POSITIONS} operaciones con riesgo alcanzado ({unprotected_risk} en riesgo). Purgando límites.")
+                    await nexus.purge_all_pending_limit_orders(reason="MAX_4_RISK_SLOTS_REACHED")
+                    await bitunix.cancel_all_pending_orders()
+                    return []
+
+                pending_orders = await bitunix.get_pending_orders()
+                if not pending_orders:
+                    continue
+
+                # SOP-22: Purga atómica de órdenes CLOSE huérfanas en esta cuenta
+                active_symbols = {p.get("symbol") for p in (await bitunix.get_pending_positions() or []) if p.get("symbol")}
+                await bitunix.purge_orphaned_close_orders(active_symbols=active_symbols)
+
+                open_limits = [
+                    o for o in pending_orders 
+                    if (o.get("tradeSide") == "OPEN" or not o.get("reduceOnly")) and o.get("orderType") == "LIMIT"
+                ]
+
+                for ord_item in open_limits:
+                    sym = ord_item.get("symbol", "UNKNOWN")
+                    oid = ord_item.get("orderId")
+                    side_raw = ord_item.get("side", "BUY").upper()
+                    is_long = side_raw in ("BUY", "LONG")
+                    entry_price = float(ord_item.get("price") or 0.0)
+                    sl_price = float(ord_item.get("slPrice") or 0.0)
+                    ctime = float(ord_item.get("ctime") or now_ms)
+                    
+                    if entry_price <= 0 or not oid:
+                        continue
+
+                    cur_price = await bitunix.get_ticker_price(sym)
+                    if cur_price <= 0:
+                        continue
+
+                    matching_setup = next((o for o in all_opps if o.get("asset") == sym and ("LONG" if is_long else "SHORT") in str(o.get("direction", "")).upper()), None)
+                    if matching_setup:
+                        tp1_target = float(matching_setup.get("tp1") or 0.0)
+                        if sl_price <= 0:
+                            sl_price = float(matching_setup.get("stop_loss") or 0.0)
+                    else:
+                        dist_sl = abs(entry_price - sl_price) if sl_price > 0 else entry_price * 0.015
+                        tp1_target = entry_price + (dist_sl * 1.3) if is_long else entry_price - (dist_sl * 1.3)
+
+                    cancel_reason = None
+
+                    # Chequeo 1: Missed Target
+                    if tp1_target > 0:
+                        if is_long and cur_price >= tp1_target:
+                            cancel_reason = f"MISSED_TARGET (Precio actual ${cur_price:.4f} superó TP1 ${tp1_target:.4f} sin retroceder a entrada ${entry_price:.4f})"
+                        elif not is_long and cur_price <= tp1_target:
+                            cancel_reason = f"MISSED_TARGET (Precio actual ${cur_price:.4f} perforó TP1 ${tp1_target:.4f} sin retroceder a entrada ${entry_price:.4f})"
+
+                    # Chequeo 2: Pre-Entry SL Breach
+                    if not cancel_reason and sl_price > 0:
+                        if is_long and cur_price <= (sl_price * 0.9995):
+                            cancel_reason = f"PRE_ENTRY_SL_BREACH (Precio actual ${cur_price:.4f} perforó el Stop Loss ${sl_price:.4f} antes de activar entrada)"
+                        elif not is_long and cur_price >= (sl_price * 1.0005):
+                            cancel_reason = f"PRE_ENTRY_SL_BREACH (Precio actual ${cur_price:.4f} superó el Stop Loss ${sl_price:.4f} antes de activar entrada)"
+
+                    # Chequeo 3: Expiración TTL
+                    if not cancel_reason:
+                        age_seconds = (now_ms - ctime) / 1000
+                        price_drift_pct = abs(cur_price - entry_price) / entry_price
+                        if age_seconds > 10800 and price_drift_pct > 0.015:
+                            cancel_reason = f"TTL_EXPIRED (Orden con {age_seconds/3600:.1f}h de antigüedad y precio desfasado {price_drift_pct*100:.1f}%)"
+
+                    if cancel_reason:
+                        logger.warning(f"🚫 [LIMIT SENTINEL] [{bitunix.account_label}] Auto-cancelando orden límite {oid} en {sym}: {cancel_reason}")
+                        success = await bitunix.cancel_limit_order(sym, oid)
+                        if success:
+                            nexus.remove_pending_limit_symbol(sym)
+                            cancelled_results.append({
+                                "account_id": acc_id,
+                                "account_label": bitunix.account_label,
+                                "symbol": sym,
+                                "order_id": oid,
+                                "reason": cancel_reason
+                            })
+            except Exception as acc_err:
+                logger.error(f"❌ [LIMIT SENTINEL] [{bitunix.account_label}] Error en auditoría de órdenes: {acc_err}")
+
+        return cancelled_results
 
     async def sync_live_mt5_positions(self) -> List[Dict[str, Any]]:
         """

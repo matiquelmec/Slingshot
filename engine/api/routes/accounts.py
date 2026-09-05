@@ -1,4 +1,4 @@
-﻿"""
+"""
 engine/api/routes/accounts.py
 =============================================================================
 Router REST para Gestión Multi-Cuentas de Bitunix Futures
@@ -106,3 +106,15 @@ async def delete_account(account_id: str):
             detail=msg
         )
     return {"status": "success", "message": msg}
+
+
+@router.post("/{account_id}/emergency-close", summary="Kill-Switch: Liquidar y cerrar de emergencia todas las posiciones y órdenes de una cuenta")
+async def emergency_close_account_endpoint(account_id: str):
+    mgr = AccountManager()
+    res = await mgr.emergency_close_account(account_id)
+    if res.get("status") == "error":
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=res.get("message")
+        )
+    return res

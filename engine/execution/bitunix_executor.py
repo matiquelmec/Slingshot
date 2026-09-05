@@ -850,6 +850,28 @@ class BitunixExecutor:
             logger.error(f"❌ [SOP-22 GHOST ERADICATOR] Error en auditoría de órdenes fantasma: {e}")
             return 0
 
+    async def cancel_all_pending_orders(self) -> bool:
+        """
+        Cancela de manera masiva todas las órdenes pendientes en la cuenta de Bitunix.
+        """
+        if self.dry_run:
+            logger.info(f"🧪 [BITUNIX DRY RUN] Cancelando todas las órdenes pendientes ({self.account_label})")
+            return True
+        try:
+            pending = await self.get_pending_orders()
+            if not pending:
+                return True
+
+            symbols = {o.get("symbol") for o in pending if o.get("symbol")}
+            success = True
+            for sym in symbols:
+                res_cnt = await self.cancel_all_orders_for_symbol(sym)
+                logger.info(f"🗑️ [BITUNIX] [{self.account_label}] Canceladas {res_cnt} órdenes en {sym}")
+            return success
+        except Exception as e:
+            logger.error(f"❌ [BITUNIX] [{self.account_label}] Error cancelando todas las órdenes: {e}")
+            return False
+
     async def get_balance(self) -> float:
         """Obtiene el balance disponible real en USDT de la cuenta."""
         if self.dry_run:

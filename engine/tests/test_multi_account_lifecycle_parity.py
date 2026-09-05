@@ -132,9 +132,8 @@ class TestMultiAccountLifecycleParity:
         ex2.get_pending_orders = AsyncMock(return_value=[{"symbol": "XRPUSDT", "orderId": "222", "orderType": "LIMIT", "tradeSide": "OPEN"}])
         ex2.cancel_limit_order = AsyncMock(return_value=True)
 
-        node.account_manager.get_all_executors = MagicMock(return_value={"primary": ex1, "client_2": ex2})
-
-        await node.purge_all_pending_limit_orders(reason="TEST_PURGE")
+        with patch.object(node.account_manager, "get_all_executors", return_value={"primary": ex1, "client_2": ex2}):
+            await node.purge_all_pending_limit_orders(reason="TEST_PURGE")
 
         ex1.cancel_limit_order.assert_called_once_with("XRPUSDT", "111")
         ex2.cancel_limit_order.assert_called_once_with("XRPUSDT", "222")

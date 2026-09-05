@@ -1,4 +1,4 @@
-﻿"""
+"""
 engine/execution/account_manager.py
 =============================================================================
 Gestor y Registro Multi-Cuentas para Bitunix Futures (Master Account Dispatcher)
@@ -12,14 +12,55 @@ Gestor y Registro Multi-Cuentas para Bitunix Futures (Master Account Dispatcher)
 import os
 import json
 import time
+import base64
+import hashlib
 import asyncio
 from pathlib import Path
 from dataclasses import dataclass, field, asdict
 from typing import Dict, List, Optional, Tuple, Any
 
+from cryptography.fernet import Fernet
 from engine.api.config import settings
 from engine.core.logger import logger
 from engine.execution.bitunix_executor import BitunixExecutor
+
+
+def _get_fernet_cipher() -> Fernet:
+    """Deriva una clave de 32 bytes para Fernet desde SECURITY_API_KEY o JWT_SECRET."""
+    secret = (getattr(settings, "SECURITY_API_KEY", "") or getattr(settings, "JWT_SECRET", "slingshot_master_vault_key")).encode("utf-8")
+    key_32 = hashlib.sha256(secret).digest()
+    b64_key = base64.urlsafe_b64encode(key_32)
+    return Fernet(b64_key)
+
+
+def encrypt_credential(plain_text: str) -> str:
+    """Cifra un secreto si no está ya cifrado."""
+    if not plain_text:
+        return ""
+    if plain_text.startswith("enc:v1:"):
+        return plain_text
+    try:
+        cipher = _get_fernet_cipher()
+        encrypted = cipher.encrypt(plain_text.encode("utf-8")).decode("utf-8")
+        return f"enc:v1:{encrypted}"
+    except Exception as e:
+        logger.error(f"❌ [ACCOUNT_MANAGER] Error al cifrar credencial: {e}")
+        return plain_text
+
+
+def decrypt_credential(cipher_text: str) -> str:
+    """Descifra una credencial con prefijo enc:v1: de forma transparente."""
+    if not cipher_text:
+        return ""
+    if not cipher_text.startswith("enc:v1:"):
+        return cipher_text
+    try:
+        raw_token = cipher_text[len("enc:v1:"):]
+        cipher = _get_fernet_cipher()
+        return cipher.decrypt(raw_token.encode("utf-8")).decode("utf-8")
+    except Exception as e:
+        logger.error(f"❌ [ACCOUNT_MANAGER] Error al descifrar credencial: {e}")
+        return cipher_text
 
 
 @dataclass
@@ -49,7 +90,7 @@ class BitunixAccountConfig:
 class AccountManager:
     """
     Administrador centralizado de cuentas de Bitunix.
-    Mantiene el ciclo de vida de los ejecutores y la persistencia de cuentas secundarias.
+    Mantiene el ciclo de vida de los ejecutores y la persistencia de cuentas secundarias con cifrado AES-256 en reposo.
     """
     _instance = None
 
@@ -69,13 +110,14 @@ class AccountManager:
         
         self._accounts: Dict[str, BitunixAccountConfig] = {}
         self._executors: Dict[str, BitunixExecutor] = {}
+        self._dispatch_semaphore = asyncio.Semaphore(10)  # Rate limiting de 10 llamadas concurrentes
         
         self._load_accounts()
         self._initialized = True
         logger.info(f"🏛️ [ACCOUNT_MANAGER] Inicializado con {len(self._accounts)} cuenta(s) registrada(s).")
 
     def _load_accounts(self):
-        """Carga la cuenta primaria de .env y las secundarias del archivo JSON."""
+        """Carga la cuenta primaria de .env y las secundarias del archivo JSON (descifrando credenciales)."""
         # 1. Cuenta Primaria (.env)
         if settings.BITUNIX_API_KEY and settings.BITUNIX_SECRET_KEY:
             primary = BitunixAccountConfig(
@@ -98,20 +140,34 @@ class AccountManager:
                 dry_run=primary.dry_run
             )
 
-        # 2. Cuentas Secundarias (JSON)
+        # 2. Cuentas Secundarias (JSON con descifrado transparente)
         if self.accounts_file.exists():
             try:
                 with open(self.accounts_file, "r", encoding="utf-8") as f:
                     data = json.load(f)
+                    needs_migration = False
                     for item in data.get("accounts", []):
                         acc_id = item.get("account_id")
                         if not acc_id or acc_id == "primary":
                             continue
+                        
+                        raw_key = item.get("api_key", "")
+                        raw_sec = item.get("secret_key", "")
+                        
+                        # Si estaban en texto plano, marcar para migración a cifrado
+                        if raw_key and not raw_key.startswith("enc:v1:"):
+                            needs_migration = True
+                        if raw_sec and not raw_sec.startswith("enc:v1:"):
+                            needs_migration = True
+
+                        decrypted_key = decrypt_credential(raw_key)
+                        decrypted_sec = decrypt_credential(raw_sec)
+
                         acc = BitunixAccountConfig(
                             account_id=acc_id,
                             label=item.get("label", f"Cuenta {acc_id}"),
-                            api_key=item.get("api_key", ""),
-                            secret_key=item.get("secret_key", ""),
+                            api_key=decrypted_key,
+                            secret_key=decrypted_sec,
                             enabled=item.get("enabled", True),
                             risk_pct=float(item.get("risk_pct", 0.025)),
                             max_notional_mult=float(item.get("max_notional_mult", 5.0)),
@@ -127,20 +183,28 @@ class AccountManager:
                             account_label=acc.label,
                             dry_run=acc.dry_run
                         )
+                    
+                    if needs_migration:
+                        logger.info("🔒 [ACCOUNT_MANAGER] Migrando credenciales planas existentes a cifrado AES-256 en reposo...")
+                        self._save_accounts()
             except Exception as e:
                 logger.error(f"❌ [ACCOUNT_MANAGER] Error cargando {self.accounts_file.name}: {e}")
 
     def _save_accounts(self):
-        """Persiste las cuentas secundarias al archivo JSON (omite la primaria)."""
+        """Persiste las cuentas secundarias al archivo JSON con credenciales cifradas."""
         try:
-            sec_accounts = [
-                acc.to_dict(mask_secrets=False) 
-                for acc_id, acc in self._accounts.items() 
-                if not acc.is_primary
-            ]
+            sec_accounts = []
+            for acc_id, acc in self._accounts.items():
+                if acc.is_primary:
+                    continue
+                acc_dict = acc.to_dict(mask_secrets=False)
+                acc_dict["api_key"] = encrypt_credential(acc_dict.get("api_key", ""))
+                acc_dict["secret_key"] = encrypt_credential(acc_dict.get("secret_key", ""))
+                sec_accounts.append(acc_dict)
+
             with open(self.accounts_file, "w", encoding="utf-8") as f:
                 json.dump({"accounts": sec_accounts}, f, indent=2, ensure_ascii=False)
-            logger.info(f"💾 [ACCOUNT_MANAGER] Guardadas {len(sec_accounts)} cuenta(s) secundaria(s).")
+            logger.info(f"💾 [ACCOUNT_MANAGER] Guardadas {len(sec_accounts)} cuenta(s) secundaria(s) cifradas.")
         except Exception as e:
             logger.error(f"❌ [ACCOUNT_MANAGER] Error guardando cuentas secundarias: {e}")
 
@@ -248,3 +312,60 @@ class AccountManager:
             item["projected_trade_risk_usd"] = round(bal * acc.risk_pct, 2)
             summary.append(item)
         return summary
+
+    async def emergency_close_account(self, account_id: str) -> Dict[str, Any]:
+        """
+        [KILL-SWITCH INSTITUCIONAL POR CUENTA]
+        Cancela de inmediato todas las órdenes pendientes y liquida/cierra a mercado todas
+        las posiciones abiertas para una cuenta específica, pausándola para evitar nuevas entradas.
+        """
+        acc = self._accounts.get(account_id)
+        if not acc:
+            return {"status": "error", "message": f"Cuenta {account_id} no encontrada"}
+
+        ex = self._executors.get(account_id)
+        if not ex:
+            return {"status": "error", "message": f"Ejecutor para {account_id} no disponible"}
+
+        logger.warning(f"🚨 [KILL-SWITCH] Activando cierre de emergencia para {acc.label} ({account_id})...")
+        
+        # 1. Cancelar todas las órdenes pendientes
+        cancelled_orders = False
+        try:
+            cancelled_orders = await ex.cancel_all_pending_orders()
+        except Exception as o_err:
+            logger.error(f"❌ [KILL-SWITCH] [{acc.label}] Error cancelando órdenes: {o_err}")
+
+        # 2. Consultar y cerrar a mercado todas las posiciones abiertas
+        closed_positions = []
+        try:
+            positions = await ex.get_pending_positions()
+            if positions:
+                for p in positions:
+                    sym = p.get("symbol")
+                    qty = float(p.get("qty", 0))
+                    side_raw = p.get("side", "BUY").upper()
+                    close_side = "SELL" if side_raw in ("BUY", "LONG", "1") else "BUY"
+                    pos_id = p.get("positionId")
+                    
+                    if sym and qty > 0:
+                        logger.warning(f"🚨 [KILL-SWITCH] [{acc.label}] Cerrando a mercado {sym} ({qty} u)...")
+                        close_res = await ex.close_market_position(symbol=sym, side=close_side, qty=qty, position_id=pos_id)
+                        closed_positions.append({"symbol": sym, "qty": qty, "result": close_res})
+        except Exception as p_err:
+            logger.error(f"❌ [KILL-SWITCH] [{acc.label}] Error cerrando posiciones: {p_err}")
+
+        # 3. Pausar la cuenta
+        acc.enabled = False
+        if not acc.is_primary:
+            self._save_accounts()
+
+        return {
+            "status": "success",
+            "account_id": account_id,
+            "label": acc.label,
+            "orders_cancelled": cancelled_orders,
+            "positions_closed": closed_positions,
+            "account_enabled": False,
+            "timestamp": time.time()
+        }
