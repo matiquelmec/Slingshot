@@ -8,7 +8,7 @@ async def run():
     acc = mgr.get_account('cliente_2')
     if acc:
         acc.enabled = True
-        mgr.save_accounts()
+        mgr._save_accounts()
         print('cliente_2 enabled: True')
         
     ex = mgr.get_executor('cliente_2')
