@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Shield, Key, Send, CheckCircle2, AlertTriangle, Play, RefreshCw, Lock } from 'lucide-react';
+import { getApiBaseUrl } from '../../utils/apiUrl';
 
 interface SetupStatus {
   is_configured: boolean;
@@ -40,7 +41,7 @@ export default function OnboardingModal() {
   useEffect(() => {
     async function checkStatus() {
       try {
-        const res = await fetch('http://localhost:8000/api/v1/setup/status');
+        const res = await fetch(`${getApiBaseUrl()}/api/v1/setup/status`);
         if (res.ok) {
           const data: SetupStatus = await res.json();
           if (!data.is_configured) {
@@ -64,7 +65,7 @@ export default function OnboardingModal() {
     setTestingBitunix(true);
     setBitunixStatus(null);
     try {
-      const res = await fetch('http://localhost:8000/api/v1/setup/test-bitunix', {
+      const res = await fetch(`${getApiBaseUrl()}/api/v1/setup/test-bitunix`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ api_key: bitunixApiKey, secret_key: bitunixSecretKey })
@@ -86,7 +87,7 @@ export default function OnboardingModal() {
     setTestingTelegram(true);
     setTelegramStatus(null);
     try {
-      const res = await fetch('http://localhost:8000/api/v1/setup/test-telegram', {
+      const res = await fetch(`${getApiBaseUrl()}/api/v1/setup/test-telegram`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ bot_token: telegramBotToken, chat_id: telegramChatId })
@@ -103,7 +104,7 @@ export default function OnboardingModal() {
   const handleSaveAndLaunch = async () => {
     setSaving(true);
     try {
-      const res = await fetch('http://localhost:8000/api/v1/setup/save', {
+      const res = await fetch(`${getApiBaseUrl()}/api/v1/setup/save`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
