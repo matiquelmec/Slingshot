@@ -6,6 +6,7 @@ from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score, precision_score, classification_report
 import os
 from pathlib import Path
+from typing import Dict, Any, Optional
 
 # Importar nuestra fábrica de features
 from engine.ml.features import FeatureEngineer
@@ -81,7 +82,75 @@ def train_slingshot_model(data_path: Path, model_dir: Path):
     model.save_model(str(model_path))
     
     logger.info(f"💾 Modelo guardado exitosamente en: {model_path}")
+    return {"accuracy": acc, "precision": prec, "model_path": str(model_path)}
+
+def safe_auto_retrain(min_accuracy: float = 0.52) -> Dict[str, Any]:
+    """
+    [AUTO-RETRAIN PIPELINE v50.0 FAIL-SAFE]
+    Entrena un modelo candidato y solo reemplaza el modelo de producción
+    si supera el umbral mínimo de calidad en datos fuera de muestra (Out-Of-Sample).
+    """
+    base_dir = Path(__file__).parent.parent.parent
+    data_file = base_dir / "engine" / "backtest" / "data" / "btcusdt_15m_1YEAR.parquet"
+    if not data_file.exists():
+        data_file = base_dir / "engine" / "backtest" / "data" / "BTCUSDT_15m_180d.parquet"
+        
+    models_dir = Path(__file__).parent / "models"
+    models_dir.mkdir(parents=True, exist_ok=True)
     
+    if not data_file.exists():
+        logger.warning(f"⚠️ [AUTO-RETRAIN] Dataset histórico no encontrado en {data_file}. Omitiendo reentrenamiento.")
+        return {"status": "skipped", "reason": "no_data"}
+        
+    try:
+        df = pd.read_parquet(data_file)
+        engineer = FeatureEngineer(target_horizon=2)
+        ml_dataset = engineer.prepare_dataset(df.tail(15000), classification=True)
+        
+        to_drop = ['timestamp', 'open', 'high', 'low', 'close', 'number_of_trades', 'TARGET']
+        feature_cols = [col for col in ml_dataset.columns if col not in to_drop and pd.api.types.is_numeric_dtype(ml_dataset[col])]
+        
+        X = ml_dataset[feature_cols]
+        y = ml_dataset['TARGET']
+        
+        split_idx = int(len(X) * 0.8)
+        X_train, X_test = X.iloc[:split_idx], X.iloc[split_idx:]
+        y_train, y_test = y.iloc[:split_idx], y.iloc[split_idx:]
+        
+        candidate_model = xgb.XGBClassifier(
+            n_estimators=150,
+            learning_rate=0.05,
+            max_depth=5,
+            subsample=0.8,
+            colsample_bytree=0.8,
+            eval_metric='logloss',
+            random_state=42
+        )
+        candidate_model.fit(X_train, y_train, eval_set=[(X_test, y_test)], verbose=False)
+        
+        preds = candidate_model.predict(X_test)
+        cand_acc = float(accuracy_score(y_test, preds))
+        cand_prec = float(precision_score(y_test, preds, zero_division=0))
+        
+        logger.info(f"🧪 [AUTO-RETRAIN] Candidato evaluado: Accuracy {cand_acc:.2%}, Precision {cand_prec:.2%}")
+        
+        if cand_acc >= min_accuracy:
+            target_file = models_dir / "slingshot_xgb_15m_v2.json"
+            temp_file = models_dir / "candidate_xgb.json"
+            candidate_model.save_model(str(temp_file))
+            # Reemplazo atómico seguro
+            import shutil
+            shutil.move(str(temp_file), str(target_file))
+            logger.info(f"🏆 [AUTO-RETRAIN] Modelo promovido a producción con {cand_acc:.2%} de Accuracy.")
+            return {"status": "promoted", "accuracy": cand_acc, "precision": cand_prec}
+        else:
+            logger.warning(f"🛡️ [AUTO-RETRAIN FAIL-SAFE] Candidato rechazado por bajo rendimiento ({cand_acc:.2%} < {min_accuracy:.2%}). Se preserva modelo actual.")
+            return {"status": "rejected", "accuracy": cand_acc, "min_required": min_accuracy}
+            
+    except Exception as retrain_err:
+        logger.error(f"❌ [AUTO-RETRAIN] Error durante ciclo de reentrenamiento: {retrain_err}")
+        return {"status": "error", "message": str(retrain_err)}
+
 if __name__ == "__main__":
     # Rutas relativas al proyecto
     base_dir = Path(__file__).parent.parent.parent

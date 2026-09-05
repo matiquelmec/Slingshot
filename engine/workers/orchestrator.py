@@ -59,6 +59,8 @@ class SlingshotOrchestrator:
         asyncio.create_task(self.news_worker.start())
         # Iniciar Worker de Calendario Económico
         asyncio.create_task(self.calendar_worker.start())
+        # Iniciar Worker Semanal de Tear Sheets SOP-60 a Telegram (v50.0)
+        asyncio.create_task(self._weekly_tear_sheet_worker())
         
         # 🚀 [APEX] Iniciar Dashboard de Ejecución Nexus (v10.0 - Auto-start en __init__)
         # nexus.start_dashboard() # Removido: Redundante y causa crash
@@ -349,6 +351,47 @@ class SlingshotOrchestrator:
             
             # Sincronización cada 60s (v8.8.1)
             await asyncio.sleep(60)
+
+    async def _weekly_tear_sheet_worker(self):
+        """
+        [SOP-60 EXECUTIVE TEAR SHEET DISPATCHER]
+        Monitorea el reloj semanal y recopila el rendimiento transaccional
+        desde SlingshotVault para generar y despachar el Tear Sheet formal a Telegram.
+        """
+        logger.info("📊 [TEAR SHEET WORKER] Centinela semanal de reportes cuantitativos activado.")
+        last_sent_week = None
+        while not self._stop_event.is_set():
+            try:
+                now_utc = pd.Timestamp.now(tz="UTC")
+                # Se dispara los domingos entre las 23:00 y las 23:59 UTC
+                is_sunday_night = (now_utc.day_name() == "Sunday" and now_utc.hour == 23 and now_utc.minute >= 45)
+                current_week_id = f"{now_utc.year}-W{now_utc.week}"
+
+                if is_sunday_night and last_sent_week != current_week_id:
+                    from engine.core.vault import vault
+                    from engine.core.tear_sheet import calculate_portfolio_metrics, format_tear_sheet_markdown
+                    from engine.router.telegram_dispatcher import telegram_dispatcher
+
+                    # 1. Extraer trades de los últimos 7 días
+                    seven_days_ago = now_utc.timestamp() - (7 * 86400)
+                    closed_trades = vault.get_closed_trades(since_timestamp=seven_days_ago)
+
+                    if closed_trades:
+                        returns_r = [float(t.get("pnl_r", 0.0)) for t in closed_trades]
+                        metrics = calculate_portfolio_metrics(returns_r)
+                        markdown_report = format_tear_sheet_markdown(metrics, account_label="Cartera Semanal Institucional")
+                        await telegram_dispatcher.send_raw_message(markdown_report)
+                        logger.info(f"✅ [TEAR SHEET WORKER] Reporte semanal {current_week_id} despachado a Telegram con éxito.")
+                    else:
+                        logger.info(f"ℹ️ [TEAR SHEET WORKER] Sin operaciones cerradas en la semana {current_week_id}. Omitiendo reporte vacío.")
+
+                    last_sent_week = current_week_id
+
+            except Exception as ts_err:
+                logger.debug(f"[TEAR SHEET WORKER] Error evaluando despacho semanal: {ts_err}")
+
+            # Revisa cada 15 minutos
+            await asyncio.sleep(900)
 
 async def run_orchestrator():
     orchestrator = SlingshotOrchestrator()

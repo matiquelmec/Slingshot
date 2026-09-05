@@ -630,6 +630,24 @@ class TradeManager:
                             hist_res = await bitunix._request("GET", "/api/v1/futures/trade/get_history_orders", params={"symbol": csym, "pageSize": 3})
                             hist_orders = hist_res.get("data", {}).get("orderList", []) if isinstance(hist_res.get("data"), dict) else []
                             is_manual = any(o.get("clientId") is None and o.get("status") == "FILLED" for o in hist_orders[:2])
+                            
+                            # Registro transaccional en SQLite WAL para Tear Sheets SOP-60
+                            from engine.core.vault import vault
+                            filled_order = next((o for o in hist_orders if o.get("status") == "FILLED"), {})
+                            real_pnl_usd = float(filled_order.get("realizedPnl", 0.0) or 0.0)
+                            order_side = str(filled_order.get("side", "SELL")).upper()
+                            exit_label = "MANUAL_CLIENT" if is_manual else "EXIT_REACHED"
+                            # Estimación de R asumiendo 2.5% de riesgo base
+                            est_r = round(real_pnl_usd / 2.0, 2) if real_pnl_usd != 0 else 0.0
+                            vault.record_closed_trade(
+                                account_id=acc_id,
+                                symbol=csym,
+                                side=order_side,
+                                pnl_r=est_r,
+                                pnl_usd=real_pnl_usd,
+                                exit_reason=exit_label
+                            )
+
                             if is_manual:
                                 logger.info(f"🛑 [SOP-59 SENTINEL] [{bitunix.account_label}] Cierre manual detectado en {csym}. Purgando órdenes pendientes asociadas...")
                                 purged_cnt = await bitunix.cancel_all_orders_for_symbol(csym)
@@ -640,7 +658,7 @@ class TradeManager:
                                     severity="INFO"
                                 ))
                         except Exception as manual_err:
-                            logger.debug(f"[SOP-59 SENTINEL] Error auditando cierre manual para {csym}: {manual_err}")
+                            logger.debug(f"[SOP-59 SENTINEL] Error auditando cierre para {csym}: {manual_err}")
                 self._last_active_positions[acc_id] = active_symbols
 
                 open_limits = [

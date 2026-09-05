@@ -13,6 +13,7 @@ import sqlite3
 import time
 import json
 import threading
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, Any, Optional, List, Tuple
 from engine.core.logger import logger
@@ -104,6 +105,21 @@ class SlingshotVault:
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
             """)
+
+            # 4. Tabla de Rendimiento Transaccional SSoT (Tear Sheets SOP-60)
+            cursor.execute("""
+            CREATE TABLE IF NOT EXISTS closed_trades (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                account_id TEXT NOT NULL,
+                symbol TEXT NOT NULL,
+                side TEXT NOT NULL,
+                pnl_r REAL NOT NULL,
+                pnl_usd REAL NOT NULL,
+                exit_reason TEXT NOT NULL,
+                closed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+            """)
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_closed_trades_acc_time ON closed_trades(account_id, closed_at);")
             conn.commit()
             logger.info(f"🏛️ [VAULT] Base de datos SQLite WAL inicializada en {self.db_path.name}")
 
@@ -207,6 +223,49 @@ class SlingshotVault:
         except Exception as e:
             logger.error(f"❌ [VAULT MAINTENANCE] Error en mantenimiento de SQLite: {e}")
         return deleted_stats
+
+    # ── MÉTODOS DE RENDIMIENTO CUANTITATIVO (SOP-60 TEAR SHEETS) ──────────────
+
+    def record_closed_trade(self, account_id: str, symbol: str, side: str, pnl_r: float, pnl_usd: float = 0.0, exit_reason: str = "TP") -> int:
+        """Registra un trade completado en la bóveda transaccional."""
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+            INSERT INTO closed_trades (account_id, symbol, side, pnl_r, pnl_usd, exit_reason)
+            VALUES (?, ?, ?, ?, ?, ?)
+            """, (account_id, symbol.upper(), side.upper(), float(pnl_r), float(pnl_usd), exit_reason))
+            conn.commit()
+            return cursor.lastrowid
+
+    def get_closed_trades(self, account_id: Optional[str] = None, since_timestamp: Optional[float] = None) -> List[Dict[str, Any]]:
+        """Recupera los trades cerrados para el cálculo de métricas financieras."""
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            query = "SELECT id, account_id, symbol, side, pnl_r, pnl_usd, exit_reason, closed_at FROM closed_trades WHERE 1=1"
+            params = []
+            if account_id:
+                query += " AND account_id = ?"
+                params.append(account_id)
+            if since_timestamp is not None:
+                since_iso = datetime.fromtimestamp(since_timestamp, tz=timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+                query += " AND closed_at >= ?"
+                params.append(since_iso)
+            query += " ORDER BY id ASC"
+            cursor.execute(query, tuple(params))
+            rows = cursor.fetchall()
+            return [
+                {
+                    "id": r[0],
+                    "account_id": r[1],
+                    "symbol": r[2],
+                    "side": r[3],
+                    "pnl_r": r[4],
+                    "pnl_usd": r[5],
+                    "exit_reason": r[6],
+                    "closed_at": r[7]
+                }
+                for r in rows
+            ]
 
 # Instancia global singleton
 vault = SlingshotVault()
