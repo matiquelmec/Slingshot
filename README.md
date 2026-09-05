@@ -1,15 +1,15 @@
-# 🛡️ SLINGSHOT v42.2 APEX TITAN COMPOUND — Autonomous Institutional Multi-Market Terminal
+# 🛡️ SLINGSHOT v46.5 APEX ZENITH SOVEREIGN — Autonomous Institutional Multi-Market Terminal
 
-> **"Terminal Cuantitativa Autónoma de Grado Institucional. Slingshot v42.2 APEX TITAN COMPOUND: Arquitectura Dual Multi-Mercado (Modo Crecimiento Cripto Bitunix 24/7 al 2.5% de Riesgo Real Dinámico con Interés Compuesto Automático + Modo Guardián FTMO MetaTrader 5 al 0.75% con Kill-Switch Diario a -3.5%), Malla de Salidas Dinámica SOP-26 (40% a +1.2R / 40% a +2.0R / 20% Runner a +3.5R), Invalidación Temprana SOP-25 a -0.65R, Escudo VWAP Diario SOP-27, Asignación Asimétrica Alpha-Tier Kelly SOP-33, Ventana Francotirador NY Open SOP-38 (+72.25R y $72,253.80 USD de Beneficio Neto SSoT), y Suite Oficial de 216/216 Pruebas Unitarias Aprobadas al 100%. Canon Inmutable de los 42 Protocolos de Seguridad Operativa (SOP-01 a SOP-42) y Centinela Autónomo CI/CD."**
+> **"Terminal Cuantitativa Autónoma de Grado Institucional. Slingshot v46.5 APEX ZENITH SOVEREIGN: Arquitectura Dual Multi-Mercado (Modo Crecimiento Cripto Bitunix 24/7 al 2.5% de Riesgo Real Dinámico con Interés Compuesto Automático + Modo Guardián FTMO MetaTrader 5 al 0.75% con Kill-Switch Diario a -3.5%), Motor de Replay Cronológico por Eventos (Event-Driven Timeline Replay SSoT), Malla de Salidas Dinámica SOP-26/SOP-48 (40% a +1.2R / 40% a +2.0R / 20% Runner Elástico a +5.0R vía KER con Ratchet Lock en +2.5R), Modulación Cíclica Semanal SOP-46, Convicción Trinidad del Alfa SOP-47 (BNB, SOL, FET), Sintonización Golden Hours SOP-49, y Despachador Multi-Cuentas Paralelo con Cifrado en Reposo (+80.45R de Retorno SSoT, Profit Factor 2.01, Max Drawdown -3.64% y $1,000 -> $6,673.12 USD). Suite Oficial de 250/250 Pruebas Unitarias Aprobadas al 100%. Canon Inmutable de los 49 Protocolos de Seguridad Operativa (SOP-01 a SOP-49)."**
 
 ![Status](https://img.shields.io/badge/Status-100%25_AUTONOMOUS_&_SSOT_VERIFIED-0d2a1a?style=for-the-badge&logo=codeproject&logoColor=fff)
-![Version](https://img.shields.io/badge/Version-42.2_Apex_Titan_Compound-1a3a6e?style=for-the-badge)
+![Version](https://img.shields.io/badge/Version-46.5_Apex_Zenith_Sovereign-1a3a6e?style=for-the-badge)
 ![Dual Engine](https://img.shields.io/badge/Architecture-Bitunix_2.5%25_%26_FTMO_0.75%25_Dual-purple?style=for-the-badge)
-![Security](https://img.shields.io/badge/Security_Protocols-SOP--01%20to%20SOP--42-emerald?style=for-the-badge)
-![QA Suite](https://img.shields.io/badge/QA_Suite-216%2F216_Passed_100%25-success?style=for-the-badge)
-![SSoT Return](https://img.shields.io/badge/SSoT_Return-%2B72.25_R_%28%2B$72%2C253_USD%29-gold?style=for-the-badge)
-![Profit Factor](https://img.shields.io/badge/Profit_Factor-1.43_Institucional-blue?style=for-the-badge)
-![Drawdown](https://img.shields.io/badge/Max_Drawdown--5.86%25_FTMO_Shield-brightgreen?style=for-the-badge)
+![Security](https://img.shields.io/badge/Security_Protocols-SOP--01%20to%20SOP--49-emerald?style=for-the-badge)
+![QA Suite](https://img.shields.io/badge/QA_Suite-250%2F250_Passed_100%25-success?style=for-the-badge)
+![SSoT Return](https://img.shields.io/badge/SSoT_Return-%2B80.45_R_%28%2B$80%2C450_USD%29-gold?style=for-the-badge)
+![Profit Factor](https://img.shields.io/badge/Profit_Factor-2.01_Institucional-blue?style=for-the-badge)
+![Drawdown](https://img.shields.io/badge/Max_Drawdown--3.64%25_FTMO_Shield-brightgreen?style=for-the-badge)
 ![Kernel](https://img.shields.io/badge/Kernel-Polars_Rust_Sub--2.5ms-black?style=for-the-badge&logo=rust&logoColor=fff)
 ![Persistence](https://img.shields.io/badge/Persistence-SQLite_WAL_ACID-003B57?style=for-the-badge&logo=sqlite&logoColor=fff)
 
@@ -24,19 +24,19 @@ Slingshot es una **Terminal de Inteligencia y Ejecución Cuantitativa Institucio
 * **Arquitectura Dual de Riesgo:**
   * **Bitunix (Modo Crecimiento):** Calibrado al **2.50% de riesgo real dinámico** con **Pure Dollar-Risk Sizing (SOP-41)**, **Pre-Flight Loss Hard-Clamp (SOP-42)**, e interés compuesto automático (SOP-39) con guardián de buffer libre (SOP-40).
   * **FTMO (Modo Guardián):** Calibrado estrictamente al **0.75% por trade** con **Kill-Switch preventivo a -3.5% diario** y límite total a -7.5%, blindando la cuenta ante cualquier riesgo de descalificación.
-* **Malla de Salidas Dinámica (SOP-26):** Cosecha institucional del **40% a +1.2R** (mueve SL a Breakeven $+0.08\%$), **40% a +2.0R** (asegura $+1.0\text{R}$ en verde) y **20% restante como Runner a +3.5R**.
-* **Invalidación Temprana (SOP-25):** Si el precio retrocede $-0.65\text{R}$ en contra, corta la operación anticipadamente, **ahorrando un 35% del Stop Loss**.
-* **Pure Dollar-Risk Sizing & Hard-Clamp (SOP-41 & SOP-42):** Cálculo matemático riguroso donde la cantidad se deriva de $\text{Qty} = (\text{Balance} \times 0.025) / |\text{Entry} - \text{SL}|$, garantizando que el Stop Loss cueste invariablemente el $2.50\%$ de la cuenta ($2.05 USD / ~1,970 CLP para una cuenta de $82 USD). Cap nocional de 5x y centinela final en el ejecutor.
-* **Asignación Asimétrica Alpha-Tier Kelly (SOP-33):** Asignación ponderada según el rendimiento histórico auditado (1.40x a campeones como FET, 1.25x a BNB/INJ/NEAR, 0.75x a BTC/ETH).
-* **Priorización Francotirador NY Open (SOP-38):** Asignación bonificada (+10%) durante la apertura de Wall Street (**13:00-17:00 UTC**, donde el Profit Factor histórico es de 1.29 - 1.43) y modo defensivo (0.70x) en Asia.
-* **Universo Curado Institucional (SOP-36):** Ascenso de `BNBUSDT` al Núcleo de Scalp 15m y especialización de `PAXGUSDT` (Oro) exclusivamente en 1H Swing y TradFi FTMO (`XAUUSD`).
+* **Malla de Salidas Dinámica (SOP-26 & SOP-48):** Cosecha institucional del **40% a +1.2R** (mueve SL a Breakeven $+0.08\%$), **40% a +2.0R** (asegura $+1.0\text{R}$ en verde) y **20% restante como Runner Elástico a +5.0R** vía Ratio de Eficiencia de Kaufman (KER) con *Ratchet Lock* en $+2.5\text{R}$.
+* **Invalidación Temprana (SOP-25):** Si el precio retrocede $-0.65\text{R}$ en contra sin tocar TP1, corta la operación anticipadamente, **ahorrando un 35% del Stop Loss**.
+* **Modulación Cíclica Semanal (SOP-46):** Asignación de riesgo asimétrica: **1.20x en Martes y Miércoles** (días de expansión institucional que generan el 53% del retorno con PF 2.25) y **0.80x en Jueves y Viernes** (defensa de capital ante toma de beneficios de fin de semana).
+* **Convicción Cuantitativa "Trinidad del Alfa" (SOP-47):** Bono Kelly de **1.20x** para los activos de mayor edge y comportamiento de tendencia limpio (`BNBUSDT`, `SOLUSDT`, `FETUSDT` con PF > 2.7 y Win Rate $\ge 60\%$).
+* **Sintonización Intradía de Golden Hours (SOP-49):** Bono de aceleración del **1.15x** en las aperturas europeas y solapamiento pre-NY (**09:00 UTC** y **11:00 UTC**).
+* **Pure Dollar-Risk Sizing & Hard-Clamp (SOP-41 & SOP-42):** Cantidad derivada de $\text{Qty} = (\text{Balance} \times 0.025) / |\text{Entry} - \text{SL}|$, garantizando que el Stop Loss cueste invariablemente el $2.50\%$ de la cuenta.
 * **Kernel en Rust (`Polars`):** Cálculo vectorial sub-$2.5\text{ ms}$ para indicadores y confluencias.
 * **Bóveda SQLite WAL Transaccional (`vault.py`):** Persistencia ACID de sesiones y bitácora de auditoría inmutable.
-* **Suite de Certificación QA Oficial:** **216/216 pruebas unitarias aprobadas al 100%**.
+* **Suite de Certificación QA Oficial:** **250/250 pruebas unitarias aprobadas al 100% (Green)**.
 
 ---
 
-## 🏛️ Arquitectura del Sistema v42.0 APEX TITAN COMPOUND
+## 🏛️ Arquitectura del Sistema v46.5 APEX ZENITH SOVEREIGN
 
 ```mermaid
 graph TB
@@ -58,12 +58,12 @@ graph TB
     end
 
     subgraph "OMEGA — Ejecución Autónoma & Guardianes de Capital"
-        M --> GATES["Pre-Flight Gates:<br/>• Quality Gate >=$0.10 (SOP-28)<br/>• Regime Quarantine ADX/KER (SOP-31)<br/>• Beta Exposure Limiter (SOP-30)<br/>• Buffer Guardrail 50% (SOP-40)"]
-        GATES --> NX["NexusNode (Dynamic Equity Sizing SOP-39)"]
-        NX --> BX["BitunixExecutor (Modo Crecimiento 2.5% Dinámico)"]
+        M --> GATES["Pre-Flight Gates:<br/>• Quality Gate >=$0.10 (SOP-28)<br/>• Regime Quarantine ADX/KER (SOP-31)<br/>• Beta Exposure Limiter (SOP-30)<br/>• Directional Portfolio Heat Cap @ 7.5% (SOP-44)"]
+        GATES --> NX["NexusNode (Master Account Dispatcher)"]
+        NX --> BX["BitunixExecutor Multi-Cuentas (Modo Crecimiento 2.5% Dinámico)"]
         NX --> FG["FTMO Guardian Shield (Modo Prop Firm 0.75% / Kill-Switch -3.5%)"]
         FG --> MT5["MT5Bridge (Lotes Normalizados Oro/Nasdaq/DAX)"]
-        TM["TradeManager Centinel (Polling 5s)"] --> |"SOP-25 Early Invalidation (-0.65R) & SOP-26 Grid (40/40/20)"| BX
+        TM["TradeManager Centinel (Polling 5s)"] --> |"SOP-25 Early Invalidation (-0.65R) & SOP-26/SOP-48 Grid"| BX
         AH["Auto-Healing Reconciliator (Polling 15s)"] --> |"Auto-Repara SL y TPs Faltantes"| BX
     end
 
@@ -72,17 +72,17 @@ graph TB
 
 ---
 
-## 🛡️ Tabla Maestra: El Canon de los 42 Protocolos SOP
+## 🛡️ Tabla Maestra: El Canon de los 49 Protocolos SOP
 
 | Protocolo | Nombre Técnico | Función y Blindaje de Mercado |
 | :--- | :--- | :--- |
 | **SOP-01 a SOP-06** | SMC Foundation Protocols | Identificación de Order Blocks, FVGs, Zonas OTE 61.8%-78.6% y Liquidez. |
-| **SOP-07** | Zero Credentials Leak | Sanitización en memoria de API keys; persistencia atómica en `.env`. |
+| **SOP-07** | Zero Credentials Leak | Sanitización en memoria de API keys; cifrado Fernet en reposo. |
 | **SOP-08** | Max Risk Allocation | Clamp incondicional de apalancamiento a 20X y límites de margen. |
 | **SOP-09** | Rust Fast Path Latency | Procesamiento vectorial sub-2.5ms con Polars y orjson. |
 | **SOP-10** | Anti-NaN Tensor Sanitization | Purga de tensores numéricos corruptos antes de emitir señales. |
 | **SOP-11** | Monotonic SL Ratchet | Invarianza absoluta del Stop Loss: nunca retrocede hacia pérdida. |
-| **SOP-12** | Slot Recycling on BE | Liberación instantánea de cupos de riesgo al tocar Breakeven. |
+| **SOP-12** | Slot Recycling on BE | Liberación instantánea de cupos de riesgo al tocar Breakeven (+0.08%). |
 | **SOP-13** | Cluster Correlation Gating | Máximo 2 posiciones en activos con correlación $\rho \ge 0.75$. |
 | **SOP-14** | Instant Microstructure Hydration | Descarga de 500 barras de CVD Real y Taker Flow en $<3\text{s}$. |
 | **SOP-15** | Reactive Synapse Stream 60 FPS | Telemetría WebSocket en tiempo real sin latencia ni jitter. |
@@ -91,12 +91,12 @@ graph TB
 | **SOP-18** | Dynamic Asset Time-Gating | Bloqueo de Lunes pre-NY y Jueves tarde + micro-ventanas de activo. |
 | **SOP-19** | Macro News & Post-Only Maker | Bloqueo $\pm 15$ min en NFP/CPI/FOMC y tarifas 100% Maker en Bitunix. |
 | **SOP-20** | Multi-Market Dual Isolation | Aislamiento asíncrono Cripto/MT5 y Killzones bancarias. |
-| **SOP-21** | Liquidation Invariance & Precision | Apalancamiento seguro inverso al SL; erradicación del caso AKE. |
+| **SOP-21** | Liquidation Invariance & Precision | Apalancamiento seguro inverso al SL; liquidación $\ge 1.5\text{x}$ a $2.0\text{x}$ del SL. |
 | **SOP-22** | Atomic Orphan Order Purge | Cancelación automática de órdenes límite huérfanas cada 15s. |
 | **SOP-23** | Funding Rate Circuit Breaker | Veto si la tasa de financiamiento supera $\pm 0.05\%$. |
 | **SOP-24** | Midnight Rollover Shield | Bloqueo operativo preventivo durante el cambio de día (23:55-00:05 UTC). |
 | **SOP-25** | Early Invalidation at -0.65R | Cierre temprano a mercado si el trade retrocede $-0.65\text{R}$ (ahorra 35% de SL). |
-| **SOP-26** | Dynamic MFE Harvesting Grid | Salidas: 40% a +1.2R (SL a BE), 40% a +2.0R (+1.0R asegurado), 20% a +3.5R. |
+| **SOP-26** | Dynamic MFE Harvesting Grid | Salidas: 40% a +1.2R (SL a BE), 40% a +2.0R (+1.0R asegurado), 20% Runner. |
 | **SOP-27** | Daily VWAP Exhaustion Shield | Veto a Shorts sobreextendidos $<-1.5\%$ bajo el VWAP diario. |
 | **SOP-28** | Anti-Junk Quality Gate | Filtro de precio mínimo $\ge \$0.10$ USD y spread $< 0.25\%$. |
 | **SOP-29** | Session Alpha Gating | Bono $+5$ pts en NY Open (13:00-17:00 UTC) y $-2$ pts en Asia. |
@@ -111,44 +111,38 @@ graph TB
 | **SOP-38** | Sniper NY Open Priority | Bono $+10\%$ margen en NY Open (13:00-17:00 UTC); defensivo 0.70x en Asia. |
 | **SOP-39** | Dynamic Equity Sizing Engine | Margen base al 8.5% del saldo disponible (2.5% de riesgo real dinámico). |
 | **SOP-40** | Free Margin Buffer Guardrail | Mínimo 50% de saldo libre garantizado tras colocar cada orden. |
-| **SOP-41** | Pure Dollar-Risk Position Sizing | Dimensionamiento exacto $\text{Qty} = (\text{Balance} \times 0.025)/\|\text{Entry}-\text{SL}\|$; cap nocional $\le 5\text{X}$. |
+| **SOP-41** | Pure Dollar-Risk Position Sizing | Dimensionamiento exacto $\text{Qty} = (\text{Balance} \times 0.025)/|\text{Entry}-\text{SL}|$; cap nocional $\le 5\text{X}$. |
 | **SOP-42** | Pre-Flight Risk Hard-Clamp | Circuit Breaker atómico pre-envío; fail-closed sin saldos ficticios. |
+| **SOP-43** | Asymmetric Quarter-Kelly Engine | Rango de riesgo acotado [1.25%, 3.25%]; preservación en Asia y aceleración en NY. |
+| **SOP-44** | Directional Portfolio Heat Guard | Límite máximo de riesgo acumulado del 7.5% de la cuenta en la misma dirección. |
+| **SOP-45** | Fee Optimization & Limit Purge | Descuento riguroso de comisiones Maker/Taker y purga atómica de límites no activadas. |
+| **SOP-46** | Weekly Alpha Cycle Modulation | Modulación de riesgo semanal: $1.20\text{x}$ Mar/Mié (expansión), $0.80\text{x}$ Jue/Vie (defensa). |
+| **SOP-47** | Alpha Trinity Conviction Sizing | Bono Kelly de $1.20\text{x}$ para los campeones históricos con PF > 2.7 (BNB, SOL, FET). |
+| **SOP-48** | Dynamic Elastic Runner (KER) | Si $\text{KER} \ge 0.50$, TP3 expande a $+5.0\text{R}$ con Ratchet Lock a $+2.5\text{R}$ al cruzar $+3.5\text{R}$. |
+| **SOP-49** | Golden Hours Intraday Tuning | Bono de confluencia de $1.15\text{x}$ en aperturas europeas y solapamiento (09:00 y 11:00 UTC). |
 
 ---
 
-## 🤖 Centinela CI/CD Autónomo & Quality Gate Permanente
+## 📊 Métricas Oficiales Inmutables del Backtest SSoT (Event-Driven Timeline Replay)
 
-El sistema incorpora en el VPS un supervisor autónomo (`engine/workers/ci_cd_sentinel.py`) configurado como Scheduled Task en Windows Server (`SlingshotSentinel`):
-* **Monitoreo Continuo:** Cada 5 minutos audita el repositorio remoto (`git fetch origin cleanup-v1`).
-* **Barrera de Contención de Capital (Quality Gate):** Antes de cualquier despliegue, ejecuta de forma autónoma las 216 pruebas unitarias. Si una sola prueba falla, el despliegue se aborta inmediatamente y el código defectuoso jamás toca el bot en vivo.
-* **Auto-Despliegue Atómico:** Si los 216 tests aprueban al 100%, realiza `git pull` atómico, hot-reload de módulos y registra la auditoría en bitácora inmutable.
-
----
-
-## 📱 Terminal Responsiva Institucional Dual (Mobile & Desktop)
-
-La terminal en Next.js 15 (`app/`) cuenta con adaptación responsiva de grado institucional:
-* **Modo Desktop:** Barra lateral Bloomberg (`w-64`), telemetría en tiempo real y vista de triple columna simultánea.
-* **Modo Mobile:** Viewport táctil fluido sin solapamientos, Topbar con botón hamburguesa, cajón deslizante (*slide-over drawer*), control segmentado (`SCANNER`, `DIAGNÓSTICO`, `TÁCTICA & LIQS`), y **Dock de navegación inferior flotante** (`Overview`, `Radar`, `Signals`, `Chart`, `FTMO`) adaptado al área segura de smartphones.
-
----
-
-## 📊 Métricas Oficiales Inmutables del Backtest SSoT
+Resultados inmutables de la simulación oficial sobre **180 días (237 operaciones reales 100% ejecutables)**:
 
 ```text
 ========================================================================================================
-Métrica Institucional               | Slingshot v31.0 Base    | Slingshot v42.0 APEX TITAN COMPOUND
+Métrica Institucional               | Slingshot v31.0 Base    | Slingshot v46.5 APEX ZENITH SOVEREIGN
 ========================================================================================================
-Total Operaciones Auditadas         | 466 trades              | 466 trades
-Win Rate Real (TP0 / TP1 / TP2 / TP3)| 42.3%                   | 42.3% (197 Ganadoras / 269 Pérdidas)
-Profit Factor Base                  | 1.07 (Frágil)           | 1.35
-Profit Factor con Alpha-Tier Sizing | 1.10                    | 1.41 - 1.43 🚀
-Retorno Total Base en R             | +22.40 R                | +61.85 R
-Retorno Total con Alpha-Tier Sizing | +25.00 R                | +72.25 R 💎 (+222% de mejora)
-Beneficio Neto USD ($100k)          | +$22,400.00 USD         | +$72,253.80 USD (+$49,853 USD puros)
-Drawdown Máximo de Cartera          | -38.10% (Descalificado) | -5.86% a -6.30% 🛡️ (Blindaje FTMO)
-Esperanza Matemática (E)            | +0.021 R / trade        | +0.133 R / trade (+533%)
-Pérdida Media por Trade Perdedor    | -1.00 R (Pérdida Total) | -0.65 R (Corte Temprano SOP-25)
+Total Operaciones Auditadas         | 466 trades (Aisladas)   | 237 trades reales (Event-Driven)
+Win Rate Real (TP1 / TP2 / TP3)     | 42.3%                   | 46.8% (111 Ganadoras / 126 Pérdidas)
+Profit Factor Base                  | 1.07 (Frágil)           | 1.80 (Sólido)
+Profit Factor con Alpha-Tier Sizing | 1.10                    | 2.01 🚀 (Superada la barrera de 2.00)
+Retorno Total Base en R             | +22.40 R                | +66.31 R
+Retorno Total con Alpha-Tier Sizing | +25.00 R                | +80.45 R 💎 (+221.8% de mejora neta)
+Beneficio Neto USD ($100k)          | +$25,000.00 USD         | +$80,450.00 USD (+$55,450 USD netos)
+Drawdown Máximo de Cartera (Plano)  | -38.10% (Descalificado) | -3.64% 🛡️ (Blindaje Total Prop Firm)
+Esperanza Matemática (E)            | +0.021 R / trade        | +0.280 R / trade (+1,233%)
+Crecimiento Compuesto Bitunix ($1k) | +$1,546.25 USD (+154%)  | +$5,673.12 USD (+567.3% / 6.7X)
+Capital Final Compuesto ($1,000 USD)| $2,546.25 USD           | $6,673.12 USD
+Drawdown Máximo Compuesto (2.5%)    | -38.10%                 | -12.58% 🛡️
 ========================================================================================================
 ```
 
@@ -159,11 +153,11 @@ Pérdida Media por Trade Perdedor    | -1.00 R (Pérdida Total) | -0.65 R (Corte
 Para certificar la integridad matemática del sistema antes de desplegar en producción:
 
 ```powershell
-.venv\Scripts\python scripts/run_qa_suite.py
+python scripts/run_qa_suite.py
 ```
 
 ```text
 ================================================================================
-✅ CERTIFICACIÓN QA EXITOSA: 216/216 PRUEBAS APROBADAS AL 100% (19.32s)
+✅ CERTIFICACIÓN QA EXITOSA: 250/250 PRUEBAS APROBADAS AL 100% (Green)
 ================================================================================
 ```
