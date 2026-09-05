@@ -240,27 +240,29 @@ class NexusNode:
 
                 # 2. Eliminar de memoria posiciones que ya no existen en Bitunix (cerradas)
                 closed_assets = []
-                for asset, pos_data in list(self._active_positions.items()):
+                for mem_key, pos_data in list(self._active_positions.items()):
                     pos_acc = pos_data.get("account_id", "primary")
-                    acc_active_map = all_account_positions.get(pos_acc, real_positions_map)
-                    base_asset = pos_data.get("signal", {}).get("asset", asset).split("_")[-1]
-                    if base_asset not in acc_active_map and asset not in real_positions_map:
-                        logger.info(f"📉 [NEXUS SYNC] Posición en {asset} ({pos_acc}) ya no existe en Bitunix. Removiendo.")
-                        closed_assets.append(asset)
+                    acc_active_map = all_account_positions.get(pos_acc, {})
+                    symbol = pos_data.get("signal", {}).get("asset", mem_key.split("_")[-1]).upper()
+                    if symbol not in acc_active_map:
+                        logger.info(f"📉 [NEXUS SYNC] Posición en {symbol} ({pos_acc}) ya no existe en Bitunix. Removiendo.")
+                        closed_assets.append(mem_key)
                         sig = pos_data.get("signal", {})
                         sig["status"] = "CLOSED"
                         await store.save_signal(sig)
                         await registry.broadcast_global({"type": "signal_auditor_update", "data": sig})
 
-                for asset in closed_assets:
-                    del self._active_positions[asset]
-                    self.remove_pending_limit_symbol(asset)
-                    # 🧹 [SOP-22 PURGA ATÓMICA] Cancelar órdenes huérfanas de ese activo en todos los ejecutores
-                    for ex in executors.values():
-                        try:
-                            await ex.cancel_all_orders_for_symbol(asset)
-                        except Exception as purge_err:
-                            logger.error(f"❌ [NEXUS SOP-22] Error purgando órdenes huérfanas para {asset}: {purge_err}")
+                for mem_key in closed_assets:
+                    pos_info = self._active_positions.pop(mem_key, None)
+                    sym_clean = pos_info.get("signal", {}).get("asset", mem_key.split("_")[-1]) if pos_info else mem_key
+                    self.remove_pending_limit_symbol(sym_clean)
+                    # 🧹 [SOP-22 PURGA ATÓMICA] Cancelar órdenes huérfanas de ese activo solo en la cuenta correspondiente
+                    p_acc = pos_info.get("account_id", "primary") if pos_info else "primary"
+                    t_ex = executors.get(p_acc) or self.executor
+                    try:
+                        await t_ex.cancel_all_orders_for_symbol(sym_clean)
+                    except Exception as purge_err:
+                        logger.error(f"❌ [NEXUS SOP-22] Error purgando órdenes huérfanas para {sym_clean}: {purge_err}")
 
                 # 2.1 🛡️ [SOP-22 GHOST ERADICATOR] Purgar cualquier orden CLOSE huérfana de monedas sin posición
                 for acc_id, ex in executors.items():
@@ -275,11 +277,10 @@ class NexusNode:
                     target_ex = executors.get(acc_id) or self.executor
                     is_primary_acc = (acc_id == "primary")
                     for symbol, p in acc_pos_map.items():
-                        mem_key = symbol if is_primary_acc else f"{acc_id}_{symbol}"
-                        alt_key = f"{acc_id}_{symbol}" if is_primary_acc else symbol
+                        mem_key = f"{acc_id}_{symbol}"
                         
-                        # Si ya está registrada en memoria bajo cualquiera de las claves, continuar
-                        if mem_key in self._active_positions or (is_primary_acc and alt_key in self._active_positions):
+                        # Si ya está registrada en memoria bajo la clave aislada de cuenta, continuar
+                        if mem_key in self._active_positions:
                             continue
 
                         qty = float(p.get("qty", 0))
@@ -467,8 +468,6 @@ class NexusNode:
                             "account_id": acc_id
                         }
                         self._active_positions[mem_key] = pos_entry
-                        if is_primary_acc:
-                            self._active_positions[f"primary_{symbol}"] = pos_entry
                         from engine.api.registry import registry
                         await registry.broadcast_global({"type": "signal_auditor_update", "data": reconstructed_signal})
 
