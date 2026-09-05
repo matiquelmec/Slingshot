@@ -510,6 +510,8 @@ class UnifiedBacktestEngine:
         max_concurrent_longs: int = 2,
         max_heat_pct: float = 7.5,
         strict_btc_macro: bool = True,
+        toxic_hours: Optional[List[int]] = None,
+        excluded_assets: Optional[List[str]] = None,
         enable_compounding: bool = True,
         dynamic_risk_pct: float = 0.025,
         compounding_initial_usd: float = 1_000.0,
@@ -523,6 +525,9 @@ class UnifiedBacktestEngine:
         - Modo Dual: R Base / Alpha-Tier (1% plano) e Interés Compuesto Dinámico (2.5% Bitunix).
         - Embudo de telemetría de señales.
         """
+        toxic_hours = [10, 14] if toxic_hours is None else toxic_hours
+        excluded_assets = ["RENDERUSDT"] if excluded_assets is None else excluded_assets
+
         btc_map = self._load_btc_macro_map()
         all_assets = MEGA_CAPS + HIGH_BETA_ALTS
         all_results = []
@@ -534,6 +539,8 @@ class UnifiedBacktestEngine:
         print(f"⚙️  Concurrencia Máxima Longs : {max_concurrent_longs} posiciones simultáneas (SOP-30)")
         print(f"🛡️  Calor Máximo de Cartera   : {max_heat_pct}% (SOP-44 Directional Heat Guardrail)")
         print(f"🧭  Filtro Macro BTC         : {'ACTIVO (btc_aligned dinámico)' if strict_btc_macro else 'DESACTIVADO'}")
+        print(f"⏳  Quirófano Horario        : Vetadas horas {toxic_hours} UTC (Trampa Londres & Apertura NY)")
+        print(f"✂️  Poda de Activos Tóxicos  : Excluidos {excluded_assets}")
         print(f"🔄  Reciclaje de Slots       : ACTIVO (Liberación de riesgo al tocar TP1 @ Breakeven)")
         print("=" * 88)
 
@@ -559,6 +566,7 @@ class UnifiedBacktestEngine:
         rejected_macro_btc = 0
         rejected_max_slots = 0
         rejected_portfolio_heat = 0
+        rejected_toxic_hours = 0
 
         for idx, tr in df_all.iterrows():
             entry_dt = pd.to_datetime(tr["entry_time"])
@@ -568,6 +576,16 @@ class UnifiedBacktestEngine:
 
             sym = tr["symbol"]
             direction = tr["direction"]
+            h = entry_dt.hour
+
+            # Poda de activos
+            if excluded_assets and sym in excluded_assets:
+                continue
+
+            # Quirófano Horario
+            if toxic_hours and h in toxic_hours:
+                rejected_toxic_hours += 1
+                continue
 
             # Veto Macro BTC en Vivo (btc_aligned)
             if strict_btc_macro and sym != "BTCUSDT":
@@ -672,6 +690,7 @@ class UnifiedBacktestEngine:
         print("-" * 88)
         print(f" • Señales Estructurales Brutas Detectadas : {raw_signal_count}")
         print(f" • Vetadas por Filtro Macro BTC (btc_aligned): {rejected_macro_btc:>4} ({rejected_macro_btc/raw_signal_count*100:.1f}%)")
+        print(f" • Vetadas por Horas Tóxicas (10h/14h UTC)  : {rejected_toxic_hours:>4} ({rejected_toxic_hours/raw_signal_count*100:.1f}%)")
         print(f" • Vetadas por Límite de Slots (SOP-30)     : {rejected_max_slots:>4} ({rejected_max_slots/raw_signal_count*100:.1f}%)")
         print(f" • Vetadas por Calor de Cartera (SOP-44)   : {rejected_portfolio_heat:>4} ({rejected_portfolio_heat/raw_signal_count*100:.1f}%)")
         print(f" • Operaciones Reales Ejecutadas            : {executed_count:>4} ({executed_count/raw_signal_count*100:.1f}%)")
