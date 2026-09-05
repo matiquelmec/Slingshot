@@ -47,7 +47,11 @@
 
 ---
 
-## 3. Matriz de Pruebas Unitarias Institucionales (38/38 PASSED - 100%)
+## 3. Matriz de Pruebas Unitarias y Certificación (293/293 Suite Global & 38/38 Quality Gate VPS)
+
+El ecosistema cuenta con una certificación de dos niveles:
+* **Suite Global del Repositorio:** **293/293 Pruebas Unitarias Aprobadas al 100% (Green)**, cubriendo el motor Polars, SMC, VWAP, persitencia WAL, modulación de riesgo y despacho multicuenta.
+* **Quality Gate de Producción (VPS `verificar_sistema.bat`):** Batería de **38 tests institucionales de misión crítica** ejecutados en cada despliegue:
 
 1. `test_multi_asset_feed_async_non_blocking` (PASSED)
 2. `test_multi_asset_feed_sync_fallback` (PASSED)

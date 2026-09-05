@@ -32,7 +32,7 @@ Slingshot es una **Terminal de Inteligencia y Ejecución Cuantitativa Institucio
 * **Pure Dollar-Risk Sizing & Hard-Clamp (SOP-41 & SOP-42):** Cantidad derivada de $\text{Qty} = (\text{Balance} \times 0.025) / |\text{Entry} - \text{SL}|$, garantizando que el Stop Loss cueste invariablemente el $2.50\%$ de la cuenta.
 * **Kernel en Rust (`Polars`):** Cálculo vectorial sub-$2.5\text{ ms}$ para indicadores y confluencias.
 * **Bóveda SQLite WAL Transaccional (`vault.py`):** Persistencia ACID de sesiones y bitácora de auditoría inmutable.
-* **Suite de Certificación QA Oficial:** **250/250 pruebas unitarias aprobadas al 100% (Green)**.
+* **Suite de Certificación QA Oficial:** **293/293 pruebas unitarias globales aprobadas al 100%** y **Quality Gate de Producción de 38/38 tests críticos en VPS (`verificar_sistema.bat`)**.
 
 ---
 
