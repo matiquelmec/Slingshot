@@ -42,6 +42,7 @@ class BroadcasterState:
         
         # Precio en tiempo real (escritura directa desde kline stream)
         self._latest_price: float = 0.0
+        self.is_connected: bool = False
         
         # Bloqueo de concurrencia
         self.lock = asyncio.Lock()

@@ -63,21 +63,22 @@ class SlingshotOrchestrator:
         # 🚀 [APEX] Iniciar Dashboard de Ejecución Nexus (v10.0 - Auto-start en __init__)
         # nexus.start_dashboard() # Removido: Redundante y causa crash
         
-        if not self.radar_assets:
-            logger.info("ℹ️ [ORCHESTRATOR] Watchlist vacía. Usando BTCUSDT como activo de guardia.")
-            for interval in self.intervals:
-                await self.spawn_persistent_broadcaster("BTCUSDT", interval)
-                await asyncio.sleep(0.5) # Pequeño delay entre temporalidades
-            self.radar_assets.add("BTCUSDT")
-        else:
-            # Si ya hay activos (desde sync_watchlists), asegurar delay en el primer barrido
-            logger.info(f"✨ [ORCHESTRATOR] Inicializando malla para: {self.radar_assets}")
-            for sym in list(self.radar_assets):
+        async def _spawn_mesh_background():
+            if not self.radar_assets:
+                logger.info("ℹ️ [ORCHESTRATOR] Watchlist vacía. Usando BTCUSDT como activo de guardia.")
                 for interval in self.intervals:
-                    asyncio.create_task(self.spawn_persistent_broadcaster(sym, interval))
-                    await asyncio.sleep(0.5) # Staggering para evitar handshake timeouts
+                    await self.spawn_persistent_broadcaster("BTCUSDT", interval)
+                    await asyncio.sleep(0.1)
+                self.radar_assets.add("BTCUSDT")
+            else:
+                logger.info(f"✨ [ORCHESTRATOR] Inicializando malla de fondo para: {self.radar_assets}")
+                for sym in list(self.radar_assets):
+                    for interval in self.intervals:
+                        asyncio.create_task(self.spawn_persistent_broadcaster(sym, interval))
+                        await asyncio.sleep(0.1)
+            logger.info(f"✅ [ORCHESTRATOR] Malla de vigilancia activa para: {self.radar_assets} en {self.intervals}")
 
-        logger.info(f"✅ [ORCHESTRATOR] Malla de vigilancia activa para: {self.radar_assets} en {self.intervals}")
+        asyncio.create_task(_spawn_mesh_background())
         
         # Iniciar loop de mantenimiento en segundo plano para no bloquear el arranque
         asyncio.create_task(self._maintenance_loop())
