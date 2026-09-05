@@ -9,11 +9,7 @@ Ejecuta simulaciones multi-activo con todas las reglas de producción:
 • Confluence Manager (Score >= 60) y Mapa Macro de Bitcoin
 • Fast Breakeven Adaptativo (+1.0R Alts / +1.2R Megas) con Fee Absorber (+0.08%)
 • Salidas Asimétricas (TP1 60%, TP2 20%, TP3 10%, Runner 10%)
-=============================================================================
-Uso:
-  python scripts/run_institutional_backtest.py --portfolio
-  python scripts/run_institutional_backtest.py --symbol NEARUSDT --timeframe 15m
-  python scripts/run_institutional_backtest.py --symbol BTCUSDT --timeframe 1h
+• Métricas Institucionales (Sharpe, Sortino, Calmar, Max Drawdown, Profit Factor)
 =============================================================================
 """
 import os
@@ -77,39 +73,32 @@ def main():
     
     btc_map = engine._load_btc_macro_map() if hasattr(engine, '_load_btc_macro_map') else {}
     
-    # Determinar si el activo tiene método dedicado o personalizado
     trades = engine.run_single_asset(sym, interval=args.timeframe, btc_map=btc_map)
 
     if not trades:
         print(f"❌ No se generaron operaciones para {sym} en {args.timeframe}.")
         return
 
-    tdf = pd.DataFrame(trades)
-    total_trades = len(tdf)
-    wins = tdf[tdf['outcome_r'] > 0]
-    bes = tdf[tdf['outcome_r'] == 0]
-    losses = tdf[tdf['outcome_r'] < 0]
-
-    win_rate = (len(wins) / total_trades) * 100
-    be_rate = (len(bes) / total_trades) * 100
-    loss_rate = (len(losses) / total_trades) * 100
-    total_r = tdf['outcome_r'].sum()
-
-    gross_w = wins['outcome_r'].sum() if len(wins) > 0 else 0.0
-    gross_l = abs(losses['outcome_r'].sum()) if len(losses) > 0 else 1.0
-    profit_factor = (gross_w / gross_l) if gross_l > 0 else 99.0
+    metrics = UnifiedBacktestEngine.calculate_performance_metrics(trades, initial_balance=10_000.0, risk_pct=0.01)
 
     print("=" * 85)
-    print(f"📊 INFORME INSTITUCIONAL: {sym} ({args.timeframe.upper()})")
+    print(f"📊 INFORME INSTITUCIONAL SSoT: {sym} ({args.timeframe.upper()})")
     print("=" * 85)
-    print(f" • Total Operaciones:         {total_trades}")
-    print(f" • Ganadoras (TP1/TP2/TP3):   {len(wins)} ({win_rate:.1f}%)")
-    print(f" • Breakevens Salvados ($0):  {len(bes)} ({be_rate:.1f}%)")
-    print(f" • Pérdidas en Stop Loss:     {len(losses)} ({loss_rate:.1f}%)")
-    print(f" • Tasa de Efectividad:       {win_rate + be_rate:.1f}% (Capital Intacto o Ganancia)")
-    print(f" • RETORNO NETO TOTAL:        {total_r:+.2f} R")
-    print(f" • PROFIT FACTOR:             {profit_factor:.2f}")
-    print(f" • Ganancia Neta ($1,000 Usd):{total_r * 10.0:+.2f} USDT (arriesgando 1% / $10)")
+    print(f" • Total Operaciones:         {metrics['total_trades']}")
+    print(f" • Win Rate Real (TP1/2/3):   {metrics['win_rate']:.1f}%")
+    print(f" • Breakevens Salvados ($0):  {metrics['breakeven_rate']:.1f}%")
+    print(f" • Retorno Neto Total:        {metrics['total_r']:>+8.2f} R")
+    print(f" • Profit Factor:             {metrics['profit_factor']:.2f}")
+    print(f" • Esperanza Matemática:      {metrics['expectancy_r']:>+7.3f} R / trade")
+    print(f" • Max Drawdown Histórico:    -{metrics['max_drawdown_pct']:.2f}%")
+    print(f" • Sharpe Ratio Anualizado:   {metrics['sharpe_ratio']:.2f}")
+    print(f" • Sortino Ratio (Downside):  {metrics['sortino_ratio']:.2f}")
+    print(f" • Calmar Ratio (Ret/DD):     {metrics['calmar_ratio']:.2f}")
+    print(f" • Beneficio Neto USD ($10k): {metrics['net_profit_usd']:>+11,.2f} USD")
+    print("-" * 85)
+    print(" • Desglose de Salidas:")
+    for reason, count in metrics.get("exit_breakdown", {}).items():
+        print(f"     - {reason:<25}: {count:>3} trades")
     print("=" * 85)
 
 if __name__ == "__main__":
