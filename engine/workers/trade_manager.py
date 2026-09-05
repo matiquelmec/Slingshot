@@ -1,17 +1,17 @@
-"""
-engine/workers/trade_manager.py — Trailing Stop Estructural Slingshot v1.0
+﻿"""
+engine/workers/trade_manager.py â€” Trailing Stop Estructural Slingshot v1.0
 ===========================================================================
-Gestiona el ciclo de vida de señales activas después de su activación.
+Gestiona el ciclo de vida de seÃ±ales activas despuÃ©s de su activaciÃ³n.
 Implementa un Trailing Stop inteligente que sigue la estructura del mercado
 (swing lows/highs y Order Blocks) en lugar de porcentajes fijos.
 
-Fases del ciclo de vida de una señal:
-  ACTIVE   → Precio entre entrada y TP1. SL fijo en posición original.
-  BREAKEVEN→ Precio tocó TP1. SL movido a precio de entrada + buffer ATR.
-             Se cierra el 40% de la posición (parcial TP1).
-  TRAILING → Precio superó TP2. SL sigue el último swing estructural.
-             Se cierra el 30% adicional de la posición (parcial TP2).
-  CLOSED   → Precio tocó TP3 o SL fue hit. Ciclo completado.
+Fases del ciclo de vida de una seÃ±al:
+  ACTIVE   â†’ Precio entre entrada y TP1. SL fijo en posiciÃ³n original.
+  BREAKEVENâ†’ Precio tocÃ³ TP1. SL movido a precio de entrada + buffer ATR.
+             Se cierra el 40% de la posiciÃ³n (parcial TP1).
+  TRAILING â†’ Precio superÃ³ TP2. SL sigue el Ãºltimo swing estructural.
+             Se cierra el 30% adicional de la posiciÃ³n (parcial TP2).
+  CLOSED   â†’ Precio tocÃ³ TP3 o SL fue hit. Ciclo completado.
 """
 
 import asyncio
@@ -27,11 +27,11 @@ import pandas as pd
 class TradeManager:
     """
     [STRUCTURAL TRAILING STOP v1.0]
-    Worker en segundo plano que monitorea las señales activas del MemoryStore
-    y actualiza el SL de forma estructural según la evolución del precio.
+    Worker en segundo plano que monitorea las seÃ±ales activas del MemoryStore
+    y actualiza el SL de forma estructural segÃºn la evoluciÃ³n del precio.
     """
 
-    POLL_INTERVAL_SECONDS = 30  # Evalúa cada 30 segundos
+    POLL_INTERVAL_SECONDS = 30  # EvalÃºa cada 30 segundos
     ATR_BE_BUFFER = 0.3         # 30% del ATR como buffer sobre el precio de entrada en BE
 
     def __init__(self):
@@ -46,20 +46,20 @@ class TradeManager:
         logger.info("[TRADE_MANAGER] Deteniendo gestor de trades...")
         self._stop_event.set()
 
-    # ─────────────────────────────────────────────
+    # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     # LOOP PRINCIPAL
-    # ─────────────────────────────────────────────
+    # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     async def _management_loop(self):
-        """Ciclo principal: revisa señales activas y sincroniza posiciones en Bitunix cada 30 segundos."""
+        """Ciclo principal: revisa seÃ±ales activas y sincroniza posiciones en Bitunix cada 30 segundos."""
         await asyncio.sleep(10)  # Espera inicial para que el sistema arranque
         while not self._stop_event.is_set():
             try:
-                # 1. Procesar señales del sistema local
+                # 1. Procesar seÃ±ales del sistema local
                 await self._process_active_signals()
                 # 2. Sincronizar y proteger posiciones reales en vivo en Bitunix
                 await self.sync_live_bitunix_positions()
-                # 3. Auditar e invalidar órdenes límite huérfanas/riesgosas en Bitunix
+                # 3. Auditar e invalidar Ã³rdenes lÃ­mite huÃ©rfanas/riesgosas en Bitunix
                 await self.sync_live_bitunix_pending_orders()
                 # 4. Sincronizar y proteger posiciones de MetaTrader 5 (FTMO)
                 await self.sync_live_mt5_positions()
@@ -68,10 +68,10 @@ class TradeManager:
             await asyncio.sleep(self.POLL_INTERVAL_SECONDS)
 
     async def _process_active_signals(self):
-        """Itera sobre las señales y gestiona tanto órdenes PENDING como activas (ACTIVE/BREAKEVEN/TRAILING)."""
+        """Itera sobre las seÃ±ales y gestiona tanto Ã³rdenes PENDING como activas (ACTIVE/BREAKEVEN/TRAILING)."""
         signals = await store.get_signals(status=None)
         
-        # 1. Monitoreo e Invalidación de órdenes PENDING
+        # 1. Monitoreo e InvalidaciÃ³n de Ã³rdenes PENDING
         pending = [
             s for s in signals 
             if s.get("status") == "PENDING" and s.get("price") and s.get("stop_loss") and s.get("tp1")
@@ -102,8 +102,8 @@ class TradeManager:
 
     async def _process_pending_signal(self, signal: Dict[str, Any]):
         """
-        Evalúa si una orden PENDING tocó entrada (pasa a FILLED/ACTIVE) 
-        o si el precio se escapó y superó TP1 sin tocar entrada (pasa a EXPIRED_MISSED).
+        EvalÃºa si una orden PENDING tocÃ³ entrada (pasa a FILLED/ACTIVE) 
+        o si el precio se escapÃ³ y superÃ³ TP1 sin tocar entrada (pasa a EXPIRED_MISSED).
         """
         asset = signal.get("asset", "UNKNOWN")
         interval = signal.get("interval", "15m")
@@ -124,50 +124,50 @@ class TradeManager:
         low_price = float(df["low"].min())
         high_price = float(df["high"].max())
 
-        # Caso A: El precio tocó la entrada -> Activar orden
+        # Caso A: El precio tocÃ³ la entrada -> Activar orden
         entry_touched = (is_long and low_price <= entry_price) or (not is_long and high_price >= entry_price)
         if entry_touched:
             signal["status"] = "FILLED"
             signal["filled_at"] = df["timestamp"].iloc[-1]
             signal["trailing_phase"] = "ACTIVE"
             await store.save_signal(signal)
-            logger.info(f"⚡ [TRADE_MANAGER] Orden PENDING {asset} LLENADA (@ ${entry_price:.4f}). Estado -> FILLED.")
+            logger.info(f"âš¡ [TRADE_MANAGER] Orden PENDING {asset} LLENADA (@ ${entry_price:.4f}). Estado -> FILLED.")
             return
 
-        # Caso B: El precio se escapó y alcanzó TP1 sin haber dado entrada -> Invalidar
+        # Caso B: El precio se escapÃ³ y alcanzÃ³ TP1 sin haber dado entrada -> Invalidar
         missed_tp1 = (is_long and high_price >= tp1_price) or (not is_long and low_price <= tp1_price)
         if missed_tp1:
             signal["status"] = "EXPIRED_MISSED"
-            signal["rejection_reason"] = f"El precio alcanzó TP1 (${tp1_price:.4f}) sin retroceder al nivel de entrada (${entry_price:.4f}). Setup descartado."
+            signal["rejection_reason"] = f"El precio alcanzÃ³ TP1 (${tp1_price:.4f}) sin retroceder al nivel de entrada (${entry_price:.4f}). Setup descartado."
             await store.save_signal(signal)
             from engine.execution.nexus import nexus
             nexus.remove_pending_limit_symbol(asset)
-            logger.info(f"⏱️ [TRADE_MANAGER] Orden PENDING {asset} EXPIRADA (Objetivo alcanzado sin dar entrada).")
+            logger.info(f"â±ï¸ [TRADE_MANAGER] Orden PENDING {asset} EXPIRADA (Objetivo alcanzado sin dar entrada).")
             return
 
-        # Caso C: El precio rompió el Stop Loss antes de entrar
+        # Caso C: El precio rompiÃ³ el Stop Loss antes de entrar
         sl_broken = (is_long and low_price < sl_price) or (not is_long and high_price > sl_price)
         if sl_broken:
             signal["status"] = "INVALIDATED_BROKEN"
-            signal["rejection_reason"] = f"Estructura invalidada antes de la activación (SL ${sl_price:.4f} perforado)."
+            signal["rejection_reason"] = f"Estructura invalidada antes de la activaciÃ³n (SL ${sl_price:.4f} perforado)."
             await store.save_signal(signal)
             from engine.execution.nexus import nexus
             nexus.remove_pending_limit_symbol(asset)
-            logger.info(f"🛑 [TRADE_MANAGER] Orden PENDING {asset} INVALIDADA (SL roto previo a entrada).")
+            logger.info(f"ðŸ›‘ [TRADE_MANAGER] Orden PENDING {asset} INVALIDADA (SL roto previo a entrada).")
 
     def is_megacap(self, symbol: str) -> bool:
         """Determina si un activo es Mega-Cap institucional (BTC, ETH, SOL, etc.)."""
         s = (symbol or "").upper()
         return any(m in s for m in ["BTC", "ETH", "SOL", "AVAX", "LINK", "XRP", "BNB", "PAXG", "XAG"])
 
-    # ─────────────────────────────────────────────
-    # LÓGICA CENTRAL DE TRAILING
-    # ─────────────────────────────────────────────
+    # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    # LÃ“GICA CENTRAL DE TRAILING
+    # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     async def _update_signal_trailing(self, signal: Dict[str, Any]):
         """
-        Evalúa un trade activo y actualiza su SL según la fase actual.
-        Descarga las últimas velas del activo para calcular la estructura real.
+        EvalÃºa un trade activo y actualiza su SL segÃºn la fase actual.
+        Descarga las Ãºltimas velas del activo para calcular la estructura real.
         """
         asset    = signal.get("asset", "UNKNOWN")
         interval = signal.get("interval", "15m")
@@ -192,16 +192,16 @@ class TradeManager:
         current_price = float(df["close"].iloc[-1])
         atr_val = float(df["atr"].iloc[-1]) if "atr" in df.columns else entry_price * 0.002
 
-        # ── Fase 1: ACTIVE → FAST BREAKEVEN (Adaptativo: 1.2R Megas / 1.0R Alts) ──
+        # â”€â”€ Fase 1: ACTIVE â†’ FAST BREAKEVEN (Adaptativo: 1.2R Megas / 1.0R Alts) â”€â”€
         if phase == "ACTIVE":
             initial_sl = float(signal.get("initial_stop_loss", current_sl))
             risk_dist = abs(entry_price - initial_sl)
             be_multiplier = 1.2 if self.is_megacap(asset) else 1.0
             be_fast_trigger = entry_price + (risk_dist * be_multiplier) if is_long else entry_price - (risk_dist * be_multiplier)
 
-            # Condición A: Toca Fast BE (+1.2R Megas / +1.0R Alts)
+            # CondiciÃ³n A: Toca Fast BE (+1.2R Megas / +1.0R Alts)
             fast_be_hit = (is_long and current_price >= be_fast_trigger) or (not is_long and current_price <= be_fast_trigger)
-            # Condición B: Toca TP1 (+1.5R)
+            # CondiciÃ³n B: Toca TP1 (+1.5R)
             tp1_hit = (is_long and current_price >= tp1) or (not is_long and current_price <= tp1)
 
             if fast_be_hit or tp1_hit:
@@ -212,12 +212,12 @@ class TradeManager:
                         signal,
                         new_sl,
                         "BREAKEVEN",
-                        f"🎯 {trig_label} alcanzado @ ${current_price:.4f}. SL protegido a entrada con Fee Absorber (${new_sl:.4f})"
+                        f"ðŸŽ¯ {trig_label} alcanzado @ ${current_price:.4f}. SL protegido a entrada con Fee Absorber (${new_sl:.4f})"
                     )
-                    logger.info(f"🛡️ [TRADE_MANAGER] {asset} -> Fast BE (+{be_multiplier:.1f}R) activado: SL movido a {new_sl:.6f}")
+                    logger.info(f"ðŸ›¡ï¸ [TRADE_MANAGER] {asset} -> Fast BE (+{be_multiplier:.1f}R) activado: SL movido a {new_sl:.6f}")
             return
 
-        # ── Fase 2: BREAKEVEN → TRAILING ────────────────────────────────────
+        # â”€â”€ Fase 2: BREAKEVEN â†’ TRAILING â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         if phase == "BREAKEVEN":
             tp2_hit = (is_long and current_price >= tp2) or (not is_long and current_price <= tp2)
             if tp2_hit:
@@ -232,7 +232,7 @@ class TradeManager:
                     logger.debug(f"[TRADE_MANAGER] {asset}: precio toca TP2 pero sin confirmacion ({reason}). Esperando.")
             return
 
-        # ── Fase 3: TRAILING activo ──────────────────────────────────────────
+        # â”€â”€ Fase 3: TRAILING activo â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         if phase == "TRAILING":
             # Comprobar si el TP3 fue tocado
             tp3_hit = tp3 > 0 and ((is_long and current_price >= tp3) or (not is_long and current_price <= tp3))
@@ -250,7 +250,7 @@ class TradeManager:
                 logger.info(f"[TRADE_MANAGER] {asset} -> SL HIT en {current_sl:.6f}")
                 return
 
-            # Actualizar trailing: buscar nuevo swing estructural más favorable
+            # Actualizar trailing: buscar nuevo swing estructural mÃ¡s favorable
             structural_sl = self._find_structural_sl(df, current_price, is_long, atr_val)
             if structural_sl and self._sl_improved(current_sl, structural_sl, is_long):
                 await self._apply_sl_update(signal, structural_sl, "TRAILING",
@@ -275,24 +275,24 @@ class TradeManager:
         lookback: int = 10
     ) -> Optional[float]:
         """
-        Encuentra el SL estructural más favorable usando:
-        1. El swing low/high más reciente de las últimas `lookback` velas.
+        Encuentra el SL estructural mÃ¡s favorable usando:
+        1. El swing low/high mÃ¡s reciente de las Ãºltimas `lookback` velas.
         2. Un buffer de 0.5 * ATR debajo/encima del swing para dar espacio.
         """
         try:
             recent = df.iloc[-lookback:]
 
             if is_long:
-                # Para LONG: buscar el swing low más reciente que esté por debajo del precio actual
+                # Para LONG: buscar el swing low mÃ¡s reciente que estÃ© por debajo del precio actual
                 swing_low = recent["low"].min()
                 structural_sl = round(swing_low - (atr * 0.5), 8)
-                # Sanity check: el SL estructural no puede estar más del 5% del precio por debajo
+                # Sanity check: el SL estructural no puede estar mÃ¡s del 5% del precio por debajo
                 max_dist = current_price * 0.05
                 if (current_price - structural_sl) > max_dist:
                     return None
                 return structural_sl
             else:
-                # Para SHORT: buscar el swing high más reciente que esté por encima del precio actual
+                # Para SHORT: buscar el swing high mÃ¡s reciente que estÃ© por encima del precio actual
                 swing_high = recent["high"].max()
                 structural_sl = round(swing_high + (atr * 0.5), 8)
                 max_dist = current_price * 0.05
@@ -306,7 +306,7 @@ class TradeManager:
 
     def _sl_improved(self, old_sl: float, new_sl: float, is_long: bool) -> bool:
         """
-        Verifica que el nuevo SL sea mejor (más favorable) que el anterior.
+        Verifica que el nuevo SL sea mejor (mÃ¡s favorable) que el anterior.
         El Trailing Stop NUNCA puede retroceder.
         """
         if is_long:
@@ -316,12 +316,12 @@ class TradeManager:
 
     def _is_move_confirmed(self, df: pd.DataFrame, level: float, is_long: bool) -> tuple:
         """
-        Triple confirmación institucional antes de mover el SL.
-        Requiere las 3 simultáneamente para evitar reaccionar a mechas falsas.
+        Triple confirmaciÃ³n institucional antes de mover el SL.
+        Requiere las 3 simultÃ¡neamente para evitar reaccionar a mechas falsas.
 
-        1. CIERRE DE VELA: la última vela cerró más allá del nivel (no solo lo tocó)
+        1. CIERRE DE VELA: la Ãºltima vela cerrÃ³ mÃ¡s allÃ¡ del nivel (no solo lo tocÃ³)
         2. VOLUMEN:        el RVOL de esa vela es >= 1.3x el promedio de 20 velas
-        3. BOS ESTRUCTURAL: el precio dejó un nuevo High/Low mayor que el anterior
+        3. BOS ESTRUCTURAL: el precio dejÃ³ un nuevo High/Low mayor que el anterior
 
         Retorna (confirmed: bool, reason: str)
         """
@@ -329,9 +329,9 @@ class TradeManager:
             if len(df) < 3:
                 return False, "Datos insuficientes"
 
-            last  = df.iloc[-1]   # Vela más reciente (puede estar abierta)
-            prev  = df.iloc[-2]   # Vela anterior cerrada — la que confirma
-            prev2 = df.iloc[-3]   # Penúltima — para comparar BOS
+            last  = df.iloc[-1]   # Vela mÃ¡s reciente (puede estar abierta)
+            prev  = df.iloc[-2]   # Vela anterior cerrada â€” la que confirma
+            prev2 = df.iloc[-3]   # PenÃºltima â€” para comparar BOS
 
             close_prev = float(prev["close"])
             high_prev  = float(prev["high"])
@@ -339,7 +339,7 @@ class TradeManager:
             high_prev2 = float(prev2["high"])
             low_prev2  = float(prev2["low"])
 
-            # ── 1. Confirmación de cierre ──────────────────────────────────
+            # â”€â”€ 1. ConfirmaciÃ³n de cierre â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
             if is_long:
                 candle_confirmed = close_prev > level
             else:
@@ -348,7 +348,7 @@ class TradeManager:
             if not candle_confirmed:
                 return False, f"Vela cerro en {close_prev:.4f}, nivel {level:.4f} no superado"
 
-            # ── 2. Confirmación de volumen (RVOL >= 1.3x) ─────────────────
+            # â”€â”€ 2. ConfirmaciÃ³n de volumen (RVOL >= 1.3x) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
             vol_mean = df["volume"].iloc[-21:-1].mean()
             vol_prev = float(prev["volume"])
             rvol = vol_prev / vol_mean if vol_mean > 0 else 1.0
@@ -356,11 +356,11 @@ class TradeManager:
             if rvol < 1.3:
                 return False, f"Volumen insuficiente: RVOL {rvol:.2f}x (minimo 1.3x)"
 
-            # ── 3. BOS Estructural (Higher High / Lower Low) ───────────────
+            # â”€â”€ 3. BOS Estructural (Higher High / Lower Low) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
             if is_long:
-                bos_confirmed = high_prev > high_prev2   # Nuevo máximo más alto
+                bos_confirmed = high_prev > high_prev2   # Nuevo mÃ¡ximo mÃ¡s alto
             else:
-                bos_confirmed = low_prev < low_prev2     # Nuevo mínimo más bajo
+                bos_confirmed = low_prev < low_prev2     # Nuevo mÃ­nimo mÃ¡s bajo
 
             if not bos_confirmed:
                 return False, "Sin Break of Structure confirmado"
@@ -372,9 +372,9 @@ class TradeManager:
             # En caso de error, permitimos el movimiento para no bloquear el sistema
             return True, "Bypass por error de calculo"
 
-    # ─────────────────────────────────────────────
-    # PERSISTENCIA & SINCRONIZACIÓN CON EXCHANGE (BITUNIX)
-    # ─────────────────────────────────────────────
+    # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    # PERSISTENCIA & SINCRONIZACIÃ“N CON EXCHANGE (BITUNIX)
+    # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     async def _apply_sl_update(
         self,
@@ -383,25 +383,25 @@ class TradeManager:
         new_phase: str,
         reason: str
     ):
-        """Persiste el nuevo SL y fase en el MemoryStore y ejecuta la modificación en Bitunix."""
+        """Persiste el nuevo SL y fase en el MemoryStore y ejecuta la modificaciÃ³n en Bitunix."""
         asset = signal.get("asset", signal.get("symbol", "UNKNOWN"))
         signal["stop_loss"]      = new_sl
         signal["trailing_phase"] = new_phase
         signal["trailing_reason"] = reason
         signal["status"] = "CLOSED" if new_phase == "CLOSED" else signal.get("status", "ACTIVE")
 
-        # Añadir al historial de trailing para auditoría
+        # AÃ±adir al historial de trailing para auditorÃ­a
         history = signal.get("trailing_history", [])
         history.append({
             "sl": new_sl,
             "phase": new_phase,
             "reason": reason,
         })
-        signal["trailing_history"] = history[-10:]  # Últimos 10 movimientos
+        signal["trailing_history"] = history[-10:]  # Ãšltimos 10 movimientos
 
         await store.save_signal(signal)
 
-        # 🚀 [BITUNIX LIVE EXCHANGE SYNC] Modificar Stop Loss real en el exchange (Multi-Cuenta SOP-45)
+        # ðŸš€ [BITUNIX LIVE EXCHANGE SYNC] Modificar Stop Loss real en el exchange (Multi-Cuenta SOP-45)
         try:
             from engine.execution.account_manager import AccountManager
             mgr = AccountManager()
@@ -416,9 +416,9 @@ class TradeManager:
                         sl_price=new_sl
                     )
                     if success:
-                        logger.info(f"⚡ [TRADE_MANAGER -> BITUNIX] [{ex.account_label}] SL de posición {asset} actualizado a ${new_sl:.4f} en el exchange.")
+                        logger.info(f"âš¡ [TRADE_MANAGER -> BITUNIX] [{ex.account_label}] SL de posiciÃ³n {asset} actualizado a ${new_sl:.4f} en el exchange.")
                     else:
-                        logger.debug(f"[TRADE_MANAGER] [{ex.account_label}] SL no requerido o sin posición activa en Bitunix para {asset}")
+                        logger.debug(f"[TRADE_MANAGER] [{ex.account_label}] SL no requerido o sin posiciÃ³n activa en Bitunix para {asset}")
                 except Exception as acc_err:
                     logger.warning(f"[TRADE_MANAGER] [{ex.account_label}] Error al sincronizar SL: {acc_err}")
         except Exception as bitunix_err:
@@ -427,7 +427,7 @@ class TradeManager:
     async def sync_live_bitunix_positions(self) -> List[Dict[str, Any]]:
         """
         Consulta las posiciones reales abiertas en Bitunix para todas las cuentas activas (SOP-45 Multi-Cuenta),
-        calcula su avance en R y actualiza automáticamente a Breakeven aquellas que hayan avanzado >= +1.0R.
+        calcula su avance en R y actualiza automÃ¡ticamente a Breakeven aquellas que hayan avanzado >= +1.0R.
         """
         managed_results = []
         try:
@@ -447,7 +447,7 @@ class TradeManager:
                 if positions is None or len(positions) == 0:
                     continue
 
-                # Consultar órdenes TPSL activas en Bitunix para conocer el SL real configurado
+                # Consultar Ã³rdenes TPSL activas en Bitunix para conocer el SL real configurado
                 tpsl_res = await bitunix._request("GET", "/api/v1/futures/tpsl/get_pending_orders")
                 tpsl_map = {}
                 if tpsl_res.get("code") == 0 and isinstance(tpsl_res.get("data"), list):
@@ -471,7 +471,7 @@ class TradeManager:
                     if entry_price <= 0 or cur_price <= 0:
                         continue
 
-                    # Buscar si existe una señal registrada para recuperar su initial_stop_loss exacto
+                    # Buscar si existe una seÃ±al registrada para recuperar su initial_stop_loss exacto
                     known_signals = await store.get_signals(asset=sym)
                     matched_sig = known_signals[-1] if known_signals else None
                     initial_sl = float(matched_sig.get("initial_stop_loss", 0.0)) if matched_sig else 0.0
@@ -533,6 +533,9 @@ class TradeManager:
                     elif r_profit >= be_threshold:
                         target_sl = round(entry_price + fee_buffer, 4) if side == "LONG" else round(entry_price - fee_buffer, 4)
                         status_msg = f"PROTEGIDO_FAST_BE (+{be_threshold:.1f}R)"
+                    elif r_profit >= 0.60 and not sl_at_be:
+                        target_sl = round(entry_price - (sl_dist * 0.50), 4) if side == "LONG" else round(entry_price + (sl_dist * 0.50), 4)
+                        status_msg = "SOP48_HALF_RISK_MITIGATOR (-0.5R)"
 
                     should_update_sl = False
                     if target_sl is not None:
@@ -544,7 +547,10 @@ class TradeManager:
                     if should_update_sl:
                         await bitunix.modify_position_tpsl(symbol=sym, position_id=pos_id, sl_price=target_sl, tp_price=None)
                         action_taken = f"SL_ACTUALIZADO (${target_sl})"
-                        logger.info(f"🛡️ [TRADE_MANAGER] [{bitunix.account_label}] Posición {sym} {side} (+{r_profit:.2f}R) protegida con SL=${target_sl} ({status_msg}).")
+                        logger.info(f"ðŸ›¡ï¸ [TRADE_MANAGER] [{bitunix.account_label}] PosiciÃ³n {sym} {side} (+{r_profit:.2f}R) protegida con SL=${target_sl} ({status_msg}).")
+                        if "FAST_BE" in status_msg or "PROTEGIDO" in status_msg:
+                            from engine.execution.nexus import nexus
+                            asyncio.create_task(nexus.on_risk_released(acc_id, reason=f"FAST_BE_ACTIVADO_{sym}"))
                     elif sl_at_be:
                         status_msg = "YA_PROTEGIDO"
 
@@ -561,19 +567,19 @@ class TradeManager:
                         "action": action_taken
                     })
             except Exception as acc_err:
-                logger.warning(f"[TRADE_MANAGER] [{bitunix.account_label}] Error en sincronización de posiciones: {acc_err}")
+                logger.warning(f"[TRADE_MANAGER] [{bitunix.account_label}] Error en sincronizaciÃ³n de posiciones: {acc_err}")
 
         return managed_results
 
     async def sync_live_bitunix_pending_orders(self) -> List[Dict[str, Any]]:
         """
         [APEX LIMIT SENTINEL v22.0]
-        Audita de forma autónoma todas las órdenes límite pendientes en Bitunix para todas las cuentas activas.
-        Ejecuta auto-cancelación inteligente por:
-          1. Objetivo alcanzado sin activación (Missed Target Kill-Switch: precio >= TP1)
-          2. Invalidación previa de estructura (Pre-Entry SL Breach: precio <= SL)
-          3. Expiración de tiempo de vida (TTL > 3h / 10800s desfasado)
-          4. Capacidad máxima de riesgo (Auto-Purge si 4 posiciones en riesgo)
+        Audita de forma autÃ³noma todas las Ã³rdenes lÃ­mite pendientes en Bitunix para todas las cuentas activas.
+        Ejecuta auto-cancelaciÃ³n inteligente por:
+          1. Objetivo alcanzado sin activaciÃ³n (Missed Target Kill-Switch: precio >= TP1)
+          2. InvalidaciÃ³n previa de estructura (Pre-Entry SL Breach: precio <= SL)
+          3. ExpiraciÃ³n de tiempo de vida (TTL > 3h / 10800s desfasado)
+          4. Capacidad mÃ¡xima de riesgo (Auto-Purge si 4 posiciones en riesgo)
         """
         cancelled_results = []
         try:
@@ -585,7 +591,7 @@ class TradeManager:
                 from engine.execution.bitunix_executor import BitunixExecutor
                 executors = {"primary": BitunixExecutor()}
         except Exception as e:
-            logger.error(f"❌ [LIMIT SENTINEL] Error obteniendo ejecutores: {e}")
+            logger.error(f"âŒ [LIMIT SENTINEL] Error obteniendo ejecutores: {e}")
             return []
 
         all_opps = store.get_scanner_opportunities("scalp") + store.get_scanner_opportunities("swing")
@@ -593,19 +599,19 @@ class TradeManager:
 
         for acc_id, bitunix in executors.items():
             try:
-                # 1. Regla D: Si la cuenta ya tiene 4 posiciones con riesgo, purgar órdenes límite de esa cuenta
+                # 1. Regla D: Si la cuenta ya tiene 4 posiciones con riesgo, purgar Ã³rdenes lÃ­mite de esa cuenta
                 unprotected_risk = nexus.get_unprotected_risk_count(account_id=acc_id)
                 if unprotected_risk >= nexus.MAX_CONCURRENT_POSITIONS:
-                    logger.info(f"🛑 [LIMIT SENTINEL] [{bitunix.account_label}] Máximo de {nexus.MAX_CONCURRENT_POSITIONS} operaciones con riesgo alcanzado ({unprotected_risk} en riesgo). Purgando límites.")
+                    logger.info(f"ðŸ›‘ [LIMIT SENTINEL] [{bitunix.account_label}] MÃ¡ximo de {nexus.MAX_CONCURRENT_POSITIONS} operaciones con riesgo alcanzado ({unprotected_risk} en riesgo). Purgando lÃ­mites.")
                     await nexus.purge_all_pending_limit_orders(reason="MAX_4_RISK_SLOTS_REACHED")
-                    await bitunix.cancel_all_pending_orders()
-                    return []
+                    # Protected TPs: only entry limits purged
+                    continue
 
                 pending_orders = await bitunix.get_pending_orders()
                 if not pending_orders:
                     continue
 
-                # SOP-22: Purga atómica de órdenes CLOSE huérfanas en esta cuenta
+                # SOP-22: Purga atÃ³mica de Ã³rdenes CLOSE huÃ©rfanas en esta cuenta
                 active_symbols = {p.get("symbol") for p in (await bitunix.get_pending_positions() or []) if p.get("symbol")}
                 await bitunix.purge_orphaned_close_orders(active_symbols=active_symbols)
 
@@ -644,26 +650,26 @@ class TradeManager:
                     # Chequeo 1: Missed Target
                     if tp1_target > 0:
                         if is_long and cur_price >= tp1_target:
-                            cancel_reason = f"MISSED_TARGET (Precio actual ${cur_price:.4f} superó TP1 ${tp1_target:.4f} sin retroceder a entrada ${entry_price:.4f})"
+                            cancel_reason = f"MISSED_TARGET (Precio actual ${cur_price:.4f} superÃ³ TP1 ${tp1_target:.4f} sin retroceder a entrada ${entry_price:.4f})"
                         elif not is_long and cur_price <= tp1_target:
-                            cancel_reason = f"MISSED_TARGET (Precio actual ${cur_price:.4f} perforó TP1 ${tp1_target:.4f} sin retroceder a entrada ${entry_price:.4f})"
+                            cancel_reason = f"MISSED_TARGET (Precio actual ${cur_price:.4f} perforÃ³ TP1 ${tp1_target:.4f} sin retroceder a entrada ${entry_price:.4f})"
 
                     # Chequeo 2: Pre-Entry SL Breach
                     if not cancel_reason and sl_price > 0:
                         if is_long and cur_price <= (sl_price * 0.9995):
-                            cancel_reason = f"PRE_ENTRY_SL_BREACH (Precio actual ${cur_price:.4f} perforó el Stop Loss ${sl_price:.4f} antes de activar entrada)"
+                            cancel_reason = f"PRE_ENTRY_SL_BREACH (Precio actual ${cur_price:.4f} perforÃ³ el Stop Loss ${sl_price:.4f} antes de activar entrada)"
                         elif not is_long and cur_price >= (sl_price * 1.0005):
-                            cancel_reason = f"PRE_ENTRY_SL_BREACH (Precio actual ${cur_price:.4f} superó el Stop Loss ${sl_price:.4f} antes de activar entrada)"
+                            cancel_reason = f"PRE_ENTRY_SL_BREACH (Precio actual ${cur_price:.4f} superÃ³ el Stop Loss ${sl_price:.4f} antes de activar entrada)"
 
-                    # Chequeo 3: Expiración TTL
+                    # Chequeo 3: ExpiraciÃ³n TTL
                     if not cancel_reason:
                         age_seconds = (now_ms - ctime) / 1000
                         price_drift_pct = abs(cur_price - entry_price) / entry_price
                         if age_seconds > 10800 and price_drift_pct > 0.015:
-                            cancel_reason = f"TTL_EXPIRED (Orden con {age_seconds/3600:.1f}h de antigüedad y precio desfasado {price_drift_pct*100:.1f}%)"
+                            cancel_reason = f"TTL_EXPIRED (Orden con {age_seconds/3600:.1f}h de antigÃ¼edad y precio desfasado {price_drift_pct*100:.1f}%)"
 
                     if cancel_reason:
-                        logger.warning(f"🚫 [LIMIT SENTINEL] [{bitunix.account_label}] Auto-cancelando orden límite {oid} en {sym}: {cancel_reason}")
+                        logger.warning(f"ðŸš« [LIMIT SENTINEL] [{bitunix.account_label}] Auto-cancelando orden lÃ­mite {oid} en {sym}: {cancel_reason}")
                         success = await bitunix.cancel_limit_order(sym, oid)
                         if success:
                             nexus.remove_pending_limit_symbol(sym)
@@ -675,18 +681,18 @@ class TradeManager:
                                 "reason": cancel_reason
                             })
             except Exception as acc_err:
-                logger.error(f"❌ [LIMIT SENTINEL] [{bitunix.account_label}] Error en auditoría de órdenes: {acc_err}")
+                logger.error(f"âŒ [LIMIT SENTINEL] [{bitunix.account_label}] Error en auditorÃ­a de Ã³rdenes: {acc_err}")
 
         return cancelled_results
 
     async def sync_live_mt5_positions(self) -> List[Dict[str, Any]]:
         """
         [FTMO SENTINEL v22.2]
-        Gestiona de forma idéntica las posiciones de MetaTrader 5 (FTMO):
+        Gestiona de forma idÃ©ntica las posiciones de MetaTrader 5 (FTMO):
         1. Fast Breakeven a +1.0R ($0.00 riesgo).
         2. Bloqueo en verde TP1 (+1.2R) y TP2 (+2.0R).
-        3. Trailing Ratchet Tier 4 (70% retención) post-TP3.
-        4. Invarianza Monótona estricta en MT5.
+        3. Trailing Ratchet Tier 4 (70% retenciÃ³n) post-TP3.
+        4. Invarianza MonÃ³tona estricta en MT5.
         """
         try:
             from engine.execution.mt5_bridge import mt5_bridge
@@ -743,7 +749,7 @@ class TradeManager:
                 if should_update:
                     mt5_bridge.modify_position_sl(symbol=sym, ticket=ticket, new_sl=target_sl)
                     action_taken = f"SL_ACTUALIZADO (${target_sl})"
-                    logger.info(f"🏛️ [MT5_GUARDIAN] Posición {sym} {side} (+{r_profit:.2f}R) protegida con SL=${target_sl} ({status_msg}).")
+                    logger.info(f"ðŸ›ï¸ [MT5_GUARDIAN] PosiciÃ³n {sym} {side} (+{r_profit:.2f}R) protegida con SL=${target_sl} ({status_msg}).")
 
                 managed_results.append({
                     "symbol": sym,
@@ -759,12 +765,13 @@ class TradeManager:
 
             return managed_results
         except Exception as e:
-            logger.debug(f"[TRADE_MANAGER] Error en sincronización MT5: {e}")
+            logger.debug(f"[TRADE_MANAGER] Error en sincronizaciÃ³n MT5: {e}")
             return []
 
 
 
 # Singleton Global
 trade_manager = TradeManager()
+
 
 

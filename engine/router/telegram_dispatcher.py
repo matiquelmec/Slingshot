@@ -42,6 +42,19 @@ class TelegramDispatcher:
         from engine.core.vault import vault
         self._vault = vault
 
+
+    def _get_bot_execution_status(self) -> str:
+        try:
+            from engine.execution.nexus import nexus
+            p_risk = nexus.get_unprotected_risk_count(account_id="primary")
+            c2_risk = nexus.get_unprotected_risk_count(account_id="cliente_2")
+            if p_risk >= nexus.MAX_CONCURRENT_POSITIONS and c2_risk >= nexus.MAX_CONCURRENT_POSITIONS:
+                return "<i>🟡 En Espera (4/4 cupos de riesgo activos en cuentas | Solo señal manual MT5)</i>"
+            else:
+                return f"<i>🟢 Procesando Orden Límite (Primary: {p_risk}/4 | Cliente 2: {c2_risk}/4)</i>"
+        except Exception:
+            return "<i>🟢 Conectado</i>"
+
     async def send_signal_alert(self, signal: Dict[str, Any], account_profile: str = "FTMO_100K") -> bool:
         """
         Envía una alerta institucional inteligente a Telegram.

@@ -1,3 +1,6 @@
+import os
+import sqlite3
+import json
 """
 engine/execution/nexus.py — v11.1 APEX SOVEREIGN (Audited)
 =============================================
@@ -33,6 +36,9 @@ class NexusNode:
         self.account_manager = AccountManager(dry_run=dry_run)
         self.executor = self.account_manager.get_executor("primary") or BitunixExecutor(dry_run=dry_run)
         self._active_positions = {}
+        self._symbol_locks = {} # Dict[str, asyncio.Lock]
+        self._high_confluence_buffer = {} # Dict[account_id, List[signal]]
+        self._load_buffer_from_disk()
         self._pending_limit_symbols = set()
         logger.info(f"🛡️ [NEXUS] Nodo de Ejecución Multi-Cuenta inicializado (Dry Run: {dry_run})")
 
@@ -254,6 +260,9 @@ class NexusNode:
 
                 for mem_key in closed_assets:
                     pos_info = self._active_positions.pop(mem_key, None)
+                    closed_acc = pos_info.get("account_id", "primary") if pos_info else "primary"
+                    closed_sym = pos_info.get("signal", {}).get("asset", mem_key.split("_")[-1]) if pos_info else mem_key
+                    asyncio.create_task(self.on_risk_released(closed_acc, reason=f"POSICION_CERRADA_{closed_sym}"))
                     sym_clean = pos_info.get("signal", {}).get("asset", mem_key.split("_")[-1]) if pos_info else mem_key
                     self.remove_pending_limit_symbol(sym_clean)
                     # 🧹 [SOP-22 PURGA ATÓMICA] Cancelar órdenes huérfanas de ese activo solo en la cuenta correspondiente
@@ -748,7 +757,7 @@ class NexusNode:
                 logger.debug(f"[NEXUS DEDUP GUARD] [{account.label}] Error al verificar posiciones pendientes en Bitunix: {chk_err}")
 
         try:
-            avail_margin = await executor.get_available_margin_usdt()
+            avail_margin = await getattr(executor, 'get_net_available_margin_usdt', executor.get_available_margin_usdt)()
         except Exception:
             avail_margin = 0.0
         if avail_margin <= 0 and executor.dry_run:
@@ -852,6 +861,172 @@ class NexusNode:
             logger.error(f"💥 [NEXUS] [{account.label}] Error crítico procesando señal en {asset}: {e}")
             return None
 
+
+
+    DB_PATH = r"C:\Slingshot\data\slingshot.db"
+
+    def _init_buffer_db(self):
+        try:
+            os.makedirs(os.path.dirname(self.DB_PATH), exist_ok=True)
+            with sqlite3.connect(self.DB_PATH) as conn:
+                conn.execute("CREATE TABLE IF NOT EXISTS high_confluence_buffer (account_id TEXT, asset TEXT, score REAL, signal_json TEXT, timestamp REAL, PRIMARY KEY (account_id, asset))")
+                conn.commit()
+        except Exception as db_err:
+            logger.debug(f"[NEXUS BUFFER DB] Error inicializando tabla: {db_err}")
+
+    def _persist_buffer_to_disk(self):
+        try:
+            self._init_buffer_db()
+            with sqlite3.connect(self.DB_PATH) as conn:
+                conn.execute("DELETE FROM high_confluence_buffer")
+                for acc_id, signals in self._high_confluence_buffer.items():
+                    for s in signals:
+                        asset = s.get("asset", s.get("symbol", "")).upper()
+                        score = float(s.get("confluence_score", s.get("score", 0)))
+                        conn.execute(
+                            "INSERT OR REPLACE INTO high_confluence_buffer (account_id, asset, score, signal_json, timestamp) VALUES (?, ?, ?, ?, ?)",
+                            (acc_id, asset, score, json.dumps(s), time.time())
+                        )
+                conn.commit()
+        except Exception as save_err:
+            logger.debug(f"[NEXUS BUFFER DB] Error persistiendo buffer: {save_err}")
+
+    def _load_buffer_from_disk(self):
+        try:
+            self._init_buffer_db()
+            with sqlite3.connect(self.DB_PATH) as conn:
+                cursor = conn.execute("SELECT account_id, signal_json FROM high_confluence_buffer ORDER BY score DESC")
+                rows = cursor.fetchall()
+                loaded_cnt = 0
+                for acc_id, s_json in rows:
+                    sig = json.loads(s_json)
+                    q = self._high_confluence_buffer.setdefault(acc_id, [])
+                    if not any(x.get("asset") == sig.get("asset") for x in q):
+                        q.append(sig)
+                        loaded_cnt += 1
+                if loaded_cnt > 0:
+                    logger.info(f"💾 [NEXUS BUFFER DB] Restauradas {loaded_cnt} oportunidades institucionales desde base de datos.")
+        except Exception as load_err:
+            logger.debug(f"[NEXUS BUFFER DB] Error cargando buffer: {load_err}")
+
+    def enqueue_high_confluence_opportunity(self, signal: Dict[str, Any], account_id: str):
+        """[SOP-46] Encola oportunidades 'God Mode' (Score >= 78%) cuando los 4 cupos están temporalmente llenos."""
+        if not hasattr(self, "_high_confluence_buffer") or not isinstance(self._high_confluence_buffer, dict):
+            self._high_confluence_buffer = {}
+        queue = self._high_confluence_buffer.setdefault(account_id, [])
+        asset = signal.get("asset", signal.get("symbol", "")).upper()
+        if any(s.get("asset", s.get("symbol", "")).upper() == asset for s in queue):
+            return
+        score = float(signal.get("confluence_score", signal.get("score", 0)))
+        logger.info(f"📥 [NEXUS BUFFER] Guardando oportunidad institucional en buffer para [{account_id}]: {asset} ({score:.0f}%)")
+        queue.append(dict(signal))
+        queue.sort(key=lambda s: float(s.get("confluence_score", s.get("score", 0))), reverse=True)
+        self._persist_buffer_to_disk()
+        if len(queue) > 5:
+            queue.pop()
+
+    async def on_risk_released(self, account_id: str, reason: str = ""):
+        """
+        [DYNAMIC SLOT RECYCLER v27.0 APEX]
+        Se dispara ante CUALQUIER evento de liberacion de riesgo:
+          1. Paso de posicion a Breakeven ($0.00 riesgo flotante)
+          2. Cierre de posicion por TP/SL en Bitunix
+          3. Cierre MANUAL realizado por el usuario directamente en el exchange
+        """
+        try:
+            unprotected = self.get_unprotected_risk_count(account_id=account_id)
+            if unprotected >= self.MAX_CONCURRENT_POSITIONS:
+                return
+
+            logger.info(f"♻️ [SLOT RECYCLER] Cupo liberado en [{account_id}] ({unprotected}/{self.MAX_CONCURRENT_POSITIONS}) por: {reason}. Evaluando mejor oportunidad...")
+
+            if hasattr(self, "_high_confluence_buffer") and isinstance(self._high_confluence_buffer, dict):
+                queue = self._high_confluence_buffer.get(account_id, [])
+                while queue:
+                    top_cand = queue.pop(0)
+                    sym_c = top_cand.get("asset", top_cand.get("symbol", "")).upper()
+                    if sym_c not in self._active_positions and f"{account_id}_{sym_c}" not in self._active_positions:
+                        logger.info(f"⚡ [SLOT RECYCLER] Activando senal prioritaria desde buffer para [{account_id}]: {sym_c} ({top_cand.get('confluence_score', 0)}%)")
+                        asyncio.create_task(self.process_limit_setup(top_cand))
+                        return
+
+            from engine.core.store import store
+            candidates = []
+            for tf in ("swing", "scalp"):
+                opps = store.get_scanner_opportunities(tf) or []
+                candidates.extend(opps)
+
+            if not candidates:
+                logger.debug(f"[SLOT RECYCLER] No hay oportunidades activas registradas en store para [{account_id}].")
+                return
+
+            valid_cands = []
+            for c in candidates:
+                sym_cand = c.get("asset", c.get("symbol", "")).upper()
+                score_cand = float(c.get("confluence_score", c.get("score", 0)))
+                is_chasing = c.get("ote_chasing", False)
+                is_quar = c.get("asset_health", {}).get("is_quarantined", False)
+                min_req = 65.0 if is_quar else 60.0
+
+                if score_cand < min_req or is_chasing:
+                    continue
+                if sym_cand in self._active_positions or f"{account_id}_{sym_cand}" in self._active_positions:
+                    continue
+                valid_cands.append(c)
+
+            valid_cands.sort(key=lambda x: float(x.get("confluence_score", x.get("score", 0))), reverse=True)
+
+            if not valid_cands:
+                logger.debug(f"[SLOT RECYCLER] Ninguna oportunidad supera los filtros institucionales para [{account_id}].")
+                return
+
+            best_opp = valid_cands[0]
+            best_sym = best_opp.get("asset", best_opp.get("symbol", "")).upper()
+            best_score = float(best_opp.get("confluence_score", best_opp.get("score", 0)))
+            logger.info(f"🎯 [SLOT RECYCLER MATCH] Seleccionada oportunidad de reemplazo para [{account_id}]: {best_sym} ({best_score:.0f}% confluencia). Colocando orden limite!")
+            
+            dist_sl = abs(float(best_opp.get("price", 0)) - float(best_opp.get("stop_loss", 0)))
+            is_long = "LONG" in best_opp.get("direction", best_opp.get("signal_type", "LONG")).upper()
+            be_val = best_opp.get("be_price") or (float(best_opp["price"]) + (dist_sl * 1.0) if is_long else float(best_opp["price"]) - (dist_sl * 1.0))
+            
+            deploy_sig = {
+                "asset": best_sym,
+                "symbol": best_sym,
+                "interval": best_opp.get("interval", "15m"),
+                "signal_type": best_opp.get("direction", "LONG"),
+                "direction": best_opp.get("direction", "LONG"),
+                "type": best_opp.get("type", "SMC Sniper"),
+                "price": float(best_opp.get("price", 0)),
+                "stop_loss": float(best_opp.get("stop_loss", 0)),
+                "be_price": round(be_val, 5),
+                "tp1": float(best_opp.get("tp1", 0)),
+                "tp2": float(best_opp.get("tp2", 0)),
+                "tp3": float(best_opp.get("tp3", 0)),
+                "take_profit_3r": float(best_opp.get("tp3", 0)),
+                "confluence_score": best_score,
+                "score": best_score,
+                "session": best_opp.get("session", "NEW_YORK"),
+                "asset_health": best_opp.get("asset_health", {})
+            }
+            asyncio.create_task(self.process_limit_setup(deploy_sig))
+
+        except Exception as rec_err:
+            logger.error(f"❌ [SLOT RECYCLER] Error procesando reciclaje de cupos en [{account_id}]: {rec_err}")
+
+    async def check_and_trigger_buffered_opportunities(self, account_id: str):
+        """[SOP-46] Si una posición libera riesgo (Breakeven o cierre), procesa de inmediato la mejor oportunidad en espera."""
+        if not hasattr(self, "_high_confluence_buffer") or not isinstance(self._high_confluence_buffer, dict):
+            return
+        queue = self._high_confluence_buffer.get(account_id, [])
+        if not queue:
+            return
+        unprotected = self.get_unprotected_risk_count(account_id=account_id)
+        if unprotected < self.MAX_CONCURRENT_POSITIONS:
+            top_sig = queue.pop(0)
+            asset = top_sig.get("asset", top_sig.get("symbol", "")).upper()
+            logger.info(f"⚡ [NEXUS BUFFER TRIGGER] Cupo liberado en [{account_id}] ({unprotected}/{self.MAX_CONCURRENT_POSITIONS}). Disparando orden en espera: {asset}!")
+            asyncio.create_task(self.process_limit_setup(top_sig))
+
     async def process_limit_setup(self, signal: Dict[str, Any]):
         """
         [NEXUS AUTO-LIMIT]
@@ -862,11 +1037,7 @@ class NexusNode:
         if not asset or self.dry_run:
             return
 
-        # ── REGLA INSTITUCIONAL DE RIESGO: MÁXIMO 4 OPERACIONES EN RIESGO (SLOT RECYCLING) ──
-        unprotected_count = self.get_unprotected_risk_count()
-        if unprotected_count >= self.MAX_CONCURRENT_POSITIONS:
-            logger.info(f"🛑 [NEXUS RIESGO] Máximo de {self.MAX_CONCURRENT_POSITIONS} operaciones con riesgo alcanzado ({unprotected_count} en riesgo / {len(self._active_positions)} totales). Pausando nuevas órdenes.")
-            return
+        # [SOP-45] Riesgo descentralizado: validado por cuenta en _place_limit_for_account
 
         # ── REGLA DE CLUSTER DE CORRELACIÓN CRUZADA (v26.0 CLUSTER FORTRESS) ──
         confluence_score = float(signal.get("confluence_score") or (signal.get("confluence") or {}).get("score", 70.0))
@@ -945,6 +1116,14 @@ class NexusNode:
         except Exception as e:
             logger.error(f"❌ [NEXUS AUTO-LIMIT] Error colocando orden en {asset}: {e}")
 
+    def _get_symbol_lock(self, acc_id: str, asset: str) -> asyncio.Lock:
+        key = f"{acc_id}_{asset.upper()}"
+        if not hasattr(self, "_symbol_locks") or not isinstance(self._symbol_locks, dict):
+            self._symbol_locks = {}
+        if key not in self._symbol_locks:
+            self._symbol_locks[key] = asyncio.Lock()
+        return self._symbol_locks[key]
+
     async def _place_limit_for_account(
         self,
         executor: BitunixExecutor,
@@ -963,6 +1142,9 @@ class NexusNode:
         unprotected_count = self.get_unprotected_risk_count(account_id=acc_id)
         if unprotected_count >= self.MAX_CONCURRENT_POSITIONS:
             logger.info(f"🛑 [NEXUS AUTO-LIMIT RIESGO] [{account.label}] Máximo de {self.MAX_CONCURRENT_POSITIONS} operaciones con riesgo alcanzado ({unprotected_count} activas). Pausando nuevas órdenes.")
+            score_val = float(acc_signal.get("confluence_score", acc_signal.get("score", 0)))
+            if score_val >= 60.0:
+                self.enqueue_high_confluence_opportunity(acc_signal, acc_id)
             return None
 
         # 2. Verificar si esta cuenta específica ya tiene una posición activa en este activo
@@ -992,7 +1174,7 @@ class NexusNode:
             logger.debug(f"[NEXUS AUTO-LIMIT] [{account.label}] Error verificando órdenes pendientes: {pe_err}")
 
         try:
-            avail_margin = await executor.get_available_margin_usdt()
+            avail_margin = await getattr(executor, 'get_net_available_margin_usdt', executor.get_available_margin_usdt)()
         except Exception:
             avail_margin = 0.0
         if avail_margin <= 0 and executor.dry_run:

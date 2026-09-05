@@ -87,6 +87,33 @@ class BitunixExecutor:
         offset = BitunixExecutor._shared_server_time_offset_ms or self._server_time_offset_ms
         return int(time.time() * 1000) + offset
 
+
+    async def get_net_available_margin_usdt(self) -> float:
+        """
+        [FROZEN MARGIN GUARD v29.0]
+        Calcula el balance disponible neto real descontando el margen congelado
+        en órdenes límite pendientes de entrada (OPEN). Evita rechazos por Insufficient Balance.
+        """
+        try:
+            avail = await self.get_available_margin_usdt()
+            pending = await self.get_pending_orders()
+            if not pending:
+                return max(0.0, avail)
+
+            frozen = 0.0
+            for o in pending:
+                if o.get("tradeSide") == "OPEN" or not o.get("reduceOnly"):
+                    price = float(o.get("price") or 0.0)
+                    qty = float(o.get("qty") or 0.0)
+                    # Estimación conservadora con apalancamiento medio 10x
+                    if price > 0 and qty > 0:
+                        frozen += (price * qty) / 10.0
+            net_avail = max(0.0, avail - frozen)
+            return net_avail
+        except Exception as e:
+            logger.debug(f"[BITUNIX FROZEN MARGIN] Error calculando margen neto: {e}")
+            return await self.get_available_margin_usdt()
+
     async def get_available_margin_usdt(self) -> float:
         """
         [SOP-10 PRE-FLIGHT MARGIN CHECK & SOP-41 ZERO FAKE FALLBACK]
@@ -400,6 +427,25 @@ class BitunixExecutor:
             if main_order.get("code") == 0:
                 order_id = main_order.get("data", {}).get("orderId", f"bitunix_order_{uuid.uuid4().hex[:8]}")
                 logger.info(f"✅ [BITUNIX] Orden principal colocada con éxito. ID: {order_id}")
+
+                # 1. Obtener el positionId real recién creado en Bitunix para asociar SL y TPs
+                real_position_id = None
+                try:
+                    open_p = await self.get_pending_positions()
+                    for pos_item in (open_p or []):
+                        if pos_item.get("symbol") == symbol:
+                            real_position_id = pos_item.get("positionId")
+                            break
+                except Exception as pos_chk_err:
+                    logger.debug(f"[BITUNIX] Error consultando positionId: {pos_chk_err}")
+
+                # 2. ⚡ [INSTANT SL] Colocar Stop Loss oficial en Bitunix de inmediato (<200ms)
+                if stop_loss and float(stop_loss) > 0 and real_position_id:
+                    try:
+                        logger.info(f"🛡️ [BITUNIX INSTANT SL] Blindando posición {symbol} con SL @ {stop_loss} (PosId: {real_position_id})...")
+                        await self.place_position_tpsl(symbol=symbol, position_id=str(real_position_id), sl_price=float(stop_loss))
+                    except Exception as sl_err:
+                        logger.error(f"❌ [BITUNIX INSTANT SL] Error colocando SL inmediato en {symbol}: {sl_err}")
                 
                 # 4. Colocar órdenes de límite Take Profit fragmentadas (60% / 20% / 20%)
                 protection_ids = []
@@ -445,16 +491,7 @@ class BitunixExecutor:
                     if f2 > 0: tps.append((tp2, f2, "TP2"))
                     if f3 > 0: tps.append((tp3, f3, "TP3"))
 
-                    # Obtener el positionId real recién creado en Bitunix para asociar las órdenes de cierre
-                    real_position_id = None
-                    try:
-                        open_p = await self.get_pending_positions()
-                        for pos_item in (open_p or []):
-                            if pos_item.get("symbol") == symbol:
-                                real_position_id = pos_item.get("positionId")
-                                break
-                    except Exception as pos_chk_err:
-                        logger.debug(f"[BITUNIX] Error consultando positionId para TP: {pos_chk_err}")
+
                     for tp_price, tp_qty, label in tps:
                         if tp_qty <= 0:
                             continue
@@ -914,7 +951,7 @@ class BitunixExecutor:
             logger.error(f"❌ [SOP-22 GHOST ERADICATOR] Error en auditoría de órdenes fantasma: {e}")
             return 0
 
-    async def cancel_all_pending_orders(self) -> bool:
+    async def cancel_all_pending_orders(self, only_open: bool = True) -> bool:
         """
         Cancela de manera masiva todas las órdenes pendientes en la cuenta de Bitunix.
         """
@@ -926,6 +963,15 @@ class BitunixExecutor:
             if not pending:
                 return True
 
+            if only_open:
+                open_orders = [o for o in pending if o.get("tradeSide") == "OPEN" or not o.get("reduceOnly")]
+                logger.info(f"🛡️ [BITUNIX] [{self.account_label}] Cancelando {len(open_orders)} órdenes de entrada (TPs protegidos)...")
+                for o in open_orders:
+                    sym = o.get("symbol")
+                    oid = o.get("orderId")
+                    if sym and oid:
+                        await self.cancel_limit_order(sym, oid)
+                return True
             symbols = {o.get("symbol") for o in pending if o.get("symbol")}
             success = True
             for sym in symbols:
