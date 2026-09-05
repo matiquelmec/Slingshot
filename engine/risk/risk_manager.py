@@ -758,7 +758,8 @@ class RiskManager:
         sl_price: float,
         leverage: int = 20,
         max_notional_mult: float = 5.0,
-        qty_decimals: int = 2
+        qty_decimals: int = 2,
+        min_notional_usdt: float = 5.0
     ) -> Dict[str, Any]:
         """
         Calcula la cantidad exacta de monedas (qty) y margen requerido para garantizar
@@ -833,6 +834,16 @@ class RiskManager:
                 "required_margin": 0.0,
                 "projected_loss": 0.0
             }
+
+        # SOP-46: Preflight Notional Guard (Bitunix min notional $5.00 USDT)
+        if final_notional < min_notional_usdt:
+            return {
+                "approved": False,
+                "reason": f"Valor nocional (${final_notional:.2f} USDT) inferior al mínimo de Bitunix (${min_notional_usdt:.2f} USDT)",
+                "qty": 0.0,
+                "required_margin": 0.0,
+                "projected_loss": 0.0
+            }
             
         return {
             "approved": True,
@@ -874,13 +885,15 @@ class RiskManager:
         new_direction: str,
         new_trade_risk_usd: float,
         account_balance: float,
-        max_heat_pct: float = 0.075
+        max_heat_pct: float = 0.075,
+        account_id: Optional[str] = None
     ) -> Tuple[bool, str, float]:
         """
         [SOP-44 PORTFOLIO HEAT CAP @ 7.5%]
         Calcula la suma del riesgo en dólares de todas las posiciones desprotegidas en la misma dirección.
         Las posiciones en Breakeven (Fast BE o SL >= Entry) tienen riesgo = $0.00.
         Si (calor_actual + nuevo_riesgo) > account_balance * max_heat_pct, rechaza la entrada.
+        Si se pasa account_id, solo contabiliza las posiciones de esa cuenta específica.
         Retorna: (aprobado, razon, heat_actual_usd)
         """
         if account_balance <= 0:
@@ -890,6 +903,11 @@ class RiskManager:
         current_heat_usd = 0.0
 
         for sym, pos in active_positions.items():
+            # Aislamiento multi-cuenta: Si se especifica account_id, filtrar posiciones de otras cuentas
+            pos_acc = pos.get("account_id")
+            if account_id and pos_acc and pos_acc != account_id:
+                continue
+
             sig = pos.get("signal", {})
             sig_side = str(sig.get("type", sig.get("signal_type", "LONG"))).upper()
             is_pos_long = "LONG" in sig_side or "BUY" in sig_side

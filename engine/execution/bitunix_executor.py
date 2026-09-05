@@ -16,6 +16,9 @@ class BitunixExecutor:
     Motor de Ejecución para Bitunix Futures.
     Realiza firmas de doble SHA-256 e interactúa mediante REST API directa.
     """
+    # Caché compartida de offset de reloj del servidor Bitunix para todas las cuentas
+    _shared_server_time_offset_ms: int = 0
+    _shared_last_time_sync: float = 0.0
     
     def __init__(
         self,
@@ -31,8 +34,8 @@ class BitunixExecutor:
         self.secret_key = secret_key or settings.BITUNIX_SECRET_KEY
         self.dry_run = dry_run
         self.base_url = "https://fapi.bitunix.com"
-        self._server_time_offset_ms = 0
-        self._last_time_sync = 0
+        self._server_time_offset_ms = BitunixExecutor._shared_server_time_offset_ms
+        self._last_time_sync = BitunixExecutor._shared_last_time_sync
         self._last_verified_balance = 0.0
         self._last_balance_ts = 0.0
         
@@ -47,7 +50,13 @@ class BitunixExecutor:
         [SOP-11 CLOCK DRIFT CALIBRATOR]
         Sincroniza la hora local con la hora oficial del servidor de Bitunix Futures.
         Evita rechazos por Timestamp Expired (100007) si el reloj de Windows está desfasado.
+        Reutiliza la calibración compartida si se ejecutó hace menos de 60 segundos.
         """
+        now = time.time()
+        if (now - BitunixExecutor._shared_last_time_sync) < 60.0 and BitunixExecutor._shared_last_time_sync > 0:
+            self._server_time_offset_ms = BitunixExecutor._shared_server_time_offset_ms
+            return self._server_time_offset_ms
+
         try:
             url = f"{self.base_url}/api/v1/futures/market/time"
             async with httpx.AsyncClient(timeout=5.0) as client:
@@ -62,17 +71,21 @@ class BitunixExecutor:
                     
                     if server_time > 0:
                         local_time = int(time.time() * 1000)
-                        self._server_time_offset_ms = server_time - local_time
-                        self._last_time_sync = time.time()
-                        logger.info(f"⏱️ [BITUNIX TIME SYNC] Reloj calibrado con exchange. Offset: {self._server_time_offset_ms:+d}ms")
-                        return self._server_time_offset_ms
+                        offset = server_time - local_time
+                        BitunixExecutor._shared_server_time_offset_ms = offset
+                        BitunixExecutor._shared_last_time_sync = now
+                        self._server_time_offset_ms = offset
+                        self._last_time_sync = now
+                        logger.info(f"⏱️ [BITUNIX TIME SYNC] Reloj calibrado con exchange. Offset: {offset:+d}ms")
+                        return offset
         except Exception as e:
             logger.debug(f"[BITUNIX TIME SYNC] Error sincronizando hora de Bitunix: {e}")
         return self._server_time_offset_ms
 
     def get_calibrated_timestamp_ms(self) -> int:
         """Retorna el timestamp actual compensado con el offset del servidor del exchange."""
-        return int(time.time() * 1000) + self._server_time_offset_ms
+        offset = BitunixExecutor._shared_server_time_offset_ms or self._server_time_offset_ms
+        return int(time.time() * 1000) + offset
 
     async def get_available_margin_usdt(self) -> float:
         """

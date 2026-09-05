@@ -221,19 +221,31 @@ class NexusNode:
         logger.info("🔄 [NEXUS SYNC] Centinela de Auto-Sincronización activado.")
         while True:
             try:
-                # 1. Obtener posiciones reales del exchange
-                real_positions = await self.executor.get_pending_positions()
-                if real_positions is None:
-                    await asyncio.sleep(15)
-                    continue
+                # 1. Obtener posiciones reales del exchange para todas las cuentas activas (SOP-45)
+                executors = self.account_manager.get_all_executors(enabled_only=True)
+                if not executors:
+                    executors = {"primary": self.executor}
 
-                real_positions_map = {p.get("symbol"): p for p in real_positions if p.get("symbol")}
+                all_account_positions = {}
+                for acc_id, ex in executors.items():
+                    try:
+                        acc_pos = await ex.get_pending_positions()
+                        if acc_pos is not None:
+                            all_account_positions[acc_id] = {p.get("symbol"): p for p in acc_pos if p.get("symbol")}
+                    except Exception as err:
+                        logger.debug(f"[NEXUS SYNC] Error obteniendo posiciones para {acc_id}: {err}")
+
+                primary_positions_map = all_account_positions.get("primary", {})
+                real_positions_map = primary_positions_map
 
                 # 2. Eliminar de memoria posiciones que ya no existen en Bitunix (cerradas)
                 closed_assets = []
                 for asset, pos_data in list(self._active_positions.items()):
-                    if asset not in real_positions_map:
-                        logger.info(f"📉 [NEXUS SYNC] Posición en {asset} ya no existe en Bitunix. Removiendo.")
+                    pos_acc = pos_data.get("account_id", "primary")
+                    acc_active_map = all_account_positions.get(pos_acc, real_positions_map)
+                    base_asset = pos_data.get("signal", {}).get("asset", asset).split("_")[-1]
+                    if base_asset not in acc_active_map and asset not in real_positions_map:
+                        logger.info(f"📉 [NEXUS SYNC] Posición en {asset} ({pos_acc}) ya no existe en Bitunix. Removiendo.")
                         closed_assets.append(asset)
                         sig = pos_data.get("signal", {})
                         sig["status"] = "CLOSED"
@@ -243,17 +255,20 @@ class NexusNode:
                 for asset in closed_assets:
                     del self._active_positions[asset]
                     self.remove_pending_limit_symbol(asset)
-                    # 🧹 [SOP-22 PURGA ATÓMICA] Cancelar inmediatamente el 100% de las órdenes huérfanas de ese activo
-                    try:
-                        await self.executor.cancel_all_orders_for_symbol(asset)
-                    except Exception as purge_err:
-                        logger.error(f"❌ [NEXUS SOP-22] Error purgando órdenes huérfanas para {asset}: {purge_err}")
+                    # 🧹 [SOP-22 PURGA ATÓMICA] Cancelar órdenes huérfanas de ese activo en todos los ejecutores
+                    for ex in executors.values():
+                        try:
+                            await ex.cancel_all_orders_for_symbol(asset)
+                        except Exception as purge_err:
+                            logger.error(f"❌ [NEXUS SOP-22] Error purgando órdenes huérfanas para {asset}: {purge_err}")
 
                 # 2.1 🛡️ [SOP-22 GHOST ERADICATOR] Purgar cualquier orden CLOSE huérfana de monedas sin posición
-                try:
-                    await self.executor.purge_orphaned_close_orders(active_symbols=set(real_positions_map.keys()))
-                except Exception as ghost_err:
-                    logger.debug(f"[NEXUS SOP-22] Skip erradicación de órdenes fantasma: {ghost_err}")
+                for acc_id, ex in executors.items():
+                    try:
+                        acc_syms = set(all_account_positions.get(acc_id, {}).keys())
+                        await ex.purge_orphaned_close_orders(active_symbols=acc_syms)
+                    except Exception as ghost_err:
+                        logger.debug(f"[NEXUS SOP-22] Skip erradicación de órdenes fantasma ({acc_id}): {ghost_err}")
 
                 # 3. Añadir a memoria posiciones abiertas en Bitunix que no tenemos registradas
                 for symbol, p in real_positions_map.items():
@@ -677,15 +692,17 @@ class NexusNode:
                 logger.warning(f"🛑 [NEXUS SOP-41] [{account.label}] Orden rechazada para {asset}: {risk_calc['reason']}")
                 return None
 
-            # SOP-44: Portfolio Heat Check (Directional Heat Cap @ 7.5%)
+            # SOP-44: Portfolio Heat Check (Directional Heat Cap @ 7.5% isolated per account)
             pos_risk_usd = risk_calc["projected_loss"]
             sig_side = str(signal.get("type", signal.get("signal_type", "LONG"))).upper()
+            acc_id = getattr(account, "account_id", "primary")
             is_heat_ok, heat_msg, _ = RiskManager.check_portfolio_heat(
                 active_positions=self._active_positions,
                 new_direction=sig_side,
                 new_trade_risk_usd=pos_risk_usd,
                 account_balance=avail_margin,
-                max_heat_pct=0.075
+                max_heat_pct=0.075,
+                account_id=acc_id
             )
             if not is_heat_ok:
                 logger.warning(f"🛑 [NEXUS SOP-44] [{account.label}] {heat_msg}")
@@ -921,24 +938,32 @@ class NexusNode:
     async def purge_all_pending_limit_orders(self, reason: str = "SLOT_OVERLOAD"):
         """
         [SAFETY PURGE] Cancela todas las órdenes límite pendientes en Bitunix
-        cuando se alcanza el límite de riesgo o por invalidación global.
+        cuando se alcanza el límite de riesgo o por invalidación global en todas las cuentas (SOP-45).
         """
         logger.warning(f"🛡️ [NEXUS PURGE] Iniciando purga de órdenes límite pendientes. Razón: {reason}")
         try:
-            pending_orders = await self.executor.get_pending_orders()
-            # Filtrar solo órdenes que abren posiciones (tradeSide == 'OPEN' o reduceOnly == False)
-            open_limits = [
-                o for o in pending_orders 
-                if (o.get("tradeSide") == "OPEN" or not o.get("reduceOnly")) and o.get("orderType") == "LIMIT"
-            ]
-            
-            for o in open_limits:
-                sym = o.get("symbol")
-                oid = o.get("orderId")
-                if sym and oid:
-                    await self.executor.cancel_limit_order(sym, oid)
-                    self.remove_pending_limit_symbol(sym)
-                    logger.info(f"🧹 [NEXUS PURGE] Orden límite sobrante {oid} ({sym}) cancelada por seguridad ({reason}).")
+            executors = self.account_manager.get_all_executors(enabled_only=True)
+            if not executors:
+                executors = {"primary": self.executor}
+
+            for acc_id, ex in executors.items():
+                try:
+                    pending_orders = await ex.get_pending_orders()
+                    if not pending_orders:
+                        continue
+                    open_limits = [
+                        o for o in pending_orders 
+                        if (o.get("tradeSide") == "OPEN" or not o.get("reduceOnly")) and o.get("orderType") == "LIMIT"
+                    ]
+                    for o in open_limits:
+                        sym = o.get("symbol")
+                        oid = o.get("orderId")
+                        if sym and oid:
+                            await ex.cancel_limit_order(sym, oid)
+                            self.remove_pending_limit_symbol(sym)
+                            logger.info(f"🧹 [NEXUS PURGE] [{ex.account_label}] Orden límite sobrante {oid} ({sym}) cancelada por seguridad ({reason}).")
+                except Exception as ex_err:
+                    logger.warning(f"❌ [NEXUS PURGE] Error purgando límites para {acc_id}: {ex_err}")
         except Exception as e:
             logger.error(f"❌ [NEXUS PURGE] Error en purga de órdenes límite: {e}")
 

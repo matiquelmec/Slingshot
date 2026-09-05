@@ -401,22 +401,26 @@ class TradeManager:
 
         await store.save_signal(signal)
 
-        # 🚀 [BITUNIX LIVE EXCHANGE SYNC] Modificar Stop Loss real en el exchange
+        # 🚀 [BITUNIX LIVE EXCHANGE SYNC] Modificar Stop Loss real en el exchange (Multi-Cuenta SOP-45)
         try:
-            from engine.execution.bitunix_executor import BitunixExecutor
-            bitunix = BitunixExecutor()
+            from engine.execution.account_manager import AccountManager
+            mgr = AccountManager()
+            executors = mgr.get_all_executors(enabled_only=True)
             position_id = signal.get("position_id") or signal.get("main_order_id")
             
-            # Modificar SL de la posición en Bitunix
-            success = await bitunix.modify_position_tpsl(
-                symbol=asset,
-                position_id=str(position_id) if position_id else "live_position",
-                sl_price=new_sl
-            )
-            if success:
-                logger.info(f"⚡ [TRADE_MANAGER -> BITUNIX] SL de posición {asset} actualizado a ${new_sl:.4f} en el exchange.")
-            else:
-                logger.debug(f"[TRADE_MANAGER] SL no requerido o sin posición activa en Bitunix para {asset}")
+            for acc_id, ex in executors.items():
+                try:
+                    success = await ex.modify_position_tpsl(
+                        symbol=asset,
+                        position_id=str(position_id) if position_id else "live_position",
+                        sl_price=new_sl
+                    )
+                    if success:
+                        logger.info(f"⚡ [TRADE_MANAGER -> BITUNIX] [{ex.account_label}] SL de posición {asset} actualizado a ${new_sl:.4f} en el exchange.")
+                    else:
+                        logger.debug(f"[TRADE_MANAGER] [{ex.account_label}] SL no requerido o sin posición activa en Bitunix para {asset}")
+                except Exception as acc_err:
+                    logger.warning(f"[TRADE_MANAGER] [{ex.account_label}] Error al sincronizar SL: {acc_err}")
         except Exception as bitunix_err:
             logger.warning(f"[TRADE_MANAGER] Error al sincronizar SL con Bitunix: {bitunix_err}")
 
