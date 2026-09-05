@@ -1,32 +1,31 @@
 """
-engine/backtest/unified_backtest_engine.py
 =============================================================================
-SLINGSHOT APEX v45.0 — QUANTUM REPLAY ENGINE (CLEAN SSoT & INSTITUTIONAL FIDELITY)
+SLINGSHOT v46.0 APEX ZENITH SOVEREIGN — MOTOR UNIFICADO DE BACKTEST (SSoT)
 =============================================================================
-Única Fuente de la Verdad (Single Source of Truth) para la auditoría cuantitativa.
-
-Mecánica Cuantitativa Institucional SSoT:
-1. Detección Vectorizada de Order Blocks, FVGs y Sweeps en Rust (Polars Engine).
-2. Jurado de Confluencia Real de 14 Factores (ConfluenceManager) evaluado por vela.
-3. Colocación Estructural de Stop Loss y Entradas OTE mediante RiskManager.
-4. Filtro Cuántico de Ventanas Temporales Específico por Activo (SOP-18).
-5. Filtros Institucionales: VWAP Exhaustion (SOP-27), Quality Gate (SOP-28) y Regime Quarantine (SOP-31).
-6. [SOP-25] Early Structural Invalidation a -0.65R antes de TP1.
-7. Grilla de Salidas de Producción Nexus (60% en TP1 +1.5R con Fast BE, 20% en TP2 +3.0R con Lock, 10% en TP3 +5.0R, 10% Ultra-Runner).
-8. Verificación Intra-Vela de Fill (Pessimistic Bias) eliminando el sesgo de supervivencia.
-9. [SOP-21] Apalancamiento Seguro Dinámico y Descuento Real de Comisiones y Deslizamiento.
-10. Métricas Financieras de Grado Fondo: Sharpe Ratio, Sortino Ratio, Calmar Ratio, Profit Factor y Max Drawdown.
+Punto Único de Verdad (Single Source of Truth) para backtesting cuantitativo.
+Replica con 100% de paridad matemática el runtime de producción:
+• Matriz Fractal Multitemporal (SOP-36: Swing 1H Mega-Caps / Scalp 15M High-Beta Alts)
+• Protocolo de Seguridad Horaria y Ventanas Sniper (SOP-18 & SOP-38)
+• Jurado de Confluencia Real (14 Factores de ConfluenceManager con umbrales adaptativos)
+• Stop Loss Estructural & OTE Fibonacci (RiskManager con colchón SIGMA por activo)
+• Grilla de Salidas Asimétricas (TP1 +1.2R/+1.5R, TP2 +2.0R/+3.0R, TP3 +3.5R/+5.0R, Runner 70% Ratchet)
+• Fast Breakeven con Fee Absorber (+0.08%) garantizando PnL >= $0.00
+• Invalidation Temprana por MAE (SOP-25 @ -0.65R)
+• Resolución Intra-Vela Pesimista (Anti-Survivor Bias)
+• Métricas Financieras Vectorizadas de Grado Hedge Fund (Sharpe, Sortino, Calmar, Profit Factor)
+=============================================================================
 """
 
-import sys
 import os
+import sys
 import glob
-import json
 import math
+import json
 from datetime import datetime, timezone
-from typing import List, Dict, Any, Optional
-import pandas as pd
+from typing import Dict, Any, List, Optional
+
 import numpy as np
+import pandas as pd
 
 if sys.platform == "win32":
     try:
@@ -49,14 +48,19 @@ logger.setLevel("ERROR")
 
 DATA_DIR = os.path.join(os.path.dirname(__file__), "data")
 
-MEGA_CAPS = ["BTCUSDT", "ETHUSDT", "SOLUSDT", "XRPUSDT", "AVAXUSDT", "LINKUSDT"]
-HIGH_BETA_ALTS = ["INJUSDT", "BNBUSDT", "NEARUSDT", "FETUSDT", "SUIUSDT", "RENDERUSDT", "ATOMUSDT"]
+# 🏛️ MATRIZ FRACTAL INSTITUCIONAL (SOP-36)
+SWING_1H_ASSETS = ["BTCUSDT", "ETHUSDT", "SOLUSDT", "AVAXUSDT", "LINKUSDT", "XRPUSDT", "PAXGUSDT"]
+SCALP_15M_ASSETS = ["INJUSDT", "BNBUSDT", "SOLUSDT", "NEARUSDT", "SUIUSDT", "FETUSDT", "ATOMUSDT", "RENDERUSDT"]
+
+# Retrocompatibilidad de exportaciones
+MEGA_CAPS = SWING_1H_ASSETS
+HIGH_BETA_ALTS = SCALP_15M_ASSETS
 
 
 class UnifiedBacktestEngine:
     """
-    [TITAN REPLAY ENGINE v45.0 SSoT]
-    Motor de Replay Histórico 100% fiel al comportamiento del live engine en producción.
+    [TITAN REPLAY ENGINE v46.0 SSoT]
+    Motor de Replay Histórico 100% fiel a la arquitectura de producción de Slingshot.
     """
 
     def __init__(
@@ -104,9 +108,12 @@ class UnifiedBacktestEngine:
         h = dt.hour
 
         # 1. Reglas Globales de Protección
-        if d == "Monday" and h <= 13: return False
-        if d == "Thursday" and h >= 16: return False
-        if h == 18: return False
+        if d == "Monday" and h <= 13:
+            return False
+        if d == "Thursday" and h >= 16:
+            return False
+        if h == 18:
+            return False
 
         # 2. Regla Específica AVAXUSDT: Solo ventanas 09:00 y 17:00 UTC
         if symbol == "AVAXUSDT":
@@ -121,6 +128,25 @@ class UnifiedBacktestEngine:
             return False
 
         return True
+
+    def get_effective_min_score(self, symbol: str, interval: str = "15m", is_long: bool = True) -> int:
+        """
+        Calcula el umbral efectivo de confluencia replicando la lógica adaptativa de Gatekeeper.
+        """
+        sym = symbol.upper()
+        if sym == "BTCUSDT":
+            base = 35 if interval == "1h" else 45
+        elif sym == "ETHUSDT":
+            base = 40 if interval == "1h" else 50
+        elif sym == "SOLUSDT":
+            base = 50
+        elif sym in ["XRPUSDT", "BNBUSDT", "LINKUSDT", "PAXGUSDT"]:
+            base = 45 if interval == "1h" else 55
+        else:
+            base = 60 if is_long else 65
+
+        # Si el usuario especificó un umbral global manual, usar el máximo para respetar la intención
+        return max(base, self.min_score)
 
     def run_single_asset(self, symbol: str, interval: str = "15m", btc_map: dict = None) -> List[Dict[str, Any]]:
         """
@@ -157,10 +183,12 @@ class UnifiedBacktestEngine:
         df = identify_order_blocks(df)
         df = self.strategy.analyze(df, interval=interval)
 
-        # Tendencia HTF (Alineación 1H EMA200 / 15m EMA800)
-        df["ema_htf"] = df["close"].ewm(span=800).mean()
+        # 2. Tendencia HTF Adaptada al Timeframe
+        # En 15m: EMA800 (Macro 1H EMA200). En 1H: EMA200 (Macro 4H EMA50).
+        ema_span = 200 if interval in ["1h", "1H", "60m"] else 800
+        df["ema_htf"] = df["close"].ewm(span=ema_span).mean()
 
-        # Filtros de Eficiencia y Microestructura
+        # 3. Filtros de Eficiencia y Microestructura
         df["vol_sma"] = df["volume"].rolling(20).mean()
         df["rvol"] = df["volume"] / (df["vol_sma"] + 1e-9)
         change = (df["close"] - df["close"].shift(10)).abs()
@@ -184,8 +212,8 @@ class UnifiedBacktestEngine:
             if not self.is_trade_allowed_sop18(symbol, dt):
                 continue
 
-            # Filtro Horario (Killzones en 15m)
-            if self.strict_killzones:
+            # Filtro Horario (Killzones estrictas para 15m Scalping; 1h opera estructura continua 24h bajo SOP-18)
+            if self.strict_killzones and interval == "15m":
                 if not (7 <= hour <= 12 or 13 <= hour <= 17):
                     continue
 
@@ -260,7 +288,8 @@ class UnifiedBacktestEngine:
             )
             confluence_score = int(confluence_res.get("score", 0))
 
-            if confluence_score < self.min_score:
+            required_score = self.get_effective_min_score(symbol, interval, is_long=(direction == "LONG"))
+            if confluence_score < required_score:
                 continue
 
             # ── CÁLCULO ESTRUCTURAL DE POSICIÓN (RiskManager SSoT) ──
@@ -482,10 +511,10 @@ class UnifiedBacktestEngine:
         """
         if not trades:
             return {
-                "total_trades": 0, "win_rate": 0.0, "profit_factor": 0.0,
+                "total_trades": 0, "win_rate": 0.0, "breakeven_rate": 0.0, "profit_factor": 0.0,
                 "expectancy_r": 0.0, "sharpe_ratio": 0.0, "sortino_ratio": 0.0,
                 "calmar_ratio": 0.0, "max_drawdown_pct": 0.0, "total_r": 0.0,
-                "net_profit_usd": 0.0
+                "net_profit_usd": 0.0, "exit_breakdown": {}
             }
 
         df = pd.DataFrame(trades)
@@ -552,23 +581,28 @@ class UnifiedBacktestEngine:
 
     def run_adaptive_portfolio_audit(self) -> Dict[str, Any]:
         """
-        Ejecuta la auditoría oficial del portafolio con paridad SSoT v45.0.
+        Ejecuta la auditoría oficial del portafolio aplicando la Matriz Fractal (SOP-36).
+        • Swing 1H: Mega-Caps & Commodities
+        • Scalp 15M: High-Beta Alts
         """
         btc_map = self._load_btc_macro_map()
         all_results = []
 
         print("=" * 85)
-        print("👑  AUDITORÍA OFICIAL SLINGSHOT v45.0 APEX ZENITH SOVEREIGN (SSoT INSTITUCIONAL)")
+        print("👑  AUDITORÍA OFICIAL SLINGSHOT v46.0 APEX ZENITH SOVEREIGN (MATRIZ FRACTAL SSoT)")
         print("=" * 85)
         print(f"💰 Capital Base: ${self.initial_balance:,.2f} USD | Riesgo Base: {self.risk_pct*100:.2f}% | Comisiones Bitunix Descontadas")
+        print("🏛️ Segmentación: Mega-Caps en 1H Swing  |  🚀 High-Beta Alts en 15M Scalp")
         print("=" * 85)
 
-        all_assets = MEGA_CAPS + HIGH_BETA_ALTS
-        seen = set()
-        for sym in all_assets:
-            if sym in seen:
-                continue
-            seen.add(sym)
+        # 1. Ejecución Swing 1H
+        for sym in SWING_1H_ASSETS:
+            t_list = self.run_single_asset(sym, interval="1h", btc_map=btc_map)
+            all_results.extend(t_list)
+
+        # 2. Ejecución Scalp 15M
+        for sym in SCALP_15M_ASSETS:
+            # Si ya se ejecutó en 1h (ej. SOLUSDT), se ejecuta también su modelo 15m scalp específico
             t_list = self.run_single_asset(sym, interval="15m", btc_map=btc_map)
             all_results.extend(t_list)
 
@@ -616,15 +650,16 @@ class UnifiedBacktestEngine:
         print(f"⚡ Calmar Ratio (Retorno / DD)  : {metrics['calmar_ratio']:.2f}")
         print("=" * 85)
 
-        print("\n📋 DESGLOSE POR ACTIVO (ORDENADO POR RETORNO NETO):")
+        print("\n📋 DESGLOSE POR ACTIVO Y TEMPORALIDAD (ORDENADO POR RETORNO NETO):")
         print("-" * 85)
-        asset_summary = df_all.groupby("symbol").agg(
+        df_all["asset_tf"] = df_all["symbol"] + " (" + df_all["interval"].str.upper() + ")"
+        asset_summary = df_all.groupby("asset_tf").agg(
             Trades=("outcome_r", "count"),
             Win_Rate=("outcome_r", lambda x: f"{(x > 0).mean()*100:.1f}%"),
             Retorno_R=("outcome_r", lambda x: f"{x.sum():+.2f} R"),
             Profit_Factor=("outcome_r", lambda x: f"{x[x>0].sum()/abs(x[x<0].sum()) if (x<0).sum()!=0 else 99:.2f}")
         )
-        asset_ret_num = df_all.groupby("symbol")["outcome_r"].sum()
+        asset_ret_num = df_all.groupby("asset_tf")["outcome_r"].sum()
         asset_summary = asset_summary.loc[asset_ret_num.sort_values(ascending=False).index]
         print(asset_summary.to_string())
         print("=" * 85)
@@ -636,7 +671,7 @@ class UnifiedBacktestEngine:
 
         summary_payload = {
             "audit_date": datetime.now(timezone.utc).isoformat(),
-            "engine_version": "v45.0 APEX TITAN (SSoT Clean Architecture)",
+            "engine_version": "v46.0 APEX TITAN (Fractal Matrix SSoT)",
             "metrics": metrics,
             "scaled_metrics": {
                 "scaled_total_r": round(float(scaled_total_r), 2),
@@ -649,10 +684,5 @@ class UnifiedBacktestEngine:
         with open(report_path, "w", encoding="utf-8") as f:
             json.dump(summary_payload, f, indent=4)
 
-        print(f"💾 Reporte Oficial Inmutable guardado en: {report_path}\n")
+        print(f"\n💾 Reporte Oficial Inmutable guardado en: {report_path}")
         return summary_payload
-
-
-if __name__ == "__main__":
-    engine = UnifiedBacktestEngine()
-    engine.run_adaptive_portfolio_audit()

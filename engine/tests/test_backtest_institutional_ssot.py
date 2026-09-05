@@ -9,6 +9,8 @@ Pruebas unitarias cuantitativas que certifican el Motor de Backtest SSoT:
 4. Conservacion de volumen en salidas asimetricas (60% TP1, 20% TP2, 10% TP3, 10% Runner).
 5. Vectorizacion y exactitud matematica de metricas institucionales:
    Sharpe, Sortino, Calmar, Profit Factor y Max Drawdown.
+6. Matriz Fractal SOP-36 (Enrutamiento 1H Swing vs 15M Scalp).
+7. Umbrales adaptativos de confluencia por activo (Gatekeeper Parity).
 =============================================================================
 """
 import pytest
@@ -16,16 +18,20 @@ import numpy as np
 import pandas as pd
 from datetime import datetime, timezone
 
-from engine.backtest.unified_backtest_engine import UnifiedBacktestEngine
+from engine.backtest.unified_backtest_engine import (
+    UnifiedBacktestEngine,
+    SWING_1H_ASSETS,
+    SCALP_15M_ASSETS
+)
 from engine.risk.risk_manager import RiskManager
 from engine.core.confluence import confluence_manager
 
 @pytest.fixture
 def engine():
-    return UnifiedBacktestEngine(min_confluence_score=60)
+    return UnifiedBacktestEngine(min_confluence_score=50)
 
 def test_unified_backtest_engine_initialization(engine):
-    assert engine.min_score == 60
+    assert engine.min_score == 50
     assert engine.maker_fee == 0.0002
     assert engine.taker_fee == 0.0006
     assert engine.slippage == 0.0002
@@ -99,3 +105,20 @@ def test_intra_candle_pessimistic_order_bias():
     
     outcome = "SL" if hit_sl else "TP"
     assert outcome == "SL"
+
+def test_sop36_fractal_matrix_assets(engine):
+    # Validar que los activos institucionales estén correctamente categorizados
+    assert "BTCUSDT" in SWING_1H_ASSETS
+    assert "ETHUSDT" in SWING_1H_ASSETS
+    assert "PAXGUSDT" in SWING_1H_ASSETS
+    assert "PAXGUSDT" not in SCALP_15M_ASSETS
+    assert "INJUSDT" in SCALP_15M_ASSETS
+    assert "BNBUSDT" in SCALP_15M_ASSETS
+
+def test_dynamic_confluence_thresholds_per_asset(engine):
+    # BTC y ETH en 1H tienen umbrales adaptativos menores debido a menor ruido
+    btc_score = engine.get_effective_min_score("BTCUSDT", interval="1h")
+    alt_score = engine.get_effective_min_score("RENDERUSDT", interval="15m")
+    assert btc_score <= alt_score
+    assert btc_score >= 35
+    assert alt_score >= 60
