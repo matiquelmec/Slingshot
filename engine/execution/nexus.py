@@ -156,7 +156,7 @@ class NexusNode:
 
                     if is_sl or is_tp:
                         result_str = "STOP_LOSS" if is_sl else "TAKE_PROFIT"
-                        logger.info(f"🏁 [OMEGA] {asset} cerrado por {result_str}. Grabando en Black Box y transmitiendo.")
+                        logger.info(f"🏁 [OMEGA] {asset} alcanzó umbral de {result_str}. Grabando evento y transmitiendo. (Remoción delegada a Bitunix SSoT)")
 
                         # Grabar en la caja negra para aprendizaje institucional
                         blackbox.record_trade(sig, result_str)
@@ -165,14 +165,12 @@ class NexusNode:
                         sig["status"] = result_str
                         await store.save_signal(sig)
                         await registry.broadcast_global({"type": "signal_auditor_update", "data": sig})
-
-                        assets_to_remove.append(asset)
+                        # 🛡️ SSoT RULE: NO eliminar de self._active_positions aquí.
+                        # La única fuente de verdad para eliminar una posición abierta es Bitunix confirmando
+                        # el cierre real en _sync_exchange_positions_loop.
 
                 except Exception as e:
                     logger.error(f"⚠️ [OMEGA] Error auditando {asset}: {e}")
-
-            for asset in assets_to_remove:
-                del self._active_positions[asset]
 
     async def _dashboard_loop(self):
         """Monitor simple para ver posiciones en tiempo real."""
@@ -270,9 +268,18 @@ class NexusNode:
                     except Exception as ghost_err:
                         logger.debug(f"[NEXUS SOP-22] Skip erradicación de órdenes fantasma ({acc_id}): {ghost_err}")
 
-                # 3. Añadir a memoria posiciones abiertas en Bitunix que no tenemos registradas
-                for symbol, p in real_positions_map.items():
-                    if symbol not in self._active_positions:
+                # 3. Añadir a memoria posiciones abiertas en Bitunix que no tenemos registradas (para TODAS las cuentas activas)
+                for acc_id, acc_pos_map in all_account_positions.items():
+                    target_ex = executors.get(acc_id) or self.executor
+                    is_primary_acc = (acc_id == "primary")
+                    for symbol, p in acc_pos_map.items():
+                        mem_key = symbol if is_primary_acc else f"{acc_id}_{symbol}"
+                        alt_key = f"{acc_id}_{symbol}" if is_primary_acc else symbol
+                        
+                        # Si ya está registrada en memoria bajo cualquiera de las claves, continuar
+                        if mem_key in self._active_positions or (is_primary_acc and alt_key in self._active_positions):
+                            continue
+
                         qty = float(p.get("qty", 0))
                         entry_price = float(p.get("avgOpenPrice", 0)) or 1.0
                         raw_side = p.get("side", "BUY").upper()
@@ -281,11 +288,10 @@ class NexusNode:
                         margin = float(p.get("margin", 0))
                         position_id = p.get("positionId", f"manual_{int(time.time())}")
 
-                        logger.info(f"📈 [NEXUS SYNC] Sincronizando posicion externa Bitunix: {symbol} ({side})")
+                        logger.info(f"📈 [NEXUS SYNC] [{target_ex.account_label}] Sincronizando posición externa Bitunix: {symbol} ({side})")
 
                         # 1. Comprobar si la posición YA tiene un Stop Loss activo en Bitunix
                         existing_sl_in_exchange = None
-                        # Revisar si viene directamente en la posición
                         pos_direct_sl = p.get("slPrice") or p.get("stopLoss")
                         if pos_direct_sl:
                             try:
@@ -295,7 +301,7 @@ class NexusNode:
 
                         if not existing_sl_in_exchange:
                             try:
-                                tpsl_chk = await self.executor._request("GET", "/api/v1/futures/tpsl/get_pending_orders", params={"symbol": symbol})
+                                tpsl_chk = await target_ex._request("GET", "/api/v1/futures/tpsl/get_pending_orders", params={"symbol": symbol})
                                 if tpsl_chk.get("code") == 0 and isinstance(tpsl_chk.get("data"), list):
                                     for t_item in tpsl_chk["data"]:
                                         raw_sl = t_item.get("slPrice") or t_item.get("triggerPrice")
@@ -306,7 +312,7 @@ class NexusNode:
                                             except (ValueError, TypeError):
                                                 pass
                             except Exception as e:
-                                logger.debug(f"[NEXUS SYNC] Error consultando TPSL existente: {e}")
+                                logger.debug(f"[NEXUS SYNC] [{target_ex.account_label}] Error consultando TPSL existente: {e}")
 
                         # Buscar si existe un setup SMC institucional activo para este activo en el escáner
                         all_opps = store.get_scanner_opportunities("scalp") + store.get_scanner_opportunities("swing")
@@ -319,14 +325,14 @@ class NexusNode:
                             tp1 = entry_price + (dist * 1.5) if side == "LONG" else entry_price - (dist * 1.5)
                             tp2 = entry_price + (dist * 3.0) if side == "LONG" else entry_price - (dist * 3.0)
                             tp3 = entry_price + (dist * 5.0) if side == "LONG" else entry_price - (dist * 5.0)
-                            logger.info(f"🛡️ [NEXUS SYNC] Posición {symbol} ya cuenta con Stop Loss activo blindado en ${sl_price:.4f}. BE Target: ${be_price:.4f}")
+                            logger.info(f"🛡️ [NEXUS SYNC] [{target_ex.account_label}] Posición {symbol} ya cuenta con Stop Loss activo blindado en ${sl_price:.4f}. BE Target: ${be_price:.4f}")
                         elif matching_setup:
                             sl_price = float(matching_setup.get("stop_loss", 0))
                             be_price = float(matching_setup.get("be_price", 0))
                             tp1 = float(matching_setup.get("tp1", 0))
                             tp2 = float(matching_setup.get("tp2", 0))
                             tp3 = float(matching_setup.get("tp3", 0))
-                            logger.info(f"💎 [NEXUS SYNC] Setup institucional SMC emparejado para {symbol}: SL: ${sl_price} | BE: ${be_price} | TP1: ${tp1}")
+                            logger.info(f"💎 [NEXUS SYNC] [{target_ex.account_label}] Setup institucional SMC emparejado para {symbol}: SL: ${sl_price} | BE: ${be_price} | TP1: ${tp1}")
                         else:
                             dist = entry_price * 0.02
                             sl_price = entry_price * 0.98 if side == "LONG" else entry_price * 1.02
@@ -353,14 +359,15 @@ class NexusNode:
                             "position_size_usdt": margin,
                             "leverage": leverage,
                             "timestamp": datetime.now(timezone.utc).isoformat(),
-                            "id": position_id
+                            "id": position_id,
+                            "account_id": acc_id
                         }
 
                         # Si NO tenía Stop Loss en el exchange, colocar el SL inicial
                         protection_ids = []
                         if not existing_sl_in_exchange and sl_price > 0:
-                            logger.info(f"🛡️ [NEXUS SYNC] Configurando Stop Loss inicial en Bitunix (SL: ${sl_price:.2f}) para {symbol}...")
-                            tpsl_order_id = await self.executor.place_position_tpsl(
+                            logger.info(f"🛡️ [NEXUS SYNC] [{target_ex.account_label}] Configurando Stop Loss inicial en Bitunix (SL: ${sl_price:.2f}) para {symbol}...")
+                            tpsl_order_id = await target_ex.place_position_tpsl(
                                 symbol=symbol,
                                 position_id=position_id,
                                 sl_price=sl_price,
@@ -369,17 +376,16 @@ class NexusNode:
                             if tpsl_order_id:
                                 protection_ids.append(tpsl_order_id)
 
-                        # 2. Colocar Take Profits límites fragmentados (60% / 20% / 20%) si no existen previamente
+                        # 2. Colocar Take Profits límites fragmentados (60% / 20% / 10%) si no existen previamente
                         try:
-                            existing_orders_res = await self.executor._request("GET", "/api/v1/futures/trade/get_pending_orders", params={"symbol": symbol})
+                            existing_orders_res = await target_ex._request("GET", "/api/v1/futures/trade/get_pending_orders", params={"symbol": symbol})
                             existing_orders = existing_orders_res.get("data", {}).get("orderList", []) if existing_orders_res.get("code") == 0 else []
                             existing_close_orders = [o for o in existing_orders if o.get("reduceOnly") or o.get("tradeSide") == "CLOSE"]
                         except Exception:
                             existing_close_orders = []
 
                         if not existing_close_orders:
-                            # Formatear decimales según especificación exacta y dinámica de Bitunix
-                            q_dec, p_dec = await self.executor.get_symbol_precision(symbol)
+                            q_dec, p_dec = await target_ex.get_symbol_precision(symbol)
                             
                             if q_dec == 0:
                                 f1 = int(round(qty * 0.60))
@@ -409,25 +415,24 @@ class NexusNode:
                                 if position_id and str(position_id).isdigit():
                                     tp_payload["positionId"] = str(position_id)
 
-                                tp_res = await self.executor._request("POST", "/api/v1/futures/trade/place_order", json_body=tp_payload)
-                                # Fallback resiliente: Si Bitunix rechaza por positionId, reintentar orden CLOSE pura
+                                tp_res = await target_ex._request("POST", "/api/v1/futures/trade/place_order", json_body=tp_payload)
                                 if tp_res.get("code") != 0 and "positionId" in tp_payload:
                                     del tp_payload["positionId"]
-                                    tp_res = await self.executor._request("POST", "/api/v1/futures/trade/place_order", json_body=tp_payload)
+                                    tp_res = await target_ex._request("POST", "/api/v1/futures/trade/place_order", json_body=tp_payload)
 
                                 if tp_res.get("code") == 0:
                                     tp_order_id = tp_res.get("data", {}).get("orderId")
-                                    logger.info(f"🎯 [NEXUS SYNC] Orden de {label} límite colocada a ${tp_val:.{p_dec}f} ({tp_qty} unidades) | ID: {tp_order_id}")
+                                    logger.info(f"🎯 [NEXUS SYNC] [{target_ex.account_label}] Orden de {label} límite colocada a ${tp_val:.{p_dec}f} ({tp_qty} unidades) | ID: {tp_order_id}")
                                     protection_ids.append(tp_order_id)
                                 else:
-                                    logger.error(f"❌ [NEXUS SYNC] Error al colocar {label}: {tp_res.get('msg')}")
+                                    logger.error(f"❌ [NEXUS SYNC] [{target_ex.account_label}] Error al colocar {label}: {tp_res.get('msg')}")
                         else:
-                            logger.info(f"🛡️ [NEXUS SYNC] {symbol} ya cuenta con {len(existing_close_orders)} órdenes límite de Take Profit activas en Bitunix.")
+                            logger.info(f"🛡️ [NEXUS SYNC] [{target_ex.account_label}] {symbol} ya cuenta con {len(existing_close_orders)} órdenes límite de Take Profit activas en Bitunix.")
                             for eo in existing_close_orders:
                                 protection_ids.append(eo.get("orderId"))
 
                         await store.save_signal(reconstructed_signal)
-                        self._active_positions[symbol] = {
+                        pos_entry = {
                             "signal": reconstructed_signal,
                             "execution": {
                                 "main_order_id": position_id,
@@ -437,8 +442,12 @@ class NexusNode:
                                 "protection_orders": protection_ids
                             },
                             "created_timestamp": time.time(),
-                            "status": "FILLED"
+                            "status": "FILLED",
+                            "account_id": acc_id
                         }
+                        self._active_positions[mem_key] = pos_entry
+                        if is_primary_acc:
+                            self._active_positions[f"primary_{symbol}"] = pos_entry
                         from engine.api.registry import registry
                         await registry.broadcast_global({"type": "signal_auditor_update", "data": reconstructed_signal})
 
@@ -670,6 +679,22 @@ class NexusNode:
             logger.warning(f"🛑 [NEXUS RIESGO] [{account.label}] Límite de {self.MAX_CONCURRENT_POSITIONS} operaciones en riesgo alcanzado ({unprotected_count} activas). Rechazando entrada en {asset}.")
             return None
 
+        # 1.1 🛡️ DEDUP GUARD EN MEMORIA: Evitar abrir si ya existe posición registrada para esta cuenta
+        acc_pos_key = f"{acc_id}_{asset}"
+        if acc_pos_key in self._active_positions or (acc_id == "primary" and asset in self._active_positions):
+            logger.warning(f"🛑 [NEXUS DEDUP GUARD MEM] [{account.label}] Rechazando orden a mercado en {asset}: Posición ya registrada en memoria interna.")
+            return None
+
+        # 1.2 🛡️ DEDUP GUARD EN VIVO BITUNIX (Defensa en profundidad): Consultar el exchange directamente
+        if not executor.dry_run:
+            try:
+                open_pos = await executor.get_pending_positions()
+                if open_pos and any(p.get("symbol") == asset for p in open_pos):
+                    logger.warning(f"🛑 [NEXUS DEDUP GUARD EXCHANGE] [{account.label}] Rechazando orden a mercado en {asset}: Ya existe una posición abierta en Bitunix.")
+                    return None
+            except Exception as chk_err:
+                logger.debug(f"[NEXUS DEDUP GUARD] [{account.label}] Error al verificar posiciones pendientes en Bitunix: {chk_err}")
+
         try:
             avail_margin = await executor.get_available_margin_usdt()
         except Exception:
@@ -893,6 +918,16 @@ class NexusNode:
         if acc_pos_key in self._active_positions or (acc_id == "primary" and asset in self._active_positions):
             logger.debug(f"[NEXUS AUTO-LIMIT] [{account.label}] Omitiendo orden límite: Posición ya activa para {asset}.")
             return None
+
+        # 2.1 🛡️ DEDUP GUARD EN VIVO BITUNIX: Si ya hay una posición abierta en el exchange, no colocar orden límite
+        if not executor.dry_run:
+            try:
+                open_pos = await executor.get_pending_positions()
+                if open_pos and any(p.get("symbol") == asset for p in open_pos):
+                    logger.debug(f"[NEXUS AUTO-LIMIT] [{account.label}] Omitiendo orden límite: Ya existe una posición abierta en Bitunix para {asset}.")
+                    return None
+            except Exception as chk_err:
+                logger.debug(f"[NEXUS AUTO-LIMIT] [{account.label}] Error al verificar posiciones en Bitunix: {chk_err}")
 
         # Verificar órdenes pendientes en Bitunix para esta cuenta específica para no duplicar en el libro
         try:
