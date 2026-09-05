@@ -1,12 +1,12 @@
-# 🛡️ SLINGSHOT v46.5 APEX ZENITH SOVEREIGN — Autonomous Institutional Multi-Market Terminal
+# 🛡️ SLINGSHOT v49.0 APEX QUANTUM — Autonomous Institutional Multi-Market Terminal
 
-> **"Terminal Cuantitativa Autónoma de Grado Institucional. Slingshot v46.5 APEX ZENITH SOVEREIGN: Arquitectura Dual Multi-Mercado (Modo Crecimiento Cripto Bitunix 24/7 al 2.5% de Riesgo Real Dinámico con Interés Compuesto Automático + Modo Guardián FTMO MetaTrader 5 al 0.75% con Kill-Switch Diario a -3.5%), Motor de Replay Cronológico por Eventos (Event-Driven Timeline Replay SSoT), Malla de Salidas Dinámica SOP-26/SOP-48 (40% a +1.2R / 40% a +2.0R / 20% Runner Elástico a +5.0R vía KER con Ratchet Lock en +2.5R), Modulación Cíclica Semanal SOP-46, Convicción Trinidad del Alfa SOP-47 (BNB, SOL, FET), Sintonización Golden Hours SOP-49, y Despachador Multi-Cuentas Paralelo con Cifrado en Reposo (+80.45R de Retorno SSoT, Profit Factor 2.01, Max Drawdown -3.64% y $1,000 -> $6,673.12 USD). Suite Oficial de 250/250 Pruebas Unitarias Aprobadas al 100%. Canon Inmutable de los 49 Protocolos de Seguridad Operativa (SOP-01 a SOP-49)."**
+> **"Terminal Cuantitativa Autónoma de Grado Institucional. Slingshot v49.0 APEX QUANTUM: Inferencia Neural Meta-Labeling (XGBoost / ONNX en ConfluenceManager +10pts), Sentinela de Intervención Manual de Clientes SOP-59 con Purgado Atómico Anti-Orphan, Motor de Reportería Cuantitativa Institucional SOP-60 (Tear Sheets: Sharpe, Sortino, Drawdown, Profit Factor), Blindaje de Capital SOP-58 (Fast BE Verificado, Reintentos SL de Emergencia, Aislamiento de Purgas por Cuenta y Precisión Dinámica de Lotes), y Despacho Concurrente Multi-Cuenta SOP-57 con Cifrado AES en Reposo (+80.45R de Retorno SSoT, Profit Factor 2.01, Max Drawdown -3.64% y $1,000 -> $6,673.12 USD). Suite Oficial de 38/38 Pruebas Unitarias Aprobadas al 100% en VPS de Producción. Canon Inmutable de los 60 Protocolos de Seguridad Operativa (SOP-01 a SOP-60)."**
 
 ![Status](https://img.shields.io/badge/Status-100%25_AUTONOMOUS_&_SSOT_VERIFIED-0d2a1a?style=for-the-badge&logo=codeproject&logoColor=fff)
-![Version](https://img.shields.io/badge/Version-46.5_Apex_Zenith_Sovereign-1a3a6e?style=for-the-badge)
-![Dual Engine](https://img.shields.io/badge/Architecture-Bitunix_2.5%25_%26_FTMO_0.75%25_Dual-purple?style=for-the-badge)
-![Security](https://img.shields.io/badge/Security_Protocols-SOP--01%20to%20SOP--49-emerald?style=for-the-badge)
-![QA Suite](https://img.shields.io/badge/QA_Suite-250%2F250_Passed_100%25-success?style=for-the-badge)
+![Version](https://img.shields.io/badge/Version-49.0_Apex_Quantum-1a3a6e?style=for-the-badge)
+![ML Engine](https://img.shields.io/badge/Neural_Engine-XGBoost_ONNX_Meta--Labeling-orange?style=for-the-badge)
+![Security](https://img.shields.io/badge/Security_Protocols-SOP--01%20to%20SOP--60-emerald?style=for-the-badge)
+![QA Suite](https://img.shields.io/badge/QA_Suite-38%2F38_Passed_100%25-success?style=for-the-badge)
 ![SSoT Return](https://img.shields.io/badge/SSoT_Return-%2B80.45_R_%28%2B$80%2C450_USD%29-gold?style=for-the-badge)
 ![Profit Factor](https://img.shields.io/badge/Profit_Factor-2.01_Institucional-blue?style=for-the-badge)
 ![Drawdown](https://img.shields.io/badge/Max_Drawdown--3.64%25_FTMO_Shield-brightgreen?style=for-the-badge)
