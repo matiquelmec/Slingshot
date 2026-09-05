@@ -59,38 +59,18 @@ class BroadcasterPipeline:
                 from engine.core.session_manager import SessionManager
                 asyncio.create_task(self.bc._emit_advisor(self.state.last_tactical or {}, SessionManager.get_global_session_status(), is_absorption_alert=True))
 
+            # 3. 🧠 ML INFERENCIA LIVE & TACTICAL (Desacoplado de la ruta de ticks para evitar Event Loop Starvation)
+            # En la ruta rápida (Fast Path) solo actualizamos métricas de latencia, pulso neural y buffers ligeros.
             ml_data = delta_fast.get("ml_prediction", {})
             if ml_data:
                 self.state.ml_projection = ml_data
                 prob_raw = ml_data.get("probability", 50)
                 prob_bull = prob_raw if ml_data.get("direction") == "ALCISTA" else 100 - prob_raw
-                self.state.ema_ml_prob = (prob_bull * 0.2) + (self.state.ema_ml_prob * 0.8) # Alpha fijo 0.2
+                self.state.ema_ml_prob = (prob_bull * 0.2) + (self.state.ema_ml_prob * 0.8)
 
-            drift_ms = delta_fast.get("latency_ms", 0)
-            if drift_ms > 25000:
-                logger.warning(f"⚠️ [LATENCY] Tick obsoleto ({drift_ms:.2f}ms). Saltando update táctico para {self.state.symbol}")
-                return
-
-            try:
-                live_tactical = await self.router.process_market_data(
-                    df_live, asset=self.state.symbol, interval=self.state.interval,
-                    macro_levels=getattr(self.bc, '_macro_levels', None), htf_bias=self.state.htf_bias, 
-                    heatmap=self.state.heatmap, silent=True,
-                    event_time_ms=raw_data.get("data", {}).get("E"),
-                    smc_data=getattr(self.bc, '_persistent_smc', None)
-                )
-                self.state.last_tactical = {"data": live_tactical}
-                self.state.live_rvol = float((live_tactical.get('diagnostic') or {}).get('rvol', 0))
-                
-                for sig in live_tactical.get("signals", []):
-                    await self.bc._broadcast({"type": "signal_auditor_update", "data": sig})
-
-                for sig in live_tactical.get("blocked_signals", []):
-                    await self.bc._broadcast({"type": "signal_auditor_update", "data": sig})
-
-                await self.bc._broadcast({"type": "tactical_update", "data": live_tactical})
-            except Exception as e:
-                logger.error(f"[FAST-PATH] Pipeline tactical error: {e}")
+            fast_rvol = delta_fast.get("rvol", 0.0)
+            if fast_rvol > 0:
+                self.state.live_rvol = float(fast_rvol)
 
             await self.bc._broadcast({
                 "type": "neural_pulse",
@@ -172,6 +152,7 @@ class BroadcasterPipeline:
                 df_slow, asset=self.state.symbol, interval=self.state.interval,
                 macro_levels=getattr(self.bc, '_macro_levels', None), htf_bias=self.state.htf_bias, silent=False
             )
+            self.state.last_tactical = {"data": final_tactical}
             await self.bc._broadcast({"type": "tactical_update", "data": final_tactical})
             await self.bc._handle_signals(final_tactical, silent=False)
 
@@ -183,6 +164,8 @@ class BroadcasterPipeline:
                 # se despacha siempre el briefing táctico para mantener informada la terminal.
                 is_cloud = bool(settings.OPENROUTER_API_KEY or settings.GROQ_API_KEY or settings.GEMINI_API_KEY)
                 is_htf = self.state.interval in ["1h", "4h", "1d"]
+                conf_score = (final_tactical.get("confluence") or {}).get("score", 0)
+                has_active_signal = bool(final_tactical.get("signals"))
                 
                 if is_cloud or is_htf or conf_score >= 50 or has_active_signal:
                     logger.info(f"[ADVISOR_TRIGGER] ⚡ Disparando análisis táctico ({self.state.interval}) para {self.state.symbol}...")

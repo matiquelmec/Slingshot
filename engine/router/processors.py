@@ -68,16 +68,10 @@ class StreamProcessor:
                         "latency_ms": latency_ms
                     }
 
-            # 3. 🧠 ML INFERENCIA LIVE (High Priority)
-            df_live = context.get("df_live")
-            ml_pred = {}
-            if df_live is not None and not df_live.empty:
-                loop = asyncio.get_running_loop()
-                ml_pred = await loop.run_in_executor(None, ml_engine.predict_live, df_live)
-
+            # 3. 🧠 ML INFERENCIA LIVE (Desacoplado de la ruta de ticks - se ejecuta en Slow Path en cierre de vela)
             return {
                 "event": "FAST_TICK",
-                "ml_prediction": ml_pred,
+                "ml_prediction": {},
                 "latency_dirty": is_latency_dirty,
                 "latency_ms": latency_ms,
                 "rvol": round(fast_rvol, 2)

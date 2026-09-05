@@ -27,7 +27,7 @@ class SlingshotOrchestrator:
     def __init__(self, radar_assets: Optional[List[str]] = None):
         # Activos dinámicos (se cargarán desde DB en start)
         self.radar_assets: set = set()
-        self.intervals = ["1m", "3m", "5m", "15m"] 
+        self.intervals = ["15m"] 
         self._tasks: Dict[str, asyncio.Task] = {}
         self._stop_event = asyncio.Event()
         self.news_worker = NewsWorker()
