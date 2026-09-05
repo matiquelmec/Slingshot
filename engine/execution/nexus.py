@@ -513,10 +513,15 @@ class NexusNode:
                                         "positionId": str(pos_id)
                                     }
                                     res_heal = await target_ex._request("POST", "/api/v1/futures/trade/place_order", json_body=tp_pld)
+                                    if res_heal.get("code") != 0 and "positionId" in tp_pld:
+                                        del tp_pld["positionId"]
+                                        res_heal = await target_ex._request("POST", "/api/v1/futures/trade/place_order", json_body=tp_pld)
                                     if res_heal.get("code") == 0:
                                         logger.info(f"✅ [AUTO-HEALING] [{target_ex.account_label}] {symbol} {lbl} colocado a ${p_val:.{p_dec}f} ({q_val} u)")
+                                    else:
+                                        logger.warning(f"⚠️ [AUTO-HEALING] [{target_ex.account_label}] No se pudo colocar {lbl} para {symbol}: {res_heal.get('msg')}")
                     except Exception as heal_err:
-                        logger.debug(f"[AUTO-HEALING] Skip reconciliación: {heal_err}")
+                        logger.error(f"❌ [AUTO-HEALING] Error reconciliando {key}: {heal_err}")
 
             except Exception as e:
                 logger.error(f"❌ [NEXUS SYNC] Error en auto-sincronización: {e}")
