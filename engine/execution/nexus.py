@@ -219,8 +219,10 @@ class NexusNode:
         logger.info("🔄 [NEXUS SYNC] Centinela de Auto-Sincronización activado.")
         while True:
             try:
-                # 1. Obtener posiciones reales del exchange para todas las cuentas activas (SOP-45)
-                executors = self.account_manager.get_all_executors(enabled_only=True)
+                # 1. Obtener posiciones reales del exchange para todas las cuentas registradas (SOP-45)
+                # NOTA: enabled_only=False para garantizar que incluso si una cuenta está pausada para nuevas aperturas,
+                # sus posiciones vivas sigan siendo protegidas, sincronizadas y gestionadas con TP/SL.
+                executors = self.account_manager.get_all_executors(enabled_only=False)
                 if not executors:
                     executors = {"primary": self.executor}
 
