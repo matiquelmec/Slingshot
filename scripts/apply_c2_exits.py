@@ -5,40 +5,34 @@ from engine.execution.account_manager import AccountManager
 
 async def run():
     mgr = AccountManager()
-    acc = mgr.get_account('cliente_2')
-    if acc:
-        acc.enabled = True
-        mgr._save_accounts()
-        print('cliente_2 enabled: True')
-        
     ex = mgr.get_executor('cliente_2')
     pos = await ex.get_pending_positions()
     
-    # 1. ETHUSDT (0.382 ETH)
+    # 1. ETHUSDT (0.382 ETH @ 2456.63) -> PosId: 552934383104417917
+    # Set TP @ 2481.44 and SL @ 2440.09
     eth = next((p for p in (pos or []) if p.get('symbol') == 'ETHUSDT'), None)
     if eth:
-        print('Setting TPs for ETH...')
-        for p, q in [(2481.44, '0.229'), (2510.00, '0.076'), (2539.33, '0.038')]:
-            b = {'symbol': 'ETHUSDT', 'qty': q, 'price': str(p), 'side': 'SELL', 'tradeSide': 'CLOSE', 'orderType': 'LIMIT', 'effect': 'GTC'}
-            r = await ex._request('POST', '/api/v1/futures/trade/place_order', json_body=b)
-            print('  ETH TP:', p, q, r.get('msg'))
+        p_id = eth.get('positionId')
+        print(f'Configurando TP/SL oficial para ETH (PosId: {p_id})...')
+        r = await ex.place_position_tpsl('ETHUSDT', p_id, sl_price=2440.09, tp_price=2481.44)
+        print('  ETH TPSL:', r)
 
-    # 2. NEARUSDT (81 NEAR)
+    # 2. NEARUSDT (81 NEAR @ 2.197) -> PosId: 2538598662386123783
+    # Set TP @ 2.279 and SL @ 2.144
     near = next((p for p in (pos or []) if p.get('symbol') == 'NEARUSDT'), None)
     if near:
-        print('Setting TPs for NEAR...')
-        for p, q in [(2.279, '49'), (2.360, '16'), (2.468, '8')]:
-            b = {'symbol': 'NEARUSDT', 'qty': q, 'price': str(p), 'side': 'SELL', 'tradeSide': 'CLOSE', 'orderType': 'LIMIT', 'effect': 'GTC'}
-            r = await ex._request('POST', '/api/v1/futures/trade/place_order', json_body=b)
-            print('  NEAR TP:', p, q, r.get('msg'))
+        p_id = near.get('positionId')
+        print(f'Configurando TP/SL oficial para NEAR (PosId: {p_id})...')
+        r = await ex.place_position_tpsl('NEARUSDT', p_id, sl_price=2.144, tp_price=2.279)
+        print('  NEAR TPSL:', r)
 
-    # 3. CLUSDT (4.6 CL)
+    # 3. CLUSDT (4.6 CL @ 91.10) -> PosId: 8306061455399387501
+    # Set TP @ 93.56 and SL @ 91.33
     cl = next((p for p in (pos or []) if p.get('symbol') == 'CLUSDT'), None)
     if cl:
-        print('Setting TPs for CL...')
-        for p, q in [(93.56, '2.8'), (96.02, '0.9'), (99.30, '0.5')]:
-            b = {'symbol': 'CLUSDT', 'qty': q, 'price': str(p), 'side': 'SELL', 'tradeSide': 'CLOSE', 'orderType': 'LIMIT', 'effect': 'GTC'}
-            r = await ex._request('POST', '/api/v1/futures/trade/place_order', json_body=b)
-            print('  CL TP:', p, q, r.get('msg'))
+        p_id = cl.get('positionId')
+        print(f'Configurando TP/SL oficial para CL (PosId: {p_id})...')
+        r = await ex.place_position_tpsl('CLUSDT', p_id, sl_price=91.33, tp_price=93.56)
+        print('  CL TPSL:', r)
 
 asyncio.run(run())
