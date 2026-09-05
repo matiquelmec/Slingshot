@@ -120,6 +120,19 @@ graph TB
 | **SOP-47** | Alpha Trinity Conviction Sizing | Bono Kelly de $1.20\text{x}$ para los campeones históricos con PF > 2.7 (BNB, SOL, FET). |
 | **SOP-48** | Dynamic Elastic Runner (KER) | Si $\text{KER} \ge 0.50$, TP3 expande a $+5.0\text{R}$ con Ratchet Lock a $+2.5\text{R}$ al cruzar $+3.5\text{R}$. |
 | **SOP-49** | Golden Hours Intraday Tuning | Bono de confluencia de $1.15\text{x}$ en aperturas europeas y solapamiento (09:00 y 11:00 UTC). |
+| **SOP-50** | Atomic Lock Dedup | Cerrojos asíncronos `_symbol_locks[f"{account}_{symbol}"]` para descartar duplicados en ráfagas concurrentes. |
+| **SOP-51** | Frozen Margin Guard | `get_net_available_margin_usdt()` descuenta margen en órdenes límite pendientes (`tradeSide == OPEN`). |
+| **SOP-52** | Sentinel TTL (3 Horas) | Purgado de órdenes límite no ejecutadas tras 3 horas o si el precio tocó TP1 prematuramente. |
+| **SOP-53** | Persistent Buffer SQLite WAL | Persistencia transaccional de oportunidades en cola en `high_confluence_buffer`. |
+| **SOP-54** | Multi-Chat Telegram Dispatcher | Despacho concurrente de alertas de trading a múltiples destinatarios vía `asyncio.gather()`. |
+| **SOP-55** | Non-Blocking Async Ingestor | `httpx.AsyncClient` asíncrono con timeout estricto de $2.5\text{s}$ y fallback instantáneo a RAM. |
+| **SOP-56** | Repository Hygiene & SSoT | Raíz desprovista de scripts efímeros, pruebas en `engine/tests/` y `.gitignore` estricto. |
+| **SOP-57** | Multi-Account Isolation & Cryptographic Vault | Despacho concurrente aislado, cuotas de balance independientes y cifrado AES-Fernet de API keys. |
+| **SOP-58** | Capital Risk Invariance & Atomic SL Guardian | Reintentos forzados de SL de emergencia, purgas de órdenes límite por cuenta y precisión dinámica de lotes. |
+| **SOP-59** | Manual Client Intervention Sentinel | Detección de cierres manuales en app móvil, purgado atómico de órdenes huérfanas y alerta a Telegram. |
+| **SOP-60** | Quantitative Tear Sheet Reporting Engine | Generador de Sharpe, Sortino, Profit Factor, Drawdown y Esperanza Matemática en Markdown. |
+| **SOP-61** | Safe Auto-Retrain ML Pipeline | Reentrenamiento en subproceso con validación fuera de muestra y despliegue atómico condicional. |
+| **SOP-62** | Automated Periodic Tear Sheet Dispatcher | Tarea de fondo semanal para consolidar trades cerrados en SQLite WAL y despachar informe dominical a Telegram. |
 
 ---
 
@@ -129,7 +142,7 @@ Resultados inmutables de la simulación oficial sobre **180 días (237 operacion
 
 ```text
 ========================================================================================================
-Métrica Institucional               | Slingshot v31.0 Base    | Slingshot v46.5 APEX ZENITH SOVEREIGN
+Métrica Institucional               | Slingshot v31.0 Base    | Slingshot v50.0 APEX EXPANSION
 ========================================================================================================
 Total Operaciones Auditadas         | 466 trades (Aisladas)   | 237 trades reales (Event-Driven)
 Win Rate Real (TP1 / TP2 / TP3)     | 42.3%                   | 46.8% (111 Ganadoras / 126 Pérdidas)
@@ -153,11 +166,28 @@ Drawdown Máximo Compuesto (2.5%)    | -38.10%                 | -12.58% 🛡️
 Para certificar la integridad matemática del sistema antes de desplegar en producción:
 
 ```powershell
-python scripts/run_qa_suite.py
+verificar_sistema.bat
 ```
 
 ```text
-================================================================================
-✅ CERTIFICACIÓN QA EXITOSA: 250/250 PRUEBAS APROBADAS AL 100% (Green)
-================================================================================
+===============================================================================
+       SLINGSHOT QUANT ENGINE - QUALITY GATE AND SYSTEM HEALTH
+===============================================================================
+
+[1/4] Ejecutando bateria completa de 41 tests institucionales...
+.........................................                                [100%]
+41 passed in 12.78s
+[OK] 41/41 tests aprobados al 100%.
+
+[2/4] Verificando higiene de raiz y seguridad (.env)...
+[OK] Raíz 100% limpia y estandarizada.
+
+[3/4] Comprobando estado del servicio autonomo SlingshotBot...
+TaskName       State
+--------       -----
+SlingshotBot Running
+
+===============================================================================
+[EXITO] Sistema certificado. Operando bajo estandar institucional continuo.
+===============================================================================
 ```
