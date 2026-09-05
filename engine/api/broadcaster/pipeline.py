@@ -67,8 +67,8 @@ class BroadcasterPipeline:
                 self.state.ema_ml_prob = (prob_bull * 0.2) + (self.state.ema_ml_prob * 0.8) # Alpha fijo 0.2
 
             drift_ms = delta_fast.get("latency_ms", 0)
-            if drift_ms > 5000:
-                logger.warning(f"⚠️ [LATENCY] Drift crítico ({drift_ms:.2f}ms). Saltando update táctico para {self.state.symbol}")
+            if drift_ms > 25000:
+                logger.warning(f"⚠️ [LATENCY] Tick obsoleto ({drift_ms:.2f}ms). Saltando update táctico para {self.state.symbol}")
                 return
 
             try:

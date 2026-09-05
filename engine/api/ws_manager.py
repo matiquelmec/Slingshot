@@ -354,7 +354,8 @@ class SymbolBroadcaster:
         ticker_stream = f"{self.symbol.lower()}@miniTicker"
         
         # Enrutamiento Inteligente (v10.1.12 APEX Ultra-Robust)
-        is_futures = self.symbol not in settings.SPOT_ONLY_ASSETS
+        prefer_spot = getattr(settings, 'PREFER_SPOT_STREAM', True)
+        is_futures = (self.symbol not in settings.SPOT_ONLY_ASSETS) and not prefer_spot
         is_testnet = "testnet" in (settings.BINANCE_API_KEY or "").lower() or getattr(settings, 'USE_TESTNET', False)
         
         # Ajuste de velocidad de depth: Spot no soporta 500ms, solo 100ms o 1000ms.
@@ -369,8 +370,8 @@ class SymbolBroadcaster:
             logger.info(f"⚡ [FUTURES-COMBO] {self.symbol} (Price+Ticker+Heatmap+Mark): {binance_url}")
         else:
             base_ws_url = "wss://testnet.binance.vision" if is_testnet else "wss://stream.binance.com:9443"
-            binance_url = f"{base_ws_url}/stream?streams={kline_stream}/{depth_stream}"
-            logger.info(f"🛒 [SPOT] {self.symbol} -> {binance_url}")
+            binance_url = f"{base_ws_url}/stream?streams={kline_stream}/{depth_stream}/{ticker_stream}"
+            logger.info(f"🛒 [SPOT-COMBO] {self.symbol} -> {binance_url}")
 
         logger.info(f"[BROADCASTER] {self._key} → Iniciando túnel en vivo...")
         

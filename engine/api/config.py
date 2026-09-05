@@ -89,6 +89,8 @@ class Settings(BaseSettings):
     # Activos SPOT-only: no existen en Binance Futures (fstream).
     # Usar wss://stream.binance.com:9443 para estos símbolos.
     SPOT_ONLY_ASSETS: set = {"PAXGUSDT", "EURUSDT", "USDCUSDT"}
+    # Usar stream Spot para máxima accesibilidad y evitar bloqueos geográficos (Francia/UE)
+    PREFER_SPOT_STREAM: bool = True
 
     # Risk Management (leídos desde .env — ya no hardcodeados en el router)
     ACCOUNT_BALANCE: float = 1000.0

@@ -77,13 +77,15 @@ export const createConnectionManager = (set: any, get: any) => {
                             statesData.forEach((s: any) => {
                                 const asset = s.asset;
                                 newSummary[asset] = s;
-                                if (s.price) {
-                                    newPrices[asset] = s.price;
+                                const p = s.price ?? s.current_price ?? s.close ?? s.latest_price;
+                                if (p) {
+                                    newPrices[asset] = Number(p);
                                 }
                             });
                             set((state: any) => ({ 
                                 marketSummary: { ...state.marketSummary, ...newSummary },
-                                latestPrices: { ...state.latestPrices, ...newPrices }
+                                latestPrices: { ...state.latestPrices, ...newPrices },
+                                latestPrice: newPrices[clean] ?? state.latestPrice
                             }));
                         }
                     }
