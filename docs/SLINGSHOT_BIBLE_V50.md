@@ -51,14 +51,15 @@
 | **SOP-60** | Quantitative Tear Sheet Reporting Engine | Generador formal de métricas financieras de rendimiento de cartera (Sharpe, Sortino, Profit Factor, Drawdown, Esperanza R) con bitácora Markdown para inversores. |
 | **SOP-61** | Safe Auto-Retrain ML Pipeline | Reentrenamiento de modelos en segundo plano con barrera de evaluación fuera de muestra (out-of-sample). Despliegue atómico solo si supera el umbral de precisión institucional. |
 | **SOP-62** | Automated Periodic Tear Sheet Dispatcher | Tarea de fondo semanal que consolida el historial de trades cerrados en SQLite WAL y despacha un informe ejecutivo a Telegram cada domingo con métricas de Sharpe y Sortino. |
+| **SOP-63** | Quantitative Market Regime & Adaptive Allocation Agent | Agente autónomo de inferencia de régimen macro (`SlingshotRegimeAgent`). Evalúa ADX, KER, dispersión al VWAP y correlación de la Trinidad (`BTC`, `SOL`, `FET`). Modula el riesgo dinámicamente (`0.65x` en Chop hasta `1.30x` en Expansión), supervisa el Drift del modelo ML disparando auto-retrain condicional y despacha briefings ejecutivos a Telegram. |
 
 ---
 
-## 3. Matriz de Pruebas Unitarias y Certificación (296/296 Suite Global & 41/41 Quality Gate VPS)
+## 3. Matriz de Pruebas Unitarias y Certificación (299/299 Suite Global & 44/44 Quality Gate VPS)
 
 El ecosistema cuenta con una certificación de dos niveles:
-* **Suite Global del Repositorio:** **296/296 Pruebas Unitarias Aprobadas al 100% (Green)**, cubriendo el motor Polars, SMC, VWAP, persitencia WAL, modulación de riesgo, auto-reentrenamiento y despacho multicuenta.
-* **Quality Gate de Producción (VPS `verificar_sistema.bat`):** Batería de **41 tests institucionales de misión crítica** ejecutados en cada despliegue:
+* **Suite Global del Repositorio:** **299/299 Pruebas Unitarias Aprobadas al 100% (Green)**, cubriendo el motor Polars, SMC, VWAP, persitencia WAL, modulación de riesgo, auto-reentrenamiento, régimen adaptativo y despacho multicuenta.
+* **Quality Gate de Producción (VPS `verificar_sistema.bat`):** Batería de **44 tests institucionales de misión crítica** ejecutados en cada despliegue:
 
 1. `test_multi_asset_feed_async_non_blocking` (PASSED)
 2. `test_multi_asset_feed_sync_fallback` (PASSED)
@@ -101,6 +102,9 @@ El ecosistema cuenta con una certificación de dos niveles:
 39. `test_vault_closed_trades_lifecycle` (PASSED)
 40. `test_weekly_tear_sheet_worker_dispatches_when_trades_exist` (PASSED)
 41. `test_safe_auto_retrain_rejects_inferior_model` (PASSED)
+42. `test_regime_agent_classification_expansion_vs_chop` (PASSED)
+43. `test_regime_agent_drift_triggers_auto_retrain` (PASSED)
+44. `test_vault_persists_and_recovers_regime_state` (PASSED)
 
 ---
 

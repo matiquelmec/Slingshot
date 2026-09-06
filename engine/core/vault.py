@@ -120,6 +120,19 @@ class SlingshotVault:
             );
             """)
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_closed_trades_acc_time ON closed_trades(account_id, closed_at);")
+
+            # 5. Tabla de Historial de Régimen Cuantitativo (SOP-63 Regime Agent)
+            cursor.execute("""
+            CREATE TABLE IF NOT EXISTS regime_history (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                regime TEXT NOT NULL,
+                risk_multiplier REAL NOT NULL,
+                confidence REAL NOT NULL,
+                details_json TEXT NOT NULL,
+                evaluated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+            """)
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_regime_eval ON regime_history(evaluated_at);")
             conn.commit()
             logger.info(f"🏛️ [VAULT] Base de datos SQLite WAL inicializada en {self.db_path.name}")
 
@@ -266,6 +279,39 @@ class SlingshotVault:
                 }
                 for r in rows
             ]
+
+    # ── MÉTODOS DE RÉGIMEN CUANTITATIVO (SOP-63 REGIME AGENT) ────────────────
+
+    def record_regime_state(self, regime: str, risk_multiplier: float, confidence: float, details: Dict[str, Any]) -> None:
+        """Persiste el estado de régimen analizado por SlingshotRegimeAgent."""
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+            INSERT INTO regime_history (regime, risk_multiplier, confidence, details_json)
+            VALUES (?, ?, ?, ?)
+            """, (regime, risk_multiplier, confidence, json.dumps(details)))
+            conn.commit()
+
+    def get_latest_regime_state(self) -> Optional[Dict[str, Any]]:
+        """Recupera el último régimen evaluado y su multiplicador táctico."""
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+            SELECT regime, risk_multiplier, confidence, details_json, evaluated_at
+            FROM regime_history
+            ORDER BY id DESC
+            LIMIT 1
+            """)
+            row = cursor.fetchone()
+            if not row:
+                return None
+            return {
+                "regime": row[0],
+                "risk_multiplier": float(row[1]),
+                "confidence": float(row[2]),
+                "details": json.loads(row[3]) if row[3] else {},
+                "evaluated_at": row[4]
+            }
 
 # Instancia global singleton
 vault = SlingshotVault()

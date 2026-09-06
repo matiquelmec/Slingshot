@@ -297,14 +297,15 @@ class RiskManager:
         day_of_week: str | None = None,
         apply_alpha_cycle: bool = False,
         apply_trinity_boost: bool = False,
-        apply_golden_hours: bool = False
+        apply_golden_hours: bool = False,
+        regime_mult: float = 1.0
     ) -> float:
         """
         [SOP-33 & SOP-34 & SOP-38 ASYMMETRIC SIZING ENGINE]
         Calcula el multiplicador de asignación de capital combinando el Tier del activo (Kelly Fraccional),
         la confluencia institucional, la ventana horaria (Sniper NY Open vs Asia Defense),
-        y las extensiones cuantitativas SOP-46 (Weekly Alpha Cycle), SOP-47 (Trinidad del Alfa)
-        y SOP-49 (Golden Hours Tuning).
+        las extensiones cuantitativas SOP-46 (Weekly Alpha Cycle), SOP-47 (Trinidad del Alfa),
+        SOP-49 (Golden Hours Tuning) y la modulación de régimen SOP-63 (SlingshotRegimeAgent).
         """
         sym = (symbol or "").replace("/", "").upper()
         base_mult = cls.ALPHA_TIERS.get(sym, 1.0)
@@ -341,6 +342,10 @@ class RiskManager:
         # SOP-49: Sintonización de Golden Hours Intradía (09:00 UTC y 11:00 UTC)
         if apply_golden_hours and hour_utc in [9, 11]:
             base_mult *= 1.15
+
+        # SOP-63: Modulación Táctica de Régimen de Mercado (SlingshotRegimeAgent)
+        if regime_mult > 0.0:
+            base_mult *= regime_mult
             
         return round(min(1.85, max(0.40, base_mult)), 2)
 

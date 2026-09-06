@@ -61,6 +61,8 @@ class SlingshotOrchestrator:
         asyncio.create_task(self.calendar_worker.start())
         # Iniciar Worker Semanal de Tear Sheets SOP-60 a Telegram (v50.0)
         asyncio.create_task(self._weekly_tear_sheet_worker())
+        # Iniciar Agente Autónomo de Régimen Cuantitativo SOP-63 (v50.0)
+        asyncio.create_task(self._regime_agent_worker())
         
         # 🚀 [APEX] Iniciar Dashboard de Ejecución Nexus (v10.0 - Auto-start en __init__)
         # nexus.start_dashboard() # Removido: Redundante y causa crash
@@ -392,6 +394,44 @@ class SlingshotOrchestrator:
 
             # Revisa cada 15 minutos
             await asyncio.sleep(900)
+
+    async def _regime_agent_worker(self):
+        """
+        Worker de Supervisión Táctica y Régimen de Mercado (SOP-63 Regime Agent).
+        Monitorea cada 4 horas (o ante inicio) el régimen macro y notifica a Telegram.
+        """
+        logger.info("🧭 [REGIME WORKER] Centinela de régimen de mercado SOP-63 activado.")
+        last_regime = None
+        while not self._stop_event.is_set():
+            try:
+                from engine.agents.regime_agent import regime_agent
+                from engine.router.telegram_dispatcher import telegram_dispatcher
+                from engine.indicators.ghost_data import get_ghost_state
+
+                ghost = get_ghost_state()
+                btc_trend = "BULLISH" if ghost.get("bitcoin_trend", 0) > 0 else "BEARISH"
+
+                # Evaluar régimen con datos en memoria del store
+                symbols_data = {}
+                for sym in ["BTCUSDT", "SOLUSDT", "ETHUSDT", "FETUSDT"]:
+                    df_sym = store.get_klines(sym, "15m") if hasattr(store, "get_klines") else None
+                    if df_sym is not None and not df_sym.empty:
+                        symbols_data[sym] = df_sym
+
+                assessment = regime_agent.evaluate_market_regime(symbols_data, btc_htf_trend=btc_trend)
+
+                # Si hubo cambio de régimen o es la primera evaluación, notificar a Telegram
+                if last_regime != assessment.regime.value:
+                    briefing = regime_agent.format_telegram_regime_report(assessment)
+                    await telegram_dispatcher.send_raw_message(briefing)
+                    last_regime = assessment.regime.value
+                    logger.info(f"🧭 [REGIME WORKER] Transición de régimen notificada a Telegram: {assessment.regime.value}")
+
+            except Exception as reg_err:
+                logger.debug(f"[REGIME WORKER] Error evaluando régimen de mercado: {reg_err}")
+
+            # Reevaluación cada 4 horas (14400 segundos)
+            await asyncio.sleep(14400)
 
 async def run_orchestrator():
     orchestrator = SlingshotOrchestrator()

@@ -697,11 +697,14 @@ class NexusNode:
             logger.warning(f"🛑 [NEXUS SOP-31] Rechazada orden en {asset}: {regime_msg}")
             return
 
-        # ── SOP-33 & SOP-38: ALPHA-TIER KELLY SIZING & SNIPER NY OPEN ──
+        # ── SOP-33 & SOP-38 & SOP-63: ALPHA-TIER SIZING CON MODULACIÓN DE RÉGIMEN ──
         from engine.risk.risk_manager import RiskManager
+        from engine.core.vault import vault
         confluence_val = float(signal.get("confluence_score", 70.0))
         hour_now = datetime.now(timezone.utc).hour
-        sizing_mult = RiskManager.calculate_alpha_tier_sizing(asset, confluence_val, hour_utc=hour_now)
+        latest_regime = vault.get_latest_regime_state()
+        reg_mult = float(latest_regime.get("risk_multiplier", 1.0)) if latest_regime else 1.0
+        sizing_mult = RiskManager.calculate_alpha_tier_sizing(asset, confluence_val, hour_utc=hour_now, regime_mult=reg_mult)
         if sizing_mult <= 0.0:
             logger.warning(f"🛑 [NEXUS SOP-33] Omitido activo descalificado: {asset}")
             return
@@ -1104,11 +1107,14 @@ class NexusNode:
             return
 
         try:
-            # ── SOP-33 & SOP-38: ALPHA-TIER KELLY SIZING & SNIPER NY OPEN ──
+            # ── SOP-33 & SOP-38 & SOP-63: ALPHA-TIER SIZING CON MODULACIÓN DE RÉGIMEN ──
             from engine.risk.risk_manager import RiskManager
+            from engine.core.vault import vault
             confluence_val = float(signal.get("confluence_score", 70.0))
             hour_now = datetime.now(timezone.utc).hour
-            sizing_mult = RiskManager.calculate_alpha_tier_sizing(asset, confluence_val, hour_utc=hour_now)
+            latest_regime = vault.get_latest_regime_state()
+            reg_mult = float(latest_regime.get("risk_multiplier", 1.0)) if latest_regime else 1.0
+            sizing_mult = RiskManager.calculate_alpha_tier_sizing(asset, confluence_val, hour_utc=hour_now, regime_mult=reg_mult)
             if sizing_mult <= 0.0:
                 logger.debug(f"[NEXUS AUTO-LIMIT SOP-33] Omitido activo descalificado: {asset}")
                 return

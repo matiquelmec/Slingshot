@@ -1,12 +1,12 @@
 # 🛡️ SLINGSHOT v50.0 APEX EXPANSION — Autonomous Institutional Multi-Market Terminal
 
-> **"Terminal Cuantitativa Autónoma de Grado Institucional. Slingshot v50.0 APEX EXPANSION: Inferencia Neural Meta-Labeling (XGBoost / ONNX en ConfluenceManager +10pts), Pipeline de Auto-Retrenamiento Asíncrono con Validación Fail-Safe Out-Of-Sample (SOP-61), Despachador Periódico de Tear Sheets Ejecutivos a Telegram (SOP-62) con Persistencia ACID de Trades Cerrados en SQLite WAL, Sentinela de Intervención Manual de Clientes SOP-59 con Purgado Atómico Anti-Orphan, Motor de Reportería Cuantitativa Institucional SOP-60 (Sharpe, Sortino, Drawdown, Profit Factor), Blindaje de Capital SOP-58 y Despacho Concurrente Multi-Cuenta SOP-57 con Cifrado AES en Reposo (+80.45R de Retorno SSoT, Profit Factor 2.01, Max Drawdown -3.64% y $1,000 -> $6,673.12 USD). Suite Oficial de 41/41 Pruebas Unitarias Aprobadas al 100% en VPS de Producción y 296 Pruebas Globales. Canon Inmutable de los 62 Protocolos de Seguridad Operativa (SOP-01 a SOP-62)."**
+> **"Terminal Cuantitativa Autónoma de Grado Institucional. Slingshot v50.0 APEX EXPANSION: Inferencia Neural Meta-Labeling (XGBoost / ONNX en ConfluenceManager +10pts), Agente Autónomo de Régimen Cuantitativo y Asignación Adaptativa SOP-63 (SlingshotRegimeAgent: 0.65x en Chop hasta 1.30x en Expansión con Guardián de Drift ML), Pipeline de Auto-Retrenamiento Asíncrono con Validación Fail-Safe Out-Of-Sample (SOP-61), Despachador Periódico de Tear Sheets Ejecutivos a Telegram (SOP-62) con Persistencia ACID de Trades Cerrados en SQLite WAL, Sentinela de Intervención Manual de Clientes SOP-59 con Purgado Atómico Anti-Orphan, Motor de Reportería Cuantitativa Institucional SOP-60 (Sharpe, Sortino, Drawdown, Profit Factor), Blindaje de Capital SOP-58 y Despacho Concurrente Multi-Cuenta SOP-57 con Cifrado AES en Reposo (+80.45R de Retorno SSoT, Profit Factor 2.01, Max Drawdown -3.64% y $1,000 -> $6,673.12 USD). Suite Oficial de 44/44 Pruebas Unitarias Aprobadas al 100% en VPS de Producción y 299 Pruebas Globales. Canon Inmutable de los 63 Protocolos de Seguridad Operativa (SOP-01 a SOP-63)."**
 
 ![Status](https://img.shields.io/badge/Status-100%25_AUTONOMOUS_&_SSOT_VERIFIED-0d2a1a?style=for-the-badge&logo=codeproject&logoColor=fff)
 ![Version](https://img.shields.io/badge/Version-50.0_Apex_Expansion-1a3a6e?style=for-the-badge)
 ![ML Engine](https://img.shields.io/badge/Neural_Engine-XGBoost_ONNX_Meta--Labeling-orange?style=for-the-badge)
-![Security](https://img.shields.io/badge/Security_Protocols-SOP--01%20to%20SOP--62-emerald?style=for-the-badge)
-![QA Suite](https://img.shields.io/badge/QA_Suite-41%2F41_Passed_100%25-success?style=for-the-badge)
+![Security](https://img.shields.io/badge/Security_Protocols-SOP--01%20to%20SOP--63-emerald?style=for-the-badge)
+![QA Suite](https://img.shields.io/badge/QA_Suite-44%2F44_Passed_100%25-success?style=for-the-badge)
 ![SSoT Return](https://img.shields.io/badge/SSoT_Return-%2B80.45_R_%28%2B$80%2C450_USD%29-gold?style=for-the-badge)
 ![Profit Factor](https://img.shields.io/badge/Profit_Factor-2.01_Institucional-blue?style=for-the-badge)
 ![Drawdown](https://img.shields.io/badge/Max_Drawdown--3.64%25_FTMO_Shield-brightgreen?style=for-the-badge)
@@ -31,8 +31,8 @@ Slingshot es una **Terminal de Inteligencia y Ejecución Cuantitativa Institucio
 * **Sintonización Intradía de Golden Hours (SOP-49):** Bono de aceleración del **1.15x** en las aperturas europeas y solapamiento pre-NY (**09:00 UTC** y **11:00 UTC**).
 * **Pure Dollar-Risk Sizing & Hard-Clamp (SOP-41 & SOP-42):** Cantidad derivada de $\text{Qty} = (\text{Balance} \times 0.025) / |\text{Entry} - \text{SL}|$, garantizando que el Stop Loss cueste invariablemente el $2.50\%$ de la cuenta.
 * **Kernel en Rust (`Polars`):** Cálculo vectorial sub-$2.5\text{ ms}$ para indicadores y confluencias.
-* **Bóveda SQLite WAL Transaccional (`vault.py`):** Persistencia ACID de sesiones, bitácora de auditoría inmutable y registro histórico de trades cerrados con PnL.
-* **Suite de Certificación QA Oficial:** **296/296 pruebas unitarias globales aprobadas al 100%** y **Quality Gate de Producción de 41/41 tests críticos en VPS (`verificar_sistema.bat`)**.
+* **Bóveda SQLite WAL Transaccional (`vault.py`):** Persistencia ACID de sesiones, bitácora de auditoría inmutable, registro histórico de trades cerrados con PnL e historial de régimen de mercado.
+* **Suite de Certificación QA Oficial:** **299/299 pruebas unitarias globales aprobadas al 100%** y **Quality Gate de Producción de 44/44 tests críticos en VPS (`verificar_sistema.bat`)**.
 
 ---
 
@@ -133,6 +133,7 @@ graph TB
 | **SOP-60** | Quantitative Tear Sheet Reporting Engine | Generador de Sharpe, Sortino, Profit Factor, Drawdown y Esperanza Matemática en Markdown. |
 | **SOP-61** | Safe Auto-Retrain ML Pipeline | Reentrenamiento en subproceso con validación fuera de muestra y despliegue atómico condicional. |
 | **SOP-62** | Automated Periodic Tear Sheet Dispatcher | Tarea de fondo semanal para consolidar trades cerrados en SQLite WAL y despachar informe dominical a Telegram. |
+| **SOP-63** | Market Regime & Adaptive Allocation Agent | Agente autónomo de inferencia de régimen macro (`SlingshotRegimeAgent`) y modulación dinámica de riesgo (0.65x a 1.30x) con guardián de Drift ML. |
 
 ---
 
