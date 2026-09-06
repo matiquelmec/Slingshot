@@ -49,11 +49,13 @@ def test_global_session_status_structure():
 def test_session_sweep_logic():
     """Valida que un precio superior a PDH active pdh_swept."""
     sm = SessionManager("ETHUSDT")
+    now_utc = datetime.now(timezone.utc)
+    sm._state["trading_day"] = str(now_utc.date())
     sm._state["pdh"] = 3500.0
     sm._state["pdl"] = 3300.0
     
     candle = {
-        "timestamp": datetime.now(timezone.utc).timestamp(),
+        "timestamp": now_utc.timestamp(),
         "high": 3550.0,
         "low": 3480.0,
         "close": 3520.0

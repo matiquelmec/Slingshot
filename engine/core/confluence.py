@@ -730,35 +730,49 @@ class ConfluenceManager:
             else:
                 checklist.append({"factor": "Día Institucional", "status": "NEUTRAL", "detail": f"Sesión en {day_wk}"})
 
-            # 🚀 Rule 3.5: SOP-29 SESSION ALPHA GATING v39.0
-            # Asia (00:00 - 07:00 UTC): PF 1.10 -> Precaución por bajo recorrido
-            # NY Open (13:00 - 17:00 UTC): PF 1.29 -> Ventana dorada institucional (+5pts)
-            # Rebalanceo (21:00 - 24:00 UTC): PF 1.31 -> Reequilibrio de libros (+5pts)
-            if 13 <= hr_utc < 17:
+            # 🚀 Rule 3.5: SOP-29 SESSION ALPHA GATING v50.0 (Dynamic Global Master Sync)
+            # Evalúa prioritariamente el estado del SessionManager (con soporte horario DST exacto en NY/Londres).
+            # Fallback a horas UTC locales de la vela si no se dispone de telemetría en vivo.
+            sess_name = (session_data.get("current_session") or "").upper() if isinstance(session_data, dict) else ""
+            is_kz = bool(session_data.get("is_killzone", False)) if isinstance(session_data, dict) else False
+            is_sb = bool(session_data.get("is_silver_bullet", False)) if isinstance(session_data, dict) else False
+            is_ol = bool(session_data.get("is_overlap", False)) if isinstance(session_data, dict) else False
+
+            # Detección adaptativa de sesión activa:
+            is_ny_session = (sess_name in ["NEW_YORK", "NY_KILLZONE", "LONDON_NY_OVERLAP", "NY_SILVER_BULLET_PM"]) or is_sb or is_ol or (13 <= hr_utc < 17)
+            is_rebalance = (21 <= hr_utc < 24)
+            is_asia_session = (sess_name == "ASIA") or (0 <= hr_utc < 7)
+            is_london_session = (sess_name in ["LONDON", "LONDON_KILLZONE", "FRANKFURT_OPEN"]) or (7 <= hr_utc < 13)
+
+            if is_ny_session:
                 score += 5
-                checklist.append({"factor": "Session Alpha Gating", "status": "ALFA_GOLDEN", "detail": "NY Open (13:00-17:00 UTC): Ventana institucional dorada (PF 1.29) (+5pts)"})
-            elif 21 <= hr_utc < 24:
+                sub_label = "Power Overlap / Silver Bullet" if (is_sb or is_ol) else "NY Open"
+                checklist.append({"factor": "Session Alpha Gating", "status": "ALFA_GOLDEN", "detail": f"{sub_label} ({sess_name or f'{hr_utc:02d}:00 UTC'}): Ventana institucional dorada (PF 1.29) (+5pts)"})
+            elif is_rebalance:
                 score += 5
                 checklist.append({"factor": "Session Alpha Gating", "status": "ALFA_GOLDEN", "detail": "Rebalanceo NY Close (21:00-24:00 UTC): Reequilibrio institucional (PF 1.31) (+5pts)"})
-            elif 0 <= hr_utc < 7:
+            elif is_asia_session:
                 score -= 2
-                checklist.append({"factor": "Session Alpha Gating", "status": "PRECAUCIÓN", "detail": "Sesión Asia (00:00-07:00 UTC): Rango pasivo / Ruido (-2pts)"})
-            else:
+                checklist.append({"factor": "Session Alpha Gating", "status": "PRECAUCIÓN", "detail": f"Sesión Asia ({sess_name or f'{hr_utc:02d}:00 UTC'}): Rango pasivo / Ruido (-2pts)"})
+            elif is_london_session:
                 score += 2
-                checklist.append({"factor": "Session Alpha Gating", "status": "NEUTRAL", "detail": f"Sesión Londres ({hr_utc:02d}:00 UTC) (+2pts)"})
+                checklist.append({"factor": "Session Alpha Gating", "status": "NEUTRAL", "detail": f"Sesión Londres ({sess_name or f'{hr_utc:02d}:00 UTC'}) (+2pts)"})
+            else:
+                score += 1
+                checklist.append({"factor": "Session Alpha Gating", "status": "NEUTRAL", "detail": f"Sesión Fuera de Horario / Transición ({hr_utc:02d}:00 UTC) (+1pt)"})
 
             # 🚀 Killzone Timing Gating para Índices TradFi (v25.0 FTMO Titanium)
-            # Índices (US100, US30, US500, GER40): Exclusivamente en London Open (07:00-10:00 UTC) o NY Open (13:30-16:30 UTC)
+            # Índices (US100, US30, US500, GER40): Exclusivamente en London Open o NY Open adaptativos
             is_tradfi_index = any(idx in asset_name for idx in ["US100", "US30", "US500", "GER40", "NQ", "YM", "ES"])
             if is_tradfi_index:
-                in_london_kz = (7 <= hr_utc < 10)
-                in_ny_kz = (13 <= hr_utc < 17)
+                in_london_kz = (sess_name in ["LONDON_KILLZONE", "FRANKFURT_OPEN"]) or (7 <= hr_utc < 10)
+                in_ny_kz = is_ny_session
                 if not (in_london_kz or in_ny_kz):
                     multiplier *= 0.0
                     checklist.append({
                         "factor": "Killzone Timing TradFi",
                         "status": "DENEGADO",
-                        "detail": f"Veto Horario FTMO: {asset_name} fuera de Killzone de Londres/NY ({hr_utc:02d}:00 UTC). Sin liquidez institucional."
+                        "detail": f"Veto Horario FTMO: {asset_name} fuera de Killzone de Londres/NY ({sess_name or f'{hr_utc:02d}:00 UTC'}). Sin liquidez institucional."
                     })
                 else:
                     score += 5

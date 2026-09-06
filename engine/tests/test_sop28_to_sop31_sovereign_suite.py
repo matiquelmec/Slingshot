@@ -72,6 +72,19 @@ class TestSOP28ToSOP31SovereignSuite(unittest.TestCase):
         self.assertIsNotNone(item_asia)
         self.assertEqual(item_asia["status"], "PRECAUCIÓN")
 
+        # 3. Simular inyección dinámica de SessionManager (DST aware Global Master Sync)
+        session_dyn = {
+            "current_session": "NY_KILLZONE",
+            "is_killzone": True,
+            "is_overlap": True,
+            "is_silver_bullet": False
+        }
+        res_dyn = confluence_manager.evaluate_signal(df=df_ny, signal=sig_ny, session_data=session_dyn)
+        item_dyn = next((i for i in res_dyn["checklist"] if i["factor"] == "Session Alpha Gating"), None)
+        self.assertIsNotNone(item_dyn)
+        self.assertEqual(item_dyn["status"], "ALFA_GOLDEN")
+        self.assertIn("Power Overlap", item_dyn["detail"])
+
     def test_sop30_beta_exposure_limiter_rejects_third_long(self):
         """
         [SOP-30] Si ya existen 2 posiciones LONG en cripto no protegidas (con riesgo flotante),
