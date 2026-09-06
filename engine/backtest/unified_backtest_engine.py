@@ -428,6 +428,7 @@ class UnifiedBacktestEngine:
                 "sl": sl,
                 "confluence_score": 75,
                 "ker": round(ker_val, 3),
+                "adx": round(adx_val, 2),
                 "is_elastic": is_elastic,
                 "scaled_in": False,
                 "risk_pct": round((risk/entry)*100, 2),
@@ -569,15 +570,17 @@ class UnifiedBacktestEngine:
         enable_trinity_boost: bool = False,
         enable_elastic_runner: bool = False,
         enable_golden_hours: bool = False,
+        enable_regime_agent: bool = False,
     ) -> Dict[str, Any]:
         """
-        [EVENT-DRIVEN TIMELINE REPLAY v46.0]
+        [EVENT-DRIVEN TIMELINE REPLAY v50.0]
         Simulador Cronológico Unificado de Cartera con Réplica 1-a-1 de Producción:
         - Reloj Global Unificado cruzando todos los activos en el tiempo.
         - Filtro Macro BTC dinámico en tiempo real (btc_aligned).
         - Concurrencia de cartera y reciclaje dinámico de slots (SOP-30 & SOP-44).
         - Modo Dual: R Base / Alpha-Tier (1% plano) e Interés Compuesto Dinámico (2.5% Bitunix).
         - Embudo de telemetría de señales.
+        - Modulación Táctica de Régimen de Mercado SOP-63 (SlingshotRegimeAgent).
         """
         toxic_hours = [10, 14] if toxic_hours is None else toxic_hours
         excluded_assets = ["RENDERUSDT"] if excluded_assets is None else excluded_assets
@@ -588,7 +591,7 @@ class UnifiedBacktestEngine:
         seen = set()
 
         print("=" * 88)
-        print("🏛️  SIMULADOR CRONOLÓGICO UNIFICADO DE CARTERA (EVENT-DRIVEN SSoT v46.0)")
+        print("🏛️  SIMULADOR CRONOLÓGICO UNIFICADO DE CARTERA (EVENT-DRIVEN SSoT v50.0)")
         print("=" * 88)
         print(f"⚙️  Concurrencia Máxima Longs : {max_concurrent_longs} posiciones simultáneas (SOP-30)")
         print(f"🛡️  Calor Máximo de Cartera   : {max_heat_pct}% (SOP-44 Directional Heat Guardrail)")
@@ -596,9 +599,9 @@ class UnifiedBacktestEngine:
         print(f"⏳  Quirófano Horario        : Vetadas horas {toxic_hours} UTC (Trampa Londres & Apertura NY)")
         print(f"✂️  Poda de Activos Tóxicos  : Excluidos {excluded_assets}")
         print(f"🔄  Reciclaje de Slots       : ACTIVO (Liberación de riesgo al tocar TP1 @ Breakeven)")
-        adv_active = enable_alpha_cycle or enable_trinity_boost or enable_elastic_runner or enable_golden_hours
+        adv_active = enable_alpha_cycle or enable_trinity_boost or enable_elastic_runner or enable_golden_hours or enable_regime_agent
         if adv_active:
-            print(f"🌟  Protocolos Alpha Avanzados: SOP-46 Cycle: {enable_alpha_cycle} | SOP-47 Trinity: {enable_trinity_boost} | SOP-48 KER: {enable_elastic_runner} | SOP-49 Hours: {enable_golden_hours}")
+            print(f"🌟  Protocolos Alpha Avanzados: SOP-46 Cycle: {enable_alpha_cycle} | SOP-47 Trinity: {enable_trinity_boost} | SOP-48 KER: {enable_elastic_runner} | SOP-49 Hours: {enable_golden_hours} | SOP-63 Regime: {enable_regime_agent}")
         print("=" * 88)
 
         # 1. Extracción de setups brutos
@@ -696,6 +699,26 @@ class UnifiedBacktestEngine:
             h = et.hour
             dow = et.day_name()
             cs = float(row.get("confluence_score", 75.0))
+            
+            # SOP-63: Inferencia de Régimen Táctico
+            reg_mult = 1.0
+            if enable_regime_agent:
+                tr_adx = float(row.get("adx", 22.0))
+                tr_ker = float(row.get("ker", 0.35))
+                btc_tr = btc_map.get(et, "NEUTRAL") if btc_map else "NEUTRAL"
+                
+                # Reglas del Agente de Régimen SOP-63
+                if tr_adx < 18.5 and tr_ker < 0.28:
+                    reg_mult = 0.65  # Chop compression (defensivo)
+                elif btc_tr == "BULLISH" and tr_ker >= 0.40 and tr_adx >= 20.0:
+                    reg_mult = 1.30  # Bull expansion
+                elif btc_tr == "BEARISH" and tr_ker >= 0.40 and tr_adx >= 20.0:
+                    reg_mult = 1.15  # Bear expansion
+                elif tr_adx >= 45.0 and tr_ker < 0.30:
+                    reg_mult = 0.50  # High vol shock
+                else:
+                    reg_mult = 1.00
+
             return RiskManager.calculate_alpha_tier_sizing(
                 s,
                 confluence_score=cs,
@@ -703,7 +726,8 @@ class UnifiedBacktestEngine:
                 day_of_week=dow,
                 apply_alpha_cycle=enable_alpha_cycle,
                 apply_trinity_boost=enable_trinity_boost,
-                apply_golden_hours=enable_golden_hours
+                apply_golden_hours=enable_golden_hours,
+                regime_mult=reg_mult
             )
 
         df_exec["sizing_mult"] = df_exec.apply(get_trade_sizing, axis=1)
@@ -812,7 +836,8 @@ class UnifiedBacktestEngine:
                 "alpha_cycle_sop46": enable_alpha_cycle,
                 "trinity_boost_sop47": enable_trinity_boost,
                 "elastic_runner_sop48": enable_elastic_runner,
-                "golden_hours_sop49": enable_golden_hours
+                "golden_hours_sop49": enable_golden_hours,
+                "regime_agent_sop63": enable_regime_agent
             },
             "telemetry_funnel": {
                 "raw_signals": raw_signal_count,

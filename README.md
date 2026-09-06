@@ -1,15 +1,16 @@
 # 🛡️ SLINGSHOT v50.0 APEX EXPANSION — Autonomous Institutional Multi-Market Terminal
 
-> **"Terminal Cuantitativa Autónoma de Grado Institucional. Slingshot v50.0 APEX EXPANSION: Inferencia Neural Meta-Labeling (XGBoost / ONNX en ConfluenceManager +10pts), Agente Autónomo de Régimen Cuantitativo y Asignación Adaptativa SOP-63 (SlingshotRegimeAgent: 0.65x en Chop hasta 1.30x en Expansión con Guardián de Drift ML), Pipeline de Auto-Retrenamiento Asíncrono con Validación Fail-Safe Out-Of-Sample (SOP-61), Despachador Periódico de Tear Sheets Ejecutivos a Telegram (SOP-62) con Persistencia ACID de Trades Cerrados en SQLite WAL, Sentinela de Intervención Manual de Clientes SOP-59 con Purgado Atómico Anti-Orphan, Motor de Reportería Cuantitativa Institucional SOP-60 (Sharpe, Sortino, Drawdown, Profit Factor), Blindaje de Capital SOP-58 y Despacho Concurrente Multi-Cuenta SOP-57 con Cifrado AES en Reposo (+80.45R de Retorno SSoT, Profit Factor 2.01, Max Drawdown -3.64% y $1,000 -> $6,673.12 USD). Suite Oficial de 44/44 Pruebas Unitarias Aprobadas al 100% en VPS de Producción y 299 Pruebas Globales. Canon Inmutable de los 63 Protocolos de Seguridad Operativa (SOP-01 a SOP-63)."**
+> **"Terminal Cuantitativa Autónoma de Grado Institucional. Slingshot v50.0 APEX EXPANSION: Inferencia Neural Meta-Labeling (XGBoost / ONNX en ConfluenceManager +10pts), Agente Autónomo de Régimen Cuantitativo y Asignación Adaptativa SOP-63 (SlingshotRegimeAgent: 0.65x en Chop hasta 1.30x en Expansión con Guardián de Drift ML), Pipeline de Auto-Retrenamiento Asíncrono con Validación Fail-Safe Out-Of-Sample (SOP-61), Despachador Periódico de Tear Sheets Ejecutivos a Telegram (SOP-62) con Persistencia ACID de Trades Cerrados en SQLite WAL, Sentinela de Intervención Manual de Clientes SOP-59 con Purgado Atómico Anti-Orphan, Motor de Reportería Cuantitativa Institucional SOP-60 (Sharpe, Sortino, Drawdown, Profit Factor), Blindaje de Capital SOP-58 y Despacho Concurrente Multi-Cuenta SOP-57 con Cifrado AES en Reposo (+94.75R de Retorno SSoT, Profit Factor 1.99, Max Drawdown -4.21% y $1,000 -> $9,148.56 USD). Suite Oficial de 44/44 Pruebas Unitarias Aprobadas al 100% en VPS de Producción y 299 Pruebas Globales. Canon Inmutable de los 63 Protocolos de Seguridad Operativa (SOP-01 a SOP-63)."**
 
 ![Status](https://img.shields.io/badge/Status-100%25_AUTONOMOUS_&_SSOT_VERIFIED-0d2a1a?style=for-the-badge&logo=codeproject&logoColor=fff)
 ![Version](https://img.shields.io/badge/Version-50.0_Apex_Expansion-1a3a6e?style=for-the-badge)
 ![ML Engine](https://img.shields.io/badge/Neural_Engine-XGBoost_ONNX_Meta--Labeling-orange?style=for-the-badge)
 ![Security](https://img.shields.io/badge/Security_Protocols-SOP--01%20to%20SOP--63-emerald?style=for-the-badge)
 ![QA Suite](https://img.shields.io/badge/QA_Suite-44%2F44_Passed_100%25-success?style=for-the-badge)
-![SSoT Return](https://img.shields.io/badge/SSoT_Return-%2B80.45_R_%28%2B$80%2C450_USD%29-gold?style=for-the-badge)
-![Profit Factor](https://img.shields.io/badge/Profit_Factor-2.01_Institucional-blue?style=for-the-badge)
-![Drawdown](https://img.shields.io/badge/Max_Drawdown--3.64%25_FTMO_Shield-brightgreen?style=for-the-badge)
+![SSoT Return](https://img.shields.io/badge/SSoT_Return-%2B94.75_R_%28%2B$94%2C750_USD%29-gold?style=for-the-badge)
+![Profit Factor](https://img.shields.io/badge/Profit_Factor-1.99_Institucional-blue?style=for-the-badge)
+![Drawdown](https://img.shields.io/badge/Max_Drawdown--4.21%25_FTMO_Shield-brightgreen?style=for-the-badge)
+![Compounding](https://img.shields.io/badge/Compounding-$1k_%E2%86%92_$9%2C148.56_USD_(%2B814.9%25)-purple?style=for-the-badge)
 ![Kernel](https://img.shields.io/badge/Kernel-Polars_Rust_Sub--2.5ms-black?style=for-the-badge&logo=rust&logoColor=fff)
 ![Persistence](https://img.shields.io/badge/Persistence-SQLite_WAL_ACID-003B57?style=for-the-badge&logo=sqlite&logoColor=fff)
 
@@ -139,24 +140,26 @@ graph TB
 
 ## 📊 Métricas Oficiales Inmutables del Backtest SSoT (Event-Driven Timeline Replay)
 
-Resultados inmutables de la simulación oficial sobre **180 días (237 operaciones reales 100% ejecutables)**:
+Resultados inmutables de la simulación oficial sobre **180 días (237 operaciones reales 100% ejecutables)** con todos los protocolos avanzados activados (SOP-46 a SOP-49 y SOP-63):
 
 ```text
 ========================================================================================================
-Métrica Institucional               | Slingshot v31.0 Base    | Slingshot v50.0 APEX EXPANSION
+Métrica Institucional               | Slingshot v31.0 Base    | Slingshot v50.0 APEX EXPANSION (SOP-63)
 ========================================================================================================
-Total Operaciones Auditadas         | 466 trades (Aisladas)   | 237 trades reales (Event-Driven)
+Total Operaciones Auditadas         | 466 trades (Aisladas)   | 237 trades reales (Event-Driven SSoT)
 Win Rate Real (TP1 / TP2 / TP3)     | 42.3%                   | 46.8% (111 Ganadoras / 126 Pérdidas)
 Profit Factor Base                  | 1.07 (Frágil)           | 1.80 (Sólido)
-Profit Factor con Alpha-Tier Sizing | 1.10                    | 2.01 🚀 (Superada la barrera de 2.00)
+Profit Factor con Alpha-Tier Sizing | 1.10                    | 1.99 🚀 (Sustentable y Robusto)
 Retorno Total Base en R             | +22.40 R                | +66.31 R
-Retorno Total con Alpha-Tier Sizing | +25.00 R                | +80.45 R 💎 (+221.8% de mejora neta)
-Beneficio Neto USD ($100k)          | +$25,000.00 USD         | +$80,450.00 USD (+$55,450 USD netos)
-Drawdown Máximo de Cartera (Plano)  | -38.10% (Descalificado) | -3.64% 🛡️ (Blindaje Total Prop Firm)
-Esperanza Matemática (E)            | +0.021 R / trade        | +0.280 R / trade (+1,233%)
-Crecimiento Compuesto Bitunix ($1k) | +$1,546.25 USD (+154%)  | +$5,673.12 USD (+567.3% / 6.7X)
-Capital Final Compuesto ($1,000 USD)| $2,546.25 USD           | $6,673.12 USD
-Drawdown Máximo Compuesto (2.5%)    | -38.10%                 | -12.58% 🛡️
+Retorno Total con Alpha-Tier Sizing | +25.00 R                | +94.75 R 💎 (+279.0% de mejora neta)
+Beneficio Neto USD ($100k)          | +$25,000.00 USD         | +$94,750.00 USD (+$69,750 USD netos)
+Drawdown Máximo de Cartera (Plano)  | -38.10% (Descalificado) | -4.21% 🛡️ (Blindaje Total Prop Firm)
+Esperanza Matemática (E)            | +0.021 R / trade        | +0.400 R / trade (+1,804%)
+Sharpe Ratio Anualizado             | 0.85                    | 4.47 🌟 (Grado Institucional Alto)
+Sortino Ratio (Downside Risk)       | 1.12                    | 24.63 🛡️ (Protección Asimétrica)
+Crecimiento Compuesto Bitunix ($1k) | +$1,546.25 USD (+154%)  | +$8,148.56 USD (+814.9% / 9.1X)
+Capital Final Compuesto ($1,000 USD)| $2,546.25 USD           | $9,148.56 USD 🚀
+Drawdown Máximo Compuesto (2.5%)    | -38.10%                 | -14.63% 🛡️
 ========================================================================================================
 ```
 

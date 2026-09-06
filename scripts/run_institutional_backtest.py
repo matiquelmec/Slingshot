@@ -97,9 +97,14 @@ def main():
         help="Activa el multiplicador 1.15x en las ventanas horarias 09:00 y 11:00 UTC (SOP-49)"
     )
     parser.add_argument(
+        "--enable-regime-agent",
+        action="store_true",
+        help="Activa la modulación dinámica de sizing y régimen de mercado SOP-63 (SlingshotRegimeAgent: 0.50x a 1.35x)"
+    )
+    parser.add_argument(
         "--all-advanced",
         action="store_true",
-        help="Activa simultáneamente todas las innovaciones cuantitativas avanzadas (SOP-46 a SOP-49)"
+        help="Activa simultáneamente todas las innovaciones cuantitativas avanzadas (SOP-46 a SOP-49 y SOP-63)"
     )
 
     args = parser.parse_args()
@@ -108,6 +113,7 @@ def main():
     trinity_boost = args.enable_trinity_boost or args.all_advanced
     elastic_runner = args.enable_elastic_runner or args.all_advanced
     golden_hours = args.enable_golden_hours or args.all_advanced
+    regime_agent = args.enable_regime_agent or args.all_advanced
 
     engine = UnifiedBacktestEngine(min_confluence_score=args.min_score)
 
@@ -120,7 +126,8 @@ def main():
                 enable_alpha_cycle=alpha_cycle,
                 enable_trinity_boost=trinity_boost,
                 enable_elastic_runner=elastic_runner,
-                enable_golden_hours=golden_hours
+                enable_golden_hours=golden_hours,
+                enable_regime_agent=regime_agent
             )
         else:
             print("\n🚀 Ejecutando Auditoría Oficial de Cartera Aislada por Activo (Legacy SSoT)...")
