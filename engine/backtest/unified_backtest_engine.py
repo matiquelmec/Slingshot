@@ -127,8 +127,20 @@ class UnifiedBacktestEngine:
         """
         Ejecuta la simulación cuantitativa institucional v31.0.
         """
-        file_candidates = glob.glob(os.path.join(DATA_DIR, f"{symbol}_{interval}_*.parquet"))
-        if not file_candidates:
+        target_file = None
+        f_180 = os.path.join(DATA_DIR, f"{symbol}_{interval}_180d.parquet")
+        f_aud = os.path.join(DATA_DIR, f"{symbol}_{interval}_audited.parquet")
+        
+        if os.path.exists(f_180):
+            target_file = f_180
+        elif os.path.exists(f_aud):
+            target_file = f_aud
+        else:
+            file_candidates = glob.glob(os.path.join(DATA_DIR, f"{symbol}_{interval}_*.parquet"))
+            if file_candidates:
+                target_file = file_candidates[0]
+
+        if not target_file:
             f15 = os.path.join(DATA_DIR, f"{symbol}_15m_180d.parquet")
             if not os.path.exists(f15):
                 return []
@@ -142,7 +154,7 @@ class UnifiedBacktestEngine:
             rule = "1h" if interval in ["1h", "1H", "60m"] else ("4h" if interval == "4h" else "1D")
             df = raw.resample(rule).agg({"open": "first", "high": "max", "low": "min", "close": "last", "volume": "sum"}).dropna().reset_index()
         else:
-            raw = pd.read_parquet(file_candidates[0])
+            raw = pd.read_parquet(target_file)
             raw.rename(columns={"o": "open", "h": "high", "l": "low", "c": "close", "v": "volume", "t": "timestamp"}, inplace=True)
             if not pd.api.types.is_datetime64_any_dtype(raw["timestamp"]):
                 first_ts = float(raw["timestamp"].iloc[0])
@@ -774,6 +786,20 @@ class UnifiedBacktestEngine:
         print(f" • Drawdown Máximo Compuesto    : -{max_comp_dd:.2f}%")
         print("=" * 88)
 
+        # Métricas formales SOP-60 (Sharpe, Sortino, Expectancy, Max DD R)
+        from engine.core.tear_sheet import calculate_portfolio_metrics
+        alpha_returns = (df_exec["outcome_r"] * df_exec["sizing_mult"]).tolist()
+        sop60_metrics = calculate_portfolio_metrics(alpha_returns)
+
+        print("📈 4. MÉTRICAS FINANCIERAS FORMALES DE CARTERA (SOP-60 TEAR SHEET):")
+        print("-" * 88)
+        print(f" • Sharpe Ratio Anualizado      : {sop60_metrics['sharpe_ratio']:.2f}")
+        print(f" • Sortino Ratio (Downside Risk): {sop60_metrics['sortino_ratio']:.2f}")
+        print(f" • Esperanza Matemática (E)     : {sop60_metrics['expectancy_r']:>+7.3f} R / trade")
+        print(f" • Ganancia Media vs Pérdida    : +{sop60_metrics['avg_win_r']:.2f}R / {sop60_metrics['avg_loss_r']:.2f}R")
+        print(f" • Max Drawdown en R            : -{sop60_metrics['max_drawdown_r']:.2f} R")
+        print("=" * 88)
+
         # Exportar reporte inmutable
         reports_dir = os.path.join(os.path.dirname(__file__), "reports")
         os.makedirs(reports_dir, exist_ok=True)
@@ -781,7 +807,7 @@ class UnifiedBacktestEngine:
 
         summary_payload = {
             "audit_date": datetime.now().isoformat(),
-            "engine_version": "v46.0 EVENT-DRIVEN TIMELINE SSoT",
+            "engine_version": "v50.0 APEX EXPANSION (Event-Driven Timeline SSoT)",
             "advanced_protocols": {
                 "alpha_cycle_sop46": enable_alpha_cycle,
                 "trinity_boost_sop47": enable_trinity_boost,
@@ -804,7 +830,11 @@ class UnifiedBacktestEngine:
                 "profit_factor_base": round(pf_base, 2),
                 "profit_factor_alpha": round(pf_alpha, 2),
                 "max_drawdown_base_pct": round(max_dd_base, 2),
-                "max_drawdown_alpha_pct": round(max_dd_alpha, 2)
+                "max_drawdown_alpha_pct": round(max_dd_alpha, 2),
+                "sharpe_ratio": sop60_metrics["sharpe_ratio"],
+                "sortino_ratio": sop60_metrics["sortino_ratio"],
+                "expectancy_r": sop60_metrics["expectancy_r"],
+                "max_drawdown_r": sop60_metrics["max_drawdown_r"]
             },
             "compounding_mode": {
                 "initial_usd": compounding_initial_usd,

@@ -1,15 +1,17 @@
 """
 =============================================================================
-SLINGSHOT v23.3 APEX — CLI OFICIAL DE BACKTESTING INSTITUCIONAL (SSoT)
+SLINGSHOT v50.0 APEX EXPANSION — CLI OFICIAL DE BACKTESTING INSTITUCIONAL (SSoT)
 =============================================================================
 Punto Único de Verdad (Single Source of Truth) para backtesting cuantitativo.
-Ejecuta simulaciones multi-activo con todas las reglas de producción:
-• Smart Money Concepts (Order Blocks, FVGs, BOS/CHoCH)
-• Entrada Óptima de Retroceso (OTE 61.8% / 70.5% Fibonacci)
-• Confluence Manager (Score >= 60) y Mapa Macro de Bitcoin
-• Fast Breakeven Adaptativo (+1.0R Alts / +1.2R Megas) con Fee Absorber (+0.08%)
-• Salidas Asimétricas (TP1 60%, TP2 20%, TP3 10%, Runner 10%)
-• Métricas Institucionales (Sharpe, Sortino, Calmar, Max Drawdown, Profit Factor)
+Ejecuta simulaciones multi-activo con todas las reglas de producción en vivo:
+• Smart Money Concepts (Order Blocks, FVGs, BOS/CHoCH en Polars Rust Kernel)
+• Entrada Óptima de Retroceso (OTE 61.8% / 78.6% Fibonacci)
+• Confluence Manager & Brújula Macro de Bitcoin (btc_aligned dinámico)
+• Fast Breakeven Adaptativo (+1.2R) con Fee Absorber (+0.08%)
+• Malla de Salidas Dinámica SOP-26 (40% TP1 @ +1.2R, 40% TP2 @ +2.0R, 20% Runner)
+• Invalidación Temprana SOP-25 @ -0.65R (preservación de capital)
+• Innovaciones Cuantitativas: SOP-46 Cycle, SOP-47 Trinity, SOP-48 KER, SOP-49 Golden Hours
+• Motor de Reportería Cuantitativa Profesional SOP-60 (Sharpe, Sortino, Drawdown, Profit Factor)
 =============================================================================
 """
 import os
@@ -24,11 +26,12 @@ ROOT_DIR = Path(__file__).parent.parent.resolve()
 sys.path.insert(0, str(ROOT_DIR))
 
 from engine.backtest.unified_backtest_engine import UnifiedBacktestEngine, DATA_DIR
+from engine.core.tear_sheet import calculate_portfolio_metrics
 from engine.api.config import settings
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Slingshot v23.3 Apex — Motor Oficial de Backtesting Institucional"
+        description="Slingshot v50.0 Apex Expansion — Motor Oficial de Backtesting Institucional"
     )
     parser.add_argument(
         "--portfolio",
