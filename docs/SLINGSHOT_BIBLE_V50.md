@@ -38,9 +38,16 @@
   * Audita todos los domingos a las 23:00 UTC el desempeño de los últimos 7 días por cuenta.
   * Despacha a Telegram un Tear Sheet institucional con: Sharpe Ratio, Sortino Ratio, Profit Factor, Win Rate, Max Drawdown y Retorno en R.
 
+### D. SOP-29: Sincronización Dinámica de Sesiones y Killzones (Global Master Sync v2)
+* **Causa Raíz:** En las transiciones estacionales de horario de verano/invierno (Daylight Saving Time - DST) en Estados Unidos y Europa, las horas fijas en UTC quedaban descalzadas respecto a la apertura real del volumen institucional de Wall Street y la City de Londres.
+* **Mecanismo:** `ConfluenceManager.evaluate_signal()` ahora ingesta directamente el `session_data` calculado en tiempo real por `SessionManager` mediante `ZoneInfo` (`America/New_York`, `Europe/London`, `Asia/Tokyo`).
+* **Blindaje Dinámico:**
+  * Detecta automáticamente las Killzones activas (`NY_KILLZONE`, `LONDON_NY_OVERLAP`, `NY_SILVER_BULLET_PM`) asignando de forma adaptativa el bono de $+5$ puntos institucionales.
+  * Modula la defensa de capital en Asia ($-2$ puntos) y el veto en activos TradFi de FTMO con precisión de huso horario local.
+
 ---
 
-## 2. Los Protocolos Canónicos de Seguridad y Resiliencia (SOP-50 a SOP-62)
+## 2. Los Protocolos Canónicos de Seguridad y Resiliencia (SOP-50 a SOP-63)
 
 | Protocolo | Nombre Técnico | Especificación Matemática & Blindaje Institucional |
 | :--- | :--- | :--- |

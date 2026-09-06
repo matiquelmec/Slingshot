@@ -100,7 +100,7 @@ graph TB
 | **SOP-26** | Dynamic MFE Harvesting Grid | Salidas: 40% a +1.2R (SL a BE), 40% a +2.0R (+1.0R asegurado), 20% Runner. |
 | **SOP-27** | Daily VWAP Exhaustion Shield | Veto a Shorts sobreextendidos $<-1.5\%$ bajo el VWAP diario. |
 | **SOP-28** | Anti-Junk Quality Gate | Filtro de precio mínimo $\ge \$0.10$ USD y spread $< 0.25\%$. |
-| **SOP-29** | Session Alpha Gating | Bono $+5$ pts en NY Open (13:00-17:00 UTC) y $-2$ pts en Asia. |
+| **SOP-29** | Session Alpha Gating (DST-Aware) | Sincronización dinámica con `SessionManager` (Global Master Sync): Bono $+5$ pts en NY Open / Power Overlap adaptativos, $-2$ pts en Asia, y veto dinámico a TradFi fuera de Killzones. |
 | **SOP-30** | Beta Exposure Limiter | Máximo 2 compras (LONG) en cripto simultáneas con riesgo flotante. |
 | **SOP-31** | Regime Quarantine | Veto incondicional si ADX < 18 y KER < 0.28 (mercado muerto). |
 | **SOP-32** | Volatility-Targeted Leverage | Apalancamiento adaptativo $0.20 / \text{dist}$ ($18\text{X}$ en BTC, $\le 8\text{X}$ en alts). |
