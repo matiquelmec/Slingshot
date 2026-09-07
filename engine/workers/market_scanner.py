@@ -312,6 +312,7 @@ class MarketScanner:
                         if "ema200" not in btc_df.columns:
                             btc_df["ema200"] = btc_df["close"].ewm(span=200, adjust=False).mean()
                         btc_price = float(btc_df["close"].iloc[-1])
+                        btc_ema200 = float(btc_df["ema200"].iloc[-1])
                         btc_aligned = (direction == "LONG" and btc_price > btc_ema200) or (direction == "SHORT" and btc_price < btc_ema200)
 
                     # Inferencia Neural Meta-Labeling (XGBoost / ONNX)
@@ -488,4 +489,5 @@ class MarketScanner:
             "session":           "LIVE_SIGNAL",
             "asset_health":      sig.get("confluence", {}).get("asset_health", {}),
         }
+
 

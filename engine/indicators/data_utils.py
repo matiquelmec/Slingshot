@@ -1,4 +1,4 @@
-import httpx
+﻿import httpx
 import asyncio
 import random
 from engine.core.logger import logger
@@ -13,15 +13,17 @@ _HTTP_CLIENT = httpx.AsyncClient(timeout=8.0, follow_redirects=True, limits=http
 async def fetch_binance_history(symbol: str, interval: str = "15m", limit: int = 300) -> list:
     """Descarga velas históricas desde Binance REST con pool de conexión persistente (sub-200ms)."""
     sym = symbol.upper()
+    # Mapeo de oráculo Binance: el oro en Binance se consulta como PAXGUSDT
+    binance_sym = "PAXGUSDT" if sym in ("XAUUSDT", "XAUUSD", "GOLD") else sym
     # Selección dinámica de endpoint: SPOT vs FUTUROS
-    if sym in _SPOT_ONLY:
+    if binance_sym in _SPOT_ONLY or sym in ("XAUUSDT", "XAUUSD", "PAXGUSDT"):
         url = "https://api.binance.com/api/v3/klines"
         mirror_url = "https://api1.binance.com/api/v3/klines"
     else:
         url = "https://fapi.binance.com/fapi/v1/klines"
         mirror_url = "https://fapi1.binance.com/fapi/v1/klines"
 
-    params = {"symbol": sym, "interval": interval, "limit": limit}
+    params = {"symbol": binance_sym, "interval": interval, "limit": limit}
     
     max_retries = 3
     for attempt in range(max_retries):
@@ -147,3 +149,4 @@ async def fetch_top_liquid_tickers(min_volume_usdt: float = 30_000_000.0, limit:
         logger.debug(f"[DYNAMIC SCREENER] Error consultando ranking 24h: {e}")
         
     return _LIQUID_TICKERS_CACHE["tickers"]
+
