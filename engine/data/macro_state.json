@@ -1,7 +1,7 @@
 {
-  "fear_greed_value": 74,
+  "fear_greed_value": 71,
   "fear_greed_label": "Greed",
-  "btc_dominance": 59.15,
+  "btc_dominance": 59.18,
   "funding_rate": 0.0,
   "funding_symbol": "BTCUSDT",
   "macro_bias": "NEUTRAL",
@@ -10,12 +10,12 @@
   "reason": "Sin datos macro disponibles.",
   "oi_delta_pct": 0.0,
   "dxy_trend": "BULLISH",
-  "dxy_price": 99.13,
+  "dxy_price": 99.18,
   "nasdaq_trend": "BULLISH",
-  "nasdaq_change_pct": 1.09,
+  "nasdaq_change_pct": 1.08,
   "risk_appetite": "RISK_ON",
   "news_sentiment": 0.5,
-  "active_event": "BOE Gov Bailey Speaks",
-  "last_updated": 1788532590.7017472,
+  "active_event": "",
+  "last_updated": 1788750897.8763564,
   "is_stale": false
 }

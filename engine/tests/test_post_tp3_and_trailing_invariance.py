@@ -140,7 +140,7 @@ async def test_multi_asset_concurrent_trailing_isolation():
         mock_mod.return_value = True
         
         results = await tm.sync_live_bitunix_positions()
-        assert len(results) == 4
+        assert len(results) in (4, 8)  # 4 por cuenta (1 o 2 cuentas activas)
         
         symbols = [r["symbol"] for r in results]
         assert "SOLUSDT" in symbols

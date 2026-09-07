@@ -15,6 +15,7 @@ from engine.indicators.data_utils import fetch_binance_history
 from engine.core.store import store
 from engine.workers.market_scanner import MarketScanner
 from engine.workers.trade_manager import TradeManager
+from engine.workers.tradfi_scanner import tradfi_scanner
 import pandas as pd
 import time
 
@@ -49,6 +50,8 @@ class SlingshotOrchestrator:
         asyncio.create_task(self._fractal_worker())
         # Iniciar Escáner de Oportunidades Globales (Scalp & Swing)
         self.market_scanner.start()
+        # Iniciar Escaner Autonomo TradFi FTMO (v51.0 Titanium)
+        tradfi_scanner.start()
         # Iniciar Gestor de Trades Activos (Trailing Stop Estructural)
         self.trade_manager.start()
         # Iniciar Worker de Métricas On-Chain Centralizadas (v8.5.9)
@@ -302,6 +305,7 @@ class SlingshotOrchestrator:
         """Parada coordinada."""
         self._stop_event.set()
         self.market_scanner.stop()
+        tradfi_scanner.stop()
         logger.info("[ORCHESTRATOR] Deteniendo motor maestro...")
 
     async def _onchain_worker(self):

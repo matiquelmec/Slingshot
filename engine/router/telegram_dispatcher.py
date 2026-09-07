@@ -74,18 +74,31 @@ class TelegramDispatcher:
         timeframe = signal.get('timeframe', signal.get('interval', '15m'))
         is_test = bool(signal.get('is_test', False))
 
-        # ── 1. DEDUPLICACIÓN ESTRUCTURAL INTELIGENTE (SQLite WAL Multi-Reinicio) ──
+        # ── 1. DEDUPLICACIÓN DE CICLO DE VIDA (Life-Cycle Driven Multi-Reinicio) ──
         dedup_key = f"{asset}_{direction}_{timeframe}"
 
         if not is_test:
+            # Comprobar si ya existe posición o límite activo en Nexus para este activo
+            try:
+                from engine.execution.nexus import nexus
+                active_syms = {p.get("signal", {}).get("asset", "").upper() for p in nexus._active_positions.values()}
+                pending_limits = {s.upper() for s in getattr(nexus, "_pending_limit_symbols", set())}
+                if asset.upper() in active_syms or asset.upper() in pending_limits:
+                    logger.debug(f"[TELEGRAM] 🛡️ Alerta {asset} {direction} suprimida: El trade ya se encuentra activo/pendiente en ejecución.")
+                    return False
+            except Exception as nexus_chk_err:
+                logger.debug(f"[TELEGRAM] Fallback comprobación Nexus: {nexus_chk_err}")
+
+            # Cooldown persistente en SQLite: Si el setup está en la misma estructura (drift < 3.0%), no repetir
+            # Se extiende el cooldown a 4 horas (14400s) para evitar ráfagas repetidas cada 30 min mientras se consolida
             is_blocked, elapsed, pct_diff = self._vault.is_signal_in_cooldown(
                 dedup_key=dedup_key,
                 current_price=price,
-                cooldown_seconds=self.cooldown_seconds,
-                max_drift_pct=3.0
+                cooldown_seconds=14400,
+                max_drift_pct=2.5
             )
             if is_blocked:
-                logger.debug(f"[TELEGRAM] ⏳ Alerta {asset} {direction} ({timeframe}) bloqueada por cooldown persistente en SQLite ({elapsed}s transcurridos / diff {pct_diff:.2f}%)")
+                logger.debug(f"[TELEGRAM] ⏳ Alerta {asset} {direction} ({timeframe}) bloqueada por deduplicación de estructura ({elapsed}s transcurridos / diff {pct_diff:.2f}%)")
                 return False
 
         # ── 2. FILTRO DE CONFLUENCIA INSTITUCIONAL (Apex Hybrid v19.1 >= 60%) ──
@@ -278,10 +291,20 @@ class TelegramDispatcher:
             logger.debug(f"[TELEGRAM] Error enviando heartbeat: {e}")
             return False
 
-    async def send_system_alert(self, title: str, details: str, severity: str = "WARNING") -> bool:
-        """Envía una alerta crítica de contingencia a Telegram."""
+    async def send_system_alert(self, title: str, details: str, severity: str = "WARNING", cooldown_seconds: int = 300) -> bool:
+        """Envia alerta critica a Telegram con rate-limiting anti-spam estricto."""
         if not self.enabled:
             return False
+        if not hasattr(self, '_alert_cooldowns'):
+            self._alert_cooldowns = {}
+        import time
+        dedup_key = f"{title}_{details[:60].strip()}"
+        now = time.time()
+        last_sent = self._alert_cooldowns.get(dedup_key, 0.0)
+        if (now - last_sent) < cooldown_seconds:
+            logger.warning(f"[TELEGRAM] Alerta '{title}' en cooldown ({int(now - last_sent)}s / {cooldown_seconds}s). Suprimida anti-spam.")
+            return False
+        self._alert_cooldowns[dedup_key] = now
         icon = "🚨" if severity == "CRITICAL" else "⚠️"
         msg = f"{icon} <b>SLINGSHOT ALERTA [{severity}]</b>\n<b>{title}</b>\n\n<code>{details}</code>"
         url = f"https://api.telegram.org/bot{self.bot_token}/sendMessage"
@@ -316,7 +339,31 @@ class TelegramDispatcher:
             logger.debug(f"[TELEGRAM] Error en send_raw_message: {e}")
             return False
 
-# Instancia singleton para importación
+
+
+
+    async def send_trade_fill_alert(self, symbol: str, side: str, price: float, qty: float, account_label: str = "Primary") -> bool:
+        if not self.enabled:
+            return False
+        sym = symbol.replace("USDT", "USD")
+        side_icon = "LONG" if "BUY" in side.upper() or "LONG" in side.upper() else "SHORT"
+        text = f"{side_icon} ORDEN EJECUTADA: {sym} @ ${price:.4f} ({qty} u) - Cuenta: {account_label}"
+        return await self.send_raw_message(text)
+
+    async def send_tp_hit_alert(self, symbol: str, tp_label: str, exit_price: float, pnl_usd: float, is_be: bool = True) -> bool:
+        if not self.enabled:
+            return False
+        sym = symbol.replace("USDT", "USD")
+        be_str = " | SL a BREAKEVEN" if is_be else ""
+        text = f"HIT TP: {tp_label.upper()} en {sym} @ ${exit_price:.4f} (+${pnl_usd:.2f} USDT){be_str}"
+        return await self.send_raw_message(text)
+
+    async def send_trade_closed_alert(self, symbol: str, reason: str, exit_price: float, pnl_usd: float, pnl_r: float = 0.0) -> bool:
+        if not self.enabled:
+            return False
+        sym = symbol.replace("USDT", "USD")
+        text = f"TRADE CERRADO: {sym} ({reason}) @ ${exit_price:.4f} | PnL: ${pnl_usd:.2f} USD ({pnl_r:.2f}R)"
+        return await self.send_raw_message(text)
+
+# Instancia singleton para importacion
 telegram_dispatcher = TelegramDispatcher()
-
-

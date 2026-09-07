@@ -102,3 +102,7 @@ class PolarsEngine:
 
 # Instancia singleton para importación directa
 polars_engine = PolarsEngine()
+
+
+# Alias de compatibilidad institucional
+PolarsEngine.compute_indicators_df = PolarsEngine.compute_indicators

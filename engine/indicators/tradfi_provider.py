@@ -1,11 +1,11 @@
 """
-engine/indicators/tradfi_provider.py — Proveedor de Datos TradFi Multi-Mercado v19.0
+engine/indicators/tradfi_provider.py — Proveedor de Datos TradFi Multi-Mercado v51.0
 ==================================================================================
 Descarga y gestiona velas e indicadores en tiempo real para activos de MetaTrader 5 / FTMO:
-- XAUUSD (Gold Spot)
+- XAUUSD (Gold Spot - Long Only)
 - US100 (Nasdaq 100 Cash)
+- GBPUSD (Forex Cable)
 - US30 (Dow Jones 30 Cash)
-- GBPUSD (Forex)
 """
 import time
 import httpx
@@ -24,7 +24,10 @@ TRADFI_ASSETS_CONFIG = {
         "spread_usd": 0.18,
         "min_lot": 0.01,
         "pip_value": 1.0,
-        "point_size": 0.01
+        "point_size": 0.01,
+        "tier": "TIER_A",
+        "enabled": True,
+        "long_only": True
     },
     "US100": {
         "ticker": "NQ=F",
@@ -34,57 +37,10 @@ TRADFI_ASSETS_CONFIG = {
         "spread_usd": 1.10,
         "min_lot": 0.1,
         "pip_value": 1.0,
-        "point_size": 0.25
-    },
-    "US30": {
-        "ticker": "YM=F",
-        "name": "Dow Jones 30 Cash",
-        "category": "INDICES",
-        "contract_size": 1,
-        "spread_usd": 2.20,
-        "min_lot": 0.1,
-        "pip_value": 1.0,
-        "point_size": 1.0
-    },
-    "US500": {
-        "ticker": "ES=F",
-        "name": "S&P 500 Cash",
-        "category": "INDICES",
-        "contract_size": 1,
-        "spread_usd": 0.40,
-        "min_lot": 0.1,
-        "pip_value": 1.0,
-        "point_size": 0.25
-    },
-    "HGUSD": {
-        "ticker": "HG=F",
-        "name": "Copper High Grade",
-        "category": "COMMODITIES",
-        "contract_size": 25000,
-        "spread_usd": 0.0010,
-        "min_lot": 0.01,
-        "pip_value": 12.5,
-        "point_size": 0.0005
-    },
-    "GER40": {
-        "ticker": "^GDAXI",
-        "name": "DAX 40 Germany",
-        "category": "INDICES",
-        "contract_size": 25,
-        "spread_usd": 1.50,
-        "min_lot": 0.1,
-        "pip_value": 1.0,
-        "point_size": 1.0
-    },
-    "GBPJPY": {
-        "ticker": "GBPJPY=X",
-        "name": "GBP/JPY Dragon",
-        "category": "FOREX",
-        "contract_size": 100000,
-        "spread_usd": 0.025,
-        "min_lot": 0.01,
-        "pip_value": 6.8,
-        "point_size": 0.01
+        "point_size": 0.25,
+        "tier": "TIER_A",
+        "enabled": True,
+        "long_only": False
     },
     "GBPUSD": {
         "ticker": "GBPUSD=X",
@@ -94,7 +50,88 @@ TRADFI_ASSETS_CONFIG = {
         "spread_usd": 0.00005,
         "min_lot": 0.01,
         "pip_value": 10.0,
-        "point_size": 0.0001
+        "point_size": 0.0001,
+        "tier": "TIER_A",
+        "enabled": True,
+        "long_only": False
+    },
+    "US30": {
+        "ticker": "YM=F",
+        "name": "Dow Jones 30 Cash",
+        "category": "INDICES",
+        "contract_size": 1,
+        "spread_usd": 2.20,
+        "min_lot": 0.1,
+        "pip_value": 1.0,
+        "point_size": 1.0,
+        "tier": "TIER_A",
+        "enabled": True,
+        "long_only": False
+    },
+    "EURUSD": {
+        "ticker": "EURUSD=X",
+        "name": "EUR/USD Forex",
+        "category": "FOREX",
+        "contract_size": 100000,
+        "spread_usd": 0.00002,
+        "min_lot": 0.01,
+        "pip_value": 10.0,
+        "point_size": 0.00001,
+        "tier": "TIER_B",
+        "enabled": False,
+        "long_only": False
+    },
+    "GBPJPY": {
+        "ticker": "GBPJPY=X",
+        "name": "GBP/JPY Dragon",
+        "category": "FOREX",
+        "contract_size": 100000,
+        "spread_usd": 0.025,
+        "min_lot": 0.01,
+        "pip_value": 6.8,
+        "point_size": 0.01,
+        "tier": "TIER_B",
+        "enabled": False,
+        "long_only": False
+    },
+    "US500": {
+        "ticker": "ES=F",
+        "name": "SP500 Cash",
+        "category": "INDICES",
+        "contract_size": 1,
+        "spread_usd": 0.40,
+        "min_lot": 0.1,
+        "pip_value": 1.0,
+        "point_size": 0.25,
+        "tier": "EXCLUDED",
+        "enabled": False,
+        "long_only": False
+    },
+    "HGUSD": {
+        "ticker": "HG=F",
+        "name": "Copper High Grade",
+        "category": "COMMODITIES",
+        "contract_size": 25000,
+        "spread_usd": 0.0010,
+        "min_lot": 0.01,
+        "pip_value": 12.5,
+        "point_size": 0.0005,
+        "tier": "EXCLUDED",
+        "enabled": False,
+        "long_only": False
+    },
+    "GER40": {
+        "ticker": "^GDAXI",
+        "name": "DAX 40 Germany",
+        "category": "INDICES",
+        "contract_size": 25,
+        "spread_usd": 1.50,
+        "min_lot": 0.1,
+        "pip_value": 1.0,
+        "point_size": 1.0,
+        "tier": "EXCLUDED",
+        "enabled": False,
+        "long_only": False
     }
 }
 
@@ -120,22 +157,58 @@ class TradFiProvider:
         now = time.time()
         if cache_key in self._cache and (now - self._last_fetch_ts.get(cache_key, 0)) < self._ttl_seconds:
             return self._cache[cache_key]["df"]
-            
-        # Mapear intervalo a Yahoo Finance
-        yf_interval = "15m" if interval in ("15m", "5m") else "1h" if interval in ("1h", "4h") else "1d"
-        yf_range = "60d" if yf_interval == "15m" else "6mo" if yf_interval == "1h" else "1y"
-        
-        url = f"https://query1.finance.yahoo.com/v8/finance/chart/{ticker}?range={yf_range}&interval={yf_interval}"
-        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
-        
+
+        # [SOP-66 NATIVE MT5 DATA FEED] Prioridad: Alimentacion Directa desde MetaTrader 5 (FTMO)
         try:
+            from engine.execution.mt5_bridge import mt5_bridge
+            import MetaTrader5 as mt5
+            
+            if mt5_bridge.connected:
+                sym_mt5 = symbol.replace("USDT", "USD")
+                if ".cash" not in sym_mt5 and any(idx in sym_mt5 for idx in ["US100", "US30", "US500", "GER40"]):
+                    sym_mt5 = f"{sym_mt5}.cash"
+                    
+                tf_map = {
+                    "1m": mt5.TIMEFRAME_M1,
+                    "5m": mt5.TIMEFRAME_M5,
+                    "15m": mt5.TIMEFRAME_M15,
+                    "1h": mt5.TIMEFRAME_H1,
+                    "4h": mt5.TIMEFRAME_H4,
+                    "1d": mt5.TIMEFRAME_D1
+                }
+                mt5_tf = tf_map.get(interval, mt5.TIMEFRAME_M15)
+                mt5.symbol_select(sym_mt5, True)
+                rates = mt5.copy_rates_from_pos(sym_mt5, mt5_tf, 0, limit)
+                
+                if rates is not None and len(rates) > 20:
+                    df = pd.DataFrame(rates)
+                    df["timestamp"] = pd.to_datetime(df["time"], unit="s", utc=True)
+                    df.rename(columns={"tick_volume": "volume"}, inplace=True)
+                    df = df[["timestamp", "open", "high", "low", "close", "volume"]]
+                    
+                    df_calc = polars_engine.compute_indicators_df(df)
+                    self._cache[cache_key] = {"df": df_calc, "source": "MT5_NATIVE"}
+                    self._last_fetch_ts[cache_key] = now
+                    return df_calc
+        except Exception as mt5_err:
+            logger.debug(f"[TRADFI_PROVIDER] Fallback de MT5 a Yahoo Finance para {symbol}: {mt5_err}")
+
+        # Fallback de Alta Disponibilidad: Yahoo Finance REST API v8
+        try:
+            range_map = {"15m": "5d", "1h": "1mo", "4h": "3mo", "1d": "1y"}
+            yf_range = range_map.get(interval, "5d")
+            
+            url = f"https://query1.finance.yahoo.com/v8/finance/chart/{ticker}?range={yf_range}&interval={interval}"
+            headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
+            
             async with httpx.AsyncClient(timeout=10.0, verify=False) as client:
                 res = await client.get(url, headers=headers)
                 res.raise_for_status()
-                result = res.json()["chart"]["result"][0]
+                data = res.json()
                 
-                timestamps = result["timestamp"]
-                quotes = result["indicators"]["quote"][0]
+                chart_data = data["chart"]["result"][0]
+                timestamps = chart_data["timestamp"]
+                quotes = chart_data["indicators"]["quote"][0]
                 
                 df = pd.DataFrame({
                     "timestamp": pd.to_datetime(timestamps, unit="s", utc=True),
@@ -143,34 +216,16 @@ class TradFiProvider:
                     "high": quotes["high"],
                     "low": quotes["low"],
                     "close": quotes["close"],
-                    "volume": quotes.get("volume", [1000]*len(timestamps))
+                    "volume": quotes.get("volume", [1.0] * len(timestamps))
                 }).dropna()
                 
-                if len(df) == 0:
-                    return None
-                    
-                # Aceleración Polars Rust
-                df = polars_engine.compute_indicators(df)
-                
-                self._cache[cache_key] = {
-                    "df": df,
-                    "price": float(df["close"].iloc[-1]),
-                    "timestamp": now
-                }
+                df_calc = polars_engine.compute_indicators_df(df)
+                self._cache[cache_key] = {"df": df_calc, "source": "YAHOO_REST"}
                 self._last_fetch_ts[cache_key] = now
-                return df
+                return df_calc
                 
         except Exception as e:
-            logger.error(f"[TRADFI_PROVIDER] Error descargando {symbol} ({ticker}): {e}")
-            if cache_key in self._cache:
-                return self._cache[cache_key]["df"]
+            logger.error(f"[TRADFI_PROVIDER] Error descargando {symbol} ({ticker}) en {interval}: {e}")
             return None
-
-    def get_latest_price(self, symbol: str) -> Optional[float]:
-        """Retorna el último precio en caché para un activo TradFi."""
-        for k, v in self._cache.items():
-            if k.startswith(f"{symbol.upper()}:"):
-                return v.get("price")
-        return None
 
 tradfi_provider = TradFiProvider()

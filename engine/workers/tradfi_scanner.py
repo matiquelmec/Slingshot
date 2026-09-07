@@ -47,6 +47,9 @@ class TradFiScanner:
         
         for symbol, spec in TRADFI_ASSETS_CONFIG.items():
             try:
+                # [SOP-67 TIER-A FILTER & PODA INSTITUCIONAL]
+                if spec.get("tier") == "EXCLUDED" or not spec.get("enabled", True):
+                    continue
                 df = await tradfi_provider.get_candles(symbol, interval=self.interval, limit=100)
                 if df is None or len(df) < 50:
                     continue
@@ -67,12 +70,24 @@ class TradFiScanner:
                 if swing_range <= (atr_val * 0.5):
                     continue
                     
+                # [SOP-29 SESSION KILLZONE GATE]
+                # Indices y Forex TradFi solo operan en Killzones de Alta Liquidez (Londres 07-10 UTC y NY 12-18 UTC)
+                now_utc = datetime.now(timezone.utc)
+                hour = now_utc.hour
+                is_tradfi_killzone = (7 <= hour <= 10) or (12 <= hour <= 18)
+                if not is_tradfi_killzone and "XAU" not in symbol:
+                    continue
+
                 # Evaluar Sesgo Institucional
                 is_bull = current_price > ema50 and ema50 > ema200
                 is_bear = current_price < ema50 and ema50 < ema200
                 
                 direction = "LONG" if is_bull else "SHORT" if is_bear else None
                 if not direction:
+                    continue
+
+                # [SOP-68 VETO INSTITUCIONAL ORO: LONG-ONLY]
+                if "XAU" in symbol and direction != "LONG":
                     continue
                     
                 if direction == "LONG":
@@ -81,16 +96,16 @@ class TradFiScanner:
                     dist = abs(optimal_entry - stop_loss)
                     be_price = optimal_entry + (dist * 1.0)
                     tp1 = optimal_entry + (dist * 1.3)
-                    tp2 = optimal_entry + (dist * 2.0)
-                    tp3 = optimal_entry + (dist * 3.5)
+                    tp2 = optimal_entry + (dist * 2.5)
+                    tp3 = optimal_entry + (dist * 4.0)
                 else:
                     optimal_entry = swing_low + (swing_range * 0.618)
                     stop_loss = swing_high + (atr_val * 0.2)
                     dist = abs(optimal_entry - stop_loss)
                     be_price = optimal_entry - (dist * 1.0)
                     tp1 = optimal_entry - (dist * 1.3)
-                    tp2 = optimal_entry - (dist * 2.0)
-                    tp3 = optimal_entry - (dist * 3.5)
+                    tp2 = optimal_entry - (dist * 2.5)
+                    tp3 = optimal_entry - (dist * 4.0)
                     
                 # Cálculo de Lotes MT5
                 lot_info = ftmo_guardian.calculate_mt5_lots(symbol, optimal_entry, stop_loss)
@@ -109,20 +124,22 @@ class TradFiScanner:
                     
                 checklist.append({"factor": "Gestión Acelerada FTMO (+1.0R / +1.3R)", "status": "CUMPLIDO", "detail": f"Lotes recomendados: {lot_info['lots']} Lots ($750 USD)"})
                 
+                # Precision dinamica de decimales por activo (SOP-65)
+                d_prec = 5 if symbol in ["EURUSD", "GBPUSD"] else 3 if "JPY" in symbol else 2
                 candidate = {
                     "asset": symbol,
                     "name": spec["name"],
                     "category": spec["category"],
                     "direction": direction,
                     "type": "TradFi SMC Setup",
-                    "price": round(optimal_entry, 4 if "GBP" in symbol else 2),
-                    "current_price": round(current_price, 4 if "GBP" in symbol else 2),
-                    "stop_loss": round(stop_loss, 4 if "GBP" in symbol else 2),
-                    "be_price": round(be_price, 4 if "GBP" in symbol else 2),
-                    "tp1": round(tp1, 4 if "GBP" in symbol else 2),
-                    "tp2": round(tp2, 4 if "GBP" in symbol else 2),
-                    "tp3": round(tp3, 4 if "GBP" in symbol else 2),
-                    "rr_ratio_tp3": 3.5,
+                    "price": round(optimal_entry, d_prec),
+                    "current_price": round(current_price, d_prec),
+                    "stop_loss": round(stop_loss, d_prec),
+                    "be_price": round(be_price, d_prec),
+                    "tp1": round(tp1, d_prec),
+                    "tp2": round(tp2, d_prec),
+                    "tp3": round(tp3, d_prec),
+                    "rr_ratio_tp3": 4.0,
                     "confluence_score": score,
                     "mt5_lots": lot_info["lots"],
                     "risk_usd": lot_info["risk_usd"],
@@ -131,6 +148,70 @@ class TradFiScanner:
                     "timestamp": datetime.now(timezone.utc).isoformat()
                 }
                 candidates.append(candidate)
+                
+                # [SOP-64 FTMO AUTO-DISPATCHER] Disparo Automatico a MT5 para confluencia >= 75%
+                if score >= 75 and not ftmo_guardian.is_daily_lockout:
+                    now_utc = datetime.now(timezone.utc)
+                    if not ftmo_guardian.check_midnight_rollover_risk(now_utc.hour, now_utc.minute):
+                        try:
+                            from engine.execution.mt5_bridge import mt5_bridge
+                            import MetaTrader5 as mt5
+                            
+                            sym_mt5 = symbol.replace("USDT", "USD")
+                            if ".cash" not in sym_mt5 and any(idx in sym_mt5 for idx in ["US100", "US30", "US500", "GER40"]):
+                                sym_mt5 = f"{sym_mt5}.cash"
+                                
+                            has_order = False
+                            if mt5_bridge.connected and not mt5_bridge.dry_run:
+                                ex_orders = mt5.orders_get(symbol=sym_mt5) or []
+                                ex_pos = mt5.positions_get(symbol=sym_mt5) or []
+                                if len(ex_orders) > 0 or len(ex_pos) > 0:
+                                    has_order = True
+                            elif hasattr(self, "_active_orders") and sym_mt5 in self._active_orders:
+                                has_order = True
+                                    
+                            open_pos = mt5_bridge.get_open_positions()
+                            unprotected_risk = sum(1 for p in open_pos if float(p.get("profit", 0.0)) <= 0.0)
+                            
+                            if not has_order and unprotected_risk < 2:
+                                res = mt5_bridge.place_limit_order(
+                                    symbol=symbol,
+                                    direction=direction,
+                                    entry_price=candidate["price"],
+                                    stop_loss=candidate["stop_loss"],
+                                    tp1=candidate["tp1"],
+                                    tp2=candidate["tp2"],
+                                    tp3=candidate["tp3"],
+                                    score=score
+                                )
+                                if res.get("success"):
+                                    if not hasattr(self, "_active_orders"):
+                                        self._active_orders = set()
+                                    self._active_orders.add(sym_mt5)
+                                    logger.info(f"⚡ [TRADFI_AUTOLIMIT] Orden limite colocada en MT5 para {sym_mt5}: {direction} @ {candidate['price']}")
+                                    try:
+                                        from engine.router.telegram_dispatcher import telegram_dispatcher
+                                        tele_sig = {
+                                            "asset": symbol,
+                                            "symbol": symbol,
+                                            "direction": direction,
+                                            "signal_type": direction,
+                                            "type": direction,
+                                            "price": candidate["price"],
+                                            "stop_loss": candidate["stop_loss"],
+                                            "tp1": candidate["tp1"],
+                                            "tp2": candidate["tp2"],
+                                            "tp3": candidate["tp3"],
+                                            "confluence_score": score,
+                                            "lots": candidate["mt5_lots"],
+                                            "risk_usd": candidate["risk_usd"],
+                                            "action": "AUTO_LIMIT_PLACED_MT5"
+                                        }
+                                        asyncio.create_task(telegram_dispatcher.send_signal_alert(tele_sig, account_profile="FTMO_100K"))
+                                    except Exception:
+                                        pass
+                        except Exception as exec_err:
+                            logger.error(f"[TRADFI_AUTOLIMIT] Error en auto-limite MT5 para {symbol}: {exec_err}")
                 
             except Exception as e:
                 logger.error(f"[TRADFI_SCANNER] Error procesando {symbol}: {e}")
