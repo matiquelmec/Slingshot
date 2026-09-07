@@ -1,4 +1,4 @@
-"""
+﻿"""
 engine/execution/mt5_bridge.py — Conector Local de Ultra Baja Latencia para MetaTrader 5
 =======================================================================================
 Permite la colocación automatizada de órdenes límite (Buy Limit / Sell Limit)
@@ -23,6 +23,16 @@ class MT5Bridge:
     """Puente local para transmisión instantánea de órdenes a MetaTrader 5."""
 
     MAGIC_NUMBER = 100100 # Identificador único institucional de Slingshot
+
+    def get_symbol_digits(self, symbol: str) -> int:
+        sym = symbol.upper()
+        if any(f in sym for f in ["EUR", "GBP", "AUD", "NZD", "USD", "CAD", "CHF"]) and not any(m in sym for m in ["XAU", "XAG", "OIL", "US500", "US100", "US30"]):
+            return 5
+        elif any(c in sym for c in ["XAU", "XAG", "OIL", "GOLD"]):
+            return 2
+        elif any(idx in sym for idx in ["US500", "US100", "US30", "NAS100", "SPX500", "GER40"]):
+            return 1
+        return 2
 
     def __init__(self, dry_run: bool = True):
         self.dry_run = dry_run
@@ -209,3 +219,4 @@ class MT5Bridge:
 
 # Instancia singleton
 mt5_bridge = MT5Bridge(dry_run=True)
+

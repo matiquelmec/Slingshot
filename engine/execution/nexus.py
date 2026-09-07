@@ -1,4 +1,4 @@
-import os
+﻿import os
 import sqlite3
 import json
 """
@@ -58,10 +58,16 @@ class NexusNode:
             await asyncio.sleep(5) # Ciclo de auditoría cada 5 segundos
 
             assets_to_remove = []
-            for asset, pos in list(self._active_positions.items()):
+            for raw_key, pos in list(self._active_positions.items()):
+                # [SSoT DECOUPLING] Separar clave interna del simbolo de mercado limpio
+                asset = pos.get('signal', {}).get('asset') or (raw_key.split('_')[-1] if '_' in raw_key else raw_key)
+                acc_id = pos.get('account_id', 'primary')
+                target_ex = self.account_manager.get_executor(acc_id) if hasattr(self, 'account_manager') else self.executor
+                if not target_ex:
+                    target_ex = self.executor
                 try:
                     # 1. Obtener precio actual (simplificado vía ticker)
-                    current_price = await self.executor.get_ticker_price(asset)
+                    current_price = await target_ex.get_ticker_price(asset)
 
                     sig = pos['signal']
                     entry = sig['price']
@@ -1317,4 +1323,5 @@ class NexusNode:
 # Instancia global (Singleton)
 # Live trading must be explicitly enabled from .env.
 nexus = NexusNode(dry_run=not settings.ENABLE_LIVE_TRADING)
+
 

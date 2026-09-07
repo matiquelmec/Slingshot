@@ -313,3 +313,30 @@ Toda la arquitectura técnica, tanto en Criptomonedas como en MetaTrader 5 y la 
 1. **Suite TradFi & FTMO Titanium:** `test_ftmo_titanium_strategy.py` & `test_tradfi_scanner_and_risk.py` (**21/21 PASSED** al 100%).
 2. **Suite Multi-Cuenta, Criptografía & Resiliencia:** `test_multi_account_advanced_security_and_resilience.py` (**38/38 PASSED** al 100%).
 3. **Suite Completa Global:** Más de **235 pruebas automatizadas aprobadas** que cubren el ciclo integral de vida de órdenes, conciliación, cálculo de margen, persistencia SQLite WAL y compresión de red.
+
+
+---
+
+## 🛡️ 12. Protocolos Canónicos de Ejecución Robusta y Anti-Desprotección (SOP-58 & SOP-59)
+
+### SOP-58: Invarianza Absoluta Never-Naked & Emergency Market Exit on SL Breach
+* **Problema Previo:** Ante volatilidad repentina o deslizamientos (slippage), si el precio penetraba el Stop Loss pretendido (ej. retroceso a $0.7929 frente a target SL de $0.7932 en un LONG), el exchange rechazaba la orden con `SL price must be less than last price`. Bajo lógicas heredadas de cancelación previa, la posición quedaba huérfana y desnuda en el mercado.
+* **Solución Canónica (Never-Naked Rule):**
+  1. **Invarianza de Cancelación:** Queda terminantemente prohibido cancelar un Stop Loss previo antes de que el nuevo sea aceptado por el exchange. Las actualizaciones de riesgo se gestionan atómicamente a nivel posición (`/api/v1/futures/tpsl/position/place_order`).
+  2. **Pre-validación contra Precio de Mercado:** El ejecutor verifica en memoria que el nuevo SL no viole las reglas del exchange (`target_sl < last_price` para LONG, `target_sl > last_price` para SHORT).
+  3. **Salida de Emergencia a Mercado (Emergency Market Close):** Si el precio ya perforó el SL o Bitunix rechaza la orden condicional, el sistema no reintenta infinitamente ni abandona la orden; ejecuta inmediatamente `close_position_market()` para cortar la pérdida y asegurar la preservación del capital.
+
+### SOP-59: Despacho Telegráfico por Hitos de Ciclo de Vida (Life-Cycle Driven Dispatcher)
+* **Problema Previo:** Temporizadores ciegos de sondeo cada 30 minutos repetían la misma alerta de señal en Telegram aunque la operación ya estuviese abierta o pendiente en cartera, saturando los canales de los operadores.
+* **Solución Canónica:**
+  1. **Supresión de Señales en Activos en Cartera:** Si un símbolo ya tiene una posición abierta o una orden límite activa en cualquiera de las cuentas, el despachador suprime automáticamente nuevas alertas de entrada.
+  2. **Despacho Exclusivo por Hitos Reales:**
+     * `send_trade_fill_alert`: Notifica en microsegundos el momento exacto en que una orden límite o de mercado es ejecutada.
+     * `send_tp_hit_alert`: Notifica la toma parcial de ganancias (TP1 / TP2) y confirma el avance a Breakeven con Fee Absorber.
+     * `send_trade_closed_alert`: Notifica el cierre definitivo del trade, detallando el PnL final en dólares y en unidades de riesgo R.
+  3. **Throttling de Errores de Sistema:** Cooldown estricto de 300 segundos (5 minutos) por tipo de alerta para erradicar el spam ante contingencias de red.
+
+### SOP-69: Normalización Dinámica de Contratos & Sustitución Definitiva XAUUSDT
+* **Erradicación de PAXGUSDT:** Se elimina permanentemente PAXGUSDT del radar dinámico y escáneres debido a su libro de órdenes delgado, baja profundidad y alto spread.
+* **XAUUSDT como Contrato Canónico:** El Oro se opera exclusivamente mediante el contrato oficial de futuros perpetuos de Bitunix (`XAUUSDT`), con precisión validada de 3 decimales en cantidad (`basePrecision: 3`) y 2 decimales en cotización (`quotePrecision: 2`).
+* **Regla Dinámica de Precisión Contractual:** Ningún precio o volumen se redondea con decimales fijos (`round(..., 4)` o `round(..., 2)`). Todo parámetro pasa obligatoriamente por `get_symbol_rules()` en Bitunix y `get_symbol_digits()` en MT5/FTMO.

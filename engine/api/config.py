@@ -1,4 +1,4 @@
-from pydantic_settings import BaseSettings, SettingsConfigDict
+﻿from pydantic_settings import BaseSettings, SettingsConfigDict
 from pathlib import Path
 from typing import Optional
 
@@ -51,7 +51,7 @@ class Settings(BaseSettings):
     OLLAMA_URL: str = "http://localhost:11434"
 
     # Strategy Delta Δ: Tiered Priority (14 Curated Institutional Assets)
-    RADAR_ASSETS: str = "BTCUSDT,ETHUSDT,SOLUSDT,AVAXUSDT,LINKUSDT,XRPUSDT,PAXGUSDT,RENDERUSDT,SUIUSDT,INJUSDT,NEARUSDT,FETUSDT,ATOMUSDT,TIAUSDT"
+    RADAR_ASSETS: str = "BTCUSDT,ETHUSDT,SOLUSDT,AVAXUSDT,LINKUSDT,XRPUSDT,XAUUSDT,RENDERUSDT,SUIUSDT,INJUSDT,NEARUSDT,FETUSDT,ATOMUSDT,TIAUSDT"
     
     # Cartera Suprema FTMO / MetaTrader 5 (v33.0 APEX OLYMPUS)
     FTMO_WATCHLIST: str = "XAUUSD,XAGUSD,US100,US500,USOIL,GER40,EURUSD,USDJPY,USDCAD,GBPJPY"
@@ -72,7 +72,7 @@ class Settings(BaseSettings):
         "BTCUSDT": 0.5,     # Tier 1: Líder Macro (0.5s)
         "ETHUSDT": 0.5,     # Tier 1: Líder Altcoins (0.5s)
         "SOLUSDT": 0.5,     # Tier 1: Liquidez Institucional (0.5s)
-        "PAXGUSDT": 0.8,    # Tier 1: Oro Refugio Institucional (0.8s)
+        "XAUUSDT": 0.8,    # Tier 1: Oro Refugio Institucional (0.8s)
         "INJUSDT": 0.8,     # Tier 1: Máxima Expansión (0.8s)
         "SUIUSDT": 0.8,     # Tier 1: Máxima Expansión (0.8s)
         "AVAXUSDT": 1.0,    # Tier 2: Media Volatilidad (1.0s)
@@ -88,7 +88,7 @@ class Settings(BaseSettings):
 
     # Activos SPOT-only: no existen en Binance Futures (fstream).
     # Usar wss://stream.binance.com:9443 para estos símbolos.
-    SPOT_ONLY_ASSETS: set = {"PAXGUSDT", "EURUSDT", "USDCUSDT"}
+    SPOT_ONLY_ASSETS: set = {"XAUUSDT", "EURUSDT", "USDCUSDT"}
     # Usar stream Spot para máxima accesibilidad y evitar bloqueos geográficos (Francia/UE)
     PREFER_SPOT_STREAM: bool = True
 
@@ -110,4 +110,5 @@ settings = Settings()
 MASTER_WATCHLIST = settings.MASTER_WATCHLIST
 PRIORITY_TIERS   = settings.PRIORITY_TIERS
 DEFAULT_PULSE_INTERVAL = settings.DEFAULT_PULSE_INTERVAL
+
 

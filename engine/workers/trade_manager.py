@@ -1,4 +1,4 @@
-"""
+﻿"""
 engine/workers/trade_manager.py â€” Trailing Stop Estructural Slingshot v1.0
 ===========================================================================
 Gestiona el ciclo de vida de seÃ±ales activas despuÃ©s de su activaciÃ³n.
@@ -407,13 +407,16 @@ class TradeManager:
             from engine.execution.account_manager import AccountManager
             mgr = AccountManager()
             executors = mgr.get_all_executors(enabled_only=True)
-            position_id = signal.get("position_id") or signal.get("main_order_id")
+            global_pos_id = signal.get("position_id") or signal.get("main_order_id")
+            pos_map = signal.get("account_position_ids", {})
             
             for acc_id, ex in executors.items():
                 try:
+                    # [SSoT ENTITY ISOLATION] Priorizar ID específico de cuenta, luego global, luego fallback
+                    local_pos_id = pos_map.get(acc_id) or global_pos_id or "live_position"
                     success = await ex.modify_position_tpsl(
                         symbol=asset,
-                        position_id=str(position_id) if position_id else "live_position",
+                        position_id=str(local_pos_id),
                         sl_price=new_sl
                     )
                     if success:
@@ -818,6 +821,7 @@ class TradeManager:
 
 # Singleton Global
 trade_manager = TradeManager()
+
 
 
 

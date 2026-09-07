@@ -1,4 +1,4 @@
-from engine.core.logger import logger
+﻿from engine.core.logger import logger
 import asyncio
 from typing import List, Dict, Optional
 from engine.api.config import settings
@@ -413,7 +413,7 @@ class SlingshotOrchestrator:
                 from engine.indicators.ghost_data import get_ghost_state
 
                 ghost = get_ghost_state()
-                btc_trend = "BULLISH" if ghost.get("bitcoin_trend", 0) > 0 else "BEARISH"
+                btc_trend = "BULLISH" if (getattr(ghost, "bitcoin_trend", 0) if hasattr(ghost, "bitcoin_trend") else (ghost.get("bitcoin_trend", 0) if isinstance(ghost, dict) else 0)) > 0 else "BEARISH"
 
                 # Evaluar régimen con datos en memoria del store
                 symbols_data = {}
@@ -448,3 +448,4 @@ async def run_orchestrator():
 
 if __name__ == "__main__":
     asyncio.run(run_orchestrator())
+

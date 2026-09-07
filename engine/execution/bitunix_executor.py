@@ -791,10 +791,9 @@ class BitunixExecutor:
                         except (ValueError, TypeError):
                             pass
                             
-                    # Si el nuevo SL es estrictamente mejor, cancelamos el TPSL previo para colocar el nuevo
+                    # [SOP-58 NEVER NAKED RULE]: Mantener proteccion viva sin desproteger
                     if eo_id:
-                        logger.info(f"🔄 [BITUNIX] Actualizando SL de {sym} (Cancelando TPSL previo {eo_id})...")
-                        await self._request("POST", "/api/v1/futures/tpsl/cancel_order", json_body={"orderId": eo_id, "symbol": sym})
+                        logger.info(f"[BITUNIX SOP-58] Actualizando TPSL de {sym} manteniendo proteccion viva...")
         except Exception as e:
             logger.debug(f"[BITUNIX] Error verificando TPSL previos: {e}")
 
@@ -825,6 +824,14 @@ class BitunixExecutor:
                     await asyncio.sleep(0.3 * attempt)
 
         # Si se canceló una orden previa y los reintentos fallaron, la posición está desprotegida
+                # [SOP-58 EMERGENCY MARKET EXIT ON SL BREACH]
+        if eo_id or (last_res and 'SL price must be' in str(last_res.get('msg', ''))):
+            logger.critical(f"[SOP-58 CRITICAL] SL perforado o rechazado para {sym}. Ejecutando CIERRE A MERCADO DE EMERGENCIA...")
+            try:
+                await self.close_position_market(sym)
+                logger.info(f"[SOP-58] Posicion {sym} cerrada a mercado exitosamente para evitar liquidacion.")
+            except Exception as close_err:
+                logger.error(f"[SOP-58] Error en cierre a mercado de emergencia para {sym}: {close_err}")
         if eo_id:
             logger.critical(f"🚨 [EMERGENCY SL ALERT] Posición {sym} quedó sin Stop Loss tras cancelar {eo_id} y fallar {max_tpsl_attempts} reintentos!")
             try:
@@ -1028,5 +1035,4 @@ class BitunixExecutor:
         if self._last_verified_balance > 0 and (time.time() - self._last_balance_ts) < 120.0:
             return self._last_verified_balance
         return 0.0
-
 
