@@ -312,7 +312,7 @@ Toda la arquitectura técnica, tanto en Criptomonedas como en MetaTrader 5 y la 
 
 1. **Suite TradFi & FTMO Titanium:** `test_ftmo_titanium_strategy.py` & `test_tradfi_scanner_and_risk.py` (**21/21 PASSED** al 100%).
 2. **Suite Multi-Cuenta, Criptografía & Resiliencia:** `test_multi_account_advanced_security_and_resilience.py` (**38/38 PASSED** al 100%).
-3. **Suite Completa Global:** Más de **235 pruebas automatizadas aprobadas** que cubren el ciclo integral de vida de órdenes, conciliación, cálculo de margen, persistencia SQLite WAL y compresión de red.
+3. **Suite Completa Global:** **311 pruebas automatizadas aprobadas al 100% (111.20s)** en 67 archivos de prueba, incluyendo la suite canónica de contratos y ciclo de vida integral E2E (`test_institutional_end_to_end_pipeline_and_contracts.py`). que cubren el ciclo integral de vida de órdenes, conciliación, cálculo de margen, persistencia SQLite WAL y compresión de red.
 
 
 ---
@@ -340,3 +340,14 @@ Toda la arquitectura técnica, tanto en Criptomonedas como en MetaTrader 5 y la 
 * **Erradicación de PAXGUSDT:** Se elimina permanentemente PAXGUSDT del radar dinámico y escáneres debido a su libro de órdenes delgado, baja profundidad y alto spread.
 * **XAUUSDT como Contrato Canónico:** El Oro se opera exclusivamente mediante el contrato oficial de futuros perpetuos de Bitunix (`XAUUSDT`), con precisión validada de 3 decimales en cantidad (`basePrecision: 3`) y 2 decimales en cotización (`quotePrecision: 2`).
 * **Regla Dinámica de Precisión Contractual:** Ningún precio o volumen se redondea con decimales fijos (`round(..., 4)` o `round(..., 2)`). Todo parámetro pasa obligatoriamente por `get_symbol_rules()` en Bitunix y `get_symbol_digits()` en MT5/FTMO.
+
+### SOP-70: Desacoplamiento Ortogonal de Poda de Riesgo y Jerarquía Trailing Stop
+* **Problema Previo:** La lógica de poda temprana por bajo momentum (`r_profit >= 0.35`) se encontraba erróneamente intercalada dentro de la estructura condicional `if ... elif` de trailing stop, provocando que operaciones en ganancia rápida fueran interceptadas antes de activar el Fast Break-Even (+1.0R).
+* **Solución Canónica:**
+  1. **Desacoplamiento Estricto:** La evaluación de poda de riesgo (SOP-68) se ejecuta en un bloque paralelo e independiente del avance del Stop Loss.
+  2. **Invarianza de Protección:** Toda posición que alcance `r_profit >= 1.0R` ejecuta obligatoriamente el Fast Break-Even protegiendo el capital, sin interferencias de comprobaciones secundarias de momentum.
+  3. **Blindaje de Regresión por Test:** Certificado formalmente mediante `test_sop68_does_not_block_fast_be_and_trailing()` dentro de `test_institutional_end_to_end_pipeline_and_contracts.py`.
+
+### SOP-71: Streaming Dinámico de Radar (14 Activos VIP) & Contrato Frontend TradFi FTMO
+* **Ampliación del Radar Cuantitativo:** Se consolida el universo de 14 activos VIP (`BTC, ETH, SOL, AVAX, LINK, XRP, RENDER, SUI, INJ, NEAR, FET, ATOM, TIA, PAXG`) con hidratación en vivo de precios y régimen en `/api/v1/market-states`.
+* **Integración Frontend TradFi 24/7:** `OpportunitiesScanner.tsx` consume la clave `tradfi` de la API, manteniendo visible el análisis técnico institucional de MT5 (sesión bancaria, Killzone activa/standby, lotaje exacto y OTE) con cero dependencias estáticas o datos nulos.
