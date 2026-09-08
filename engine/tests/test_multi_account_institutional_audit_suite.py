@@ -1,4 +1,4 @@
-﻿import pytest
+import pytest
 import asyncio
 from unittest.mock import AsyncMock, patch, MagicMock
 from engine.execution.nexus import NexusNode

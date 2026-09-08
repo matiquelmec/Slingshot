@@ -12,6 +12,13 @@ Cubre los 5 vectores críticos de seguridad y robustez:
 """
 
 import pytest
+
+from engine.execution.bitunix_executor import BitunixExecutor
+
+@pytest.fixture(autouse=True)
+def isolate_primary_account():
+    with patch("engine.execution.account_manager.AccountManager.get_all_executors", return_value={"primary": BitunixExecutor()}):
+        yield
 import asyncio
 import time
 from pathlib import Path

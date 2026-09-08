@@ -10,6 +10,13 @@ Valida:
 4. Sincronización y cálculo de avance en R para posiciones abiertas.
 """
 import pytest
+
+from engine.execution.bitunix_executor import BitunixExecutor
+
+@pytest.fixture(autouse=True)
+def isolate_primary_account():
+    with patch("engine.execution.account_manager.AccountManager.get_all_executors", return_value={"primary": BitunixExecutor()}):
+        yield
 import asyncio
 import time
 from unittest.mock import AsyncMock, patch

@@ -5,6 +5,13 @@ SUITE DE PRUEBAS UNITARIAS: CENTINELA INTELIGENTE DE ÓRDENES LÍMITE (v22.0)
 =============================================================================
 """
 import pytest
+
+from engine.execution.bitunix_executor import BitunixExecutor
+
+@pytest.fixture(autouse=True)
+def isolate_primary_account():
+    with patch("engine.execution.account_manager.AccountManager.get_all_executors", return_value={"primary": BitunixExecutor()}):
+        yield
 import asyncio
 import time
 from unittest.mock import AsyncMock, patch, MagicMock

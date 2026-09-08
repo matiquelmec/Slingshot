@@ -51,8 +51,8 @@ def setup_logger():
     if not logger.handlers:
         logger.setLevel(logging.DEBUG)
         
-        # Ensure log directory exists within tmp/ to keep root clean
-        log_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "tmp", "logs")
+        # Ensure log directory exists within logs/ to keep root clean
+        log_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "logs")
         os.makedirs(log_dir, exist_ok=True)
         
         # Rotating File Handler: Max 10MB per file, keep 5 backups

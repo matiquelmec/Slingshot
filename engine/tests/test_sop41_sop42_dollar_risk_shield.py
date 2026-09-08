@@ -1,4 +1,4 @@
-﻿"""
+"""
 engine/tests/test_sop41_sop42_dollar_risk_shield.py
 =============================================================================
 Suite de Certificación QA: Protocolos SOP-41 y SOP-42

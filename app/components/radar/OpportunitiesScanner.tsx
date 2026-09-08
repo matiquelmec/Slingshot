@@ -61,10 +61,11 @@ const EDUCATIONAL_NOTES: Record<string, string> = {
 
 export default function OpportunitiesScanner() {
     const [activeTab, setActiveTab] = useState<'scalp' | 'swing' | 'daily'>('scalp');
-    const [opportunities, setOpportunities] = useState<{ scalp: Opportunity[]; swing: Opportunity[]; daily: Opportunity[] }>({
+    const [opportunities, setOpportunities] = useState<{ scalp: Opportunity[]; swing: Opportunity[]; daily: Opportunity[]; tradfi: Opportunity[] }>({
         scalp: [],
         swing: [],
-        daily: []
+        daily: [],
+        tradfi: []
     });
     const [filterHighConfluence, setFilterHighConfluence] = useState(false);
     const [filterAdaptiveKER, setFilterAdaptiveKER] = useState(true);
@@ -87,7 +88,8 @@ export default function OpportunitiesScanner() {
                 setOpportunities({
                     scalp: data.scalp || [],
                     swing: data.swing || [],
-                    daily: data.daily || []
+                    daily: data.daily || [],
+                    tradfi: data.tradfi || []
                 });
             }
         } catch (err) {
@@ -109,13 +111,18 @@ export default function OpportunitiesScanner() {
         fetchOpps();
     };
 
-    const currentOppsRaw = activeTab === 'scalp' ? opportunities.scalp : (activeTab === 'swing' ? opportunities.swing : opportunities.daily);
+    // Si se selecciona FTMO Institucional, alimentamos con la suite TradFi dedicada
+    const currentOppsRaw = marketCategoryFilter === 'FTMO_INSTITUTIONAL'
+        ? (opportunities.tradfi.length > 0 ? opportunities.tradfi : opportunities.swing.filter(o => getAssetMarketCategory(o.asset) === 'FTMO_INSTITUTIONAL'))
+        : (activeTab === 'scalp' ? opportunities.scalp : (activeTab === 'swing' ? [...opportunities.swing, ...opportunities.tradfi] : opportunities.daily));
     
     let filteredOpps = currentOppsRaw;
     
     // Filtro por Categoría de Mercado (FTMO Institucional vs Altcoins)
     if (marketCategoryFilter === 'FTMO_INSTITUTIONAL') {
-        filteredOpps = filteredOpps.filter(o => getAssetMarketCategory(o.asset) === 'FTMO_INSTITUTIONAL');
+        filteredOpps = opportunities.tradfi.length > 0 
+            ? opportunities.tradfi 
+            : filteredOpps.filter(o => getAssetMarketCategory(o.asset) === 'FTMO_INSTITUTIONAL');
     } else if (marketCategoryFilter === 'CRYPTO_ALTCOINS') {
         filteredOpps = filteredOpps.filter(o => getAssetMarketCategory(o.asset) === 'CRYPTO_ALTCOINS');
     }
@@ -278,7 +285,7 @@ export default function OpportunitiesScanner() {
                                     : 'text-white/40 hover:text-neon-green border border-transparent'
                             }`}
                         >
-                            🏛️ FTMO (Oro, BTC, ETH)
+                            🏛️ FTMO TradFi (US100, US30, GBPUSD, Oro)
                         </button>
                         <button
                             onClick={() => setMarketCategoryFilter('CRYPTO_ALTCOINS')}

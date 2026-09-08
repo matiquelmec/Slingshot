@@ -24,7 +24,7 @@ class MarketScanner:
         # 🚀 Tier 1: Núcleo Fijo Especializado por Perfil Cuantitativo (SOP-36)
         # 7 Activos Core Inmutables + BNBUSDT y SOLUSDT activos en Scalp 15m
         self.core_scalp_assets = ["RENDERUSDT", "SUIUSDT", "INJUSDT", "NEARUSDT", "FETUSDT", "ATOMUSDT", "TIAUSDT"]
-        self.core_swing_1h_assets = ["BTCUSDT", "ETHUSDT", "SOLUSDT", "AVAXUSDT", "LINKUSDT", "XRPUSDT", "XAUUSDT"]
+        self.core_swing_1h_assets = ["BTCUSDT", "ETHUSDT", "SOLUSDT", "AVAXUSDT", "LINKUSDT", "XRPUSDT", "XAUUSDT", "PAXGUSDT"]
         self.daily_assets = ["BTCUSDT", "ETHUSDT", "SOLUSDT", "XAUUSDT", "RENDERUSDT", "NEARUSDT"]
         
         # Activos activos en Scalp 15m (Core + Campeones BNB y SOL)
@@ -391,6 +391,17 @@ class MarketScanner:
                         "asset_health":      conf_res.get("asset_health", {}),
                     }
                     candidates.append(cand)
+
+                    # [RADAR & LATTICE DYNAMIC HYDRATION]
+                    await store.update_market_state(symbol, {
+                        "asset": symbol,
+                        "price": current_price,
+                        "current_price": current_price,
+                        "regime": regime,
+                        "bias": direction,
+                        "session": session_data.get("current_session", "UNKNOWN"),
+                        "last_updated": datetime.now(timezone.utc).isoformat()
+                    })
                 
                 await asyncio.sleep(0.05)
             except Exception as e:

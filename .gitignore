@@ -69,3 +69,7 @@ crash_log*.txt
 slingshot-core-rust/target/
 **/target/
 Cargo.lock
+data/*.json
+data/backups/
+tmp_runner.py
+engine/data/macro_state.json

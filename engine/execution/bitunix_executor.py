@@ -38,6 +38,7 @@ class BitunixExecutor:
         self._last_time_sync = BitunixExecutor._shared_last_time_sync
         self._last_verified_balance = 0.0
         self._last_balance_ts = 0.0
+        self._recent_algo_closes: Dict[str, float] = {}
         
         if not self.dry_run and (not self.api_key or not self.secret_key):
             logger.error(f"❌ [{self.account_label}] BITUNIX_API_KEY o SECRET_KEY no encontrados. Cambiando a DRY_RUN.")
@@ -752,13 +753,21 @@ class BitunixExecutor:
         formatted_tp = f"{float(tp_price):.{decimals}f}" if tp_price is not None else None
 
         # 1. Comprobar si ya existe un TPSL para esta posición en Bitunix y aplicar INVARIANZA ABSOLUTA
+        eo_id = None
         try:
             res_orders = await self._request("GET", "/api/v1/futures/tpsl/get_pending_orders", params={"symbol": sym})
             existing_orders = res_orders.get("data", []) or []
             if isinstance(existing_orders, list):
                 for eo in existing_orders:
+                    # [MULTI-POSITION ISOLATION]: Solo evaluar si coincide con este positionId
+                    eo_pos_id = str(eo.get("positionId") or "")
+                    if position_id and eo_pos_id and eo_pos_id != str(position_id):
+                        continue  # Pertenece a otra posición en Hedge Mode, no tocar!
+
                     raw_sl_str = eo.get("slPrice") or eo.get("triggerPrice") or ""
-                    eo_id = str(eo.get("id") or eo.get("orderId") or "")
+                    current_eo_id = str(eo.get("id") or eo.get("orderId") or "")
+                    if current_eo_id:
+                        eo_id = current_eo_id
                     
                     if raw_sl_str and formatted_sl:
                         try:
@@ -767,35 +776,50 @@ class BitunixExecutor:
                             
                             # Si ya tiene exactamente el mismo SL configurado, no reenviar
                             if abs(existing_sl_val - new_sl_val) < 0.0001:
-                                logger.info(f"🛡️ [BITUNIX] {sym} ya cuenta con Stop Loss activo blindado en ${existing_sl_val:.4f} (ID: {eo_id}).")
+                                logger.info(f"🛡️ [BITUNIX] {sym} (PosId: {position_id}) ya cuenta con Stop Loss activo blindado en ${existing_sl_val:.4f} (ID: {eo_id}).")
                                 return eo_id
                                 
-                            # 🔒 REGLA DE INVARIANZA: Determinar la dirección de la posición
-                            # Si no se especifica, consultar la dirección en posiciones abiertas
+                            # 🔒 REGLA DE INVARIANZA: Determinar la dirección de la posición específica
                             pos_side = "LONG"
                             positions = await self.get_pending_positions()
-                            for p in positions:
+                            for p in (positions or []):
                                 if p.get("symbol") == sym:
+                                    if position_id and str(p.get("positionId")) != str(position_id):
+                                        continue
                                     pos_side = "LONG" if p.get("side") in ("BUY", "LONG", "1") else "SHORT"
                                     break
                                     
                             # Si es LONG y el nuevo SL es MENOR al existente -> BLOQUEAR INTENTO DE DEGRADACIÓN
                             if pos_side == "LONG" and new_sl_val < existing_sl_val:
-                                logger.warning(f"🛑 [INVARIANZA SL] Intento de retroceder SL en LONG para {sym} de ${existing_sl_val:.4f} a ${new_sl_val:.4f} RECHAZADO.")
+                                logger.warning(f"🛑 [INVARIANZA SL] Intento de retroceder SL en LONG para {sym} (PosId: {position_id}) de ${existing_sl_val:.4f} a ${new_sl_val:.4f} RECHAZADO.")
                                 return eo_id
                                 
                             # Si es SHORT y el nuevo SL es MAYOR al existente -> BLOQUEAR INTENTO DE DEGRADACIÓN
                             if pos_side == "SHORT" and new_sl_val > existing_sl_val:
-                                logger.warning(f"🛑 [INVARIANZA SL] Intento de retroceder SL en SHORT para {sym} de ${existing_sl_val:.4f} a ${new_sl_val:.4f} RECHAZADO.")
+                                logger.warning(f"🛑 [INVARIANZA SL] Intento de retroceder SL en SHORT para {sym} (PosId: {position_id}) de ${existing_sl_val:.4f} a ${new_sl_val:.4f} RECHAZADO.")
                                 return eo_id
                         except (ValueError, TypeError):
                             pass
                             
                     # [SOP-58 NEVER NAKED RULE]: Mantener proteccion viva sin desproteger
                     if eo_id:
-                        logger.info(f"[BITUNIX SOP-58] Actualizando TPSL de {sym} manteniendo proteccion viva...")
+                        logger.info(f"[BITUNIX SOP-58] Actualizando TPSL de {sym} (PosId: {position_id}) manteniendo proteccion viva...")
         except Exception as e:
             logger.debug(f"[BITUNIX] Error verificando TPSL previos: {e}")
+
+        # 1.1 PURGA ATOMICA DE TPSL OBSOLETOS EXCLUSIVA PARA ESTE positionId (SOP-58 Anti-Orphaned Rules)
+        if existing_orders:
+            for eo in existing_orders:
+                eo_pos_id = str(eo.get("positionId") or "")
+                if position_id and eo_pos_id and eo_pos_id != str(position_id):
+                    continue  # AISLAMIENTO: NUNCA cancelar TPSL de otra posición!
+                cancel_id = str(eo.get("id") or eo.get("orderId") or "")
+                if cancel_id:
+                    try:
+                        await self._request("POST", "/api/v1/futures/tpsl/cancel_order", json_body={"symbol": sym, "orderId": cancel_id})
+                        logger.info(f"🗑️ [BITUNIX SOP-58] SL anterior #{cancel_id} purgado con exito para {sym} (PosId: {position_id}).")
+                    except Exception as ce:
+                        logger.debug(f"[BITUNIX] Error cancelando TPSL previo {cancel_id}: {ce}")
 
         # 2. Emitir la nueva orden de Stop Loss / Take Profit
         payload = {
@@ -823,15 +847,29 @@ class BitunixExecutor:
                 if attempt < max_tpsl_attempts:
                     await asyncio.sleep(0.3 * attempt)
 
-        # Si se canceló una orden previa y los reintentos fallaron, la posición está desprotegida
-                # [SOP-58 EMERGENCY MARKET EXIT ON SL BREACH]
-        if eo_id or (last_res and 'SL price must be' in str(last_res.get('msg', ''))):
-            logger.critical(f"[SOP-58 CRITICAL] SL perforado o rechazado para {sym}. Ejecutando CIERRE A MERCADO DE EMERGENCIA...")
+        # Si Bitunix rechazo el SL porque el precio de mercado ya cruzo el nivel:
+        msg_str = str(last_res.get('msg', ''))
+        is_sl_price_breached = 'SL price must be' in msg_str or 'price must be less' in msg_str or 'price must be greater' in msg_str
+
+        if is_sl_price_breached:
+            logger.critical(f"[SOP-58 CRITICAL] SL perforado en {sym} (Exchange msg: {msg_str}). Ejecutando CIERRE A MERCADO DE EMERGENCIA...")
             try:
-                await self.close_position_market(sym)
-                logger.info(f"[SOP-58] Posicion {sym} cerrada a mercado exitosamente para evitar liquidacion.")
+                await self.close_position_market(sym, position_id=position_id)
+                logger.info(f"[SOP-58] Posicion {sym} cerrada a mercado exitosamente para salvaguardar balance.")
+                try:
+                    from engine.router.telegram_dispatcher import telegram_dispatcher
+                    asyncio.create_task(telegram_dispatcher.send_system_alert(
+                        title=f"🛡️ SOP-58: CIERRE A MERCADO ({sym})",
+                        details=f"Cuenta: {self.account_label}\nEl precio de mercado ya perforo el Stop Loss requerido.\nPosicion liquidada a mercado.",
+                        severity="WARNING"
+                    ))
+                except Exception:
+                    pass
+                return "emergency_closed_market"
             except Exception as close_err:
                 logger.error(f"[SOP-58] Error en cierre a mercado de emergencia para {sym}: {close_err}")
+
+        # Si se cancelo una orden previa y los reintentos fallaron
         if eo_id:
             logger.critical(f"🚨 [EMERGENCY SL ALERT] Posición {sym} quedó sin Stop Loss tras cancelar {eo_id} y fallar {max_tpsl_attempts} reintentos!")
             try:
@@ -844,6 +882,55 @@ class BitunixExecutor:
             except Exception:
                 pass
         return None
+
+    async def close_position_market(self, symbol: str, position_id: Optional[str] = None) -> bool:
+        """[SOP-58 / SOP-25] Cierra inmediatamente una posicion a mercado en Bitunix."""
+        sym = symbol.replace('/', '').upper()
+        if self.dry_run:
+            logger.info(f"🧪 [BITUNIX DRY RUN] Cierre de emergencia a mercado para {sym}")
+            return True
+        try:
+            positions = await self.get_pending_positions()
+            if not positions:
+                logger.warning(f"[BITUNIX] No se encontraron posiciones abiertas para cerrar en {sym}")
+                return False
+            target_pos = None
+            for p in positions:
+                if p.get("symbol") == sym:
+                    if position_id and str(p.get("positionId")) != str(position_id):
+                        continue
+                    target_pos = p
+                    break
+            if not target_pos:
+                logger.warning(f"[BITUNIX] Posicion {sym} (ID: {position_id}) ya no esta abierta.")
+                return True
+            pos_qty = float(target_pos.get("qty") or target_pos.get("holdAmount") or 0.0)
+            if pos_qty <= 0:
+                logger.warning(f"[BITUNIX] Posicion {sym} tiene cantidad 0.")
+                return True
+            pos_side = target_pos.get("side", "").upper()
+            close_side = "SELL" if pos_side in ("BUY", "LONG", "1") else "BUY"
+            amount_precision, _ = await self.get_symbol_precision(sym)
+            formatted_qty = f"{pos_qty:.{amount_precision}f}"
+            self._recent_algo_closes[sym] = time.time()
+            payload = {
+                "symbol": sym,
+                "side": close_side,
+                "orderType": "MARKET",
+                "tradeSide": "CLOSE",
+                "qty": formatted_qty,
+                "reduceOnly": True
+            }
+            res = await self._request("POST", "/api/v1/futures/trade/order", json_body=payload)
+            if res.get("code") == 0:
+                logger.info(f"⚡ [BITUNIX] Posicion {sym} ({formatted_qty} {pos_side}) cerrada a mercado exitosamente.")
+                return True
+            else:
+                logger.error(f"❌ [BITUNIX] Fallo cierre a mercado para {sym}: {res.get('msg')}")
+                return False
+        except Exception as e:
+            logger.error(f"❌ [BITUNIX] Excepcion al cerrar posicion a mercado para {sym}: {e}")
+            return False
 
     async def get_pending_positions(self) -> Optional[List[Dict[str, Any]]]:
         """Obtiene las posiciones abiertas actuales desde Bitunix."""
