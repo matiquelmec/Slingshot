@@ -92,7 +92,8 @@ Slingshot/
 │       ├── test_deterministic_pipeline_isolation.py # Latencia y lot sizing sin red
 │       ├── test_session_mastery.py                  # Killzones de sesión (Asia/London/NY)
 │       ├── test_market_scanner_hft.py               # Watchdog OTE y order flow fallback
-│       ├── test_ftmo_security_guard.py              # Guardian FTMO, Lotes Índices/Oro
+│       ├── test_institutional_end_to_end_pipeline_and_contracts.py # Golden Path E2E, Contratos UI y Blindaje SOP-68
+│       ├── legacy/test_ftmo_security_guard_v18.py   # Suite histórica v18 preservada
 │       ├── test_telegram_persistence.py             # Deduplicación y supervivencia a reinicios
 │       ├── test_dynamic_sl_professional_audit.py    # Invarianza Monótona, Ratchet 1R-10R y Buffer ATR
 │       ├── test_dynamic_universe_screener.py        # Rotación cuantitativa y especialización
