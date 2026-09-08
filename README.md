@@ -164,6 +164,9 @@ graph TB
 | **SOP-66** | Native MT5 Partial Volume Harvesting | Cierres parciales nativos con `TRADE_ACTION_DEAL` normalizados al `volume_step` del broker. |
 | **SOP-67** | Tier-A Portfolio Purity | Concentración en `XAUUSD`, `US100`, `GBPUSD`, `US30` y exclusión de tóxicos (`GER40`, `US500`, `HGUSD`). |
 | **SOP-68** | Institutional Gold Long-Only Shield | Veto algorítmico absoluto contra posiciones cortas en Oro (`XAUUSD`). |
+| **SOP-69** | Normalización Dinámica XAUUSDT | Precisión contractual por API de exchange y erradicación de PAXG. |
+| **SOP-70** | Desacoplamiento Ortogonal Trailing Stop | Poda de riesgo en paralelo sin cortar el avance de Fast Break-Even ni Trailing. |
+| **SOP-71** | Streaming Dinámico Radar 14 VIP & TradFi | Hidratación viva en /api/v1/market-states y consumo dinámico en OpportunitiesScanner. |
 
 ---
 
@@ -193,23 +196,19 @@ Drawdown Máximo Compuesto (2.5%)      | -38.10%                 | -14.63% 🛡�
 ========================================================================================================
 ```
 
-### 2. Auditoría Oficial TradFi FTMO (180 Días Concurrente en MetaTrader 5)
-Auditoría sobre la cartera Tier A (`XAUUSD`, `US100`, `GBPUSD`, `US30`) en cuenta de $100,000 USD:
+### 2. 🏛️ Backtest & Auditoría Oficial TradFi FTMO (180 Días Concurrente en MetaTrader 5)
+Simulación Event-Driven Oficial sobre la cartera Tier A (`XAUUSD`, `US100`, `GBPUSD`, `US30`) en cuenta de fondeo de **$100,000 USD** con reglas FTMO estrictas (MetaTrader 5):
 
-```text
-========================================================================================================
-Métrica Cuantitativa Institucional    | Slingshot v51.0 Cartera Tier A | Límite Regla FTMO | Margen Seguridad
-========================================================================================================
-Balance Inicial                       | $100,000.00 USD                | $100,000.00 USD   | -
-Balance Final (180 días)              | $176,984.96 USD                | -                 | +76.98% ROI
-Profit Factor                         | 1.97                           | >= 1.00           | Consistencia Alta
-Win Rate Efectivo (TP1+TP2+TP3)       | 60.4% (155 Wins / 31 BE)       | -                 | 102 Pérdidas (-0.65R/-1R)
-Drawdown Máximo de Cartera            | -4.02%                         | -10.00%           | Colchón del 59.8%
-Violaciones de Drawdown Diario        | 0 veces (-3.5% Killswitch)     | -5.00%            | 100% libre de faltas
-Tiempo de Superación Fase 1 (+10%)    | 18 días operativos             | 30 días máx       | Aprobado con holgura
-Tiempo de Superación Fase 2 (+5%)     | 9 días operativos              | 60 días máx       | Aprobado con holgura
-========================================================================================================
-```
+| Métrica Cuantitativa Institucional | Slingshot v51.0 Cartera Tier A | Límite Regla FTMO | Margen de Seguridad / Estado |
+| :--- | :---: | :---: | :--- |
+| **Balance Inicial** | **$100,000.00 USD** | $100,000.00 USD | Capital Inicial Base |
+| **Balance Final (180 días)** | **$176,984.96 USD** | — | **+76.98% ROI** (+$76,984.96 USD netos) |
+| **Profit Factor** | **1.97** | $\ge 1.00$ | **Consistencia Institucional Alta** 🚀 |
+| **Win Rate Efectivo (TP1+TP2+TP3)** | **60.4%** (155 Wins / 31 BE) | — | 102 Pérdidas controladas (-0.65R / -1.0R) |
+| **Drawdown Máximo de Cartera** | **-4.02%** | **-10.00%** | **Colchón de Seguridad del 59.8%** 🛡️ |
+| **Violaciones de Drawdown Diario** | **0 veces** (-3.5% Kill-Switch) | **-5.00%** | **100% libre de penalizaciones** ✅ |
+| **Tiempo de Superación Fase 1 (+10%)** | **18 días operativos** | Sin límite | **Aprobado con amplia holgura** 🏆 |
+| **Tiempo de Superación Fase 2 (+5%)** | **9 días operativos** | Sin límite | **Aprobado con amplia holgura** 🏆 |
 
 * Desglose Individual de los Activos de Élite (15m):
   * **`GBPUSD`:** Profit Factor **3.05** | Win Rate **66.7%** | ROI **+30.41%** | Max DD **3.49%**.
