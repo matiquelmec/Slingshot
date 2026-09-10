@@ -27,11 +27,15 @@ class MT5Bridge:
 
     def get_symbol_digits(self, symbol: str) -> int:
         sym = symbol.upper()
-        if any(f in sym for f in ["EUR", "GBP", "AUD", "NZD", "USD", "CAD", "CHF"]) and not any(m in sym for m in ["XAU", "XAG", "OIL", "US500", "US100", "US30"]):
+        if "JPY" in sym:
+            return 3
+        elif any(f in sym for f in ["EUR", "GBP", "AUD", "NZD", "USD", "CAD", "CHF"]) and not any(m in sym for m in ["XAU", "XAG", "OIL", "US500", "US100", "US30", "SPX500"]):
             return 5
         elif any(c in sym for c in ["XAU", "XAG", "OIL", "GOLD"]):
             return 2
-        elif any(idx in sym for idx in ["US500", "US100", "US30", "NAS100", "SPX500", "GER40"]):
+        elif any(idx in sym for idx in ["US500", "SPX500"]):
+            return 2
+        elif any(idx in sym for idx in ["US100", "US30", "NAS100", "GER40"]):
             return 1
         return 2
 
@@ -261,7 +265,85 @@ class MT5Bridge:
             logger.error(f"❌ [MT5_BRIDGE] Error consultando posiciones en MT5: {e}")
             return []
 
-    def modify_position_sl(self, symbol: str, ticket: int, new_sl: float, new_tp: Optional[float] = None) -> bool:
+    def get_pending_orders(self) -> list:
+        """Obtiene las órdenes límite y stop pendientes registradas en MetaTrader 5."""
+        if self.dry_run or not self.connected or not MT5_AVAILABLE:
+            return []
+        try:
+            orders = mt5.orders_get()
+            if not orders:
+                return []
+            res_orders = []
+            for o in orders:
+                # 2 = BUY_LIMIT, 3 = SELL_LIMIT, 4 = BUY_STOP, 5 = SELL_STOP
+                order_type_str = "BUY_LIMIT" if o.type == 2 else "SELL_LIMIT" if o.type == 3 else "BUY_STOP" if o.type == 4 else "SELL_STOP" if o.type == 5 else f"ORDER_{o.type}"
+                res_orders.append({
+                    "ticket": o.ticket,
+                    "symbol": o.symbol,
+                    "type": order_type_str,
+                    "type_code": o.type,
+                    "volume": o.volume_initial,
+                    "price": o.price_open,
+                    "sl": o.sl,
+                    "tp": o.tp,
+                    "comment": o.comment or "",
+                    "magic": o.magic
+                })
+            return res_orders
+        except Exception as e:
+            logger.error(f"❌ [MT5_BRIDGE] Error consultando órdenes pendientes en MT5: {e}")
+            return []
+
+    def get_realtime_spreads(self, symbols: Optional[List[str]] = None) -> dict:
+        """Obtiene el spread en tiempo real (en puntos/pips) y precios Bid/Ask para los símbolos clave."""
+        target_symbols = symbols or ["GBPUSD", "US100.cash", "US30.cash", "XAUUSD"]
+        spread_data = {}
+        if self.dry_run or not self.connected or not MT5_AVAILABLE:
+            for s in target_symbols:
+                spread_data[s] = {"bid": 0.0, "ask": 0.0, "spread": 0.0, "status": "SIMULATED"}
+            return spread_data
+
+        try:
+            for s in target_symbols:
+                # Normalizar si existe versión .cash en broker
+                sym_eval = s
+                if mt5.symbol_info(s) is None and mt5.symbol_info(f"{s}.cash") is not None:
+                    sym_eval = f"{s}.cash"
+                
+                tick = mt5.symbol_info_tick(sym_eval)
+                s_info = mt5.symbol_info(sym_eval)
+                if tick and s_info:
+                    digits = s_info.digits or 2
+                    point = s_info.point or 0.01
+                    bid = tick.bid
+                    ask = tick.ask
+                    spread_raw = round(ask - bid, digits)
+                    spread_points = round(spread_raw / point, 1) if point > 0 else spread_raw
+                    
+                    # Diagnóstico de salud de spread (Spike Guard)
+                    # Umbrales normales: Forex <= 1.5 pips, Oro <= 40 pts ($0.40), US100 <= 200 pts ($2.0)
+                    is_spike = False
+                    if "GBP" in s or "EUR" in s:
+                        is_spike = spread_raw > 0.00030 # > 3 pips
+                    elif "XAU" in s:
+                        is_spike = spread_raw > 0.70 # > $0.70 spread en oro
+                    elif "US100" in s or "US30" in s:
+                        is_spike = spread_raw > 3.0 # > $3.0 spread en índices
+                        
+                    spread_data[s] = {
+                        "symbol": sym_eval,
+                        "bid": bid,
+                        "ask": ask,
+                        "spread_raw": spread_raw,
+                        "spread_points": spread_points,
+                        "digits": digits,
+                        "is_spike": is_spike,
+                        "status": "ELEVATED" if is_spike else "NORMAL"
+                    }
+            return spread_data
+        except Exception as e:
+            logger.error(f"❌ [MT5_BRIDGE] Error calculando spreads en MT5: {e}")
+            return {}
         """Modifica el Stop Loss en MetaTrader 5 respetando la Invarianza Monótona."""
         if self.dry_run or not self.connected or not MT5_AVAILABLE:
             logger.info(f"🏛️ [MT5_BRIDGE:DRY_RUN] Modificación simulada de SL para ticket #{ticket} ({symbol}) a ${new_sl}")

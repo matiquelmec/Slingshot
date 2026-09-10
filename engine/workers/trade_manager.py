@@ -335,12 +335,9 @@ class TradeManager:
 
 
     def is_megacap(self, symbol: str) -> bool:
-
-        """Determina si un activo es Mega-Cap institucional (BTC, ETH, SOL, etc.)."""
-
+        """Determina si un activo es Mega-Cap institucional (BTC, ETH, SOL, XAU, etc.)."""
         s = (symbol or "").upper()
-
-        return any(m in s for m in ["BTC", "ETH", "SOL", "AVAX", "LINK", "XRP", "BNB", "PAXG", "XAG"])
+        return any(m in s for m in ["BTC", "ETH", "SOL", "AVAX", "LINK", "XRP", "BNB", "XAU", "XAG"])
 
 
 
@@ -846,18 +843,19 @@ class TradeManager:
 
                 try:
 
-                    # [SSoT ENTITY ISOLATION] Priorizar ID especA-fico de cuenta, luego global, luego fallback
+                    # [SSoT ENTITY ISOLATION] Priorizar ID específico de cuenta; si la señal pertenece a una cuenta específica, solo esa cuenta usa el ID global
+                    if acc_id in pos_map:
+                        local_pos_id = pos_map[acc_id]
+                    elif signal.get("account_id"):
+                        local_pos_id = global_pos_id if signal.get("account_id") == acc_id else None
+                    else:
+                        local_pos_id = global_pos_id
 
-                    local_pos_id = pos_map.get(acc_id) or global_pos_id or "live_position"
-
+                    pos_id_arg = str(local_pos_id) if local_pos_id is not None else None
                     success = await ex.modify_position_tpsl(
-
                         symbol=asset,
-
-                        position_id=str(local_pos_id),
-
+                        position_id=pos_id_arg,
                         sl_price=new_sl
-
                     )
 
                     if success:

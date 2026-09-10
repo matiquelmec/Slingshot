@@ -42,7 +42,7 @@ def test_radar_14_vip_assets_universe_integrity():
     y que ninguno quede en null o ausente.
     """
     vip_assets = [s.strip().upper().replace("USDT", "") for s in settings.RADAR_ASSETS.split(",") if s.strip()]
-    expected_vip = ["BTC", "ETH", "SOL", "AVAX", "LINK", "XRP", "RENDER", "SUI", "INJ", "NEAR", "FET", "ATOM", "TIA", "PAXG"]
+    expected_vip = ["BTC", "ETH", "SOL", "AVAX", "LINK", "XRP", "RENDER", "SUI", "INJ", "NEAR", "FET", "ATOM", "TIA", "XAU"]
     
     assert len(vip_assets) == 14, f"Se esperaban 14 activos VIP en RADAR_ASSETS, encontrados {len(vip_assets)}"
     for asset in expected_vip:
@@ -55,7 +55,7 @@ async def test_market_states_live_payload_conformance():
     Certifica que el store retorne estructuras válidas para los 14 activos del Radar,
     con precios numéricos, bias y sin valores NaN o null.
     """
-    vip_assets = ["BTCUSDT", "ETHUSDT", "SOLUSDT", "AVAXUSDT", "LINKUSDT", "XRPUSDT", "RENDERUSDT", "SUIUSDT", "INJUSDT", "NEARUSDT", "FETUSDT", "ATOMUSDT", "TIAUSDT", "PAXGUSDT"]
+    vip_assets = ["BTCUSDT", "ETHUSDT", "SOLUSDT", "AVAXUSDT", "LINKUSDT", "XRPUSDT", "RENDERUSDT", "SUIUSDT", "INJUSDT", "NEARUSDT", "FETUSDT", "ATOMUSDT", "TIAUSDT", "XAUUSDT"]
     
     # Hidratar estados de prueba
     for sym in vip_assets:

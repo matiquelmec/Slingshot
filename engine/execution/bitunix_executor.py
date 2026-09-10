@@ -262,7 +262,7 @@ class BitunixExecutor:
             
         try:
             r = await self._request("GET", "/api/v1/futures/market/trading_pairs")
-            if r.get("code") == 0 and isinstance(r.get("data"), list):
+            if isinstance(r, dict) and r.get("code") == 0 and isinstance(r.get("data"), list):
                 for item in r["data"]:
                     s = item.get("symbol")
                     bp = int(item.get("basePrecision", 2))
@@ -277,6 +277,7 @@ class BitunixExecutor:
         # Fallback inteligente con soporte nativo de micro-tokens
         fallback_map = {
             "BTCUSDT": (4, 1), "ETHUSDT": (3, 2), "SOLUSDT": (2, 2), "PAXGUSDT": (3, 2),
+            "XAUUSDT": (3, 2),
             "AVAXUSDT": (2, 2), "LINKUSDT": (2, 2), "NEARUSDT": (1, 3), "RENDERUSDT": (1, 3),
             "SUIUSDT": (1, 4), "INJUSDT": (2, 3), "FETUSDT": (0, 4), "ATOMUSDT": (2, 3),
             "TIAUSDT": (1, 3), "XRPUSDT": (0, 4), "TRUMPUSDT": (2, 3), "AKEUSDT": (0, 6)
@@ -741,85 +742,89 @@ class BitunixExecutor:
     async def place_position_tpsl(self, symbol: str, position_id: str, sl_price: Optional[float] = None, tp_price: Optional[float] = None) -> Optional[str]:
         """
         Establece Stop Loss y/o Take Profit para una posicion abierta en Bitunix.
-        Verifica primero si ya existe una orden TPSL activa para evitar el error de duplicado ('Network Error').
+        Pre-valida contra el precio de mercado actual para detectar precios perforados (SOP-58/SOP-25)
+        y ejecuta cierre de emergencia a mercado si el SL ya fue cruzado.
         """
         sym = symbol.replace('/', '').upper()
         if self.dry_run or (position_id and str(position_id).startswith("dry_")):
             logger.info(f"🧪 [BITUNIX DRY RUN] Colocando TP/SL de posicion para {sym} (PosId: {position_id}) -> TP: {tp_price}, SL: {sl_price}")
             return f"dry_tpsl_{uuid.uuid4().hex[:8]}"
 
+        # 0. Pre-validación inmediata de SL perforado contra precio de mercado actual (SOP-58 / SOP-25)
+        if sl_price is not None:
+            try:
+                positions = await self.get_pending_positions()
+                cur_price = await self.get_ticker_price(sym)
+                if positions and cur_price > 0:
+                    target_pos = None
+                    for p in positions:
+                        if p.get("symbol") == sym:
+                            if position_id and str(p.get("positionId") or p.get("id")) != str(position_id):
+                                continue
+                            target_pos = p
+                            break
+                    if target_pos:
+                        pos_side = str(target_pos.get("side", "BUY")).upper()
+                        is_long = pos_side in ("BUY", "LONG", "1")
+                        if (is_long and sl_price >= cur_price) or (not is_long and sl_price <= cur_price):
+                            logger.critical(f"🚨 [SOP-58 PRE-VALIDATION] SL perforado en {sym} ({pos_side}): target SL ${sl_price} vs mercado ${cur_price}. Disparando CIERRE A MERCADO DE EMERGENCIA...")
+                            await self.close_position_market(symbol=sym, position_id=position_id)
+                            return None
+            except Exception as e:
+                logger.debug(f"[BITUNIX] Error en pre-validación de Stop Loss perforado: {e}")
+
         _, decimals = await self.get_symbol_precision(sym)
         formatted_sl = f"{float(sl_price):.{decimals}f}" if sl_price is not None else None
         formatted_tp = f"{float(tp_price):.{decimals}f}" if tp_price is not None else None
 
-        # 1. Comprobar si ya existe un TPSL para esta posición en Bitunix y aplicar INVARIANZA ABSOLUTA
+        # 1. Comprobar si ya existen TPSL previos para esta posición y verificar INVARIANZA ABSOLUTA
+        existing_orders = []
         eo_id = None
         try:
             res_orders = await self._request("GET", "/api/v1/futures/tpsl/get_pending_orders", params={"symbol": sym})
-            existing_orders = res_orders.get("data", []) or []
-            if isinstance(existing_orders, list):
-                for eo in existing_orders:
-                    # [MULTI-POSITION ISOLATION]: Solo evaluar si coincide con este positionId
-                    eo_pos_id = str(eo.get("positionId") or "")
-                    if position_id and eo_pos_id and eo_pos_id != str(position_id):
-                        continue  # Pertenece a otra posición en Hedge Mode, no tocar!
+            if isinstance(res_orders, dict):
+                existing_orders = res_orders.get("data", []) or []
+                if isinstance(existing_orders, list):
+                    for eo in existing_orders:
+                        eo_pos_id = str(eo.get("positionId") or "")
+                        if position_id and eo_pos_id and eo_pos_id != str(position_id):
+                            continue
 
-                    raw_sl_str = eo.get("slPrice") or eo.get("triggerPrice") or ""
-                    current_eo_id = str(eo.get("id") or eo.get("orderId") or "")
-                    if current_eo_id:
-                        eo_id = current_eo_id
-                    
-                    if raw_sl_str and formatted_sl:
-                        try:
-                            existing_sl_val = float(raw_sl_str)
-                            new_sl_val = float(formatted_sl)
-                            
-                            # Si ya tiene exactamente el mismo SL configurado, no reenviar
-                            if abs(existing_sl_val - new_sl_val) < 0.0001:
-                                logger.info(f"🛡️ [BITUNIX] {sym} (PosId: {position_id}) ya cuenta con Stop Loss activo blindado en ${existing_sl_val:.4f} (ID: {eo_id}).")
-                                return eo_id
-                                
-                            # 🔒 REGLA DE INVARIANZA: Determinar la dirección de la posición específica
-                            pos_side = "LONG"
-                            positions = await self.get_pending_positions()
-                            for p in (positions or []):
-                                if p.get("symbol") == sym:
-                                    if position_id and str(p.get("positionId")) != str(position_id):
-                                        continue
-                                    pos_side = "LONG" if p.get("side") in ("BUY", "LONG", "1") else "SHORT"
-                                    break
-                                    
-                            # Si es LONG y el nuevo SL es MENOR al existente -> BLOQUEAR INTENTO DE DEGRADACIÓN
-                            if pos_side == "LONG" and new_sl_val < existing_sl_val:
-                                logger.warning(f"🛑 [INVARIANZA SL] Intento de retroceder SL en LONG para {sym} (PosId: {position_id}) de ${existing_sl_val:.4f} a ${new_sl_val:.4f} RECHAZADO.")
-                                return eo_id
-                                
-                            # Si es SHORT y el nuevo SL es MAYOR al existente -> BLOQUEAR INTENTO DE DEGRADACIÓN
-                            if pos_side == "SHORT" and new_sl_val > existing_sl_val:
-                                logger.warning(f"🛑 [INVARIANZA SL] Intento de retroceder SL en SHORT para {sym} (PosId: {position_id}) de ${existing_sl_val:.4f} a ${new_sl_val:.4f} RECHAZADO.")
-                                return eo_id
-                        except (ValueError, TypeError):
-                            pass
-                            
-                    # [SOP-58 NEVER NAKED RULE]: Mantener proteccion viva sin desproteger
-                    if eo_id:
-                        logger.info(f"[BITUNIX SOP-58] Actualizando TPSL de {sym} (PosId: {position_id}) manteniendo proteccion viva...")
+                        raw_sl_str = eo.get("slPrice") or eo.get("triggerPrice") or ""
+                        current_eo_id = str(eo.get("id") or eo.get("orderId") or "")
+                        if current_eo_id:
+                            eo_id = current_eo_id
+
+                        if raw_sl_str and formatted_sl:
+                            try:
+                                existing_sl_val = float(raw_sl_str)
+                                new_sl_val = float(formatted_sl)
+
+                                if abs(existing_sl_val - new_sl_val) < 0.0001:
+                                    logger.info(f"🛡️ [BITUNIX] {sym} (PosId: {position_id}) ya cuenta con Stop Loss activo blindado en ${existing_sl_val:.4f} (ID: {eo_id}).")
+                                    return eo_id
+
+                                # 🔒 REGLA DE INVARIANZA: Determinar la dirección de la posición
+                                pos_side = "LONG"
+                                positions = await self.get_pending_positions()
+                                for p in (positions or []):
+                                    if p.get("symbol") == sym:
+                                        if position_id and str(p.get("positionId")) != str(position_id):
+                                            continue
+                                        pos_side = "LONG" if p.get("side") in ("BUY", "LONG", "1") else "SHORT"
+                                        break
+
+                                if pos_side == "LONG" and new_sl_val < existing_sl_val:
+                                    logger.warning(f"🚫 [INVARIANZA SL] Intento de retroceder SL en LONG para {sym} (PosId: {position_id}) de ${existing_sl_val:.4f} a ${new_sl_val:.4f} RECHAZADO.")
+                                    return eo_id
+
+                                if pos_side == "SHORT" and new_sl_val > existing_sl_val:
+                                    logger.warning(f"🚫 [INVARIANZA SL] Intento de retroceder SL en SHORT para {sym} (PosId: {position_id}) de ${existing_sl_val:.4f} a ${new_sl_val:.4f} RECHAZADO.")
+                                    return eo_id
+                            except (ValueError, TypeError):
+                                pass
         except Exception as e:
             logger.debug(f"[BITUNIX] Error verificando TPSL previos: {e}")
-
-        # 1.1 PURGA ATOMICA DE TPSL OBSOLETOS EXCLUSIVA PARA ESTE positionId (SOP-58 Anti-Orphaned Rules)
-        if existing_orders:
-            for eo in existing_orders:
-                eo_pos_id = str(eo.get("positionId") or "")
-                if position_id and eo_pos_id and eo_pos_id != str(position_id):
-                    continue  # AISLAMIENTO: NUNCA cancelar TPSL de otra posición!
-                cancel_id = str(eo.get("id") or eo.get("orderId") or "")
-                if cancel_id:
-                    try:
-                        await self._request("POST", "/api/v1/futures/tpsl/cancel_order", json_body={"symbol": sym, "orderId": cancel_id})
-                        logger.info(f"🗑️ [BITUNIX SOP-58] SL anterior #{cancel_id} purgado con exito para {sym} (PosId: {position_id}).")
-                    except Exception as ce:
-                        logger.debug(f"[BITUNIX] Error cancelando TPSL previo {cancel_id}: {ce}")
 
         # 2. Emitir la nueva orden de Stop Loss / Take Profit
         payload = {
@@ -835,52 +840,143 @@ class BitunixExecutor:
 
         max_tpsl_attempts = 3
         order_id = None
-        last_res = {}
+        last_res = None
         for attempt in range(1, max_tpsl_attempts + 1):
             last_res = await self._request("POST", "/api/v1/futures/tpsl/position/place_order", json_body=payload)
-            if last_res.get("code") == 0:
-                order_id = last_res.get("data", {}).get("orderId")
+            if isinstance(last_res, dict) and last_res.get("code") == 0:
+                data = last_res.get("data")
+                order_id = data.get("orderId") if isinstance(data, dict) else f"tpsl_{uuid.uuid4().hex[:8]}"
                 logger.info(f"✅ [BITUNIX] TP/SL de posicion colocado con exito para {sym}. Order ID: {order_id}")
-                return order_id
+                break
             else:
-                logger.warning(f"⚠️ [BITUNIX] Intento {attempt}/{max_tpsl_attempts} fallo al colocar TP/SL para {sym}: {last_res.get('msg')}")
+                msg = last_res.get('msg') if isinstance(last_res, dict) else str(last_res)
+                logger.warning(f"⚠️ [BITUNIX] Intento {attempt}/{max_tpsl_attempts} fallo al colocar TP/SL para {sym}: {msg}")
                 if attempt < max_tpsl_attempts:
                     await asyncio.sleep(0.3 * attempt)
 
-        # Si Bitunix rechazo el SL porque el precio de mercado ya cruzo el nivel:
-        msg_str = str(last_res.get('msg', ''))
-        is_sl_price_breached = 'SL price must be' in msg_str or 'price must be less' in msg_str or 'price must be greater' in msg_str
+        # 3. Si se colocó exitosamente la nueva orden, purgar TPSL obsoletos (Never-Naked SOP-58)
+        if order_id:
+            if existing_orders and isinstance(existing_orders, list):
+                for eo in existing_orders:
+                    eo_pos_id = str(eo.get("positionId") or "")
+                    if position_id and eo_pos_id and eo_pos_id != str(position_id):
+                        continue
+                    cancel_id = str(eo.get("id") or eo.get("orderId") or "")
+                    if cancel_id and cancel_id != str(order_id):
+                        try:
+                            await self._request("POST", "/api/v1/futures/trade/cancel_order", json_body={"symbol": sym, "orderId": cancel_id})
+                            logger.info(f"🗑️ [BITUNIX SOP-58] SL anterior #{cancel_id} purgado tras colocar #{order_id} para {sym}.")
+                        except Exception as ce:
+                            logger.debug(f"[BITUNIX] Error cancelando TPSL previo {cancel_id}: {ce}")
+            return order_id
 
-        if is_sl_price_breached:
-            logger.critical(f"[SOP-58 CRITICAL] SL perforado en {sym} (Exchange msg: {msg_str}). Ejecutando CIERRE A MERCADO DE EMERGENCIA...")
-            try:
-                await self.close_position_market(sym, position_id=position_id)
-                logger.info(f"[SOP-58] Posicion {sym} cerrada a mercado exitosamente para salvaguardar balance.")
+        # 4. [RESCUE MECHANISM]: Si fallaron todos los intentos de colocación, ejecutar cierre de emergencia a mercado
+        logger.critical(f"🚨 [SOP-58 RESCUE] Fallo persistente al colocar SL para {sym}. Ejecutando CIERRE A MERCADO DE EMERGENCIA...")
+        try:
+            await self.close_position_market(symbol=sym, position_id=position_id)
+            logger.info(f"[SOP-58] Posicion {sym} cerrada a mercado exitosamente para salvaguardar balance.")
+        except Exception as close_err:
+            logger.error(f"[SOP-58] Error en cierre a mercado de emergencia para {sym}: {close_err}")
+
+        # Si fallaron los intentos tras haber tenido o intentado un SL
+        err_msg = last_res.get('msg') if isinstance(last_res, dict) else str(last_res)
+        logger.critical(f"🚨 [EMERGENCY SL ALERT] Posición {sym} quedó sin Stop Loss o fallaron {max_tpsl_attempts} reintentos!")
+        try:
+            from engine.router.telegram_dispatcher import telegram_dispatcher
+            await telegram_dispatcher.send_system_alert(
+                title=f"CRITICAL: SL DESPROTEGIDO EN {sym}",
+                details=f"Cuenta: {self.account_label}\nPosId: {position_id}\nTarget SL: {formatted_sl}\nError: {err_msg}",
+                severity="CRITICAL"
+            )
+        except Exception:
+            pass
+
+        return None
+
+    async def modify_position_tpsl(
+        self,
+        symbol: str,
+        position_id: Optional[str] = None,
+        sl_price: Optional[float] = None,
+        tp_price: Optional[float] = None
+    ) -> bool:
+        """Modifica el Stop Loss o Take Profit de una posición en Bitunix asegurando protección."""
+        sym = symbol.replace('/', '').upper()
+        if self.dry_run:
+            logger.info(f"🧪 [BITUNIX DRY RUN] modify_position_tpsl para {sym} (PosId: {position_id}) -> SL: {sl_price}, TP: {tp_price}")
+            return True
+        res = await self.place_position_tpsl(sym, str(position_id or ""), sl_price=sl_price, tp_price=tp_price)
+        return res is not None
+
+    async def update_stop_loss(
+        self,
+        symbol: str,
+        old_order_id: Optional[str] = None,
+        new_stop_price: Optional[float] = None,
+        amount: Optional[float] = None,
+        side: Optional[str] = None,
+        position_id: Optional[str] = None,
+        tp_price: Optional[float] = None
+    ) -> Optional[str]:
+        """
+        [SOP-58 NEVER-NAKED ATOMIC UPDATE]
+        Actualiza el Stop Loss para una posicion abierta en Bitunix (Breakeven / Trailing).
+        Si se provee position_id, modifica el TP/SL de la posicion entera de forma nativa en Bitunix.
+        Si position_id no se provee pero se especifica amount, emite una orden trigger formateada dinámicamente.
+        """
+        sym = symbol.replace('/', '').upper()
+        if self.dry_run or (position_id and str(position_id).startswith("dry_")):
+            logger.info(f"🧪 [BITUNIX DRY RUN] update_stop_loss para {sym} (PosId: {position_id}) -> Nuevo SL: {new_stop_price}")
+            return "position_tpsl_updated"
+
+        if position_id:
+            success = await self.modify_position_tpsl(
+                symbol=sym,
+                position_id=str(position_id),
+                sl_price=new_stop_price,
+                tp_price=tp_price
+            )
+
+            if success and old_order_id:
                 try:
-                    from engine.router.telegram_dispatcher import telegram_dispatcher
-                    asyncio.create_task(telegram_dispatcher.send_system_alert(
-                        title=f"🛡️ SOP-58: CIERRE A MERCADO ({sym})",
-                        details=f"Cuenta: {self.account_label}\nEl precio de mercado ya perforo el Stop Loss requerido.\nPosicion liquidada a mercado.",
-                        severity="WARNING"
-                    ))
-                except Exception:
-                    pass
-                return "emergency_closed_market"
-            except Exception as close_err:
-                logger.error(f"[SOP-58] Error en cierre a mercado de emergencia para {sym}: {close_err}")
+                    await self._request(
+                        "POST",
+                        "/api/v1/futures/trade/cancel_orders",
+                        json_body={"symbol": sym, "orderList": [{"orderId": str(old_order_id)}]}
+                    )
+                except Exception as e:
+                    logger.debug(f"[BITUNIX] Error cancelando orden previa {old_order_id}: {e}")
 
-        # Si se cancelo una orden previa y los reintentos fallaron
-        if eo_id:
-            logger.critical(f"🚨 [EMERGENCY SL ALERT] Posición {sym} quedó sin Stop Loss tras cancelar {eo_id} y fallar {max_tpsl_attempts} reintentos!")
+            return "position_tpsl_updated" if success else None
+
+        # Si no hay position_id pero se provee amount (orden trigger clásica condicional)
+        if old_order_id:
             try:
-                from engine.router.telegram_dispatcher import telegram_dispatcher
-                asyncio.create_task(telegram_dispatcher.send_system_alert(
-                    title=f"CRITICAL: SL DESPROTEGIDO EN {sym}",
-                    details=f"Cuenta: {self.account_label}\nPosId: {position_id}\nTarget SL: {formatted_sl}\nError: {last_res.get('msg')}",
-                    severity="CRITICAL"
-                ))
-            except Exception:
-                pass
+                await self._request("POST", "/api/v1/futures/trade/cancel_orders", json_body={
+                    "symbol": sym,
+                    "orderList": [{"orderId": str(old_order_id)}]
+                })
+                logger.info(f"🛡️ [BITUNIX] SL antiguo cancelado: {old_order_id}")
+            except Exception as e:
+                logger.debug(f"[BITUNIX] Error cancelando orden previa {old_order_id}: {e}")
+
+        qty_precision, _ = await self.get_symbol_precision(sym)
+        amt_val = float(amount or 0.0)
+        formatted_qty = f"{int(amt_val)}" if qty_precision == 0 else f"{amt_val:.{qty_precision}f}"
+        sl_payload = {
+            "symbol": sym,
+            "qty": formatted_qty,
+            "side": (side or "SELL").upper(),
+            "tradeSide": "CLOSE",
+            "orderType": "MARKET",
+            "triggerPrice": str(new_stop_price)
+        }
+        
+        new_order = await self._request("POST", "/api/v1/futures/trade/place_order", json_body=sl_payload)
+        if isinstance(new_order, dict) and new_order.get("code") == 0:
+            new_id = new_order.get("data", {}).get("orderId") or "sl_order_placed"
+            logger.info(f"🛡️ [BITUNIX] Nuevo SL colocado en {new_stop_price} | ID: {new_id}")
+            return new_id
         return None
 
     async def close_position_market(self, symbol: str, position_id: Optional[str] = None) -> bool:
@@ -1122,4 +1218,167 @@ class BitunixExecutor:
         if self._last_verified_balance > 0 and (time.time() - self._last_balance_ts) < 120.0:
             return self._last_verified_balance
         return 0.0
+
+    async def get_account_telemetry_summary(self) -> Dict[str, Any]:
+        """
+        [BITUNIX TELEMETRY MASTER]
+        Consolida la telemetría en tiempo real de la cuenta de futuros de Bitunix:
+        - Balance total, margen disponible, margen congelado en órdenes y margen en posiciones.
+        - Posiciones abiertas enriquecidas con Stop Loss condicional activo y Take Profits en libro.
+        - Órdenes límite pendientes con desglose de contratos.
+        - Parámetros de riesgo institucional (2.50% SOP-41).
+        """
+        start_t = time.time()
+        res_acc = await self._request("GET", "/api/v1/futures/account", params={"marginCoin": "USDT"})
+        acc_data = res_acc.get("data") or {}
+        if isinstance(acc_data, list) and len(acc_data) > 0:
+            acc_data = acc_data[0]
+
+        total_equity = float(acc_data.get("equity") or acc_data.get("marginBalance") or 0.0)
+        avail_margin = float(acc_data.get("available") or acc_data.get("availableMargin") or acc_data.get("availableBalance") or 0.0)
+        used_margin = float(acc_data.get("margin") or acc_data.get("positionMargin") or acc_data.get("holdAmount") or 0.0)
+        unrealized_pnl = float(acc_data.get("unrealizedProfit") or acc_data.get("unrealizedPnl") or acc_data.get("crossUnrealizedPnl") or 0.0)
+
+        # Fallback si total_equity viene en 0 pero hay available
+        if total_equity <= 0.0 and avail_margin > 0.0:
+            total_equity = avail_margin + used_margin + unrealized_pnl
+
+        raw_positions = await self.get_pending_positions() or []
+        raw_orders = await self.get_pending_orders() or []
+
+        # Calcular margen congelado en órdenes de apertura
+        frozen_margin = 0.0
+        for o in raw_orders:
+            if o.get("tradeSide") == "OPEN" or not o.get("reduceOnly"):
+                p_val = float(o.get("price") or 0.0)
+                q_val = float(o.get("qty") or 0.0)
+                if p_val > 0 and q_val > 0:
+                    frozen_margin += (p_val * q_val) / 10.0
+
+        net_available = max(0.0, avail_margin - frozen_margin)
+
+        # Enriquecer posiciones con órdenes TPSL asociadas
+        enriched_positions = []
+        total_calc_floating_pnl = 0.0
+
+        for p in raw_positions:
+            sym = str(p.get("symbol", "")).upper()
+            qty = float(p.get("qty") or p.get("holdAmount") or 0.0)
+            if qty <= 0:
+                continue
+
+            entry_p = float(p.get("entryPrice") or p.get("openPrice") or 0.0)
+            mark_p = float(p.get("markPrice") or p.get("lastPrice") or entry_p)
+            pos_id = str(p.get("positionId") or "")
+            raw_side = str(p.get("side") or "").upper()
+            side = "LONG" if raw_side in ("BUY", "LONG", "1") else "SHORT"
+            leverage = int(p.get("leverage") or 18)
+            isolated_margin = float(p.get("isolatedMargin") or p.get("positionMargin") or 0.0)
+
+            # PnL no realizado de la posición
+            if entry_p > 0:
+                if side == "LONG":
+                    pos_pnl = (mark_p - entry_p) * qty
+                else:
+                    pos_pnl = (entry_p - mark_p) * qty
+            else:
+                pos_pnl = float(p.get("unrealizedPnl") or 0.0)
+
+            total_calc_floating_pnl += pos_pnl
+
+            # Consultar TPSL de esta posición
+            tpsl_orders = []
+            try:
+                res_tpsl = await self._request("GET", "/api/v1/futures/tpsl/get_pending_orders", params={"symbol": sym})
+                tpsl_orders = res_tpsl.get("data") or []
+            except Exception:
+                pass
+
+            active_sl_price = None
+            active_sl_id = None
+            for t_o in (tpsl_orders or []):
+                t_pos = str(t_o.get("positionId") or "")
+                if not pos_id or not t_pos or t_pos == pos_id:
+                    sl_p = t_o.get("slPrice") or t_o.get("triggerPrice")
+                    if sl_p:
+                        active_sl_price = float(sl_p)
+                        active_sl_id = str(t_o.get("id") or t_o.get("orderId") or "")
+                        break
+
+            # TPs en el libro de órdenes
+            pos_tps = []
+            for ord_item in raw_orders:
+                if str(ord_item.get("symbol", "")).upper() == sym and (ord_item.get("tradeSide") == "CLOSE" or ord_item.get("reduceOnly")):
+                    pos_tps.append({
+                        "order_id": str(ord_item.get("orderId")),
+                        "price": float(ord_item.get("price") or 0.0),
+                        "qty": float(ord_item.get("qty") or 0.0),
+                        "ctime": ord_item.get("ctime")
+                    })
+
+            # Ordenar TPs por precio ascendente/descendente
+            pos_tps.sort(key=lambda x: x["price"], reverse=(side == "SHORT"))
+
+            enriched_positions.append({
+                "symbol": sym,
+                "position_id": pos_id,
+                "side": side,
+                "qty": qty,
+                "entry_price": round(entry_p, 4),
+                "mark_price": round(mark_p, 4),
+                "leverage": leverage,
+                "isolated_margin": round(isolated_margin, 2),
+                "unrealized_pnl": round(pos_pnl, 2),
+                "unrealized_pnl_pct": round(((pos_pnl / isolated_margin) * 100.0) if isolated_margin > 0 else 0.0, 2),
+                "active_sl": {
+                    "price": active_sl_price,
+                    "order_id": active_sl_id,
+                    "is_protected": active_sl_price is not None
+                },
+                "take_profits": pos_tps
+            })
+
+        net_pnl = round(unrealized_pnl if unrealized_pnl != 0 else total_calc_floating_pnl, 2)
+        latency_ms = round((time.time() - start_t) * 1000.0, 1)
+
+        # Regla SOP-41 de Riesgo Canónico 2.50%
+        risk_pct = 0.025
+        risk_usd_per_trade = round(total_equity * risk_pct, 2) if total_equity > 0 else 0.0
+
+        return {
+            "account_label": self.account_label,
+            "connected": True,
+            "latency_ms": latency_ms,
+            "equity": round(total_equity, 2),
+            "available_balance": round(avail_margin, 2),
+            "net_available_balance": round(net_available, 2),
+            "used_margin": round(used_margin, 2),
+            "frozen_margin": round(frozen_margin, 2),
+            "total_floating_pnl": net_pnl,
+            "risk_config": {
+                "risk_pct": risk_pct,
+                "risk_pct_display": "2.50%",
+                "risk_usd_per_trade": risk_usd_per_trade,
+                "max_notional_mult": 5.0,
+                "sop_protocol": "SOP-41 Dollar Risk Shield & SOP-58 Never-Naked"
+            },
+            "positions_count": len(enriched_positions),
+            "positions": enriched_positions,
+            "pending_orders_count": len(raw_orders),
+            "pending_orders": [
+                {
+                    "order_id": str(o.get("orderId")),
+                    "symbol": o.get("symbol"),
+                    "side": o.get("side"),
+                    "trade_side": o.get("tradeSide", "OPEN"),
+                    "order_type": o.get("orderType", "LIMIT"),
+                    "price": float(o.get("price") or 0.0),
+                    "qty": float(o.get("qty") or 0.0),
+                    "reduce_only": bool(o.get("reduceOnly")),
+                    "ctime": o.get("ctime")
+                }
+                for o in raw_orders
+            ]
+        }
+
 

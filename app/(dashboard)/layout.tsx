@@ -37,6 +37,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         { name: 'Overview', href: '/', icon: LayoutDashboard },
         { name: 'Radar Center', href: '/radar', icon: Radio },
         { name: 'Signal Terminal', href: '/signals', icon: Terminal },
+        { name: 'Bitunix Core', href: '/bitunix', icon: Zap },
         { name: 'FTMO MT5', href: '/ftmo', icon: ShieldCheck },
         { name: 'Trading Chart', href: '/chart', icon: BarChart2 },
         { name: 'Liquidity Heatmap', href: '/heatmap', icon: Activity },
@@ -47,7 +48,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         { name: 'Overview', href: '/', icon: LayoutDashboard },
         { name: 'Radar', href: '/radar', icon: Radio },
         { name: 'Signals', href: '/signals', icon: Terminal },
-        { name: 'Chart', href: '/chart', icon: BarChart2 },
+        { name: 'Bitunix', href: '/bitunix', icon: Zap },
         { name: 'FTMO', href: '/ftmo', icon: ShieldCheck },
     ];
 

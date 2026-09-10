@@ -279,6 +279,109 @@ async def get_ftmo_guardian_status():
     return ftmo_guardian.update_equity(ftmo_guardian.current_equity)
 
 
+@app.get("/api/v1/ftmo/positions")
+async def get_ftmo_positions_and_telemetry():
+    """
+    Retorna la telemetría viva de MetaTrader 5:
+    - Posiciones abiertas en ejecución (PnL, volumen, SL, TP).
+    - Órdenes límite/stop pendientes (tramos 50/30/20).
+    - Spreads en tiempo real con detector de volatilidad anómala.
+    """
+    from engine.execution.mt5_bridge import mt5_bridge
+    from engine.risk.ftmo_guardian import ftmo_guardian
+    
+    open_pos = mt5_bridge.get_open_positions()
+    pending_orders = mt5_bridge.get_pending_orders()
+    spreads = mt5_bridge.get_realtime_spreads()
+    
+    total_floating_pnl = sum(float(p.get("profit", 0.0)) for p in open_pos)
+    
+    account_login = 1514537587
+    real_balance = round(ftmo_guardian.current_equity - total_floating_pnl, 2)
+    real_equity = round(ftmo_guardian.current_equity, 2)
+    real_margin = 0.0
+    real_margin_free = 0.0
+    currency = "USD"
+    leverage = 30
+
+    if mt5_bridge.connected and not mt5_bridge.dry_run:
+        try:
+            import MetaTrader5 as mt5
+            acc = mt5.account_info()
+            if acc:
+                account_login = acc.login
+                real_balance = round(float(acc.balance), 2)
+                real_equity = round(float(acc.equity), 2)
+                real_margin = round(float(acc.margin), 2)
+                real_margin_free = round(float(acc.margin_free), 2)
+                currency = str(acc.currency)
+                leverage = int(acc.leverage)
+        except Exception:
+            pass
+
+    return {
+        "connected": bool(mt5_bridge.connected and not mt5_bridge.dry_run),
+        "account_login": account_login,
+        "balance": real_balance,
+        "equity": real_equity,
+        "margin": real_margin,
+        "margin_free": real_margin_free,
+        "currency": currency,
+        "leverage": leverage,
+        "total_floating_pnl": round(total_floating_pnl, 2),
+        "positions_count": len(open_pos),
+        "pending_orders_count": len(pending_orders),
+        "positions": open_pos,
+        "pending_orders": pending_orders,
+        "spreads": spreads
+    }
+
+
+@app.get("/api/v1/bitunix/telemetry")
+async def get_bitunix_telemetry():
+    """
+    Retorna la telemetría viva de la cuenta Principal de Bitunix (Futuros):
+    - Balance total, margen neto disponible, margen congelado en órdenes y margen en posiciones.
+    - Posiciones abiertas en tiempo real con Stop Loss condicional activo y Take Profits en libro.
+    - Órdenes límite pendientes en exchange.
+    - Configuración canónica de riesgo institucional al 2.50% (SOP-41).
+    """
+    from engine.execution.nexus import nexus
+    executor = nexus.executor
+    if hasattr(nexus, "account_manager") and hasattr(nexus.account_manager, "executors"):
+        executor = nexus.account_manager.executors.get("primary") or nexus.executor
+
+    try:
+        data = await executor.get_account_telemetry_summary()
+        return data
+    except Exception as e:
+        logger.error(f"❌ Error en endpoint /api/v1/bitunix/telemetry: {e}")
+        return {
+            "account_label": getattr(executor, "account_label", "Cuenta Principal"),
+            "connected": False,
+            "error": str(e),
+            "equity": 0.0,
+            "available_balance": 0.0,
+            "net_available_balance": 0.0,
+            "used_margin": 0.0,
+            "frozen_margin": 0.0,
+            "total_floating_pnl": 0.0,
+            "risk_config": {
+                "risk_pct": 0.025,
+                "risk_pct_display": "2.50%",
+                "risk_usd_per_trade": 0.0,
+                "max_notional_mult": 5.0,
+                "sop_protocol": "SOP-41 Dollar Risk Shield"
+            },
+            "positions_count": 0,
+            "positions": [],
+            "pending_orders_count": 0,
+            "pending_orders": []
+        }
+
+
+
+
 @app.get("/api/v1/trades/active")
 async def get_active_trades(asset: Optional[str] = Query(None)):
     """

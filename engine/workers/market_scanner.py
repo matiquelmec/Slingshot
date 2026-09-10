@@ -1,4 +1,4 @@
-﻿import asyncio
+import asyncio
 import time
 from datetime import datetime, timezone
 import pandas as pd
@@ -24,7 +24,7 @@ class MarketScanner:
         # 🚀 Tier 1: Núcleo Fijo Especializado por Perfil Cuantitativo (SOP-36)
         # 7 Activos Core Inmutables + BNBUSDT y SOLUSDT activos en Scalp 15m
         self.core_scalp_assets = ["RENDERUSDT", "SUIUSDT", "INJUSDT", "NEARUSDT", "FETUSDT", "ATOMUSDT", "TIAUSDT"]
-        self.core_swing_1h_assets = ["BTCUSDT", "ETHUSDT", "SOLUSDT", "AVAXUSDT", "LINKUSDT", "XRPUSDT", "XAUUSDT", "PAXGUSDT"]
+        self.core_swing_1h_assets = ["BTCUSDT", "ETHUSDT", "SOLUSDT", "AVAXUSDT", "LINKUSDT", "XRPUSDT", "XAUUSDT"]
         self.daily_assets = ["BTCUSDT", "ETHUSDT", "SOLUSDT", "XAUUSDT", "RENDERUSDT", "NEARUSDT"]
         
         # Activos activos en Scalp 15m (Core + Campeones BNB y SOL)

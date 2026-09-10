@@ -33,10 +33,10 @@ class TestSOP36ToSOP38UniverseAndFractalHarmony(unittest.TestCase):
 
     def test_sop36_paxg_reserved_for_swing_1h(self):
         """
-        [SOP-36] PAXGUSDT (Oro) debe estar reservado estrictamente para 1H Swing
-        donde el rango diario absorbe holgadamente el coste del spread.
+        [SOP-36 / SOP-69] XAUUSDT (Oro) está reservado para 1H Swing / TradFi y PAXGUSDT está excluido.
         """
-        self.assertIn("PAXGUSDT", self.scanner.core_swing_1h_assets)
+        self.assertIn("XAUUSDT", self.scanner.core_swing_1h_assets)
+        self.assertNotIn("PAXGUSDT", self.scanner.core_swing_1h_assets)
 
     def test_sop37_strict_mtf_fractal_alignment(self):
         """
