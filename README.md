@@ -4,12 +4,12 @@
 
 ![Status](https://img.shields.io/badge/Status-100%25_AUTONOMOUS_&_SSOT_VERIFIED-0d2a1a?style=for-the-badge&logo=codeproject&logoColor=fff)
 ![Version](https://img.shields.io/badge/Version-51.0_Apex_Multi--Market_Titanium-1a3a6e?style=for-the-badge)
+![NVIDIA NIM](https://img.shields.io/badge/AI_Engine-NVIDIA_NIM_Nemotron_3.5_&_DeepSeek-76b900?style=for-the-badge&logo=nvidia&logoColor=fff)
 ![Crypto Engine](https://img.shields.io/badge/Bitunix_Crypto-2.5%25_Compounded_Live-f39c12?style=for-the-badge&logo=bitcoin&logoColor=fff)
 ![MetaTrader 5](https://img.shields.io/badge/MetaTrader_5-FTMO_Institutional_Live-2980b9?style=for-the-badge&logo=windows&logoColor=fff)
 ![Execution Engine](https://img.shields.io/badge/Execution-SOP--64_Auto--Dispatcher_≥75%25-green?style=for-the-badge)
-![Machine Learning](https://img.shields.io/badge/AI_Inference-XGBoost_ONNX_+10pts-indigo?style=for-the-badge)
 ![Security](https://img.shields.io/badge/Security_Protocols-SOP--01%20to%20SOP--71-emerald?style=for-the-badge)
-![QA Suite](https://img.shields.io/badge/QA_Suite-311_Tests_100%25_Passed-success?style=for-the-badge)
+![QA Suite](https://img.shields.io/badge/QA_Suite-316_Tests_100%25_Passed-success?style=for-the-badge)
 ![Crypto Return](https://img.shields.io/badge/Crypto_Return-%2B94.75_R_(+$94%2C750_USD)-gold?style=for-the-badge)
 ![FTMO ROI](https://img.shields.io/badge/FTMO_180d_ROI-%2B76.98%25_($76%2C984_USD)-gold?style=for-the-badge)
 ![Crypto Profit Factor](https://img.shields.io/badge/Crypto_PF-1.99_Robusto-blue?style=for-the-badge)
@@ -167,6 +167,7 @@ graph TB
 | **SOP-69** | Normalización Dinámica XAUUSDT | Precisión contractual por API de exchange y erradicación de PAXG. |
 | **SOP-70** | Desacoplamiento Ortogonal Trailing Stop | Poda de riesgo en paralelo sin cortar el avance de Fast Break-Even ni Trailing. |
 | **SOP-71** | Streaming Dinámico Radar 14 VIP & TradFi | Hidratación viva en /api/v1/market-states y consumo dinámico en OpportunitiesScanner. |
+| **SOP-72** | Inferencia Agéntica NVIDIA NIM | Orquestación en la nube con Nemotron 3.5 Lightning, DeepSeek-v4 y fallback en cascada a OpenRouter/Groq. |
 
 ---
 

@@ -129,10 +129,14 @@ export default function BitunixPage() {
                 </div>
 
                 {/* Status Badges */}
-                <div className="flex items-center gap-2 font-mono text-[10px]">
+                <div className="flex flex-wrap items-center gap-2 font-mono text-[10px]">
                     <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-black/40 border border-white/10 text-white/70">
                         <span className={`w-2 h-2 rounded-full ${data?.connected ? 'bg-emerald-400 animate-pulse' : 'bg-rose-500'}`} />
                         <span>API: {data?.connected ? 'CONECTADO' : 'OFFLINE'} ({data?.latency_ms ?? 0}ms)</span>
+                    </div>
+                    <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-purple-500/10 border border-purple-500/20 text-purple-300">
+                        <Zap size={12} className="text-purple-400 animate-pulse" />
+                        <span>AI: NVIDIA NIM (NEMOTRON 3.5)</span>
                     </div>
                     <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400">
                         <ShieldCheck size={12} />
