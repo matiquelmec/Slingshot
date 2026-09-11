@@ -40,8 +40,8 @@ async def check_ollama_status(force_recheck=False) -> bool:
     """v5.9.4-Resilience: Salto agresivo si ya está confirmado online en la sesión o si se usa Gemini API."""
     global _ollama_cache
     
-    # Si tenemos configurado OpenRouter, Groq o Gemini, la IA está activa (cloud)
-    if settings.OPENROUTER_API_KEY or settings.GEMINI_API_KEY or settings.GROQ_API_KEY:
+    # Si tenemos configurado NVIDIA NIM, OpenRouter, Groq o Gemini, la IA está activa (cloud)
+    if getattr(settings, "NVIDIA_NIM_API_KEY", None) or settings.OPENROUTER_API_KEY or settings.GEMINI_API_KEY or settings.GROQ_API_KEY:
         return True
         
     # 1. Bypass total: si ya se confirmó una vez, no volver a preguntar al servidor tags (que se bloquea en heavy load)
@@ -494,7 +494,76 @@ async def ai_worker():
                 asset_name = task.get('asset', 'UNKNOWN')
                 fallback_content = _deterministic_verdict(asset_name, {})
 
-                if settings.OPENROUTER_API_KEY:
+                if getattr(settings, "NVIDIA_NIM_API_KEY", None):
+                    # RUTA CLOUD NATIVA: NVIDIA NIM (Nemotron 3.5 Lightning)
+                    nim_url = "https://integrate.api.nvidia.com/v1/chat/completions"
+                    nim_headers = {
+                        "Authorization": f"Bearer {settings.NVIDIA_NIM_API_KEY}",
+                        "Content-Type": "application/json",
+                        "User-Agent": "Slingshot-Apex-Titan/1.0"
+                    }
+                    nim_payload = {
+                        "model": getattr(settings, "NVIDIA_NIM_MODEL", "nvidia/nemotron-3.5-lightning-30b-a3b"),
+                        "messages": [{"role": "user", "content": task['prompt']}],
+                        "temperature": 0.2,
+                        "max_tokens": 1024
+                    }
+                    if task.get('format') == 'json':
+                        nim_payload["response_format"] = {"type": "json_object"}
+
+                    try:
+                        response = await client.post(nim_url, json=nim_payload, headers=nim_headers, timeout=8.0)
+                    except Exception as nime:
+                        logger.warning(f"[AI_WORKER] ⚠️ NVIDIA NIM timeout/error para {asset_name}: {nime} — Derivando a OpenRouter/Groq...")
+                        response = None
+
+                    if task['future'].cancelled():
+                        continue
+
+                    if response and response.status_code == 200:
+                        result = response.json()
+                        if "choices" in result and len(result["choices"]) > 0:
+                            content = result["choices"][0]["message"]["content"].strip()
+                            logger.info(f"[AI_WORKER] ⚡ Inferencia NVIDIA NIM completada para {asset_name} ({len(content)} bytes)")
+                            if not task['future'].done():
+                                task['future'].set_result(content)
+                                continue
+                    
+                    # Si NVIDIA NIM no responde a tiempo, pasamos de inmediato a OpenRouter / Groq sin perder la tarea
+                    logger.info(f"[AI_WORKER] Redirigiendo tarea {asset_name} a OpenRouter...")
+                    if settings.OPENROUTER_API_KEY:
+                        url = "https://openrouter.ai/api/v1/chat/completions"
+                        headers = {
+                            "Authorization": f"Bearer {settings.OPENROUTER_API_KEY}",
+                            "HTTP-Referer": "https://slingshot-trading.local",
+                            "X-Title": "Slingshot Institutional Trading",
+                            "Content-Type": "application/json"
+                        }
+                        openrouter_payload = {
+                            "model": settings.OPENROUTER_MODEL or "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
+                            "messages": [{"role": "user", "content": task['prompt']}],
+                            "temperature": 0.2
+                        }
+                        if task.get('format') == 'json':
+                            openrouter_payload["response_format"] = {"type": "json_object"}
+                        try:
+                            or_resp = await client.post(url, json=openrouter_payload, headers=headers, timeout=10.0)
+                            if or_resp.status_code == 200:
+                                or_data = or_resp.json()
+                                if "choices" in or_data and len(or_data["choices"]) > 0:
+                                    content = or_data["choices"][0]["message"]["content"].strip()
+                                    if not task['future'].done():
+                                        task['future'].set_result(content)
+                                        continue
+                        except Exception as or_err:
+                            logger.debug(f"[AI_WORKER] OpenRouter fallback error: {or_err}")
+
+                    if not task['future'].done():
+                        task['future'].set_result(fallback_content)
+
+                    await asyncio.sleep(0.1)
+
+                elif settings.OPENROUTER_API_KEY:
                     # RUTA CLOUD DEEP REASONING: OpenRouter
                     url = "https://openrouter.ai/api/v1/chat/completions"
                     headers = {

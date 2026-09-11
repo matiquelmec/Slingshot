@@ -27,6 +27,10 @@ class Settings(BaseSettings):
     # Groq Cloud AI (LLM Advisor)
     GROQ_API_KEY: Optional[str] = None
 
+    # NVIDIA NIM Cloud AI (Nemotron 3.5 Lightning & DeepSeek)
+    NVIDIA_NIM_API_KEY: Optional[str] = None
+    NVIDIA_NIM_MODEL: str = "nvidia/nemotron-3.5-lightning-30b-a3b"
+
     # OpenRouter Cloud AI (DeepSeek R1 / NVIDIA Nemotron Reasoning)
     OPENROUTER_API_KEY: Optional[str] = None
     OPENROUTER_MODEL: str = "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free"
