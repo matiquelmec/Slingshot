@@ -347,12 +347,17 @@ async def get_bitunix_telemetry():
     - Configuración canónica de riesgo institucional al 2.50% (SOP-41).
     """
     from engine.execution.nexus import nexus
-    executor = nexus.executor
-    if hasattr(nexus, "account_manager") and hasattr(nexus.account_manager, "executors"):
-        executor = nexus.account_manager.executors.get("primary") or nexus.executor
+    executor = None
+    if hasattr(nexus, "account_manager"):
+        if hasattr(nexus.account_manager, "_executors"):
+            executor = nexus.account_manager._executors.get("primary")
+        elif hasattr(nexus.account_manager, "executors"):
+            executor = nexus.account_manager.executors.get("primary")
+    if executor is None:
+        executor = nexus.executor
 
     try:
-        data = await executor.get_account_telemetry_summary()
+        data = await asyncio.wait_for(executor.get_account_telemetry_summary(), timeout=10.0)
         return data
     except Exception as e:
         logger.error(f"❌ Error en endpoint /api/v1/bitunix/telemetry: {e}")
