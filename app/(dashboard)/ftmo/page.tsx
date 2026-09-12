@@ -117,18 +117,24 @@ export default function FtmoPage() {
 
             if (oppsRes.ok) {
                 const data = await oppsRes.json();
-                setOpportunities(data.opportunities || []);
+                if (data && data.opportunities) {
+                    setOpportunities(data.opportunities);
+                }
             }
             if (statusRes.ok) {
                 const sData = await statusRes.json();
-                setFtmoStatus(sData);
+                if (sData) setFtmoStatus(sData);
             }
             if (mt5Res.ok) {
                 const mData = await mt5Res.json();
-                setMt5Data(mData);
+                if (mData && (mData.connected || mData.equity > 0 || mData.positions_count > 0)) {
+                    setMt5Data(mData);
+                } else {
+                    setMt5Data(prev => prev ? { ...prev, connected: false } : mData);
+                }
             }
         } catch (e) {
-            console.warn("FTMO Terminal: Feed offline, cargando simulador local.");
+            console.warn("FTMO Terminal: Feed offline, manteniendo estado verificado.");
         } finally {
             setLoading(false);
         }
