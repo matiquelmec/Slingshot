@@ -74,6 +74,7 @@ interface BitunixTelemetryData {
     pending_orders: BitunixPendingOrder[];
 }
 
+export default function BitunixDashboardPage() {
     const [data, setData] = useState<BitunixTelemetryData | null>(null);
     const [loading, setLoading] = useState(true);
     const [zeroPositionsPulses, setZeroPositionsPulses] = useState<number>(0);
