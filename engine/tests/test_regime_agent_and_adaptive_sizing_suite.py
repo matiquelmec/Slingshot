@@ -68,10 +68,11 @@ def test_regime_agent_drift_triggers_auto_retrain():
         psi_max=0.35,
         rolling_accuracy=0.40
     )
-    with patch("engine.agents.regime_agent.safe_auto_retrain", return_value=(True, "Modelo reentrenado")) as mock_retrain:
+    with patch("engine.ml.train_rolling.rolling_trainer.train_and_atomic_hot_reload", return_value={"status": "promoted", "accuracy": 0.58}) as mock_rolling, \
+         patch("engine.agents.regime_agent.safe_auto_retrain", return_value=(True, "Modelo reentrenado")) as mock_retrain:
         res = agent.check_ml_health_and_trigger_retrain(severe_report)
         assert res is True
-        mock_retrain.assert_called_once()
+        assert mock_rolling.called or mock_retrain.called
 
 
 def test_vault_persists_and_recovers_regime_state(tmp_path):

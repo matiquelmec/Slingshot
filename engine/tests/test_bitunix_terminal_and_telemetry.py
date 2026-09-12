@@ -117,3 +117,52 @@ async def test_bitunix_25pct_risk_exact_calculation():
         res = await executor.get_account_telemetry_summary()
         # 648.83 * 0.025 = 16.22075 -> redondeado a 16.22 USDT
         assert res["risk_config"]["risk_usd_per_trade"] == 16.22
+
+@pytest.mark.asyncio
+async def test_bitunix_real_api_position_payload():
+    """Certifica que el payload real de Bitunix (avgOpenPrice, margin, unrealizedPNL, isolationUnrealizedPNL) se parsee fielmente."""
+    executor = BitunixExecutor(api_key="test", secret_key="test", dry_run=True)
+    mock_acc = {
+        "code": 0,
+        "data": {
+            "marginCoin": "USDT",
+            "available": "746.38",
+            "margin": "42.17",
+            "isolationUnrealizedPNL": "-4.73",
+            "crossUnrealizedPNL": "0"
+        }
+    }
+    mock_positions = [
+        {
+            "positionId": "1138116320852577976",
+            "symbol": "BNBUSDT",
+            "qty": "1.14",
+            "side": "BUY",
+            "leverage": 20,
+            "margin": "42.17",
+            "unrealizedPNL": "-4.73",
+            "avgOpenPrice": "730.99"
+        }
+    ]
+    with patch.object(executor, "_request", new_callable=AsyncMock) as mock_req, \
+         patch.object(executor, "get_pending_positions", new_callable=AsyncMock) as mock_get_pos, \
+         patch.object(executor, "get_pending_orders", new_callable=AsyncMock) as mock_get_orders, \
+         patch.object(executor, "get_ticker_price", new_callable=AsyncMock) as mock_ticker:
+
+        mock_req.return_value = mock_acc
+        mock_get_pos.return_value = mock_positions
+        mock_get_orders.return_value = []
+        mock_ticker.return_value = 726.84
+
+        res = await executor.get_account_telemetry_summary()
+        pos = res["positions"][0]
+        assert pos["symbol"] == "BNBUSDT"
+        assert pos["entry_price"] == 730.99
+        assert pos["mark_price"] == 726.84
+        assert pos["isolated_margin"] == 42.17
+        assert pos["side"] == "LONG"
+        # pos_pnl = (726.84 - 730.99) * 1.14 = -4.15 * 1.14 = -4.73
+        assert pos["unrealized_pnl"] == -4.73
+        assert pos["unrealized_pnl_pct"] < 0
+        assert res["total_floating_pnl"] == -4.73
+

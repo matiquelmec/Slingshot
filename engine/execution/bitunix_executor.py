@@ -1237,7 +1237,15 @@ class BitunixExecutor:
         total_equity = float(acc_data.get("equity") or acc_data.get("marginBalance") or 0.0)
         avail_margin = float(acc_data.get("available") or acc_data.get("availableMargin") or acc_data.get("availableBalance") or 0.0)
         used_margin = float(acc_data.get("margin") or acc_data.get("positionMargin") or acc_data.get("holdAmount") or 0.0)
-        unrealized_pnl = float(acc_data.get("unrealizedProfit") or acc_data.get("unrealizedPnl") or acc_data.get("crossUnrealizedPnl") or 0.0)
+        unrealized_pnl = float(
+            acc_data.get("unrealizedProfit")
+            or acc_data.get("unrealizedPNL")
+            or acc_data.get("unrealizedPnl")
+            or acc_data.get("isolationUnrealizedPNL")
+            or acc_data.get("crossUnrealizedPNL")
+            or acc_data.get("crossUnrealizedPnl")
+            or 0.0
+        )
 
         # Fallback si total_equity viene en 0 pero hay available
         if total_equity <= 0.0 and avail_margin > 0.0:
@@ -1267,22 +1275,57 @@ class BitunixExecutor:
             if qty <= 0:
                 continue
 
-            entry_p = float(p.get("entryPrice") or p.get("openPrice") or 0.0)
-            mark_p = float(p.get("markPrice") or p.get("lastPrice") or entry_p)
+            entry_p = float(
+                p.get("avgOpenPrice")
+                or p.get("entryPrice")
+                or p.get("openPrice")
+                or p.get("openAvgPrice")
+                or p.get("costPrice")
+                or 0.0
+            )
+            mark_p = float(
+                p.get("markPrice")
+                or p.get("lastPrice")
+                or p.get("fairPrice")
+                or 0.0
+            )
+            # Si no vino markPrice en la posición, obtenerlo mediante get_ticker_price
+            if mark_p <= 0.0:
+                try:
+                    mark_p = await self.get_ticker_price(sym)
+                except Exception:
+                    mark_p = entry_p
+
+            if mark_p <= 0.0:
+                mark_p = entry_p
+
             pos_id = str(p.get("positionId") or "")
             raw_side = str(p.get("side") or "").upper()
             side = "LONG" if raw_side in ("BUY", "LONG", "1") else "SHORT"
             leverage = int(p.get("leverage") or 18)
-            isolated_margin = float(p.get("isolatedMargin") or p.get("positionMargin") or 0.0)
+            isolated_margin = float(
+                p.get("isolatedMargin")
+                or p.get("margin")
+                or p.get("positionMargin")
+                or p.get("holdAmount")
+                or 0.0
+            )
+            if isolated_margin <= 0.0 and entry_p > 0 and leverage > 0:
+                isolated_margin = (qty * entry_p) / float(leverage)
 
             # PnL no realizado de la posición
-            if entry_p > 0:
+            if entry_p > 0 and mark_p > 0:
                 if side == "LONG":
                     pos_pnl = (mark_p - entry_p) * qty
                 else:
                     pos_pnl = (entry_p - mark_p) * qty
             else:
-                pos_pnl = float(p.get("unrealizedPnl") or 0.0)
+                pos_pnl = float(
+                    p.get("unrealizedPNL")
+                    or p.get("unrealizedProfit")
+                    or p.get("unrealizedPnl")
+                    or 0.0
+                )
 
             total_calc_floating_pnl += pos_pnl
 
@@ -1297,6 +1340,8 @@ class BitunixExecutor:
             active_sl_price = None
             active_sl_id = None
             for t_o in (tpsl_orders or []):
+                if not isinstance(t_o, dict):
+                    continue
                 t_pos = str(t_o.get("positionId") or "")
                 if not pos_id or not t_pos or t_pos == pos_id:
                     sl_p = t_o.get("slPrice") or t_o.get("triggerPrice")
