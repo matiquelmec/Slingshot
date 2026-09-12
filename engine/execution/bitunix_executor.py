@@ -1244,6 +1244,11 @@ class BitunixExecutor:
         - Parámetros de riesgo institucional (2.50% SOP-41).
         """
         start_t = time.time()
+        # Cache interno de telemetría de 4.0s para evitar rate-limits y responder en sub-milisegundos
+        if hasattr(self, "_last_telemetry_summary") and self._last_telemetry_summary:
+            if (start_t - getattr(self, "_last_telemetry_summary_ts", 0)) < 4.0:
+                return self._last_telemetry_summary
+
         # [PARALLEL TELEMETRY PIPELINE] Consulta concurrente de cuenta, posiciones y órdenes
         acc_task = self._request("GET", "/api/v1/futures/account", params={"marginCoin": "USDT"})
         pos_task = self.get_pending_positions()
@@ -1418,7 +1423,7 @@ class BitunixExecutor:
         risk_pct = 0.025
         risk_usd_per_trade = round(total_equity * risk_pct, 2) if total_equity > 0 else 0.0
 
-        return {
+        res_dict = {
             "account_label": self.account_label,
             "connected": True,
             "latency_ms": latency_ms,
@@ -1453,5 +1458,8 @@ class BitunixExecutor:
                 for o in raw_orders
             ]
         }
+        self._last_telemetry_summary = res_dict
+        self._last_telemetry_summary_ts = time.time()
+        return res_dict
 
 
