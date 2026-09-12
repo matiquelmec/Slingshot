@@ -53,21 +53,51 @@ export const createConnectionManager = (set: any, get: any) => {
                     const ghostRes = await fetch(`${BASE_URL}/api/v1/ghost`);
                     if (ghostRes.ok) {
                         const ghostData = await ghostRes.json();
-                        if (ghostData.ghost) set({ ghostState: ghostData.ghost });
-                        if (ghostData.macro) set({ macroContext: ghostData.macro });
+                        if (ghostData.ghost) set({ ghostData: ghostData.ghost });
                     }
 
-                    // 2. [NEW] Sessions Recovery Path
-                    const sessionRes = await fetch(`${BASE_URL}/api/v1/sessions/${clean}`);
-                    if (sessionRes.ok) {
-                        const sessionData = await sessionRes.json();
-                        if (sessionData && sessionData.data) {
-                            console.log(`[TELEMETRY] 📥 Hidratación REST exitosa para ${clean}`);
-                            set({ sessionData: sessionData.data });
+                    // 2. [FAST DIAGNOSTIC] Recuperación inmediata de Retina Técnica, SMC, Niveles y Sesiones
+                    const diagRes = await fetch(`${BASE_URL}/api/v1/diagnostic/${clean}?timeframe=${timeframe}`);
+                    if (diagRes.ok) {
+                        const diag = await diagRes.json();
+                        if (diag && !diag.error) {
+                            set((state: any) => ({
+                                isCalibrating: false,
+                                tacticalDecision: diag.tactical ? {
+                                    ...state.tacticalDecision,
+                                    asset: clean,
+                                    regime: diag.tactical.market_regime ?? 'UNKNOWN',
+                                    strategy: diag.tactical.active_strategy ?? 'STANDBY',
+                                    reasoning: `Régimen: ${diag.tactical.market_regime || 'NEUTRAL'}. Soportes mapeados.`,
+                                    current_price: diag.tactical.current_price ?? state.latestPrice,
+                                    signal_history: diag.tactical.signals ?? [],
+                                    ...diag.tactical
+                                } : state.tacticalDecision,
+                                smcData: diag.smc ?? state.smcData,
+                                sessionData: diag.sessions ? {
+                                    ...diag.sessions,
+                                    asset: clean
+                                } : state.sessionData,
+                                mlProjection: diag.ml_projection ?? state.mlProjection,
+                                htfBias: diag.htf_bias ?? state.htfBias
+                            }));
+                            console.log(`[TELEMETRY] 📥 Hidratación REST completa (Retina + SMC + Sesiones) para ${clean}`);
                         }
                     }
 
-                    // 3. [NEW] Radar Market States Recovery Path
+                    // 3. Fallback directo de Sesiones si aún no estaban en diagnóstico
+                    if (!get().sessionData) {
+                        const sessionRes = await fetch(`${BASE_URL}/api/v1/sessions/${clean}`);
+                        if (sessionRes.ok) {
+                            const sessionData = await sessionRes.json();
+                            const payload = sessionData.data || sessionData;
+                            if (payload && payload.sessions) {
+                                set({ sessionData: { ...payload, asset: clean } });
+                            }
+                        }
+                    }
+
+                    // 4. Radar Market States Recovery Path
                     const statesRes = await fetch(`${BASE_URL}/api/v1/market-states`);
                     if (statesRes.ok) {
                         const statesData = await statesRes.json();

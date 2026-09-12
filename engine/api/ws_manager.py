@@ -299,7 +299,7 @@ class SymbolBroadcaster:
                 await asyncio.sleep(5.0)
 
     async def _sync_initial_telemetry(self):
-        """Asegura que el cliente reciba datos macro y de sesión inmediatamente."""
+        """Asegura que el cliente reciba datos macro, de sesión y análisis táctico inmediatamente."""
         try:
             # 1. Sincronizar Sesión
             session_payload = self._session_manager.get_current_state()
@@ -309,12 +309,45 @@ class SymbolBroadcaster:
             # 2. Sincronizar Ghost & On-Chain (vía Bridge)
             await self._advisor_bridge.refresh_ghost()
 
-            # 3. Análisis Táctico Inicial (One-Shot)
+            # 3. Análisis Táctico Inicial Completo (One-Shot Bootstrap)
             if self.state.history:
                 last_candle = self.state.history[-1]
                 await self.pipeline.execute_fast_path(last_candle, {"data": {"E": int(time.time()*1000)}}, force=True)
+                
+                # Ejecutar Slow Path / Tactical Analysis inicial para poblar key_levels, SMC, RVOL y bias
+                try:
+                    df_initial = pd.DataFrame([i["data"] for i in self.state.history])
+                    df_initial["timestamp"] = pd.to_datetime(df_initial["timestamp"], unit="s")
+                    
+                    news_items = await store.get_news()
+                    econ_events = await store.get_economic_events(limit=5)
+                    correlated_df = await self.pipeline._get_correlated_df()
+                    
+                    self._router.set_context(
+                        ml_projection=self.state.ml_projection,
+                        session_data=(self.state.last_session or {}).get("data", {}),
+                        news_items=news_items,
+                        economic_events=econ_events,
+                        liquidation_clusters=self.state.last_liquidations.get("data", []) if self.state.last_liquidations else [],
+                        correlated_df=correlated_df,
+                        ghost_data=self.state.last_ghost
+                    )
+                    
+                    initial_tactical = await self._router.process_market_data(
+                        df_initial,
+                        asset=self.symbol,
+                        interval=self.interval,
+                        macro_levels=getattr(self, '_macro_levels', None),
+                        htf_bias=self.state.htf_bias,
+                        silent=True
+                    )
+                    if initial_tactical:
+                        self.state.last_tactical = {"data": initial_tactical}
+                        await self._broadcast({"type": "tactical_update", "data": initial_tactical})
+                except Exception as te:
+                    logger.debug(f"[BROADCASTER] Warning en Initial Tactical Calculation ({self.symbol}): {te}")
             
-            logger.info(f"[BROADCASTER] 🚀 {self._key} Telemetría inicial sincronizada.")
+            logger.info(f"[BROADCASTER] 🚀 {self._key} Telemetría inicial sincronizada al 100%.")
         except Exception as e:
             logger.error(f"[BROADCASTER] ⚠️ Error en telemetría inicial {self._key}: {e}")
 

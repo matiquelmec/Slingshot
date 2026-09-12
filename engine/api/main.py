@@ -233,6 +233,36 @@ async def get_session_state(asset: str):
         return {"error": "Asset not found"}
     return sanitize_for_json(broadcaster._session_manager.get_current_state())
 
+@app.get("/api/v1/diagnostic/{asset}")
+async def get_diagnostic_state(asset: str, timeframe: str = "15m"):
+    """
+    Retorna el estado táctico y diagnóstico completo en tiempo real para un activo:
+    - tactical: régimen, estrategia, key_levels, rvol, absorción score.
+    - smc: order blocks y fair value gaps.
+    - sessions: sesiones mundiales (Asia, Londres, NY) y niveles PDH/PDL.
+    - ml_projection: sesgo y probabilidad direccional.
+    - htf_bias: sesgo temporal mayor (4h/1h).
+    """
+    broadcaster, _ = await registry.get_or_create(asset, timeframe)
+    if not broadcaster:
+        return {"error": "Asset not found"}
+    
+    tactical_data = broadcaster.state.last_tactical.get("data") if broadcaster.state.last_tactical else None
+    smc_data = broadcaster.state.last_smc.get("data") if broadcaster.state.last_smc else None
+    session_data = broadcaster.state.last_session.get("data") if broadcaster.state.last_session else None
+    if not session_data:
+        session_data = broadcaster._session_manager.get_current_state().get("data")
+        
+    return sanitize_for_json({
+        "asset": asset.upper(),
+        "timeframe": timeframe,
+        "tactical": tactical_data,
+        "smc": smc_data,
+        "sessions": session_data,
+        "ml_projection": broadcaster.state.ml_projection,
+        "htf_bias": broadcaster.state.htf_bias.to_dict() if hasattr(broadcaster.state.htf_bias, "to_dict") else broadcaster.state.htf_bias
+    })
+
 @app.get("/api/v1/signals")
 async def get_signals(
     asset: Optional[str] = Query(None),
