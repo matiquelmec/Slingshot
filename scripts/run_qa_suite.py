@@ -25,7 +25,8 @@ MODERN_TEST_FILES = [
     "engine/tests/test_deterministic_pipeline_isolation.py",
     "engine/tests/test_session_mastery.py",
     "engine/tests/test_market_scanner_hft.py",
-    "engine/tests/test_ftmo_security_guard.py",
+    "engine/tests/test_ftmo_titanium_strategy.py",
+    "engine/tests/test_tradfi_scanner_and_risk.py",
     "engine/tests/test_telegram_persistence.py",
     "engine/tests/test_dynamic_sl_professional_audit.py",
     "engine/tests/test_dynamic_universe_screener.py",
@@ -70,7 +71,7 @@ MODERN_TEST_FILES = [
 
 def main():
     print("\n" + "="*80)
-    print("🧪 SLINGSHOT v43.0 APEX TITAN COMPOUND — SUITE OFICIAL DE CERTIFICACIÓN QA")
+    print("🧪 SLINGSHOT v52.0 APEX ADAPTIVE TITANIUM — SUITE OFICIAL DE CERTIFICACIÓN QA")
     print("="*80)
     
     cmd = [sys.executable, "-m", "pytest"] + MODERN_TEST_FILES + ["-v", "--tb=short"]
@@ -78,7 +79,7 @@ def main():
     
     if result.returncode == 0:
         print("\n" + "="*80)
-        print("✅ CERTIFICACIÓN QA EXITOSA: 235/235 PRUEBAS APROBADAS AL 100%")
+        print("✅ CERTIFICACIÓN QA EXITOSA: 100% PRUEBAS APROBADAS")
         print("="*80 + "\n")
     else:
         print("\n" + "="*80)
