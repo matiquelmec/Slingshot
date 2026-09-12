@@ -133,6 +133,63 @@ class SlingshotVault:
             );
             """)
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_regime_eval ON regime_history(evaluated_at);")
+
+            # 6. Tabla de Atribución de Factores de Confluencia (SOP-74 Bayesian Calibrator)
+            cursor.execute("""
+            CREATE TABLE IF NOT EXISTS confluence_factor_attribution (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                trade_id TEXT,
+                symbol TEXT,
+                factor_name TEXT NOT NULL,
+                was_confirmed INTEGER NOT NULL,
+                is_win INTEGER NOT NULL,
+                pnl_r REAL NOT NULL,
+                timestamp REAL NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+            """)
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_factor_ts ON confluence_factor_attribution(factor_name, timestamp);")
+
+            # 7. Tabla de Pesos Bayesianos Calibrados (SOP-74 Bayesian Calibrator)
+            cursor.execute("""
+            CREATE TABLE IF NOT EXISTS confluence_factor_weights (
+                factor_name TEXT PRIMARY KEY,
+                base_weight REAL NOT NULL,
+                calibrated_weight REAL NOT NULL,
+                win_rate REAL NOT NULL,
+                wins INTEGER NOT NULL,
+                losses INTEGER NOT NULL,
+                sample_size INTEGER NOT NULL,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+            """)
+
+            # 8. Tablas de Análisis Post-Mortem y Vetos Tácticos (SOP-76 NVIDIA NIM)
+            cursor.execute("""
+            CREATE TABLE IF NOT EXISTS post_mortem_vetoes (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                symbol TEXT NOT NULL,
+                condition_tag TEXT NOT NULL,
+                reason TEXT NOT NULL,
+                expires_at REAL NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+            """)
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_veto_sym_exp ON post_mortem_vetoes(symbol, expires_at);")
+
+            cursor.execute("""
+            CREATE TABLE IF NOT EXISTS post_mortem_reports (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                trade_id TEXT NOT NULL,
+                symbol TEXT NOT NULL,
+                side TEXT NOT NULL,
+                pnl_usd REAL NOT NULL,
+                loss_category TEXT NOT NULL,
+                causal_analysis TEXT NOT NULL,
+                preventive_rule TEXT NOT NULL,
+                analyzed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+            """)
             conn.commit()
             logger.info(f"🏛️ [VAULT] Base de datos SQLite WAL inicializada en {self.db_path.name}")
 
@@ -239,16 +296,41 @@ class SlingshotVault:
 
     # ── MÉTODOS DE RENDIMIENTO CUANTITATIVO (SOP-60 TEAR SHEETS) ──────────────
 
-    def record_closed_trade(self, account_id: str, symbol: str, side: str, pnl_r: float, pnl_usd: float = 0.0, exit_reason: str = "TP") -> int:
-        """Registra un trade completado en la bóveda transaccional."""
+    def record_closed_trade(
+        self,
+        account_id: str,
+        symbol: str,
+        side: str,
+        pnl_r: float,
+        pnl_usd: float = 0.0,
+        exit_reason: str = "TP",
+        checklist: Optional[List[Dict[str, Any]]] = None
+    ) -> int:
+        """Registra un trade completado en la bóveda transaccional y alimenta la calibración bayesiana."""
         with self._get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute("""
             INSERT INTO closed_trades (account_id, symbol, side, pnl_r, pnl_usd, exit_reason)
             VALUES (?, ?, ?, ?, ?, ?)
             """, (account_id, symbol.upper(), side.upper(), float(pnl_r), float(pnl_usd), exit_reason))
+            trade_id = cursor.lastrowid
             conn.commit()
-            return cursor.lastrowid
+
+        if checklist:
+            try:
+                from engine.core.bayesian_confluence import bayesian_calibrator
+                is_win = float(pnl_r) > 0.0
+                bayesian_calibrator.record_trade_attribution(
+                    trade_id=str(trade_id),
+                    symbol=symbol,
+                    active_checklist=checklist,
+                    is_win=is_win,
+                    pnl_r=float(pnl_r)
+                )
+            except Exception as b_err:
+                logger.debug(f"[VAULT] Error actualizando calibrador bayesiano en record_closed_trade: {b_err}")
+
+        return trade_id
 
     def get_closed_trades(self, account_id: Optional[str] = None, since_timestamp: Optional[float] = None) -> List[Dict[str, Any]]:
         """Recupera los trades cerrados para el cálculo de métricas financieras."""
@@ -312,6 +394,150 @@ class SlingshotVault:
                 "details": json.loads(row[3]) if row[3] else {},
                 "evaluated_at": row[4]
             }
+
+    # ── MÉTODOS DE CALIBRACIÓN BAYESIANA (SOP-74) ─────────────────────────────
+
+    def record_factor_attributions(
+        self,
+        trade_id: str,
+        symbol: str,
+        confirmed_factors: List[str],
+        unconfirmed_factors: List[str],
+        is_win: bool,
+        pnl_r: float
+    ) -> None:
+        """Registra la presencia o ausencia de factores en un trade cerrado."""
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            now = time.time()
+            win_val = 1 if is_win else 0
+            
+            for factor in confirmed_factors:
+                cursor.execute("""
+                INSERT INTO confluence_factor_attribution 
+                (trade_id, symbol, factor_name, was_confirmed, is_win, pnl_r, timestamp)
+                VALUES (?, ?, ?, 1, ?, ?, ?)
+                """, (trade_id, symbol.upper(), factor, win_val, float(pnl_r), now))
+                
+            for factor in unconfirmed_factors:
+                cursor.execute("""
+                INSERT INTO confluence_factor_attribution 
+                (trade_id, symbol, factor_name, was_confirmed, is_win, pnl_r, timestamp)
+                VALUES (?, ?, ?, 0, ?, ?, ?)
+                """, (trade_id, symbol.upper(), factor, win_val, float(pnl_r), now))
+            conn.commit()
+
+    def get_factor_rolling_stats(self, rolling_window: int = 50) -> Dict[str, Dict[str, Any]]:
+        """
+        Recupera el recuento de aciertos/fallos para cada factor en los últimos N trades
+        donde dicho factor estuvo confirmado.
+        """
+        stats = {}
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT DISTINCT factor_name FROM confluence_factor_attribution")
+            factors = [r[0] for r in cursor.fetchall()]
+            
+            for factor in factors:
+                cursor.execute("""
+                SELECT is_win FROM confluence_factor_attribution
+                WHERE factor_name = ? AND was_confirmed = 1
+                ORDER BY timestamp DESC, id DESC
+                LIMIT ?
+                """, (factor, rolling_window))
+                rows = cursor.fetchall()
+                wins = sum(1 for r in rows if r[0] == 1)
+                losses = sum(1 for r in rows if r[0] == 0)
+                stats[factor] = {"wins": wins, "losses": losses, "count": len(rows)}
+        return stats
+
+    def save_factor_weights(self, weights_data: List[Dict[str, Any]]) -> None:
+        """Persiste los pesos calibrados en SQLite WAL."""
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            for item in weights_data:
+                cursor.execute("""
+                INSERT INTO confluence_factor_weights 
+                (factor_name, base_weight, calibrated_weight, win_rate, wins, losses, sample_size, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+                ON CONFLICT(factor_name) DO UPDATE SET
+                    base_weight = excluded.base_weight,
+                    calibrated_weight = excluded.calibrated_weight,
+                    win_rate = excluded.win_rate,
+                    wins = excluded.wins,
+                    losses = excluded.losses,
+                    sample_size = excluded.sample_size,
+                    updated_at = CURRENT_TIMESTAMP;
+                """, (
+                    item["factor_name"],
+                    float(item["base_weight"]),
+                    float(item["calibrated_weight"]),
+                    float(item["win_rate"]),
+                    int(item["wins"]),
+                    int(item["losses"]),
+                    int(item["sample_size"])
+                ))
+            conn.commit()
+
+    def load_factor_weights(self) -> Dict[str, float]:
+        """Carga los últimos pesos calibrados guardados."""
+        weights = {}
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT factor_name, calibrated_weight FROM confluence_factor_weights")
+            for row in cursor.fetchall():
+                weights[row[0]] = float(row[1])
+        return weights
+
+    # ── MÉTODOS DE VETO POST-MORTEM (SOP-76 NVIDIA NIM) ────────────────────────
+
+    def add_post_mortem_veto(self, symbol: str, condition_tag: str, reason: str, duration_seconds: int = 43200) -> None:
+        """Registra un veto temporal para un activo tras análisis causal de pérdida."""
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            now = time.time()
+            expires = now + duration_seconds
+            cursor.execute("""
+            INSERT INTO post_mortem_vetoes (symbol, condition_tag, reason, expires_at)
+            VALUES (?, ?, ?, ?)
+            """, (symbol.upper(), condition_tag.upper(), reason, expires))
+            conn.commit()
+
+    def is_symbol_vetoed(self, symbol: str) -> Tuple[bool, Optional[str]]:
+        """Verifica si un activo tiene un veto temporal activo."""
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            now = time.time()
+            cursor.execute("""
+            SELECT reason, expires_at FROM post_mortem_vetoes
+            WHERE symbol = ? AND expires_at > ?
+            ORDER BY expires_at DESC LIMIT 1
+            """, (symbol.upper(), now))
+            row = cursor.fetchone()
+            if row:
+                remaining_m = int((row[1] - now) / 60)
+                return True, f"{row[0]} (Expira en {remaining_m}m)"
+            return False, None
+
+    def record_post_mortem_report(
+        self,
+        trade_id: str,
+        symbol: str,
+        side: str,
+        pnl_usd: float,
+        loss_category: str,
+        causal_analysis: str,
+        preventive_rule: str
+    ) -> None:
+        """Almacena el reporte completo del análisis causal de IA."""
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+            INSERT INTO post_mortem_reports 
+            (trade_id, symbol, side, pnl_usd, loss_category, causal_analysis, preventive_rule)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            """, (trade_id, symbol.upper(), side.upper(), float(pnl_usd), loss_category, causal_analysis, preventive_rule))
+            conn.commit()
 
 # Instancia global singleton
 vault = SlingshotVault()

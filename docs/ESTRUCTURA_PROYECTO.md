@@ -1,11 +1,11 @@
-# 🏗️ Estructura del Proyecto Slingshot v51.0 APEX MULTI-MARKET TITANIUM
+# 🏗️ Estructura del Proyecto Slingshot v52.0 APEX ADAPTIVE TITANIUM
 
 > Guía de referencia técnica oficial de la arquitectura, jerarquía de directorios, módulos y componentes del sistema autónomo Slingshot.
-> **Última actualización**: Septiembre 2026 (v51.0 APEX MULTI-MARKET TITANIUM — Arquitectura Dual Cripto Bitunix 2.5% vs FTMO MetaTrader 5 TradFi 0.75%, Machine Learning Meta-Labeling, Cosecha Escalonada Cuantitativa, Bóveda Criptográfica Multi-Cuenta, Persistencia SQLite WAL y Suite QA Certificada al 100% en VPS).
+> **Última actualización**: Septiembre 2026 (v52.0 APEX ADAPTIVE TITANIUM — Sistema de Calibración Continua en Tres Bucles: Anillo 1 Bayesiano SMC <10µs, Anillo 2 HMM/GMM y Walk-Forward ML, Anillo 3 Post-Mortem NVIDIA NIM con Veto en Gatekeeper, Arquitectura Dual Cripto Bitunix 2.5% vs FTMO MetaTrader 5 TradFi 0.75%, Persistencia SQLite WAL y Suite QA Certificada al 100% en VPS).
 
 ---
 
-## 📊 Árbol de Directorios Oficial v51.0
+## 📊 Árbol de Directorios Oficial v52.0
 
 ```text
 Slingshot/
@@ -32,17 +32,27 @@ Slingshot/
 │   │   ├── config.py                # Settings centralizadas (.env) + Watchlist Curada + Umbrales de Riesgo
 │   │   ├── ws_manager.py            # WebSocket broadcaster al frontend (Streaming a 60 FPS SOP-15)
 │   │   └── registry.py              # SymbolBroadcaster y Pulso Global de Telemetría
-│   ├── core/                        # Núcleo del motor, Machine Learning y Persistencia
-│   │   ├── vault.py                 # SQLite WAL Vault — Persistencia Transaccional ACID (SSoT) y Anti-Spam
+│   ├── core/                        # Núcleo del motor, Calibración Bayesiana y Persistencia
+│   │   ├── vault.py                 # SQLite WAL Vault — Persistencia Transaccional ACID (SSoT), Anti-Spam y Vetos
 │   │   ├── confluence.py            # ConfluenceManager — Jurado de 14 Factores SMC + Meta-Labeling ML (+10pts)
+│   │   ├── bayesian_confluence.py   # BayesianConfluenceCalibrator — Anillo 1 Calibración en Tiempo Real (<10µs SOP-72)
 │   │   ├── store.py                 # MemoryStore — Estado persistente por activo y buffers en memoria
 │   │   ├── session_manager.py       # Gestión de sesiones bancarias institucionales (Asia/London/NY Open SOP-29)
-│   │   ├── regime_agent.py          # SlingshotRegimeAgent — Detección Macro y Modulación de Riesgo (0.65x - 1.30x SOP-63)
 │   │   ├── tear_sheet.py            # Quantitative Tear Sheet Generator — Sharpe, Sortino, PF, Drawdown (SOP-60)
 │   │   └── validator.py             # AI Validator Agent — Auditoría narrativa cuantitativa de señales
+│   ├── agents/                      # Agentes Cuantitativos y de Razonamiento Profundo
+│   │   ├── regime_agent.py          # SlingshotRegimeAgent — Detección Macro y Modulación de Riesgo (0.65x - 1.30x SOP-63)
+│   │   ├── regime_hmm.py            # MarketRegimeHMM — Anillo 2 Clasificador GMM/HMM de 4 Estados (SOP-73)
+│   │   └── post_mortem_agent.py     # PostMortemAgent — Anillo 3 Razonamiento NVIDIA NIM y Veto Preventivo (SOP-74)
+│   ├── ml/                          # Pipeline de Machine Learning y Reentrenamiento
+│   │   ├── inference.py             # SlingshotML — Inferencia Meta-Labeling con Hot-Reload Atómico (reload_model)
+│   │   ├── train_rolling.py         # Rolling Walk-Forward Retraining con Guardián OOS ≥ 52% (SOP-73)
+│   │   ├── train.py                 # Entrenamiento base LightGBM / XGBoost
+│   │   └── drift_monitor.py         # Monitor de Drift de Modelo con métricas Kolmogorov-Smirnov
 │   ├── router/                      # Pipeline de señales y Despacho
 │   │   ├── analyzer.py              # MarketAnalyzer — LRU Cache de 200 ítems + SMC Overlays
-│   │   ├── gatekeeper.py            # SignalGatekeeper — Motor Bayesiano + Sovereign Bypass
+│   │   ├── gatekeeper.py            # SignalGatekeeper — Filtro Bayesiano, Veto Post-Mortem y Sovereign Bypass
+│   │   └── telegram_dispatcher.py   # Telegram Dispatcher — Multi-Destinatario Concurrente (SOP-54 / SOP-62)
 │   │   └── telegram_dispatcher.py   # Telegram Dispatcher — Multi-Destinatario Concurrente (SOP-54 / SOP-62)
 │   ├── strategies/                  # Lógica táctica cuantitativa
 │   │   └── smc.py                   # SMCInstitutionalStrategy (Zonas OTE 61.8%-78.6%, Order Blocks y FVGs)
@@ -120,10 +130,13 @@ Slingshot/
 │       ├── test_sop39_sop40_bitunix_dynamic_risk.py # Bitunix 2.5% Dynamic Margin & Buffer Guardrail
 │       ├── test_sop41_sop42_dollar_risk_shield.py   # SOP-41 Dollar-Risk Sizing & SOP-42 Hard-Clamp
 │       ├── test_ci_cd_security_gates.py             # Quality Gates CI/CD y CORS
+│       ├── test_bayesian_confluence_calibration.py  # 5 Pruebas Calibración Bayesiana SMC, Prior Beta(10,10) y Microsegundos (SOP-72)
+│       ├── test_hmm_regime_and_rolling_train.py     # 4 Pruebas HMM 4 Estados, Markov Transition y Hot-Reload Atómico (SOP-73)
+│       ├── test_post_mortem_and_veto_suite.py       # 3 Pruebas Agente Post-Mortem NVIDIA NIM y Veto Gatekeeper (SOP-74)
 │       └── legacy/                                  # Pruebas históricas preservadas
 │
 ├── scripts/                         # ═══ HERRAMIENTAS CLI & DE DESPLIEGUE (SSoT) ═══
-│   ├── verificar_sistema.bat        # Script de verificación integral en Windows/VPS
+│   ├── verificar_sistema.bat        # Script de verificación integral en Windows/VPS (56 tests)
 │   ├── run_qa_suite.py              # Ejecutor automático de suites de pruebas
 │   ├── historical_fetcher.py        # Descargador oficial de Parquets históricos
 │   ├── doctor.py                    # Diagnóstico de puertos, sockets y servicios
@@ -133,6 +146,7 @@ Slingshot/
 └── docs/                            # ═══ DOCUMENTACIÓN TÉCNICA CANÓNICA (SSoT) ═══
     ├── README.md                    # Manual general del ecosistema y especificaciones ejecutivas
     ├── SLINGSHOT_BIBLE_V51.md       # Biblia canónica maestra v51.0 (Especificación completa del sistema)
+    ├── SLINGSHOT_BIBLE_V52.md       # Biblia canónica maestra v52.0 (Tri-Loop Adaptive Calibration, SOP-72 a SOP-74)
     ├── ESTRUCTURA_PROYECTO.md       # Guía de estructura, archivos y módulos (este archivo)
     └── MULTI_ACCOUNT_INSTITUTIONAL_SPEC.md # Especificación técnica de la arquitectura multi-cuenta
 ```

@@ -1400,21 +1400,31 @@ class TradeManager:
 
                             est_r = round(real_pnl_usd / 2.0, 2) if real_pnl_usd != 0 else 0.0
 
-                            vault.record_closed_trade(
-
+                            closed_id = vault.record_closed_trade(
                                 account_id=acc_id,
-
                                 symbol=csym,
-
                                 side=order_side,
-
                                 pnl_r=est_r,
-
                                 pnl_usd=real_pnl_usd,
-
                                 exit_reason=exit_label
-
                             )
+
+                            # SOP-76: Gatillar análisis causal con NVIDIA NIM si fue pérdida
+                            if est_r < 0 or real_pnl_usd < 0:
+                                try:
+                                    from engine.agents.post_mortem_agent import post_mortem_agent
+                                    post_mortem_agent.trigger_async_analysis(
+                                        trade_id=f"closed_{closed_id}",
+                                        symbol=csym,
+                                        side=order_side,
+                                        entry_price=float(filled_order.get("price", 0)),
+                                        exit_price=float(filled_order.get("avgPrice", 0)),
+                                        pnl_r=est_r,
+                                        pnl_usd=real_pnl_usd,
+                                        exit_reason=exit_label
+                                    )
+                                except Exception as pm_err:
+                                    logger.debug(f"[TRADE_MANAGER] Post-mortem trigger omitido: {pm_err}")
 
 
 

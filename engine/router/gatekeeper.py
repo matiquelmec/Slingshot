@@ -302,6 +302,14 @@ class SignalGatekeeper:
                     self._block(sig, "BLOCKED_BY_POLLUTION", f"Incoherencia de precio ({price_diff_pct:.1%}). Posible cruce de activos.", result)
                     continue
 
+            # --- [SOP-76 NVIDIA NIM] Post-Mortem Anti-Pattern Veto Check ---
+            from engine.core.vault import vault
+            is_vetoed, veto_reason = vault.is_symbol_vetoed(asset)
+            if is_vetoed:
+                logger.warning(f"🛑 [GATEKEEPER] [POST_MORTEM_VETO] {asset} bloqueado por regla preventiva: {veto_reason}")
+                self._block(sig, "POST_MORTEM_VETO", f"Veto temporal activo por IA: {veto_reason}", result)
+                continue
+
             try:
                 confluence_result = confluence_manager.evaluate_signal(
                     df=df,

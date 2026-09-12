@@ -15,6 +15,7 @@ from datetime import datetime, timezone
 from engine.api.config import settings
 from typing import Dict, Any, Optional
 from engine.core.logger import logger
+from engine.core.bayesian_confluence import bayesian_calibrator
 
 class ConfluenceManager:
     """
@@ -62,8 +63,8 @@ class ConfluenceManager:
         smt_strength = 0 # Inicialización para evitar NameError [FIX v11.1]
         cluster_hit = False # Inicialización para evitar NameError [FIX v13.6]
 
-        # 1. NARRATIVA ESTRUCTURAL (Peso 15)
-        narrative_weight = 15
+        # 1. NARRATIVA ESTRUCTURAL (Peso Dinámico Bayesiano - Base 15)
+        narrative_weight = bayesian_calibrator.get_weight("narrative_weight", default=15.0)
         total_weight += narrative_weight
         regime = str(current.get('market_regime', signal.get('regime', 'UNKNOWN'))).upper()
         # En Sigma, permitimos operar en RANGING si la estructura interna es fuerte
@@ -75,8 +76,8 @@ class ConfluenceManager:
         else:
             checklist.append({"factor": "Narrativa SMC", "status": "DIVERGENTE", "detail": f"Régimen {regime}"})
 
-        # 2. PUNTOS DE INTERÉS OB/FVG (Peso 40 - EL REY)
-        poi_weight = 40
+        # 2. PUNTOS DE INTERÉS OB/FVG (Peso Dinámico Bayesiano - Base 40)
+        poi_weight = bayesian_calibrator.get_weight("poi_weight", default=40.0)
         total_weight += poi_weight
         
         smc_map = kwargs.get('smc_map', {})
@@ -88,7 +89,7 @@ class ConfluenceManager:
         mitigating_ob = any(ob['bottom'] <= price <= ob['top'] for ob in active_obs)
         mitigating_fvg = any(fvg['bottom'] <= price <= fvg['top'] for fvg in active_fvgs)
         
-        # [SIGMA v9.0] Si es creación fresca (lo que dispara el Sniper), damos 20 pts por cada uno.
+        # [SIGMA v9.0] Si es creación fresca (lo que dispara el Sniper), damos mitad de poi_weight por cada uno.
         # Esto permite que el disparo inicial sea tan válido como el re-test.
         has_ob_creation = bool(current.get('ob_bullish' if is_long else 'ob_bearish', False))
         has_fvg_creation = bool(current.get('fvg_bullish' if is_long else 'fvg_bearish', False))
@@ -96,13 +97,14 @@ class ConfluenceManager:
         has_ob = mitigating_ob or has_ob_creation # FIX BUG-002: required for reasoning builder
         
         poi_pts = 0
-        if has_ob: poi_pts += 20
-        if mitigating_fvg or has_fvg_creation: poi_pts += 20
+        half_poi = poi_weight / 2.0
+        if has_ob: poi_pts += half_poi
+        if mitigating_fvg or has_fvg_creation: poi_pts += half_poi
         
         score += poi_pts
-        if poi_pts >= 40:
+        if poi_pts >= (poi_weight * 0.95):
             checklist.append({"factor": "Zonas POI", "status": "CONFIRMADO", "detail": "Confluencia OB + FVG (Institucional)"})
-        elif poi_pts >= 20:
+        elif poi_pts >= (poi_weight * 0.45):
             checklist.append({"factor": "Zonas POI", "status": "PARCIAL", "detail": "OB o FVG Detectado"})
         else:
             checklist.append({"factor": "Zonas POI", "status": "NEUTRAL", "detail": "Sin POI claro"})
@@ -121,28 +123,33 @@ class ConfluenceManager:
         else:
             checklist.append({"factor": "Yosh Order Flow", "status": "NEUTRAL", "detail": "Sin trampas extremas de Yosh"})
 
-        # 3. LIQUIDEZ Y SWEEPS (Peso 30)
-        # 3. LIQUIDEZ Y SWEEPS (Peso 30 total si hay sesiones)
+        # 3. LIQUIDEZ Y SWEEPS (Peso Dinámico Bayesiano - Base 30/20)
         current_session = session_data.get('current_session') if session_data else None
-        liq_weight = 30 if current_session else 20
+        base_liq = 30.0 if current_session else 20.0
+        liq_weight = bayesian_calibrator.get_weight("liq_weight", default=base_liq)
+        if current_session and liq_weight == 20.0:
+            liq_weight = 30.0
         total_weight += liq_weight
         
         # Detección de barrido (Sweep) usando la nueva lógica de memoria en smc.py
         has_sweep = bool(current.get('recent_sweep_bull' if is_long else 'recent_sweep_bear', False))
         
+        sweep_pts = (liq_weight * (2.0 / 3.0)) if current_session else liq_weight
+        session_pts = (liq_weight * (1.0 / 3.0)) if current_session else 0.0
+        
         if current_session:
-            liq_pts = (10 if current_session != 'OFF_HOURS' else 0) + (20 if has_sweep else 0)
+            liq_pts = (session_pts if current_session != 'OFF_HOURS' else 0) + (sweep_pts if has_sweep else 0)
             detail_str = f"Sweep: {has_sweep} | Session: {current_session}"
         else:
-            liq_pts = (20 if has_sweep else 0)
+            liq_pts = (sweep_pts if has_sweep else 0)
             detail_str = f"Sweep: {has_sweep}"
             
         score += liq_pts
-        status = "CONFIRMADO" if liq_pts >= 20 else "PARCIAL" if liq_pts > 0 else "BAJO"
+        status = "CONFIRMADO" if liq_pts >= (liq_weight * 0.6) else "PARCIAL" if liq_pts > 0 else "BAJO"
         checklist.append({"factor": "Liquidez", "status": status, "detail": detail_str})
 
-        # 4. VOLUMEN INSTITUCIONAL (RVOL) (Peso 15)
-        vol_weight = 15
+        # 4. VOLUMEN INSTITUCIONAL (RVOL) (Peso Dinámico Bayesiano - Base 15)
+        vol_weight = bayesian_calibrator.get_weight("vol_weight", default=15.0)
         total_weight += vol_weight
         rvol = float(current.get('volume', 0)) / vol_mean if vol_mean > 0 else 1.0
         if rvol >= settings.INSTITUTIONAL_VOL_THRESHOLD:
@@ -151,8 +158,8 @@ class ConfluenceManager:
         else:
             checklist.append({"factor": "Huella RVOL", "status": "BAJO", "detail": f"Volumen {rvol:.1f}x"})
 
-        # 5. ALGORITMO NEURAL (Peso 10)
-        ml_weight = 10
+        # 5. ALGORITMO NEURAL (Peso Dinámico Bayesiano - Base 10)
+        ml_weight = bayesian_calibrator.get_weight("ml_weight", default=10.0)
         ml_prob = ml_projection.get('probability') if ml_projection else None
         if ml_prob is not None:
             total_weight += ml_weight
@@ -184,8 +191,8 @@ class ConfluenceManager:
             score += 10 # Bono por volumen en noticia
             checklist.append({"factor": "Contexto Macro", "status": "VOLÁTIL", "detail": "Volumen validado por Noticia de Alto Impacto"})
 
-        # 6. CALENDARIO ECONÓMICO Y NARRATIVA RECIENTE (Peso 20) v5.7.155 Master Gold
-        econ_weight = 20
+        # 6. CALENDARIO ECONÓMICO Y NARRATIVA RECIENTE (Peso Dinámico Bayesiano - Base 20) v5.7.155 Master Gold
+        econ_weight = bayesian_calibrator.get_weight("econ_weight", default=20.0)
         total_weight += econ_weight
         high_impact_near = False
         recent_impact_active = False
@@ -348,8 +355,8 @@ class ConfluenceManager:
         if news_score >= 0.7: score += 5
         elif news_score <= 0.3: score -= 5
 
-        # 🚀 9.5. NEURAL HEATMAP (Peso 20) v5.7 Platinum
-        heatmap_weight = 20
+        # 🚀 9.5. NEURAL HEATMAP (Peso Dinámico Bayesiano - Base 20) v5.7 Platinum
+        heatmap_weight = bayesian_calibrator.get_weight("heatmap_weight", default=20.0)
         total_weight += heatmap_weight
         heatmap = kwargs.get('heatmap', {})
         
@@ -385,10 +392,11 @@ class ConfluenceManager:
         else:
             checklist.append({"factor": "Neural Heatmap", "status": "CALIBRANDO", "detail": "Datos insuficientes"})
 
-        # 🚀 9.6. SMT DIVERGENCE (Peso 15) v11.1 Restoration
+        # 🚀 9.6. SMT DIVERGENCE (Peso Dinámico Bayesiano - Base 15) v11.1 Restoration
+        smt_weight = bayesian_calibrator.get_weight("smt_weight", default=15.0)
         if correlated_df is not None and len(correlated_df) >= 2:
             try:
-                total_weight += 15
+                total_weight += smt_weight
                 c1_asset, c2_asset = df['close'].iloc[-1], df['close'].iloc[-2]
                 c1_corr, c2_corr = correlated_df['close'].iloc[-1], correlated_df['close'].iloc[-2]
                 
@@ -398,15 +406,15 @@ class ConfluenceManager:
                 
                 if asset_trending_up != corr_trending_up:
                     smt_strength = 0.85
-                    score += 15
+                    score += smt_weight
                     checklist.append({"factor": "SMT Divergence", "status": "CONFIRMADO", "detail": "Divergencia institucional (Smart Money Tool)"})
                 else:
                     checklist.append({"factor": "SMT Divergence", "status": "NEUTRAL", "detail": "Correlación en sintonía"})
             except Exception as e:
                 logger.warning(f"[CONFLUENCE] Error en SMT: {e}")
 
-        # 🚀 9.7. ORDER FLOW DELTA & TRIGGER CANDLE (Peso 15) v10.0 Sovereign Apex
-        delta_weight = 15
+        # 🚀 9.7. ORDER FLOW DELTA & TRIGGER CANDLE (Peso Dinámico Bayesiano - Base 15) v10.0 Sovereign Apex
+        delta_weight = bayesian_calibrator.get_weight("delta_weight", default=15.0)
         total_weight += delta_weight
         order_flow_delta = float(current.get('order_flow_delta', 0.0))
         
@@ -422,8 +430,8 @@ class ConfluenceManager:
         else:
             checklist.append({"factor": "Order Flow Delta", "status": "NEUTRAL", "detail": f"Delta equilibrado ({order_flow_delta:+.2f})"})
 
-        # 🚀 9.8. CUMULATIVE VOLUME DELTA (CVD) & L2 IMPALANCE (Peso 15) v37.0 Apex Quantum
-        cvd_weight = 15
+        # 🚀 9.8. CUMULATIVE VOLUME DELTA (CVD) & L2 IMPALANCE (Peso Dinámico Bayesiano - Base 15) v37.0 Apex Quantum
+        cvd_weight = bayesian_calibrator.get_weight("cvd_weight", default=15.0)
         total_weight += cvd_weight
         try:
             from engine.indicators.volume import calculate_cvd_divergence
@@ -449,8 +457,8 @@ class ConfluenceManager:
         except Exception as cvd_err:
             checklist.append({"factor": "CVD Divergence", "status": "NEUTRAL", "detail": "CVD en calibración"})
 
-        # 🛡️ 9.9. DAILY ANCHORED VWAP INSTITUTIONAL ANCHOR (Peso 15) v38.0 SOP-27
-        vwap_weight = 15
+        # 🛡️ 9.9. DAILY ANCHORED VWAP INSTITUTIONAL ANCHOR (Peso Dinámico Bayesiano - Base 15) v38.0 SOP-27
+        vwap_weight = bayesian_calibrator.get_weight("vwap_weight", default=15.0)
         total_weight += vwap_weight
         try:
             vwap_dist = float(current.get('vwap_dist_pct', 0.0))
@@ -702,11 +710,11 @@ class ConfluenceManager:
             ema800_val = float(df['ema800'].iloc[-1]) if 'ema800' in df.columns else None
             if ema800_val and ema800_val > 0:
                 is_htf_aligned = (is_long and price_curr > ema800_val) or (not is_long and price_curr < ema800_val)
-                htf_weight = 15
+                htf_weight = bayesian_calibrator.get_weight("htf_weight", default=15.0)
                 total_weight += htf_weight
                 if is_htf_aligned:
                     score += htf_weight
-                    checklist.append({"factor": "Tendencia 4H HTF", "status": "CONFIRMADO", "detail": "Alineado con la Tendencia Institucional 4H (+15pts)"})
+                    checklist.append({"factor": "Tendencia 4H HTF", "status": "CONFIRMADO", "detail": f"Alineado con la Tendencia Institucional 4H (+{int(htf_weight)}pts)"})
                 else:
                     score -= 10
                     checklist.append({"factor": "Tendencia 4H HTF", "status": "DIVERGENTE", "detail": "Operando contra la Tendencia Institucional 4H (-10pts)"})
@@ -921,7 +929,7 @@ class ConfluenceManager:
             if 'multiplier' not in locals(): multiplier = 1.0
 
         # 🚀 10. ALINEACIÓN HTF (Peso 25 — EL ANCLA) v5.7.155 Master Gold
-        onchain_weight = 15
+        onchain_weight = bayesian_calibrator.get_weight("onchain_weight", default=15.0)
         onchain_bias = kwargs.get('onchain_bias')
         
         if onchain_bias and onchain_bias != 'NEUTRAL':
@@ -992,6 +1000,10 @@ class ConfluenceManager:
                 "ker": safe_ker,
                 "status": health_status,
                 "is_quarantined": is_quarantined
+            },
+            "calibration": {
+                "mode": "BAYESIAN_ADAPTIVE",
+                "weights": bayesian_calibrator.get_all_weights()
             }
         }
 

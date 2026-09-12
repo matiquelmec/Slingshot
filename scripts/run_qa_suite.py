@@ -62,7 +62,10 @@ MODERN_TEST_FILES = [
     "engine/tests/test_ci_cd_security_gates.py",
     "engine/tests/test_sop43_to_sop45_advanced_quant_improvements.py",
     "engine/tests/test_backtest_institutional_ssot.py",
-    "engine/tests/test_event_driven_portfolio_backtest.py"
+    "engine/tests/test_event_driven_portfolio_backtest.py",
+    "engine/tests/test_bayesian_confluence_calibration.py",
+    "engine/tests/test_hmm_regime_and_rolling_train.py",
+    "engine/tests/test_post_mortem_and_veto_suite.py"
 ]
 
 def main():

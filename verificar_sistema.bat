@@ -23,12 +23,15 @@ C:\Slingshot\.venv\Scripts\pytest ^
     engine/tests/test_institutional_vulnerabilities_and_risk_fixes.py ^
     engine/tests/test_quantum_ai_and_sentinel_suite.py ^
     engine/tests/test_weekly_tear_sheet_and_auto_retrain_suite.py ^
-    engine/tests/test_regime_agent_and_adaptive_sizing_suite.py -q
+    engine/tests/test_regime_agent_and_adaptive_sizing_suite.py ^
+    engine/tests/test_bayesian_confluence_calibration.py ^
+    engine/tests/test_hmm_regime_and_rolling_train.py ^
+    engine/tests/test_post_mortem_and_veto_suite.py -q
 if %ERRORLEVEL% NEQ 0 (
     echo [ERROR] Fallaron los tests unitarios. Despliegue abortado.
     exit /b 1
 )
-echo [OK] 44/44 tests aprobados al 100%%.
+echo [OK] 56/56 tests aprobados al 100%%.
 
 echo.
 echo [2/4] Verificando higiene de raiz y seguridad (.env)...

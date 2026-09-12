@@ -39,6 +39,26 @@ class SlingshotML:
         except Exception as ort_err:
             pass
 
+    def reload_model(self, model_filename: str = "slingshot_xgb_15m_v2.json") -> bool:
+        """
+        Recarga el modelo XGBoost en caliente (Hot-Reload) sin interrumpir el servicio.
+        """
+        model_path = Path(__file__).parent / "models" / model_filename
+        if not model_path.exists():
+            logger.warning(f"[ML ENGINE] Archivo de modelo no encontrado para reload: {model_path}")
+            return False
+
+        try:
+            new_model = xgb.XGBClassifier()
+            new_model.load_model(str(model_path))
+            self.model = new_model
+            self.is_loaded = True
+            logger.info(f"🔥 [ML ENGINE] Hot-Reload exitoso: {model_filename} activo en memoria.")
+            return True
+        except Exception as err:
+            logger.error(f"❌ [ML ENGINE] Error durante Hot-Reload de modelo: {err}")
+            return False
+
     def predict_live(self, df: pd.DataFrame) -> dict:
         """
         Toma el DataFrame en tiempo real (buffer de velas), calcula las features,

@@ -158,6 +158,21 @@ class SlingshotRegimeAgent:
             confidence = 0.70
             guideline = "Mercado en equilibrio o rotación inter-sesión. Asignación nominal 100% de riesgo."
 
+        # ── SOP-75 HMM PROBABILISTIC HYBRID OVERLAY ──
+        try:
+            from engine.agents.regime_hmm import hmm_regime_detector
+            # Si tenemos velas de BTC o del primer activo representativo
+            lead_df = symbols_data.get("BTCUSDT", next(iter(symbols_data.values()), None))
+            if lead_df is not None and len(lead_df) >= 30:
+                hmm_state = hmm_regime_detector.predict_regime_state(lead_df)
+                # Ponderación híbrida: Si el HMM detecta SHOCK o COMPRESSION con alta certeza (>75%)
+                if hmm_state.confidence >= 0.75 and hmm_state.primary_regime.value in ("HIGH_VOL_SHOCK", "CHOP_COMPRESSION"):
+                    multiplier = min(multiplier, hmm_state.risk_multiplier)
+                    confidence = (confidence + hmm_state.confidence) / 2.0
+                    guideline += f" [HMM Alerta: {hmm_state.primary_regime.value} ({hmm_state.confidence*100:.0f}%)]"
+        except Exception as hmm_err:
+            logger.debug(f"[REGIME AGENT] HMM Overlay omitido: {hmm_err}")
+
         assessment = RegimeAssessment(
             regime=regime,
             confidence=confidence,
@@ -181,16 +196,23 @@ class SlingshotRegimeAgent:
 
     def check_ml_health_and_trigger_retrain(self, drift_report: DriftReport, min_accuracy: float = 0.52) -> bool:
         """
-        Evalúa el reporte del Drift Monitor y dispara el reentrenamiento condicional atómico si hay obsolescencia.
+        Evalúa el reporte del Drift Monitor y dispara el reentrenamiento Walk-Forward continuo (SOP-75)
+        con hot-reload sin downtime.
         """
         if not drift_report:
             return False
 
         if drift_report.drift_level == "SEVERE" or drift_report.alert_triggered or (drift_report.rolling_accuracy > 0 and drift_report.rolling_accuracy < 0.45):
-            logger.warning(f"🚨 [REGIME AGENT] Obsolescencia de modelo detectada (PSI Max: {drift_report.psi_max:.3f}, Acc: {drift_report.rolling_accuracy:.2%}). Disparando SOP-61 Safe Auto-Retrain...")
-            success, msg = safe_auto_retrain(min_accuracy=min_accuracy)
-            logger.info(f"🧠 [REGIME AGENT] Resultado de auto-retrain condicional: {msg}")
-            return success
+            logger.warning(f"🚨 [REGIME AGENT] Obsolescencia detectada (PSI Max: {drift_report.psi_max:.3f}, Acc: {drift_report.rolling_accuracy:.2%}). Disparando SOP-75 Rolling Walk-Forward Retrain...")
+            try:
+                from engine.ml.train_rolling import rolling_trainer
+                res = rolling_trainer.train_and_atomic_hot_reload()
+                logger.info(f"🧠 [REGIME AGENT] Resultado Walk-Forward Rolling Retrain: {res.get('status')} (Acc: {res.get('accuracy', 0):.2%})")
+                return res.get("status") == "promoted"
+            except Exception as e:
+                logger.error(f"❌ [REGIME AGENT] Error en reentrenamiento rodante: {e}")
+                success, msg = safe_auto_retrain(min_accuracy=min_accuracy)
+                return success
         return False
 
     def format_telegram_regime_report(self, assessment: RegimeAssessment) -> str:

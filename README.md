@@ -1,15 +1,16 @@
-# 🛡️ SLINGSHOT v51.0 APEX MULTI-MARKET TITANIUM — Autonomous Institutional Dual Terminal
+# 🛡️ SLINGSHOT v52.0 APEX ADAPTIVE TITANIUM — Autonomous Institutional Dual Terminal
 
-> **"Terminal Cuantitativa Autónoma de Grado Institucional. Slingshot v51.0 APEX MULTI-MARKET TITANIUM: Arquitectura Dual de Alto Rendimiento que integra la Operativa Continua de Criptomonedas (Bitunix Futures 24/7 con Riesgo Real al 2.5%, Interés Compuesto Automático SOP-39, Sizing en Dólares SOP-41, Pre-Flight Hard-Clamp SOP-42, Convicción 'Trinidad del Alfa' SOP-47, Malla MFE 40/40/20 con Runner Elástico KER a +5.0R SOP-48 y Bóveda Criptográfica Multi-Cuenta con Cifrado AES-256 Fernet SOP-57/58) y la Ejecución Desatendida en Cuentas de Fondeo (FTMO MetaTrader 5 TradFi con Despachador Autónomo SOP-64 para Confluencias ≥ 75%, Poda de Activos Tóxicos SOP-67 con Concentración en Cartera Tier A: XAUUSD Long-Only SOP-68, US100, GBPUSD, US30; Cosecha Escalonada 50 / 30 / 20 SOP-26 con Cierres Parciales Nativos en MT5 SOP-66 mediante TRADE_ACTION_DEAL, Resolución Dinámica de Broker FOK/IOC SOP-65, Invalidación Temprana SOP-25 a -0.65R y Guardián de Prop-Firm con Kill-Switch a -3.5%). Inferencia Neural Meta-Labeling (XGBoost / ONNX en ConfluenceManager +10pts), Agente Autónomo de Régimen Cuantitativo SOP-63 (0.65x a 1.30x), Despachador Periódico de Tear Sheets Ejecutivos a Telegram (SOP-60 / SOP-62), Kernel Vectorial en Rust Polars (Sub-2.5ms SOP-09), Persistencia ACID en SQLite WAL (SOP-53) y Terminal Reactiva Frontend en Next.js 15 con Streaming WebSockets a 60 FPS (SOP-15). Canon Inmutable de los 68 Protocolos de Seguridad Operativa (SOP-01 a SOP-71)."**
+> **"Terminal Cuantitativa Autónoma de Grado Institucional. Slingshot v52.0 APEX ADAPTIVE TITANIUM: Arquitectura Dual de Alto Rendimiento que integra la Operativa Continua de Criptomonedas (Bitunix Futures 24/7 con Riesgo Real al 2.5%, Interés Compuesto Automático SOP-39, Sizing en Dólares SOP-41, Pre-Flight Hard-Clamp SOP-42, Convicción 'Trinidad del Alfa' SOP-47, Malla MFE 40/40/20 con Runner Elástico KER a +5.0R SOP-48 y Bóveda Criptográfica Multi-Cuenta con Cifrado AES-256 Fernet SOP-57/58) y la Ejecución Desatendida en Cuentas de Fondeo (FTMO MetaTrader 5 TradFi con Despachador Autónomo SOP-64 para Confluencias ≥ 75%, Poda de Activos Tóxicos SOP-67 con Concentración en Cartera Tier A: XAUUSD Long-Only SOP-68, US100, GBPUSD, US30; Cosecha Escalonada 50 / 30 / 20 SOP-26 con Cierres Parciales Nativos en MT5 SOP-66 mediante TRADE_ACTION_DEAL, Resolución Dinámica de Broker FOK/IOC SOP-65, Invalidación Temprana SOP-25 a -0.65R y Guardián de Prop-Firm con Kill-Switch a -3.5%). Sistema de Calibración Continua en Tres Bucles Adaptativos: Anillo 1 de Calibración Bayesiana SMC en Tiempo Real (<10µs, Prior Conjugado Beta-Binomial y Clamping [0.50x - 1.60x] SOP-72), Anillo 2 de Clasificación Probabilística de Regímenes de Mercado HMM/GMM con Reentrenamiento Walk-Forward y Hot-Reload Atómico (SOP-73), y Anillo 3 de Diagnóstico Causal Post-Mortem Asíncrono con Modelos de Razonamiento NVIDIA NIM (DeepSeek v4 Flash & Nemotron 3.5) con Veto Preventivo de Activos Tóxicos en Gatekeeper (SOP-74). Canon Inmutable de los 74 Protocolos de Seguridad Operativa (SOP-01 a SOP-74)."**
 
 ![Status](https://img.shields.io/badge/Status-100%25_AUTONOMOUS_&_SSOT_VERIFIED-0d2a1a?style=for-the-badge&logo=codeproject&logoColor=fff)
-![Version](https://img.shields.io/badge/Version-51.0_Apex_Multi--Market_Titanium-1a3a6e?style=for-the-badge)
+![Version](https://img.shields.io/badge/Version-52.0_Apex_Adaptive_Titanium-1a3a6e?style=for-the-badge)
 ![NVIDIA NIM](https://img.shields.io/badge/AI_Engine-NVIDIA_NIM_Nemotron_3.5_&_DeepSeek-76b900?style=for-the-badge&logo=nvidia&logoColor=fff)
+![Adaptive System](https://img.shields.io/badge/Adaptive_Engine-Tri--Loop_Bayes_HMM_NIM-9b59b6?style=for-the-badge)
 ![Crypto Engine](https://img.shields.io/badge/Bitunix_Crypto-2.5%25_Compounded_Live-f39c12?style=for-the-badge&logo=bitcoin&logoColor=fff)
 ![MetaTrader 5](https://img.shields.io/badge/MetaTrader_5-FTMO_Institutional_Live-2980b9?style=for-the-badge&logo=windows&logoColor=fff)
 ![Execution Engine](https://img.shields.io/badge/Execution-SOP--64_Auto--Dispatcher_≥75%25-green?style=for-the-badge)
-![Security](https://img.shields.io/badge/Security_Protocols-SOP--01%20to%20SOP--71-emerald?style=for-the-badge)
-![QA Suite](https://img.shields.io/badge/QA_Suite-316_Tests_100%25_Passed-success?style=for-the-badge)
+![Security](https://img.shields.io/badge/Security_Protocols-SOP--01%20to%20SOP--74-emerald?style=for-the-badge)
+![QA Suite](https://img.shields.io/badge/QA_Suite-328_Tests_100%25_Passed-success?style=for-the-badge)
 ![Crypto Return](https://img.shields.io/badge/Crypto_Return-%2B94.75_R_(+$94%2C750_USD)-gold?style=for-the-badge)
 ![FTMO ROI](https://img.shields.io/badge/FTMO_180d_ROI-%2B76.98%25_($76%2C984_USD)-gold?style=for-the-badge)
 ![Crypto Profit Factor](https://img.shields.io/badge/Crypto_PF-1.99_Robusto-blue?style=for-the-badge)
@@ -44,17 +45,18 @@ Slingshot es una **Terminal de Inteligencia y Ejecución Cuantitativa Institucio
    * **Invalidación Temprana SOP-25 en MT5:** Corte a mercado preventivo a $-0.65\text{R}$ (ahorra 35% del Stop Loss) y purga de órdenes huérfanas si el precio toca TP1 sin activar la entrada.
    * **Resolución Dinámica de Broker (SOP-65):** Adaptación en vivo a modos de llenado `ORDER_FILLING_FOK` / `ORDER_FILLING_IOC` y redondeo de precios con la precisión exacta (`sym_info.digits`) por contrato.
 
-3. **Inteligencia Artificial y Núcleo de Rendimiento:**
-   * **Machine Learning Meta-Labeling:** Modelo XGBoost/ONNX integrado en `ConfluenceManager` que inyecta $+10$ puntos de confluencia ante confirmación estadística ($\ge 60\%$) o penaliza $-5$ puntos ante contradicción ($\ge 70\%$).
-   * **Agente de Régimen Cuantitativo (SOP-63):** Modulación continua de riesgo (0.65x a 1.30x) según volatilidad, ADX, KER y detección de deriva de modelo (*Drift ML*).
+3. **Inteligencia Artificial y Sistema de Calibración Continua Tri-Bucle:**
+   * **Anillo 1 — Calibración Bayesiana SMC en Tiempo Real (<10µs, SOP-72):** Modelo conjugado Beta-Binomial ($\alpha_0=10, \beta_0=10$) que recalcula in-memory el multiplicador de peso de cada factor SMC ($M_f \in [0.50x, 1.60x]$) según su win-rate posterior empírico, eliminando la degradación por desestructuración de mercado.
+   * **Anillo 2 — Clasificador de Regímenes HMM & Walk-Forward ML (SOP-73):** GMM probabilístico de 4 estados con matriz markoviana de transición, acoplado a un reentrenador Walk-Forward con guardián out-of-sample ($\ge 52\%$) y reemplazo atómico en caliente (`reload_model()`) sin downtime.
+   * **Anillo 3 — Centinela Post-Mortem Asíncrono con NVIDIA NIM (SOP-74):** Modelos de razonamiento profundo (`deepseek-v4-flash` / `nemotron-3.5-lightning`) que diagnostican pérdidas en segundo plano y aplican vetos temporales de 4h a 24h en `Gatekeeper` para prevenir repeticiones de trampas institucionales.
    * **Kernel en Rust Polars (SOP-09):** Procesamiento vectorial sub-$2.5\text{ ms}$ para cálculo de 14 factores SMC y confluencias.
-   * **Bóveda SQLite WAL Transaccional (SOP-53):** Persistencia ACID de sesiones, bitácora inmutable y buffers tolerantes a reinicios.
+   * **Bóveda SQLite WAL Transaccional (SOP-53):** Persistencia ACID de sesiones, bitácora inmutable, vetos y buffers tolerantes a reinicios.
    * **Reportería Tear Sheets (SOP-60 / SOP-62):** Generador de métricas de Grado Institucional (Sharpe, Sortino, Drawdown, Profit Factor) con despacho periódico a canales de Telegram.
    * **Frontend Reactivo en Next.js 15 (SOP-15):** Radar multiactivo, gráficos interactivos con overlays SMC, visualización de posiciones vivas y streaming a 60 FPS.
 
 ---
 
-## 🏛️ Arquitectura Global del Sistema Slingshot v51.0 Titanium
+## 🏛️ Arquitectura Global del Sistema Slingshot v52.0 Adaptive Titanium
 
 ```mermaid
 graph TB
@@ -97,7 +99,7 @@ graph TB
 
 ---
 
-## 🛡️ Tabla Maestra: El Canon de los 68 Protocolos SOP
+## 🛡️ Tabla Maestra: El Canon de los 74 Protocolos SOP (SOP-01 a SOP-74)
 
 | Protocolo | Nombre Técnico | Especificación Matemática & Blindaje de Mercado |
 | :--- | :--- | :--- |
@@ -167,7 +169,9 @@ graph TB
 | **SOP-69** | Normalización Dinámica XAUUSDT | Precisión contractual por API de exchange y erradicación de PAXG. |
 | **SOP-70** | Desacoplamiento Ortogonal Trailing Stop | Poda de riesgo en paralelo sin cortar el avance de Fast Break-Even ni Trailing. |
 | **SOP-71** | Streaming Dinámico Radar 14 VIP & TradFi | Hidratación viva en /api/v1/market-states y consumo dinámico en OpportunitiesScanner. |
-| **SOP-72** | Inferencia Agéntica NVIDIA NIM | Orquestación en la nube con Nemotron 3.5 Lightning, DeepSeek-v4 y fallback en cascada a OpenRouter/Groq. |
+| **SOP-72** | Calibración Bayesiana SMC (Anillo 1) | Actualización continua de pesos SMC por verosimilitud Beta-Binomial in-memory (<10µs, clamp [0.50x-1.60x]). |
+| **SOP-73** | Regímenes HMM & Walk-Forward (Anillo 2) | Clasificador GMM/HMM de 4 estados con matrices de Markov y hot-reload atómico de modelos ML. |
+| **SOP-74** | Centinela Post-Mortem NVIDIA NIM (Anillo 3) | Diagnóstico causal con LLMs de razonamiento y cuarentena preventiva temporal (4h-24h) en Gatekeeper. |
 
 ---
 
@@ -240,6 +244,9 @@ Para certificar la integridad del sistema en el VPS de producción:
 ```powershell
 # Certificación TradFi / FTMO Titanium (21 Tests)
 pytest C:\Slingshot\engine\tests\test_ftmo_titanium_strategy.py C:\Slingshot\engine\tests\test_tradfi_scanner_and_risk.py -v
+
+# Certificación Sistema Adaptativo Tri-Bucle (12 Tests)
+pytest C:\Slingshot\engine\tests\test_bayesian_confluence_calibration.py C:\Slingshot\engine\tests\test_hmm_regime_and_rolling_train.py C:\Slingshot\engine\tests\test_post_mortem_and_veto_suite.py -v
 
 # Certificación Multi-Cuenta & Resiliencia Institucional (38 Tests)
 pytest C:\Slingshot\engine\tests\test_multi_account_advanced_security_and_resilience.py -v
