@@ -394,11 +394,10 @@ async def get_bitunix_telemetry():
     if hasattr(nexus, "account_manager"):
         if hasattr(nexus.account_manager, "_executors"):
             executor = nexus.account_manager._executors.get("primary")
-        elif hasattr(nexus.account_manager, "executors"):
-            executor = nexus.account_manager.executors.get("primary")
     if executor is None:
         executor = nexus.executor
 
+    try:
         data = await asyncio.wait_for(executor.get_account_telemetry_summary(), timeout=8.0)
         if data and data.get("connected"):
             # Protección Anti-Flapping SSoT: Si la respuesta trae 0 posiciones pero el cache anterior
