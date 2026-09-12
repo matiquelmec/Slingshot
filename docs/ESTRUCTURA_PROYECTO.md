@@ -53,7 +53,11 @@ Slingshot/
 │   │   ├── analyzer.py              # MarketAnalyzer — LRU Cache de 200 ítems + SMC Overlays
 │   │   ├── gatekeeper.py            # SignalGatekeeper — Filtro Bayesiano, Veto Post-Mortem y Sovereign Bypass
 │   │   └── telegram_dispatcher.py   # Telegram Dispatcher — Multi-Destinatario Concurrente (SOP-54 / SOP-62)
-│   │   └── telegram_dispatcher.py   # Telegram Dispatcher — Multi-Destinatario Concurrente (SOP-54 / SOP-62)
+│   ├── aiq/                         # ═══ NVIDIA AI-Q Blueprint: Inteligencia Agéntica Institucional ═══
+│   │   ├── config.py                # AIQSettings — Catálogo NIM (Nemotron 3.5, DeepSeek v4, Ultra 550b, Kumo)
+│   │   ├── relational_connector.py  # Conector Relacional Multi-Tabla (Kumo Relational Foundation Model)
+│   │   ├── semantic_memory.py       # Memoria Semántica Vectorial con nemotron-3-embed-1b y Similitud Coseno
+│   │   └── agent_router.py          # Enrutador Agéntico Multi-Nivel (Sub-segundo Causal & Macro Semanal)
 │   ├── strategies/                  # Lógica táctica cuantitativa
 │   │   └── smc.py                   # SMCInstitutionalStrategy (Zonas OTE 61.8%-78.6%, Order Blocks y FVGs)
 │   ├── indicators/                  # Indicadores Técnicos, de Volumen y Conectores de Datos
@@ -68,10 +72,12 @@ Slingshot/
 │   ├── risk/                        # Gestión y Guardianes de Riesgo Institucional
 │   │   ├── risk_manager.py          # RiskManager — SOP-25 (-0.65R), SOP-26 (40/40/20) & SOP-32/33 Kelly
 │   │   ├── ftmo_guardian.py         # FTMO Guardian Shield — Lotes Adaptativos, Midnight Rollover y Kill-Switch (-3.5%)
-│   │   └── cluster_risk_guard.py    # Cluster Risk Guard — Covarianza rodante en vivo (ρ >= 0.75) y SOP-30 Beta
+│   │   ├── cluster_risk_guard.py    # Cluster Risk Guard — Covarianza rodante en vivo (ρ >= 0.75) y SOP-30 Beta
+│   │   └── hrp_allocator.py         # HierarchicalRiskParityAllocator — Optimizador HRP (Marcos López de Prado)
 │   ├── execution/                   # Ejecución Institucional en Exchanges y MetaTrader
 │   │   ├── nexus.py                 # Nexus Node — Router Multi-Mercado, SOP-39 Dynamic Equity & SOP-40 Buffer
 │   │   ├── account_manager.py       # AccountManager — Bóveda Multi-Tenant Cifrada AES-256 Fernet (SOP-57)
+│   │   ├── omni_broker_hub.py       # OmniBrokerHub — Orquestador Multi-Broker Prop-Firm (Bitunix + FTMO MT5)
 │   │   ├── bitunix_executor.py      # Conector Bitunix Futures — Dynamic Decimals, HMAC-SHA256 y Post-Only
 │   │   ├── mt5_bridge.py            # Puente MetaTrader 5 — SOP-65 Dynamic FOK/IOC y SOP-66 Cierres Parciales Nativos
 │   │   ├── delta_executor.py        # Fragmentador de Órdenes Iceberg
