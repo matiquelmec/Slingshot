@@ -86,7 +86,12 @@ export default function BitunixPage() {
             const res = await fetch(`${apiHost}/api/v1/bitunix/telemetry`);
             if (res.ok) {
                 const json = await res.json();
-                setData(json);
+                if (json && (json.connected || json.equity > 0 || json.positions_count > 0)) {
+                    setData(json);
+                } else {
+                    // Si viene una desconexión momentánea, preservar el estado anterior
+                    setData(prev => prev ? { ...prev, connected: false } : json);
+                }
             }
         } catch (e) {
             console.warn("Bitunix Terminal: Error consultando telemetría en vivo:", e);

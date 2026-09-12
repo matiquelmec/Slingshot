@@ -11,6 +11,7 @@ from typing import Optional, List
 import httpx
 import pandas as pd
 import asyncio
+import time
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Query, HTTPException
@@ -337,6 +338,10 @@ async def get_ftmo_positions_and_telemetry():
     }
 
 
+# Cache en memoria de telemetría para estabilidad de UI y cero parpadeos
+_last_bitunix_telemetry_cache = None
+_last_bitunix_telemetry_time = 0.0
+
 @app.get("/api/v1/bitunix/telemetry")
 async def get_bitunix_telemetry():
     """
@@ -345,7 +350,15 @@ async def get_bitunix_telemetry():
     - Posiciones abiertas en tiempo real con Stop Loss condicional activo y Take Profits en libro.
     - Órdenes límite pendientes en exchange.
     - Configuración canónica de riesgo institucional al 2.50% (SOP-41).
+    - Cache protector anti-flicker: Si Bitunix API tarda o hay micro-lag, mantiene los datos en pantalla.
     """
+    global _last_bitunix_telemetry_cache, _last_bitunix_telemetry_time
+    now = time.time()
+
+    # Si hay una respuesta fresca de hace menos de 1.5s, devolverla directamente
+    if _last_bitunix_telemetry_cache and (now - _last_bitunix_telemetry_time) < 1.5:
+        return _last_bitunix_telemetry_cache
+
     from engine.execution.nexus import nexus
     executor = None
     if hasattr(nexus, "account_manager"):
@@ -357,10 +370,17 @@ async def get_bitunix_telemetry():
         executor = nexus.executor
 
     try:
-        data = await asyncio.wait_for(executor.get_account_telemetry_summary(), timeout=10.0)
+        data = await asyncio.wait_for(executor.get_account_telemetry_summary(), timeout=8.0)
+        if data and data.get("connected"):
+            _last_bitunix_telemetry_cache = data
+            _last_bitunix_telemetry_time = now
         return data
     except Exception as e:
-        logger.error(f"❌ Error en endpoint /api/v1/bitunix/telemetry: {e}")
+        logger.warning(f"⚠️ [BITUNIX TELEMETRY] Micro-latencia o excepción ({e}). Usando caché de resiliencia...")
+        if _last_bitunix_telemetry_cache:
+            # Preservar datos en pantalla y evitar reseteo a 0
+            return _last_bitunix_telemetry_cache
+
         return {
             "account_label": getattr(executor, "account_label", "Cuenta Principal"),
             "connected": False,
