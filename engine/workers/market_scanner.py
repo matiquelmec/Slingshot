@@ -416,7 +416,7 @@ class MarketScanner:
                         "asset": symbol,
                         "price": current_price,
                         "current_price": current_price,
-                        "regime": regime,
+                        "regime": result.get("market_regime", "RANGING"),
                         "bias": direction,
                         "session": session_data.get("current_session", "UNKNOWN"),
                         "last_updated": datetime.now(timezone.utc).isoformat()
