@@ -1244,7 +1244,16 @@ class BitunixExecutor:
         - Parámetros de riesgo institucional (2.50% SOP-41).
         """
         start_t = time.time()
-        res_acc = await self._request("GET", "/api/v1/futures/account", params={"marginCoin": "USDT"})
+        # [PARALLEL TELEMETRY PIPELINE] Consulta concurrente de cuenta, posiciones y órdenes
+        acc_task = self._request("GET", "/api/v1/futures/account", params={"marginCoin": "USDT"})
+        pos_task = self.get_pending_positions()
+        orders_task = self.get_pending_orders()
+        gather_res = await asyncio.gather(acc_task, pos_task, orders_task, return_exceptions=True)
+
+        res_acc = gather_res[0] if not isinstance(gather_res[0], Exception) and isinstance(gather_res[0], dict) else {}
+        positions_res = gather_res[1] if not isinstance(gather_res[1], Exception) else None
+        raw_orders = gather_res[2] if not isinstance(gather_res[2], Exception) and isinstance(gather_res[2], list) else []
+
         acc_data = res_acc.get("data") or {}
         if isinstance(acc_data, list) and len(acc_data) > 0:
             acc_data = acc_data[0]
@@ -1266,14 +1275,12 @@ class BitunixExecutor:
         if total_equity <= 0.0 and avail_margin > 0.0:
             total_equity = avail_margin + used_margin + unrealized_pnl
 
-        positions_res = await self.get_pending_positions()
         if positions_res is not None:
             raw_positions = positions_res
         elif (time.time() - self._last_positions_ts) < self._positions_cache_ttl and self._last_verified_positions:
             raw_positions = self._last_verified_positions
         else:
             raw_positions = []
-        raw_orders = await self.get_pending_orders() or []
 
         # Calcular margen congelado en órdenes de apertura
         frozen_margin = 0.0
@@ -1285,6 +1292,18 @@ class BitunixExecutor:
                     frozen_margin += (p_val * q_val) / 10.0
 
         net_available = max(0.0, avail_margin - frozen_margin)
+
+        # Pre-consultar TPSL en paralelo para todos los símbolos con posiciones activas
+        distinct_syms = list({str(p.get("symbol", "")).upper() for p in raw_positions if p.get("symbol")})
+        tpsl_map = {}
+        if distinct_syms:
+            tpsl_tasks = [self._request("GET", "/api/v1/futures/tpsl/get_pending_orders", params={"symbol": s}) for s in distinct_syms]
+            tpsl_responses = await asyncio.gather(*tpsl_tasks, return_exceptions=True)
+            for s, r in zip(distinct_syms, tpsl_responses):
+                if isinstance(r, dict) and r.get("data"):
+                    tpsl_map[s] = r["data"]
+                else:
+                    tpsl_map[s] = []
 
         # Enriquecer posiciones con órdenes TPSL asociadas
         enriched_positions = []
@@ -1310,13 +1329,6 @@ class BitunixExecutor:
                 or p.get("fairPrice")
                 or 0.0
             )
-            # Si no vino markPrice en la posición, obtenerlo mediante get_ticker_price
-            if mark_p <= 0.0:
-                try:
-                    mark_p = await self.get_ticker_price(sym)
-                except Exception:
-                    mark_p = entry_p
-
             if mark_p <= 0.0:
                 mark_p = entry_p
 
@@ -1350,13 +1362,8 @@ class BitunixExecutor:
 
             total_calc_floating_pnl += pos_pnl
 
-            # Consultar TPSL de esta posición
-            tpsl_orders = []
-            try:
-                res_tpsl = await self._request("GET", "/api/v1/futures/tpsl/get_pending_orders", params={"symbol": sym})
-                tpsl_orders = res_tpsl.get("data") or []
-            except Exception:
-                pass
+            # TPSL de esta posición desde tpsl_map pre-obtenido
+            tpsl_orders = tpsl_map.get(sym, [])
 
             active_sl_price = None
             active_sl_id = None
