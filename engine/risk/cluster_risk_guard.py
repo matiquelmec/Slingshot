@@ -187,5 +187,61 @@ class ClusterRiskGuard:
             
         return True, f"Aprobado por Cluster Risk Guard ({correlated_risk_count}/{self.max_per_cluster} en cluster {new_cluster})"
 
+    def calculate_portfolio_var(
+        self,
+        active_positions: Dict[str, Any],
+        account_balance: float = 1000.0,
+        confidence_level: float = 0.95
+    ) -> Dict[str, Any]:
+        """
+        [PORTFOLIO VaR ENGINE]
+        Calcula el Valor en Riesgo (VaR) paramétrico de la cartera considerando
+        las correlaciones cruzadas entre posiciones abiertas.
+        """
+        if not active_positions:
+            return {"portfolio_var_usd": 0.0, "portfolio_var_pct": 0.0, "status": "SAFE"}
+
+        assets = []
+        dollar_risks = []
+        for a_key, p_data in active_positions.items():
+            sig = p_data.get("signal", {})
+            sym = self._clean_symbol(sig.get("asset") or a_key)
+            sl = float(sig.get("stop_loss") or 0.0)
+            entry = float(sig.get("price") or sig.get("entry_price") or 0.0)
+            qty = float(p_data.get("qty") or sig.get("qty") or 0.0)
+            
+            if entry > 0 and sl > 0 and qty > 0:
+                d_risk = qty * abs(entry - sl)
+                assets.append(sym)
+                dollar_risks.append(d_risk)
+
+        if not dollar_risks:
+            return {"portfolio_var_usd": 0.0, "portfolio_var_pct": 0.0, "status": "SAFE"}
+
+        n = len(assets)
+        w = np.array(dollar_risks, dtype=np.float64)
+        
+        # Construir matriz de correlación
+        corr_matrix = np.eye(n, dtype=np.float64)
+        for i in range(n):
+            for j in range(i + 1, n):
+                c = self.calculate_correlation(assets[i], assets[j])
+                corr_matrix[i, j] = c
+                corr_matrix[j, i] = c
+
+        # VaR de cartera diversificada
+        portfolio_variance = float(np.dot(w.T, np.dot(corr_matrix, w)))
+        portfolio_std = np.sqrt(max(0.0, portfolio_variance))
+        z_score = 1.645 if confidence_level == 0.95 else 2.326
+        portfolio_var_usd = portfolio_std * z_score
+        portfolio_var_pct = (portfolio_var_usd / account_balance) * 100.0 if account_balance > 0 else 0.0
+
+        return {
+            "portfolio_var_usd": round(portfolio_var_usd, 2),
+            "portfolio_var_pct": round(portfolio_var_pct, 2),
+            "correlated_assets_count": n,
+            "status": "EXCEEDED" if portfolio_var_pct > 5.0 else "SAFE"
+        }
+
 # Instancia global singleton
 cluster_risk_guard = ClusterRiskGuard()

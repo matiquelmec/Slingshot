@@ -37,6 +37,7 @@ from engine.indicators.structure import identify_order_blocks
 from engine.indicators.volume import calculate_vwap
 from engine.strategies.smc import SMCInstitutionalStrategy
 from engine.core.confluence import confluence_manager
+from engine.core.execution_kernel import execution_kernel
 from engine.risk.risk_manager import RiskManager
 from engine.core.logger import logger
 

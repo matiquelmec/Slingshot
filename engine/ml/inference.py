@@ -11,22 +11,36 @@ class SlingshotML:
     Motor de Inferencia de ML en Tiempo Real (XGBoost).
     Carga el modelo pre-entrenado en memoria una sola vez para inferencia ultrarrápida.
     """
-    def __init__(self, model_filename: str = "slingshot_xgb_15m_v2.json"):
+    def __init__(self, model_filename: str = None):
         self.model = xgb.XGBClassifier()
         self.is_loaded = False
         self.engineer = FeatureEngineer(target_horizon=2)
         
-        # Intentar cargar el modelo al instanciar
-        model_path = Path(__file__).parent / "models" / model_filename
-        if model_path.exists():
-            try:
-                self.model.load_model(str(model_path))
-                self.is_loaded = True
-                logger.info(f"🧠 [ML ENGINE] Modelo cargado con éxito en memoria: {model_filename}")
-            except Exception as e:
-                logger.error(f"❌ [ML ENGINE] Error cargando el modelo: {e}")
-        else:
-            logger.info(f"⚠️ [ML ENGINE] Modelo no encontrado en {model_path}. Operando en modo degrado.")
+        # Prioridad: 1. filename explícito, 2. v3 Triple-Barrier, 3. v2 fallback
+        models_dir = Path(__file__).parent / "models"
+        candidates = []
+        if model_filename:
+            candidates.append(model_filename)
+        candidates.extend(["slingshot_xgb_15m_v3.json", "slingshot_xgb_15m_v2.json"])
+        
+        loaded_fn = None
+        for fn in candidates:
+            p = models_dir / fn
+            if p.exists():
+                try:
+                    self.model.load_model(str(p))
+                    self.is_loaded = True
+                    loaded_fn = fn
+                    logger.info(f"🧠 [ML ENGINE] Modelo cargado con éxito en memoria: {fn}")
+                    break
+                except Exception as e:
+                    logger.error(f"❌ [ML ENGINE] Error cargando modelo {fn}: {e}")
+                    
+        if not self.is_loaded:
+            logger.info(f"⚠️ [ML ENGINE] Ningún modelo encontrado en {models_dir}. Operando en modo degradado.")
+            loaded_fn = "slingshot_xgb_15m_v2.json"
+        
+        model_filename = loaded_fn
 
         # Intentar cargar motor ONNX Runtime acelerado C++ si existe
         self.onnx_session = None

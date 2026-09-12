@@ -74,9 +74,9 @@ interface BitunixTelemetryData {
     pending_orders: BitunixPendingOrder[];
 }
 
-export default function BitunixPage() {
     const [data, setData] = useState<BitunixTelemetryData | null>(null);
     const [loading, setLoading] = useState(true);
+    const [zeroPositionsPulses, setZeroPositionsPulses] = useState<number>(0);
     const [simEntry, setSimEntry] = useState<number>(0);
     const [simSl, setSimSl] = useState<number>(0);
 
@@ -87,9 +87,25 @@ export default function BitunixPage() {
             if (res.ok) {
                 const json = await res.json();
                 if (json && (json.connected || json.equity > 0 || json.positions_count > 0)) {
-                    setData(json);
+                    setData(prev => {
+                        // SSoT Anti-Flapping: si el nuevo payload viene sin posiciones pero el estado anterior
+                        // tenía posiciones activas, retenerlas durante 2 ciclos (6s) para evitar el parpadeo
+                        if (prev?.positions && prev.positions.length > 0 && (!json.positions || json.positions.length === 0)) {
+                            if (json.is_stabilizing || zeroPositionsPulses < 2) {
+                                setZeroPositionsPulses(p => p + 1);
+                                return {
+                                    ...json,
+                                    positions: prev.positions,
+                                    positions_count: prev.positions.length,
+                                    total_floating_pnl: prev.total_floating_pnl,
+                                    is_stabilizing: true
+                                };
+                            }
+                        }
+                        setZeroPositionsPulses(0);
+                        return json;
+                    });
                 } else {
-                    // Si viene una desconexión momentánea, preservar el estado anterior
                     setData(prev => prev ? { ...prev, connected: false } : json);
                 }
             }

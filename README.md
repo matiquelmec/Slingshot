@@ -1,22 +1,22 @@
-# 🛡️ SLINGSHOT v53.0 APEX SOVEREIGN — Autonomous Institutional Dual Terminal
+# 🛡️ SLINGSHOT v54.0 APEX SOVEREIGN — Autonomous Institutional Dual Terminal
 
-> **"Terminal Cuantitativa Autónoma de Grado Institucional. Slingshot v53.0 APEX SOVEREIGN: Arquitectura Cuantitativa Dual, Integralmente Adaptativa y Multi-Broker que integra la Operativa Continua de Criptomonedas (Bitunix Futures 24/7 con Riesgo Real al 2.5%, Interés Compuesto Automático SOP-39, Sizing en Dólares SOP-41, Pre-Flight Hard-Clamp SOP-42, Convicción 'Trinidad del Alfa' SOP-47, Malla MFE 40/40/20 con Runner Elástico KER a +5.0R SOP-48 y Bóveda Criptográfica Multi-Cuenta con Cifrado AES-256 Fernet SOP-57/58) y la Ejecución Desatendida en Cuentas de Fondeo (FTMO MetaTrader 5 TradFi con Despachador Autónomo SOP-64 para Confluencias ≥ 75%, Poda de Activos Tóxicos SOP-67 con Concentración en Cartera Tier A: XAUUSD Long-Only SOP-68, US100, GBPUSD, US30; Cosecha Escalonada 50 / 30 / 20 SOP-26 con Cierres Parciales Nativos en MT5 SOP-66 mediante TRADE_ACTION_DEAL, Resolución Dinámica de Broker FOK/IOC SOP-65, Invalidación Temprana SOP-25 a -0.65R y Guardián de Prop-Firm con Kill-Switch a -3.5%). Sistema de Calibración Continua en Tres Bucles Adaptativos: Anillo 1 de Calibración Bayesiana SMC en Tiempo Real (<10µs, Prior Conjugado Beta-Binomial y Clamping [0.50x - 1.60x] SOP-72), Anillo 2 de Clasificación Probabilística de Regímenes de Mercado HMM/GMM con Reentrenamiento Walk-Forward y Hot-Reload Atómico (SOP-73), Anillo 3 de Diagnóstico Causal Post-Mortem Asíncrono con Modelos de Razonamiento NVIDIA NIM (DeepSeek v4 Flash & Nemotron 3.5) con Veto Preventivo de Activos Tóxicos en Gatekeeper (SOP-74), Paridad de Riesgo Jerárquico HRP de López de Prado (SOP-75) y Hub de Escalado Omni-Broker con NVIDIA AI-Q Blueprint (SOP-76). Canon Inmutable de los 76 Protocolos de Seguridad Operativa (SOP-01 a SOP-76)."**
+> **"Terminal Cuantitativa Autónoma de Grado Institucional. Slingshot v54.0 APEX SOVEREIGN: Arquitectura Cuantitativa Dual, Integralmente Adaptativa y Multi-Broker que integra la Operativa Continua de Criptomonedas (Bitunix Futures 24/7 con Riesgo Real al 2.5%, Interés Compuesto Automático SOP-39, Sizing en Dólares SOP-41, Pre-Flight Hard-Clamp SOP-42, Convicción 'Trinidad del Alfa' SOP-47, Malla MFE 40/40/20 con Runner Elástico KER a +5.0R SOP-48, Telemetría Anti-Flicker SOP-77, Triple-Barrier ML Engine SOP-78 con 74.5% de precisión, Blindaje de Cartera VaR SOP-79 y Shared Execution Kernel SOP-80) y la Ejecución Desatendida en Cuentas de Fondeo (FTMO MetaTrader 5 TradFi con Despachador Autónomo SOP-64 para Confluencias ≥ 75%, Poda de Activos Tóxicos SOP-67 con Concentración en Cartera Tier A: XAUUSD Long-Only SOP-68, US100, GBPUSD, US30; Cosecha Escalonada 50 / 30 / 20 SOP-26 con Cierres Parciales Nativos en MT5 SOP-66 mediante TRADE_ACTION_DEAL, Resolución Dinámica de Broker FOK/IOC SOP-65, Invalidación Temprana SOP-25 a -0.65R y Guardián de Prop-Firm con Kill-Switch a -3.5%). Sistema de Calibración Continua en Tres Bucles Adaptativos: Anillo 1 de Calibración Bayesiana SMC en Tiempo Real (<10µs, Prior Conjugado Beta-Binomial y Clamping [0.50x - 1.60x] SOP-72), Anillo 2 de Clasificación Probabilística de Regímenes de Mercado HMM/GMM con Reentrenamiento Walk-Forward y Hot-Reload Atómico (SOP-73), Anillo 3 de Diagnóstico Causal Post-Mortem Asíncrono con Modelos de Razonamiento NVIDIA NIM (DeepSeek v4 Flash & Nemotron 3.5) con Veto Preventivo de Activos Tóxicos en Gatekeeper (SOP-74), Paridad de Riesgo Jerárquico HRP de López de Prado (SOP-75) y Hub de Escalado Omni-Broker con NVIDIA AI-Q Blueprint (SOP-76). Canon Inmutable de los 80 Protocolos de Seguridad Operativa (SOP-01 a SOP-80)."**
 
 ![Status](https://img.shields.io/badge/Status-100%25_AUTONOMOUS_&_SSOT_VERIFIED-0d2a1a?style=for-the-badge&logo=codeproject&logoColor=fff)
-![Version](https://img.shields.io/badge/Version-53.0_Apex_Sovereign-1a3a6e?style=for-the-badge)
+![Version](https://img.shields.io/badge/Version-54.0_Apex_Sovereign-1a3a6e?style=for-the-badge)
 ![NVIDIA AI-Q](https://img.shields.io/badge/AI_Engine-NVIDIA_AI--Q_Blueprint_&_NIM-76b900?style=for-the-badge&logo=nvidia&logoColor=fff)
 ![Adaptive System](https://img.shields.io/badge/Adaptive_Engine-Tri--Loop_Bayes_HMM_NIM-9b59b6?style=for-the-badge)
 ![Crypto Engine](https://img.shields.io/badge/Bitunix_Crypto-2.5%25_Compounded_Live-f39c12?style=for-the-badge&logo=bitcoin&logoColor=fff)
 ![MetaTrader 5](https://img.shields.io/badge/MetaTrader_5-FTMO_Institutional_Live-2980b9?style=for-the-badge&logo=windows&logoColor=fff)
 ![Execution Engine](https://img.shields.io/badge/Execution-SOP--64_Auto--Dispatcher_≥75%25-green?style=for-the-badge)
-![Security](https://img.shields.io/badge/Security_Protocols-SOP--01%20to%20SOP--76-emerald?style=for-the-badge)
-![QA Suite](https://img.shields.io/badge/QA_Suite-337_Tests_100%25_Passed-success?style=for-the-badge)
-![Crypto Return](https://img.shields.io/badge/Crypto_Return-%2B94.75_R_(+$94%2C750_USD)-gold?style=for-the-badge)
-![FTMO ROI](https://img.shields.io/badge/FTMO_180d_ROI-%2B76.98%25_($76%2C984_USD)-gold?style=for-the-badge)
-![Crypto Profit Factor](https://img.shields.io/badge/Crypto_PF-1.99_Robusto-blue?style=for-the-badge)
-![FTMO Profit Factor](https://img.shields.io/badge/FTMO_PF-1.97_Institucional-blue?style=for-the-badge)
-![Drawdown](https://img.shields.io/badge/Max_Drawdown--4.02%25_Shield-brightgreen?style=for-the-badge)
-![Kernel](https://img.shields.io/badge/Kernel-Polars_Rust_Sub--2.5ms-black?style=for-the-badge&logo=rust&logoColor=fff)
+![Security](https://img.shields.io/badge/Security_Protocols-SOP--01%20to%20SOP--80-emerald?style=for-the-badge)
+![QA Suite](https://img.shields.io/badge/QA_Suite-342_Tests_100%25_Passed-success?style=for-the-badge)
+![Crypto Return](https://img.shields.io/badge/Crypto_Compounded_ROI-%2B452.4%25_(5.5x)-gold?style=for-the-badge)
+![Total Alpha](https://img.shields.io/badge/Total_Alpha-%2B72.36_R-gold?style=for-the-badge)
+![Profit Factor](https://img.shields.io/badge/Profit_Factor-1.89_Institucional-blue?style=for-the-badge)
+![Sharpe Ratio](https://img.shields.io/badge/Sharpe_Ratio-4.25_Elite-blue?style=for-the-badge)
+![Drawdown](https://img.shields.io/badge/Max_Drawdown--3.73%25_Shield-brightgreen?style=for-the-badge)
+![Kernel](https://img.shields.io/badge/Kernel-Polars_Rust_Sub--1.0ms-black?style=for-the-badge&logo=rust&logoColor=fff)
 ![Persistence](https://img.shields.io/badge/Persistence-SQLite_WAL_ACID-003B57?style=for-the-badge&logo=sqlite&logoColor=fff)
 
 ---

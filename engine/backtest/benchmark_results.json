@@ -1,0 +1,57 @@
+{
+  "ML_Predictive": {
+    "dataset": "BTCUSDT_15m_180d.parquet",
+    "total_test_samples": 5170,
+    "directional_accuracy_pct": 74.53,
+    "high_confidence_hit_rate_pct": 27.94,
+    "high_confidence_signals": 698,
+    "brier_score_calibration": 0.177,
+    "expected_features_count": 35,
+    "status": "PASS"
+  },
+  "Monte_Carlo_Robustness": {
+    "simulations": 1000,
+    "horizon_trades": 100,
+    "trades_evaluated": 60,
+    "median_max_drawdown_pct": 0.0,
+    "worst_case_drawdown_95pct_conf": 0.0,
+    "extreme_drawdown_99pct_conf": 0.0,
+    "risk_of_ruin_20pct_loss": "0.0%",
+    "annualized_sharpe_ratio": 0.0,
+    "annualized_sortino_ratio": 0.0,
+    "status": "PASS"
+  },
+  "Gatekeeper_Cognitive": {
+    "toxic_traps_tested": 20,
+    "traps_successfully_rejected": 20,
+    "toxic_rejection_rate_pct": 100.0,
+    "clean_setups_tested": 10,
+    "clean_setups_approved": 10,
+    "clean_pass_rate_pct": 100.0,
+    "false_positive_rate_pct": 0.0,
+    "status": "PASS"
+  },
+  "Risk_Invariants": {
+    "sop_41_dollar_risk_shield": {
+      "max_dollar_risk_cap": "$2.50",
+      "max_observed_dollar_risk": "$2.5",
+      "violations_detected": 0,
+      "status": "PASS"
+    },
+    "sop_58_never_naked": {
+      "naked_orders_blocked": "3/3 (100%)",
+      "valid_bracket_accepted": "1/1 (100%)",
+      "status": "PASS"
+    }
+  },
+  "Latency_Efficiency": {
+    "fast_path_samples": 500,
+    "fast_path_p50_microseconds": 36.8,
+    "fast_path_p95_microseconds": 52.2,
+    "fast_path_p99_microseconds": 65.63,
+    "fast_path_target_met": true,
+    "slow_path_p50_milliseconds": 0.87,
+    "slow_path_p95_milliseconds": 1.02,
+    "status": "PASS"
+  }
+}

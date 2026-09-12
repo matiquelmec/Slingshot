@@ -38,6 +38,9 @@ class BitunixExecutor:
         self._last_time_sync = BitunixExecutor._shared_last_time_sync
         self._last_verified_balance = 0.0
         self._last_balance_ts = 0.0
+        self._last_verified_positions: List[Dict[str, Any]] = []
+        self._last_positions_ts: float = 0.0
+        self._positions_cache_ttl: float = 10.0
         self._recent_algo_closes: Dict[str, float] = {}
         
         if not self.dry_run and (not self.api_key or not self.secret_key):
@@ -1029,16 +1032,28 @@ class BitunixExecutor:
             return False
 
     async def get_pending_positions(self) -> Optional[List[Dict[str, Any]]]:
-        """Obtiene las posiciones abiertas actuales desde Bitunix."""
+        """
+        Obtiene las posiciones abiertas actuales desde Bitunix.
+        Incluye protección Anti-Flapping Cache para evitar borrado temporal ante micro-latencias.
+        """
+        now = time.time()
         try:
             res = await self._request("GET", "/api/v1/futures/position/get_pending_positions")
             if res.get("code") == 0 and isinstance(res.get("data"), list):
+                self._last_verified_positions = res["data"]
+                self._last_positions_ts = now
                 return res["data"]
             else:
                 logger.error(f"❌ Error al obtener posiciones de Bitunix: {res.get('msg')}")
+                if (now - self._last_positions_ts) < self._positions_cache_ttl and self._last_verified_positions:
+                    logger.warning(f"🛡️ [ANTI-FLAPPING] Preservando último snapshot verificado ({len(self._last_verified_positions)} pos) tras error del exchange.")
+                    return self._last_verified_positions
                 return None
         except Exception as e:
             logger.error(f"❌ Error al conectar con endpoint de posiciones: {e}")
+            if (now - self._last_positions_ts) < self._positions_cache_ttl and self._last_verified_positions:
+                logger.warning(f"🛡️ [ANTI-FLAPPING] Preservando último snapshot verificado ({len(self._last_verified_positions)} pos) tras excepción de red: {e}")
+                return self._last_verified_positions
             return None
 
     async def get_pending_orders(self, symbol: Optional[str] = None) -> List[Dict[str, Any]]:
@@ -1251,7 +1266,13 @@ class BitunixExecutor:
         if total_equity <= 0.0 and avail_margin > 0.0:
             total_equity = avail_margin + used_margin + unrealized_pnl
 
-        raw_positions = await self.get_pending_positions() or []
+        positions_res = await self.get_pending_positions()
+        if positions_res is not None:
+            raw_positions = positions_res
+        elif (time.time() - self._last_positions_ts) < self._positions_cache_ttl and self._last_verified_positions:
+            raw_positions = self._last_verified_positions
+        else:
+            raw_positions = []
         raw_orders = await self.get_pending_orders() or []
 
         # Calcular margen congelado en órdenes de apertura

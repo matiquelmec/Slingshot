@@ -371,6 +371,23 @@ class MarketScanner:
                             "detail": f"⚠️ PERSIGUIENDO PRECIO: {chase_label}",
                         })
 
+                    # ── EVALUACIÓN PREVENTIVA DE RIESGO DE CLUSTER & CORRELACIÓN ──
+                    from engine.risk.cluster_risk_guard import cluster_risk_guard
+                    active_positions = getattr(getattr(self.router, "_nexus", None), "_active_positions", {})
+                    can_open_cluster, cluster_reason = cluster_risk_guard.can_open_position(
+                        new_asset=symbol,
+                        new_direction=direction,
+                        confluence_score=base_score,
+                        active_positions=active_positions
+                    )
+
+                    if not can_open_cluster:
+                        checklist.append({
+                            "factor": "Cluster Risk Guard",
+                            "status": "VETO",
+                            "detail": f"🛑 {cluster_reason}",
+                        })
+
                     cand = {
                         "asset":             symbol,
                         "direction":         direction,
@@ -387,6 +404,8 @@ class MarketScanner:
                         "checklist":         checklist,
                         "is_active_trigger": False,
                         "ote_chasing":       is_chasing,
+                        "is_cluster_blocked": not can_open_cluster,
+                        "cluster_reason":    cluster_reason,
                         "session":           session_data.get("current_session", "UNKNOWN"),
                         "asset_health":      conf_res.get("asset_health", {}),
                     }
@@ -413,7 +432,7 @@ class MarketScanner:
             candidates,
             key=lambda x: (
                 1 if x["is_active_trigger"] else 0,
-                0 if x.get("ote_chasing") else 1,  # Setups OTE válidos antes que los que persiguen precio
+                0 if (x.get("ote_chasing") or x.get("is_cluster_blocked")) else 1,
                 x["confluence_score"],
                 x["rr_ratio_tp3"]
             ),
@@ -424,7 +443,7 @@ class MarketScanner:
         # Generar hipótesis para el Top-3 de oportunidades válidas
         try:
             from engine.api.advisor import generate_scanner_hypotheses_batch
-            eligible_for_ai = [c for c in sorted_candidates if c["confluence_score"] >= 60 and not c.get("ote_chasing")]
+            eligible_for_ai = [c for c in sorted_candidates if c["confluence_score"] >= 60 and not c.get("ote_chasing") and not c.get("is_cluster_blocked")]
             if eligible_for_ai:
                 hypotheses = await generate_scanner_hypotheses_batch(eligible_for_ai[:3])
                 hyp_by_asset = {h.get("asset"): h for h in hypotheses if isinstance(h, dict) and h.get("asset")}
@@ -442,15 +461,16 @@ class MarketScanner:
         logger.info(f"🔍 [MARKET_SCANNER v19.1] Guardados {len(sorted_candidates)} setups de {store_key} en el Escáner de Oportunidades.")
 
         # 🚀 [TELEGRAM APEX SNIPER DISPATCHER] ──
-        # Despacho automático de oportunidades con confluencia >= 60% sin persecución de precio ni cuarentena
+        # Despacho automático de oportunidades con confluencia >= 60% sin persecución de precio, sin cuarentena ni veto de cluster
         from engine.router.telegram_dispatcher import telegram_dispatcher
         for top_c in sorted_candidates:
             score = top_c.get("confluence_score", 0)
             is_chasing = top_c.get("ote_chasing", False)
+            is_cluster_blocked = top_c.get("is_cluster_blocked", False)
             is_quarantined = top_c.get("asset_health", {}).get("is_quarantined", False)
             min_score = 65 if is_quarantined else 60
 
-            if score >= min_score and not is_chasing:
+            if score >= min_score and not is_chasing and not is_cluster_blocked:
                 dist_sl = abs(float(top_c["price"]) - float(top_c["stop_loss"]))
                 is_long = "LONG" in top_c["direction"].upper()
                 be_val = top_c.get("be_price") or (float(top_c["price"]) + (dist_sl * 1.0) if is_long else float(top_c["price"]) - (dist_sl * 1.0))

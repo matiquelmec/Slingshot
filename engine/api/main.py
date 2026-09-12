@@ -399,9 +399,15 @@ async def get_bitunix_telemetry():
     if executor is None:
         executor = nexus.executor
 
-    try:
         data = await asyncio.wait_for(executor.get_account_telemetry_summary(), timeout=8.0)
         if data and data.get("connected"):
+            # Protección Anti-Flapping SSoT: Si la respuesta trae 0 posiciones pero el cache anterior
+            # tenía posiciones activas de hace menos de 8 segundos, retenerlas como estabilizando
+            if _last_bitunix_telemetry_cache and _last_bitunix_telemetry_cache.get("positions"):
+                if not data.get("positions") and (now - _last_bitunix_telemetry_time) < 8.0:
+                    data["positions"] = _last_bitunix_telemetry_cache["positions"]
+                    data["positions_count"] = len(data["positions"])
+                    data["is_stabilizing"] = True
             _last_bitunix_telemetry_cache = data
             _last_bitunix_telemetry_time = now
         return data

@@ -11,9 +11,14 @@ from typing import Dict, Any, Optional
 # Importar nuestra fábrica de features
 from engine.ml.features import FeatureEngineer
 
-def train_slingshot_model(data_path: Path, model_dir: Path):
+def train_slingshot_model(
+    data_path: Path,
+    model_dir: Path,
+    method: str = "triple_barrier",
+    target_model_name: str = "slingshot_xgb_15m_v3.json"
+):
     """
-    Entrena el Cerebro de Criptodamus (XGBoost) utilizando datos históricos.
+    Entrena el Cerebro de Criptodamus (XGBoost) utilizando datos históricos y Triple-Barrier Meta-Labeling.
     """
     logger.info("📈 Cargando datos desde el Data Lake...")
     if not data_path.exists():
@@ -23,9 +28,9 @@ def train_slingshot_model(data_path: Path, model_dir: Path):
     df = pd.read_parquet(data_path)
     
     # 1. Feature Engineering
-    logger.info("⚙️ Generando Features Estacionarias (Returns, Volatility, TA)...")
-    engineer = FeatureEngineer(target_horizon=2) # Predecir a 2 velas vista
-    ml_dataset = engineer.prepare_dataset(df, classification=True)
+    logger.info(f"⚙️ Generando Features y Labels Cuánticos (Método: {method})...")
+    engineer = FeatureEngineer(target_horizon=2)
+    ml_dataset = engineer.prepare_dataset(df, classification=True, method=method)
     
     # 2. Definir Features (X) y Target (y)
     # Excluimos variables "feas" para un árbol de decisión (como el Timestamp o el string del Símbolo)
@@ -78,7 +83,7 @@ def train_slingshot_model(data_path: Path, model_dir: Path):
     
     # 7. Guardar el Modelo (Exportación Ultrarrápida JSON)
     os.makedirs(model_dir, exist_ok=True)
-    model_path = model_dir / "slingshot_xgb_15m_v2.json"
+    model_path = model_dir / target_model_name
     model.save_model(str(model_path))
     
     logger.info(f"💾 Modelo guardado exitosamente en: {model_path}")
