@@ -385,8 +385,8 @@ async def get_bitunix_telemetry():
     global _last_bitunix_telemetry_cache, _last_bitunix_telemetry_time
     now = time.time()
 
-    # Si hay una respuesta fresca de hace menos de 1.5s, devolverla directamente
-    if _last_bitunix_telemetry_cache and (now - _last_bitunix_telemetry_time) < 1.5:
+    # Si hay una respuesta fresca de hace menos de 2.5s, devolverla directamente
+    if _last_bitunix_telemetry_cache and (now - _last_bitunix_telemetry_time) < 2.5:
         return _last_bitunix_telemetry_cache
 
     from engine.execution.nexus import nexus
@@ -398,7 +398,7 @@ async def get_bitunix_telemetry():
         executor = nexus.executor
 
     try:
-        data = await asyncio.wait_for(executor.get_account_telemetry_summary(), timeout=8.0)
+        data = await asyncio.wait_for(executor.get_account_telemetry_summary(), timeout=12.0)
         if data and data.get("connected"):
             # Protección Anti-Flapping SSoT: Si la respuesta trae 0 posiciones pero el cache anterior
             # tenía posiciones activas de hace menos de 8 segundos, retenerlas como estabilizando
@@ -413,8 +413,9 @@ async def get_bitunix_telemetry():
     except Exception as e:
         logger.warning(f"⚠️ [BITUNIX TELEMETRY] Micro-latencia o excepción ({e}). Usando caché de resiliencia...")
         if _last_bitunix_telemetry_cache:
-            # Preservar datos en pantalla y evitar reseteo a 0
-            return _last_bitunix_telemetry_cache
+            res = dict(_last_bitunix_telemetry_cache)
+            res["is_stabilizing"] = True
+            return res
 
         return {
             "account_label": getattr(executor, "account_label", "Cuenta Principal"),
