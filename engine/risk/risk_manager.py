@@ -423,10 +423,10 @@ class RiskManager:
         risk_amount_usdt = self.account_balance * actual_risk_pct
         
         # 1. Aplicación de Pulmones (SIGMA ATR Mult) adaptados al Régimen de Mercado
-        # En rangos sucios (CHOPPY), ampliamos el stop loss un 30% para evitar el ruido de las mechas.
+        # En rangos sucios o compresión (CHOPPY, CHOP_COMPRESSION), ampliamos el stop loss un 40% para evitar el ruido de las mechas.
         atr_multiplier = tuning["atr_mult"]
-        if regime_upper == "CHOPPY":
-            atr_multiplier *= 1.3
+        if any(c in regime_upper for c in ("CHOP", "COMPRESSION", "CHOPPY", "RANGE")):
+            atr_multiplier *= 1.4
         
         fallback_atr = atr_value if atr_value > 0 else (current_price * 0.005)
         risk_dist = fallback_atr * atr_multiplier

@@ -1,4 +1,4 @@
-﻿import os
+import os
 import sqlite3
 import json
 """
@@ -39,7 +39,22 @@ class NexusNode:
         self._high_confluence_buffer = {} # Dict[account_id, List[signal]]
         self._load_buffer_from_disk()
         self._pending_limit_symbols = set()
+        self._asset_cooldown: Dict[str, float] = {}
         logger.info(f"🛡️ [NEXUS] Nodo de Ejecución Multi-Cuenta inicializado (Dry Run: {dry_run})")
+
+    def is_asset_in_cooldown(self, asset: str) -> bool:
+        """Comprueba si un activo está en cuarentena de enfriamiento tras un stop loss (SOP-52)."""
+        clean = (asset or "").replace("/", "").upper()
+        expiry = getattr(self, "_asset_cooldown", {}).get(clean, 0)
+        return time.time() < expiry
+
+    def set_asset_cooldown(self, asset: str, duration_sec: int = 3600, reason: str = "STOP_LOSS"):
+        """Coloca un activo en enfriamiento temporal para evitar pérdidas en cascada (SOP-52)."""
+        clean = (asset or "").replace("/", "").upper()
+        if not hasattr(self, "_asset_cooldown"):
+            self._asset_cooldown = {}
+        self._asset_cooldown[clean] = time.time() + duration_sec
+        logger.warning(f"🧊 [SOP-52 COOLDOWN] Activo {clean} en cuarentena por {duration_sec}s ({duration_sec//60} min) debido a: {reason}.")
 
     def start_centinels(self):
         """Inicia los procesos de monitoreo y gestión de riesgo."""
@@ -267,7 +282,12 @@ class NexusNode:
                     pos_info = self._active_positions.pop(mem_key, None)
                     closed_acc = pos_info.get("account_id", "primary") if pos_info else "primary"
                     closed_sym = pos_info.get("signal", {}).get("asset", mem_key.split("_")[-1]) if pos_info else mem_key
-                    asyncio.create_task(self.on_risk_released(closed_acc, reason=f"POSICION_CERRADA_{closed_sym}"))
+                    pnl_val = float(pos_info.get("unrealized_pnl", 0.0)) if pos_info else 0.0
+                    reason_close = f"POSICION_CERRADA_{closed_sym}"
+                    if pnl_val < -0.5:
+                        reason_close = f"POSICION_CERRADA_SL_{closed_sym}"
+                        self.set_asset_cooldown(closed_sym, duration_sec=3600, reason=f"Cierre en pérdida ({pnl_val:.2f} USDT)")
+                    asyncio.create_task(self.on_risk_released(closed_acc, reason=reason_close))
                     sym_clean = pos_info.get("signal", {}).get("asset", mem_key.split("_")[-1]) if pos_info else mem_key
                     self.remove_pending_limit_symbol(sym_clean)
                     # 🧹 [SOP-22 PURGA ATÓMICA] Cancelar órdenes huérfanas de ese activo solo en la cuenta correspondiente
@@ -351,11 +371,11 @@ class NexusNode:
                             tp3 = float(matching_setup.get("tp3", 0))
                             logger.info(f"💎 [NEXUS SYNC] [{target_ex.account_label}] Setup institucional SMC emparejado para {symbol}: SL: ${sl_price} | BE: ${be_price} | TP1: ${tp1}")
                         else:
-                            dist = entry_price * 0.02
-                            sl_price = entry_price * 0.98 if side == "LONG" else entry_price * 1.02
+                            dist = entry_price * 0.018 # Buffer de 1.8% adaptado a volatilidad
+                            sl_price = entry_price * 0.982 if side == "LONG" else entry_price * 1.018
                             be_price = entry_price + (dist * 1.0) if side == "LONG" else entry_price - (dist * 1.0)
-                            tp1 = entry_price + (dist * 1.3) if side == "LONG" else entry_price - (dist * 1.3)
-                            tp2 = entry_price + (dist * 2.2) if side == "LONG" else entry_price - (dist * 2.2)
+                            tp1 = entry_price + (dist * 1.5) if side == "LONG" else entry_price - (dist * 1.5)
+                            tp2 = entry_price + (dist * 2.5) if side == "LONG" else entry_price - (dist * 2.5)
                             tp3 = entry_price + (dist * 3.5) if side == "LONG" else entry_price - (dist * 3.5)
 
                         reconstructed_signal = {
@@ -375,6 +395,9 @@ class NexusNode:
                             "position_size": margin,
                             "position_size_usdt": margin,
                             "leverage": leverage,
+                            "confluence_score": 75.0,
+                            "score": 75.0,
+                            "is_reconstructed": True,
                             "timestamp": datetime.now(timezone.utc).isoformat(),
                             "id": position_id,
                             "account_id": acc_id
@@ -978,6 +1001,12 @@ class NexusNode:
           3. Cierre MANUAL realizado por el usuario directamente en el exchange
         """
         try:
+            # 🛡️ Si el cierre fue por Stop Loss, activar enfriamiento preventivo (SOP-52)
+            if "STOP_LOSS" in reason.upper() or "SL" in reason.upper() or "PERDIDA" in reason.upper():
+                for part in reason.split("_"):
+                    if "USDT" in part:
+                        self.set_asset_cooldown(part, duration_sec=3600, reason=reason)
+
             unprotected = self.get_unprotected_risk_count(account_id=account_id)
             if unprotected >= self.MAX_CONCURRENT_POSITIONS:
                 return
@@ -989,6 +1018,9 @@ class NexusNode:
                 while queue:
                     top_cand = queue.pop(0)
                     sym_c = top_cand.get("asset", top_cand.get("symbol", "")).upper()
+                    if self.is_asset_in_cooldown(sym_c):
+                        logger.info(f"❄️ [SLOT RECYCLER] Omitiendo {sym_c} por período de enfriamiento/cuarentena activo (SOP-52).")
+                        continue
                     if sym_c not in self._active_positions and f"{account_id}_{sym_c}" not in self._active_positions:
                         logger.info(f"⚡ [SLOT RECYCLER] Activando senal prioritaria desde buffer para [{account_id}]: {sym_c} ({top_cand.get('confluence_score', 0)}%)")
                         asyncio.create_task(self.process_limit_setup(top_cand))
@@ -1010,9 +1042,13 @@ class NexusNode:
                 score_cand = float(c.get("confluence_score", c.get("score", 0)))
                 is_chasing = c.get("ote_chasing", False)
                 is_quar = c.get("asset_health", {}).get("is_quarantined", False)
-                min_req = 65.0 if is_quar else 60.0
+                # 🛡️ Piso Institucional Estricto: 72% mínimo para reemplazos (SOP-44)
+                min_req = 75.0 if is_quar else 72.0
 
                 if score_cand < min_req or is_chasing:
+                    continue
+                if self.is_asset_in_cooldown(sym_cand):
+                    logger.debug(f"[SLOT RECYCLER] Omitiendo {sym_cand} por período de enfriamiento activo.")
                     continue
                 if sym_cand in self._active_positions or f"{account_id}_{sym_cand}" in self._active_positions:
                     continue
@@ -1021,7 +1057,7 @@ class NexusNode:
             valid_cands.sort(key=lambda x: float(x.get("confluence_score", x.get("score", 0))), reverse=True)
 
             if not valid_cands:
-                logger.debug(f"[SLOT RECYCLER] Ninguna oportunidad supera los filtros institucionales para [{account_id}].")
+                logger.debug(f"[SLOT RECYCLER] Ninguna oportunidad supera los filtros institucionales (min 72%) para [{account_id}].")
                 return
 
             best_opp = valid_cands[0]
@@ -1081,6 +1117,11 @@ class NexusNode:
         if not asset or self.dry_run:
             return
 
+        # ── SOP-52: COOLDOWN GUARD (ANTI-CASCADE RE-ENTRY) ──
+        if self.is_asset_in_cooldown(asset):
+            logger.info(f"❄️ [NEXUS AUTO-LIMIT SOP-52] Omitida orden límite para {asset}: Activo en enfriamiento temporal post-stopout.")
+            return
+
         # [SOP-45] Riesgo descentralizado: validado por cuenta en _place_limit_for_account
 
         # ── REGLA DE CLUSTER DE CORRELACIÓN CRUZADA (v26.0 CLUSTER FORTRESS) ──
@@ -1130,7 +1171,9 @@ class NexusNode:
 
             from engine.risk.risk_manager import RiskManager
             if entry_p > 0 and sl_p > 0:
-                safe_lev = RiskManager.calculate_safe_leverage(entry_p, sl_p, max_cap=20)
+                is_chop_regime = latest_regime and "CHOP" in str(latest_regime.get("regime", "")).upper()
+                max_lev_cap = 10 if is_chop_regime else 20
+                safe_lev = RiskManager.calculate_safe_leverage(entry_p, sl_p, max_cap=max_lev_cap)
                 signal["leverage"] = safe_lev
                 is_safe, liq_msg, cl_ratio = RiskManager.verify_liquidation_clearance(entry_p, sl_p, safe_lev)
                 logger.info(f"🛡️ [NEXUS AUTO-LIMIT SOP-21] {asset} -> {liq_msg}")

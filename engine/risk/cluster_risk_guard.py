@@ -53,6 +53,9 @@ class ClusterRiskGuard:
         for cluster_name, assets in self.STRUCTURAL_CLUSTERS.items():
             if any(sym.startswith(a) or sym == a for a in assets):
                 return cluster_name
+        # 🛡️ [CRYPTO SSoT FALLBACK]: Todo activo finalizado en USDT/USDC (excepto metales) es Cripto High-Beta
+        if (sym.endswith("USDT") or sym.endswith("USDC")) and not any(m in sym for m in ("PAXG", "XAU", "GOLD", "SILVER", "XAG")):
+            return "CRYPTO_HIGH_BETA"
         return "GENERAL_ALPHA"
 
     def calculate_correlation(self, asset_a: str, asset_b: str) -> float:
@@ -148,30 +151,32 @@ class ClusterRiskGuard:
                 correlated_risk_count += 1
                 conflicting_assets.append(f"{active_sym} (ρ={corr:.2f})")
                 
-        # ── SOP-30: BETA EXPOSURE LIMITER v39.0 ──
-        # Si es un LONG en Cripto, no permitir más de 2 posiciones LONG en cripto simultáneas con riesgo flotante
-        if new_dir == "LONG" and "CRYPTO" in new_cluster:
-            crypto_longs_count = 0
-            crypto_conflicts = []
+        # ── SOP-30 & SOP-44: DIRECTIONAL HEAT CAP v40.0 (SYMMETRIC DUAL-GUARD) ──
+        # No permitir más de 2 posiciones en la misma dirección (LONG o SHORT) en cripto con riesgo flotante
+        if "CRYPTO" in new_cluster and new_dir in ("LONG", "SHORT"):
+            same_dir_crypto_count = 0
+            same_dir_conflicts = []
             for act_asset, p_data in active_positions.items():
                 act_sym = self._clean_symbol(act_asset)
                 if act_sym == new_sym:
                     continue
                 s_data = p_data.get("signal", {})
                 s_dir = str(s_data.get("type", s_data.get("signal_type", "LONG"))).upper()
-                if s_dir == "LONG" and "CRYPTO" in self.get_cluster_name(act_sym):
+                if s_dir == new_dir and "CRYPTO" in self.get_cluster_name(act_sym):
                     s_sl = float(s_data.get("stop_loss", 0))
                     s_entry = float(s_data.get("price", s_data.get("entry_price", 0)))
                     s_be = p_data.get("smart_trailing", {}).get("be_active", False)
-                    if not (s_be or (s_entry > 0 and s_sl >= s_entry * 0.999)):
-                        crypto_longs_count += 1
-                        crypto_conflicts.append(act_sym)
+                    sl_at_be = (s_dir == "LONG" and s_entry > 0 and s_sl >= s_entry * 0.999) or \
+                               (s_dir == "SHORT" and s_entry > 0 and s_sl > 0 and s_sl <= s_entry * 1.001)
+                    if not (s_be or sl_at_be):
+                        same_dir_crypto_count += 1
+                        same_dir_conflicts.append(act_sym)
                         
-            if crypto_longs_count >= self.max_per_cluster:
+            if same_dir_crypto_count >= self.max_per_cluster:
                 if confluence_score >= 88.0:
-                    logger.info(f"💎 [SOP-30 BETA GUARD] Confluencia Élite ({confluence_score}%) aprueba 3er LONG en {new_sym}.")
+                    logger.info(f"💎 [SOP-44 DIRECTIONAL GUARD] Confluencia Élite ({confluence_score}%) aprueba 3er {new_dir} en {new_sym}.")
                     return True, f"Aprobado por Confluencia Élite ({confluence_score}% >= 88%)"
-                reason = f"Límite de cluster alcanzado (SOP-30 BETA VETO: {crypto_longs_count}/{self.max_per_cluster} en riesgo). Conflicto con: {', '.join(crypto_conflicts)}"
+                reason = f"Límite direccional alcanzado (SOP-44 DIRECTIONAL VETO: {same_dir_crypto_count}/{self.max_per_cluster} {new_dir} en riesgo). Conflicto con: {', '.join(same_dir_conflicts)}"
                 logger.warning(f"{reason} para {new_sym}")
                 return False, reason
 

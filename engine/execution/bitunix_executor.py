@@ -1266,6 +1266,7 @@ class BitunixExecutor:
         total_equity = float(acc_data.get("equity") or acc_data.get("marginBalance") or 0.0)
         avail_margin = float(acc_data.get("available") or acc_data.get("availableMargin") or acc_data.get("availableBalance") or 0.0)
         used_margin = float(acc_data.get("margin") or acc_data.get("positionMargin") or acc_data.get("holdAmount") or 0.0)
+        frozen_in_acc = float(acc_data.get("frozen") or acc_data.get("frozenMargin") or 0.0)
         unrealized_pnl = float(
             acc_data.get("unrealizedProfit")
             or acc_data.get("unrealizedPNL")
@@ -1276,9 +1277,11 @@ class BitunixExecutor:
             or 0.0
         )
 
-        # Fallback si total_equity viene en 0 pero hay available
-        if total_equity <= 0.0 and avail_margin > 0.0:
-            total_equity = avail_margin + used_margin + unrealized_pnl
+        wallet_balance = float(acc_data.get("walletBalance") or (avail_margin + used_margin + frozen_in_acc))
+
+        # Fallback si total_equity viene en 0 pero hay wallet_balance o available (SOP-41 Bitunix SSoT)
+        if total_equity <= 0.0:
+            total_equity = wallet_balance + unrealized_pnl
 
         if positions_res is not None:
             raw_positions = positions_res
@@ -1428,10 +1431,11 @@ class BitunixExecutor:
             "connected": True,
             "latency_ms": latency_ms,
             "equity": round(total_equity, 2),
+            "wallet_balance": round(wallet_balance, 2),
             "available_balance": round(avail_margin, 2),
             "net_available_balance": round(net_available, 2),
             "used_margin": round(used_margin, 2),
-            "frozen_margin": round(frozen_margin, 2),
+            "frozen_margin": round(frozen_in_acc if frozen_in_acc > 0 else frozen_margin, 2),
             "total_floating_pnl": net_pnl,
             "risk_config": {
                 "risk_pct": risk_pct,
