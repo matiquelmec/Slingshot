@@ -39,6 +39,11 @@ class MT5Bridge:
             return 1
         return 2
 
+    DEFAULT_TERMINAL_PATHS = [
+        r"C:\Program Files\MetaTrader 5\terminal64.exe",
+        r"C:\Program Files\FTMO MetaTrader 5\terminal64.exe",
+    ]
+
     def __init__(self, dry_run: bool = True):
         self.dry_run = dry_run
         self.connected = False
@@ -46,21 +51,48 @@ class MT5Bridge:
             self._connect()
 
     def _connect(self) -> bool:
-        """Inicializa la API local de MetaTrader 5."""
+        """Inicializa la API local de MetaTrader 5 con fallback a rutas estándar."""
         if not MT5_AVAILABLE:
             return False
         try:
+            # 1. Intentar inicialización automática
             if mt5.initialize():
                 account_info = mt5.account_info()
                 if account_info:
                     logger.info(f"🏛️ [MT5_BRIDGE] Conectado a terminal MT5: Cuenta #{account_info.login} ({account_info.company}) - Balance: ${account_info.balance:,.2f}")
                     self.connected = True
                     return True
+
+            # 2. Intentar inicialización con rutas explícitas de terminal
+            import os
+            for p in self.DEFAULT_TERMINAL_PATHS:
+                if os.path.exists(p):
+                    if mt5.initialize(path=p):
+                        account_info = mt5.account_info()
+                        if account_info:
+                            logger.info(f"🏛️ [MT5_BRIDGE] Conectado a terminal MT5 ({p}): Cuenta #{account_info.login} ({account_info.company}) - Balance: ${account_info.balance:,.2f}")
+                            self.connected = True
+                            return True
+
             logger.warning("[MT5_BRIDGE] No se pudo inicializar la terminal MetaTrader 5.")
             return False
         except Exception as e:
             logger.error(f"[MT5_BRIDGE] Error inicializando MT5: {e}")
             return False
+
+    def ensure_connected(self) -> bool:
+        """Garantiza la conexión activa con MT5 con auto-reconexión."""
+        if not MT5_AVAILABLE or self.dry_run:
+            return False
+        if self.connected:
+            try:
+                acc = mt5.account_info()
+                if acc:
+                    return True
+            except Exception:
+                pass
+            self.connected = False
+        return self._connect()
 
     def place_limit_order(self, symbol: str, direction: str, entry_price: float, stop_loss: float, tp1: float, tp2: float, tp3: float, score: int = 70) -> Dict[str, Any]:
         """
@@ -238,7 +270,7 @@ class MT5Bridge:
 
     def get_open_positions(self) -> list:
         """Obtiene las posiciones abiertas en MetaTrader 5 gestionadas por Slingshot."""
-        if self.dry_run or not self.connected or not MT5_AVAILABLE:
+        if not MT5_AVAILABLE or self.dry_run or not self.ensure_connected():
             return []
         try:
             positions = mt5.positions_get()
@@ -267,7 +299,7 @@ class MT5Bridge:
 
     def get_pending_orders(self) -> list:
         """Obtiene las órdenes límite y stop pendientes registradas en MetaTrader 5."""
-        if self.dry_run or not self.connected or not MT5_AVAILABLE:
+        if not MT5_AVAILABLE or self.dry_run or not self.ensure_connected():
             return []
         try:
             orders = mt5.orders_get()
@@ -298,7 +330,7 @@ class MT5Bridge:
         """Obtiene el spread en tiempo real (en puntos/pips) y precios Bid/Ask para los símbolos clave."""
         target_symbols = symbols or ["GBPUSD", "US100.cash", "US30.cash", "XAUUSD"]
         spread_data = {}
-        if self.dry_run or not self.connected or not MT5_AVAILABLE:
+        if not MT5_AVAILABLE or self.dry_run or not self.ensure_connected():
             for s in target_symbols:
                 spread_data[s] = {"bid": 0.0, "ask": 0.0, "spread": 0.0, "status": "SIMULATED"}
             return spread_data
