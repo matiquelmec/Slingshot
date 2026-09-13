@@ -48,23 +48,31 @@ export const useTelemetryStore = create<TelemetryState>((set, get) => {
             });
         },
 
-        fetchEconomicEvents: async () => {
-            try {
-                const BASE_URL = getApiBaseUrl();
-                const endpoint = `${BASE_URL}/api/v1/calendar`;
-                
-                const res = await fetch(endpoint);
-                if (!res.ok) {
-                    throw new Error(`HTTP Error: ${res.status} - ${res.statusText}`);
+        fetchEconomicEvents: async (retries = 3) => {
+            const BASE_URL = getApiBaseUrl();
+            const endpoint = `${BASE_URL}/api/v1/calendar`;
+            
+            for (let attempt = 1; attempt <= retries; attempt++) {
+                try {
+                    const res = await fetch(endpoint);
+                    if (!res.ok) {
+                        throw new Error(`HTTP ${res.status} - ${res.statusText}`);
+                    }
+                    
+                    const data = await res.json();
+                    let events = Array.isArray(data) ? data : (data.value || data.data || []);
+                    if (events && events.length > 0) {
+                        set({ economicEvents: events });
+                    }
+                    return; // Éxito, salir del loop
+                } catch (e: any) {
+                    if (attempt < retries) {
+                        // Backoff exponencial: 1s, 2s...
+                        await new Promise(r => setTimeout(r, attempt * 1000));
+                    } else {
+                        console.warn("🌐 [TELEMETRY] Calendario económico no disponible temporalmente:", e.message || e);
+                    }
                 }
-                
-                const data = await res.json();
-                let events = Array.isArray(data) ? data : (data.value || data.data || []);
-                if (events && events.length > 0) {
-                    set({ economicEvents: events });
-                }
-            } catch (e: any) {
-                console.error("🌐 [TELEMETRY] Failed to fetch economic events:", e.message || e);
             }
         },
 
