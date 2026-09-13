@@ -77,9 +77,14 @@ interface BitunixTelemetryData {
 export default function BitunixDashboardPage() {
     const [data, setData] = useState<BitunixTelemetryData | null>(null);
     const [loading, setLoading] = useState(true);
+    const [mounted, setMounted] = useState(false);
     const [zeroPositionsPulses, setZeroPositionsPulses] = useState<number>(0);
     const [simEntry, setSimEntry] = useState<number>(0);
     const [simSl, setSimSl] = useState<number>(0);
+
+    useEffect(() => {
+        setMounted(true);
+    }, []);
 
     const fetchBitunixData = async () => {
         try {
@@ -124,14 +129,14 @@ export default function BitunixDashboardPage() {
     }, []);
 
     // Cálculo interactivo del simulador de riesgo (SOP-41 2.50%)
-    const simRiskUsd = data?.risk_config?.risk_usd_per_trade ?? ((data?.equity ?? 648.83) * 0.025);
+    const simRiskUsd = data?.risk_config?.risk_usd_per_trade ?? ((data?.equity ?? 711.74) * 0.025);
     const simSlDist = Math.abs(simEntry - simSl);
     const simContracts = (simEntry > 0 && simSlDist > 0) ? (simRiskUsd / simSlDist) : 0;
     const simNotional = simContracts * simEntry;
-    const isExceedingNotional = simNotional > ((data?.equity ?? 648.83) * 5.0);
+    const isExceedingNotional = simNotional > ((data?.equity ?? 711.74) * 5.0);
 
     return (
-        <div className="h-full w-full flex flex-col p-3 lg:p-6 overflow-y-auto custom-scrollbar bg-[#02040A]">
+        <div suppressHydrationWarning className="h-full w-full flex flex-col p-3 lg:p-6 overflow-y-auto custom-scrollbar bg-[#02040A]">
             {/* Header */}
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 lg:pb-6 border-b border-white/5">
                 <div>
@@ -151,7 +156,7 @@ export default function BitunixDashboardPage() {
                 </div>
 
                 {/* Status Badges */}
-                <div className="flex flex-wrap items-center gap-2 font-mono text-[10px]">
+                <div suppressHydrationWarning className="flex flex-wrap items-center gap-2 font-mono text-[10px]">
                     <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-black/40 border border-white/10 text-white/70">
                         <span className={`w-2 h-2 rounded-full ${data?.connected ? 'bg-emerald-400 animate-pulse' : 'bg-rose-500'}`} />
                         <span>API: {data?.connected ? 'CONECTADO' : 'OFFLINE'} ({data?.latency_ms ?? 0}ms)</span>
