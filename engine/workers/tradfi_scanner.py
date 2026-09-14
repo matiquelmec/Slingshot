@@ -183,13 +183,21 @@ class TradFiScanner:
                                 else:
                                     del self._symbol_cooldowns[sym_mt5]
 
-                            # 2. Sincronizar deals recientes desde MT5 para detectar cierres en SL
+                            # 2. Sincronizar deals recientes desde MT5 para detectar cierres en SL y actualizar FTMO Guardian
                             if mt5_bridge.ensure_connected():
                                 from datetime import timedelta
                                 recent_deals = mt5.history_deals_get(datetime.now() - timedelta(hours=3), datetime.now()) or []
                                 sl_hit_detected = False
+                                if not hasattr(self, "_processed_deal_tickets"):
+                                    self._processed_deal_tickets = set()
+
                                 for d in reversed(recent_deals):
-                                    if d.symbol == sym_mt5 and d.entry == 1: # Trade Exit
+                                    if d.entry == 1 and d.ticket not in self._processed_deal_tickets:
+                                        self._processed_deal_tickets.add(d.ticket)
+                                        # Notificar a ftmo_guardian el outcome del deal
+                                        ftmo_guardian.register_trade_outcome(is_win=(d.profit >= 0.0), symbol=d.symbol)
+
+                                    if d.symbol == sym_mt5 and d.entry == 1: # Trade Exit de este activo
                                         if d.profit < 0.0:
                                             # Cierre con pérdida reciente
                                             sl_age = (datetime.now().timestamp() - d.time)
@@ -203,6 +211,11 @@ class TradFiScanner:
                                             break # Última salida fue positiva, no hay cooldown
                                 if sl_hit_detected:
                                     continue
+
+                            # Verificar si FTMO Guardian activó Daily Loss Cap
+                            if ftmo_guardian.is_daily_lockout:
+                                logger.info(f"🛑 [SOP-70 DAILY LOSS CAP] Emisión de orden {sym_mt5} cancelada: {ftmo_guardian.lockout_reason}")
+                                continue
 
                             # [CORRELATION GOVERNOR US100 / US30]
                             # Prevenir duplicación de riesgo direccional a 1.50% ($1,500 USD) en índices correlacionados > 85%

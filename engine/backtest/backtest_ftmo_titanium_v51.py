@@ -99,12 +99,15 @@ def run_simulation():
     daily_balance_start = INITIAL_BALANCE
     current_day = None
     daily_lockout = False
+    daily_losses = 0
+    MAX_DAILY_LOSSES = 2 # SOP-70 Daily Loss Cap
     
     open_positions = [] # Posiciones en mercado
     pending_orders = [] # Ordenes limite vivas
     closed_trades = []
     
     daily_killswitch_hits = 0
+    daily_loss_cap_hits = 0
     symbol_cooldown_until: Dict[str, pd.Timestamp] = {}
     
     # Pre-index dataframes por tiempo para O(1) lookups
@@ -116,6 +119,7 @@ def run_simulation():
             current_day = t_day
             daily_balance_start = balance
             daily_lockout = False
+            daily_losses = 0
             
         now_hour = t_step.hour
         now_weekday = t_step.weekday() # 0 = Lunes, 1 = Martes, etc.
@@ -166,6 +170,7 @@ def run_simulation():
                     balance += pnl
                     reason = "STOP_LOSS"
                     symbol_cooldown_until[sym] = t_step + pd.Timedelta(minutes=120)
+                    daily_losses += 1
                 pos["exit_price"] = sl
                 pos["exit_time"] = t_step
                 pos["pnl"] = pnl
@@ -180,6 +185,7 @@ def run_simulation():
                 pnl = (-risk_usd * 0.65) - pos["commission"]
                 balance += pnl
                 symbol_cooldown_until[sym] = t_step + pd.Timedelta(minutes=120)
+                daily_losses += 1
                 pos["exit_price"] = c_close
                 pos["exit_time"] = t_step
                 pos["pnl"] = pnl
@@ -259,9 +265,9 @@ def run_simulation():
             # Llenado de orden limite
             filled = (is_long and c_low <= entry) or (not is_long and c_high >= entry)
             if filled:
-                # Comprobar Slot Fortress al momento de llenado
+                # Comprobar Slot Fortress y Lockout Diario al momento de llenado
                 unprotected_slots = sum(1 for p in open_positions if not p["is_be"])
-                if unprotected_slots < 2 and not daily_lockout:
+                if unprotected_slots < 2 and not daily_lockout and daily_losses < MAX_DAILY_LOSSES:
                     order["entry_time"] = t_step
                     open_positions.append(order)
             else:
@@ -278,12 +284,20 @@ def run_simulation():
             max_drawdown_pct = dd_pct
             max_drawdown_usd = dd_usd
             
-        # Kill-Switch Diario (-3.5%)
+        # Kill-Switch Diario (-3.5%) o Daily Loss Cap (SOP-70: 2 pérdidas en el día)
         daily_loss_pct = ((daily_balance_start - current_equity) / daily_balance_start) * 100.0
         if daily_loss_pct >= 3.5:
             if not daily_lockout:
                 daily_killswitch_hits += 1
                 daily_lockout = True
+                pending_orders = [] # Purga de órdenes pendientes
+            continue
+            
+        if daily_losses >= MAX_DAILY_LOSSES:
+            if not daily_lockout:
+                daily_loss_cap_hits += 1
+                daily_lockout = True
+                pending_orders = [] # Purga preventiva de límites
             continue
             
         if daily_lockout or is_midnight_lock:
@@ -436,6 +450,7 @@ def run_simulation():
         "max_drawdown_pct": round(max_drawdown_pct, 2),
         "max_drawdown_usd": round(max_drawdown_usd, 2),
         "daily_killswitch_hits": daily_killswitch_hits,
+        "daily_loss_cap_hits": daily_loss_cap_hits,
         "passed_ftmo_phase_1": bool(balance >= 110000.0),
         "passed_ftmo_phase_2": bool(balance >= 105000.0)
     }
@@ -468,6 +483,7 @@ def run_simulation():
     print(f"[START] Profit Factor:              {profit_factor:.2f}")
     print(f"[DEFENSE] Drawdown Maximo Cartera:    -{max_drawdown_pct:.2f}% (${max_drawdown_usd:,.2f})")
     print(f"  Kill-Switch Diario Disparado: {daily_killswitch_hits} veces")
+    print(f"  Daily Loss Cap (2 SL) Disparo:{daily_loss_cap_hits} veces")
     print(f"   Estatus FTMO Fase 1 (+10%):  {'[OK] APROBADO' if report['passed_ftmo_phase_1'] else 'EN CURSO'}")
     print("="*80)
 

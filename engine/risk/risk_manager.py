@@ -252,6 +252,18 @@ class RiskManager:
             return False, f"🛑 [SOP-31 REGIME QUARANTINE] Mercado en compresión muerta (ADX={adx:.1f} < {min_adx:.1f}, KER={ker:.2f} < {min_ker:.2f})."
         return True, f"✅ [SOP-31 REGIME OK] Régimen de volatilidad activo (ADX={adx:.1f}, KER={ker:.2f})."
 
+    # ── PROTOCOLO SOP-70: STREAK CIRCUIT BREAKER v52.0 ───────────────────────
+    @staticmethod
+    def check_streak_circuit_breaker(consecutive_losses: int, max_consecutive_losses: int = 3) -> tuple[bool, str]:
+        """
+        [SOP-70 CRYPTO STREAK CIRCUIT BREAKER]
+        Veta la apertura de nuevas posiciones si la cartera acumula 3 o más pérdidas consecutivas,
+        evitando períodos de manipulación macro y reduciendo el drawdown de la cuenta.
+        """
+        if consecutive_losses >= max_consecutive_losses:
+            return False, f"🛑 [SOP-70 STREAK BREAKER] Cartera en enfriamiento preventivo ({consecutive_losses} pérdidas consecutivas >= {max_consecutive_losses})."
+        return True, f"✅ [SOP-70 STREAK OK] Racha dentro de límites saludables ({consecutive_losses}/{max_consecutive_losses})."
+
     # ── PROTOCOLO SOP-32: DYNAMIC VOLATILITY-TARGETED LEVERAGE v40.0 ─────────
     @staticmethod
     def calculate_volatility_targeted_leverage(symbol: str, sl_distance_pct: float) -> int:

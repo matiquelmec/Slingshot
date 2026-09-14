@@ -572,6 +572,9 @@ class UnifiedBacktestEngine:
         enable_elastic_runner: bool = False,
         enable_golden_hours: bool = False,
         enable_regime_agent: bool = False,
+        enable_streak_circuit_breaker: bool = True,
+        max_consecutive_losses: int = 3,
+        streak_cooldown_trades: int = 1
     ) -> Dict[str, Any]:
         """
         [EVENT-DRIVEN TIMELINE REPLAY v50.0]
@@ -582,6 +585,7 @@ class UnifiedBacktestEngine:
         - Modo Dual: R Base / Alpha-Tier (1% plano) e Interés Compuesto Dinámico (2.5% Bitunix).
         - Embudo de telemetría de señales.
         - Modulación Táctica de Régimen de Mercado SOP-63 (SlingshotRegimeAgent).
+        - [SOP-70] Streak Circuit Breaker: Pausa preventiva tras 3 pérdidas consecutivas.
         """
         toxic_hours = [10, 14] if toxic_hours is None else toxic_hours
         excluded_assets = ["RENDERUSDT"] if excluded_assets is None else excluded_assets
@@ -633,6 +637,11 @@ class UnifiedBacktestEngine:
         rejected_max_slots = 0
         rejected_portfolio_heat = 0
         rejected_toxic_hours = 0
+        rejected_streak_breaker = 0
+        
+        # [SOP-70 STREAK CIRCUIT BREAKER]
+        consecutive_losses = 0
+        skip_trades_remaining = 0
 
         for idx, tr in df_all.iterrows():
             entry_dt = pd.to_datetime(tr["entry_time"])
@@ -651,6 +660,12 @@ class UnifiedBacktestEngine:
             # Quirófano Horario
             if toxic_hours and h in toxic_hours:
                 rejected_toxic_hours += 1
+                continue
+
+            # [SOP-70] Streak Circuit Breaker Check
+            if enable_streak_circuit_breaker and skip_trades_remaining > 0:
+                skip_trades_remaining -= 1
+                rejected_streak_breaker += 1
                 continue
 
             # Veto Macro BTC en Vivo (btc_aligned)
@@ -685,6 +700,16 @@ class UnifiedBacktestEngine:
                 "exit_time": exit_dt
             })
             executed_trades.append(tr)
+            
+            # [SOP-70] Actualizar contador de pérdidas consecutivas
+            outcome_r = float(tr.get("outcome_r", 0.0))
+            if outcome_r < 0:
+                consecutive_losses += 1
+                if enable_streak_circuit_breaker and consecutive_losses >= max_consecutive_losses:
+                    skip_trades_remaining = streak_cooldown_trades
+                    consecutive_losses = 0 # reset racha tras activar enfriamiento
+            else:
+                consecutive_losses = 0
 
         df_exec = pd.DataFrame(executed_trades).reset_index(drop=True)
         executed_count = len(df_exec)
@@ -789,6 +814,7 @@ class UnifiedBacktestEngine:
         print(f" • Vetadas por Horas Tóxicas (10h/14h UTC)  : {rejected_toxic_hours:>4} ({rejected_toxic_hours/raw_signal_count*100:.1f}%)")
         print(f" • Vetadas por Límite de Slots (SOP-30)     : {rejected_max_slots:>4} ({rejected_max_slots/raw_signal_count*100:.1f}%)")
         print(f" • Vetadas por Calor de Cartera (SOP-44)   : {rejected_portfolio_heat:>4} ({rejected_portfolio_heat/raw_signal_count*100:.1f}%)")
+        print(f" • Vetadas por Streak Breaker (SOP-70)     : {rejected_streak_breaker:>4} ({rejected_streak_breaker/raw_signal_count*100:.1f}%)")
         print(f" • Operaciones Reales Ejecutadas            : {executed_count:>4} ({executed_count/raw_signal_count*100:.1f}%)")
         print("=" * 88)
 

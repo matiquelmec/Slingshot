@@ -46,6 +46,9 @@ class FtmoGuardianShield:
         self.is_daily_lockout = False
         self.lockout_reason = ""
         self.trades_today = 0
+        self.daily_loss_count = 0
+        self.consecutive_losses = 0
+        self.max_daily_losses = int(os.getenv("FTMO_MAX_DAILY_LOSSES", "2"))
         self._load_state()
         
     @property
@@ -71,7 +74,9 @@ class FtmoGuardianShield:
                     self.is_daily_lockout = bool(data.get("is_daily_lockout", False))
                     self.lockout_reason = str(data.get("lockout_reason", ""))
                     self.peak_equity = float(data.get("peak_equity", self.account_size))
-                    logger.info(f"🛡️ [FTMO_GUARDIAN] Estado restaurado desde disco: Base Diaria=${self.daily_starting_equity:,.2f} | Fecha Broker={self.current_broker_date} | Lockout={self.is_daily_lockout}")
+                    self.daily_loss_count = int(data.get("daily_loss_count", 0))
+                    self.consecutive_losses = int(data.get("consecutive_losses", 0))
+                    logger.info(f"🛡️ [FTMO_GUARDIAN] Estado restaurado desde disco: Base Diaria=${self.daily_starting_equity:,.2f} | Fecha Broker={self.current_broker_date} | Lockout={self.is_daily_lockout} | Pérdidas Hoy={self.daily_loss_count}")
         except Exception as e:
             logger.debug(f"[FTMO_GUARDIAN] No se pudo cargar estado previo: {e}")
 
@@ -91,6 +96,8 @@ class FtmoGuardianShield:
                     "peak_equity": self.peak_equity,
                     "is_daily_lockout": self.is_daily_lockout,
                     "lockout_reason": self.lockout_reason,
+                    "daily_loss_count": self.daily_loss_count,
+                    "consecutive_losses": self.consecutive_losses,
                     "updated_at": datetime.now(timezone.utc).isoformat()
                 }
                 with open(self.state_file, "w", encoding="utf-8") as f:
@@ -117,6 +124,27 @@ class FtmoGuardianShield:
             logger.info(f"🛡️ [FTMO_GUARDIAN] Fase actualizada a {self.phase} (Riesgo base: {self.current_config['risk_pct']*100:.2f}%)")
             self._save_state()
 
+    def register_trade_outcome(self, is_win: bool, symbol: str = ""):
+        """
+        [SOP-70 STREAK CIRCUIT BREAKER]
+        Registra el resultado de una operación cerrada en TradFi y evalúa el límite de pérdidas diarias.
+        """
+        if is_win:
+            self.consecutive_losses = 0
+            logger.info(f"🎯 [FTMO_GUARDIAN] Ganancia registrada ({symbol}). Racha de pérdidas reseteada a 0.")
+        else:
+            self.daily_loss_count += 1
+            self.consecutive_losses += 1
+            logger.warning(f"🛑 [FTMO_GUARDIAN] Pérdida registrada ({symbol}). Pérdidas hoy: {self.daily_loss_count}/{self.max_daily_losses} | Consecutivas: {self.consecutive_losses}")
+            
+            # Límite Diario Preventivo (Daily Loss Cap SOP-70)
+            if self.daily_loss_count >= self.max_daily_losses and not self.is_daily_lockout:
+                self.is_daily_lockout = True
+                self.lockout_reason = f"DAILY LOSS CAP ACTIVADO (SOP-70): {self.daily_loss_count} pérdidas registradas en el día (Máx: {self.max_daily_losses}). Bot pausado hasta 00:00 CE(S)T."
+                logger.error(f"🛑 [FTMO_GUARDIAN] {self.lockout_reason}")
+                self._purge_mt5_pending_orders_on_lockout()
+        self._save_state()
+
     def evaluate_broker_day(self, server_time: Optional[datetime], live_balance: float, live_equity: float):
         """
         Sincroniza el cambio de jornada bancaria según la hora exacta del broker MT5 (Praga CE(S)T).
@@ -135,8 +163,10 @@ class FtmoGuardianShield:
             self.is_daily_lockout = False
             self.lockout_reason = ""
             self.trades_today = 0
+            self.daily_loss_count = 0
+            self.consecutive_losses = 0
             self._save_state()
-            logger.info(f"🌅 [FTMO_GUARDIAN] Rollover de Jornada Broker ({old_date} -> {date_str}). Base diaria fijada en ${self.daily_starting_equity:,.2f} USD (Balance=${live_balance:,.2f}, Equity=${live_equity:,.2f}) | Modo: {self.account_type}")
+            logger.info(f"🌅 [FTMO_GUARDIAN] Rollover de Jornada Broker ({old_date} -> {date_str}). Base diaria fijada en ${self.daily_starting_equity:,.2f} USD | Pérdidas del día reseteadas a 0 | Modo: {self.account_type}")
 
     def update_equity(self, current_equity: float, current_balance: Optional[float] = None) -> Dict[str, Any]:
         """Actualiza el equity en tiempo real y evalúa los interceptores de seguridad."""
