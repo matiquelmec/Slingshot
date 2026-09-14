@@ -100,18 +100,26 @@ class TradeManager:
 
 
     def start(self):
-
         logger.info("[TRADE_MANAGER] Iniciando Trailing Stop Estructural v1.0...")
-
         self._task = asyncio.create_task(self._management_loop())
-
-
+        self._mt5_task = asyncio.create_task(self._mt5_dedicated_loop())
 
     def stop(self):
-
         logger.info("[TRADE_MANAGER] Deteniendo gestor de trades...")
-
         self._stop_event.set()
+        if hasattr(self, "_mt5_task") and self._mt5_task:
+            self._mt5_task.cancel()
+
+    async def _mt5_dedicated_loop(self):
+        """Loop dedicado de alta frecuencia (cada 4 seg) para sincronizar y blindar MT5."""
+        await asyncio.sleep(5)
+        while not self._stop_event.is_set():
+            try:
+                await self.sync_live_mt5_positions()
+                await self.sync_live_mt5_pending_orders()
+            except Exception as e:
+                logger.debug(f"[MT5_DEDICATED_LOOP] Error en ciclo MT5: {e}")
+            await asyncio.sleep(4)
 
 
 
@@ -1613,8 +1621,8 @@ class TradeManager:
             from engine.execution.mt5_bridge import mt5_bridge
             from engine.risk.ftmo_guardian import ftmo_guardian
 
-            if mt5_bridge.connected:
-                # 1. AlimentaciA3n continua de Equidad y Balance a FTMO Guardian
+            if mt5_bridge.ensure_connected():
+                # 1. Alimentación continua de Equidad y Balance a FTMO Guardian
                 acc_info = mt5.account_info()
                 if acc_info:
                     tick = mt5.symbol_info_tick("EURUSD") or mt5.symbol_info_tick("GBPUSD")
@@ -1625,13 +1633,13 @@ class TradeManager:
                     
                     if guard_status.get("is_daily_lockout") and not getattr(self, "_last_lockout_notified", False):
                         self._last_lockout_notified = True
-                        logger.critical(f"dY>` [FTMO_SENTINEL] {guard_status.get('lockout_reason')}")
+                        logger.critical(f"🛑 [FTMO_SENTINEL] {guard_status.get('lockout_reason')}")
                         try:
                             from engine.router.telegram_dispatcher import telegram_dispatcher
                             asyncio.create_task(telegram_dispatcher.send_system_alert(
-                                title="KILL-SWITCH DIARIO FTMO ACTIVADO",
-                                details=f"Equidad actual: ${acc_info.equity:,.2f}\nBase diaria: ${guard_status.get('daily_starting_equity'):,.2f}\nPAcrdida diaria: {guard_status.get('daily_dd_pct'):.2f}%\nNuevas A3rdenes bloqueadas por seguridad.",
-                                severity="CRITICAL"
+                                 title="KILL-SWITCH DIARIO FTMO ACTIVADO",
+                                 details=f"Equidad actual: ${acc_info.equity:,.2f}\nBase diaria: ${guard_status.get('daily_starting_equity'):,.2f}\nPérdida diaria: {guard_status.get('daily_dd_pct'):.2f}%\nNuevas órdenes bloqueadas por seguridad.",
+                                 severity="CRITICAL"
                             ))
                         except Exception:
                             pass
@@ -1641,16 +1649,27 @@ class TradeManager:
             # 2. Centinela de Fin de Semana para FTMO SWING
             now_utc = datetime.now(timezone.utc)
             is_weekend_window = (now_utc.weekday() == 4 and now_utc.hour >= 21) or (now_utc.weekday() in (5, 6))
-            if is_weekend_window and getattr(ftmo_guardian, "account_type", "SWING") == "SWING" and mt5_bridge.connected:
-                # Cancelar A3rdenes lA-mite no ejecutadas para no arriesgar gaps de apertura el domingo
+            if is_weekend_window and getattr(ftmo_guardian, "account_type", "SWING") == "SWING" and mt5_bridge.ensure_connected():
+                # Cancelar órdenes límite no ejecutadas para no arriesgar gaps de apertura el domingo
                 pending_orders = mt5.orders_get() or []
                 for p_ord in pending_orders:
                     mt5_bridge.cancel_order(p_ord.ticket)
-                    logger.info(f"dY>,? [SWING_GAP_SHIELD] Orden lA-mite pendiente #{p_ord.ticket} ({p_ord.symbol}) cancelada para fin de semana.")
+                    logger.info(f"🛡️ [SWING_GAP_SHIELD] Orden límite pendiente #{p_ord.ticket} ({p_ord.symbol}) cancelada para fin de semana.")
 
-            positions = mt5_bridge.get_open_positions() if mt5_bridge.connected else []
+            positions = mt5_bridge.get_open_positions() if mt5_bridge.ensure_connected() else []
             if not positions:
                 return []
+
+            # 3. Consultar deals recientes para detectar si TP1 o TP2 ya fue ejecutado en el símbolo
+            closed_winners = set()
+            try:
+                from datetime import timedelta
+                rec_deals = mt5.history_deals_get(datetime.now() - timedelta(hours=12), datetime.now()) or []
+                for d in rec_deals:
+                    if d.entry == 1 and d.profit > 0.0:
+                        closed_winners.add(d.symbol)
+            except Exception:
+                pass
 
             managed_results = []
             for pos in positions:
@@ -1670,12 +1689,15 @@ class TradeManager:
 
                 r_profit = (cur_price - entry_price) / sl_dist if side == "LONG" else (entry_price - cur_price) / sl_dist
 
-                # PrecisiA3n decimal dinAmica segAn activo
+                # Precisión decimal dinámica según activo
                 d_prec = 5 if any(fx in sym for fx in ["GBPUSD", "EURUSD"]) else 3 if "JPY" in sym else 2
 
                 target_sl = None
                 status_msg = "EN_CURSO"
                 action_taken = "NINGUNA"
+
+                # Si cualquier tramo de este símbolo ya tocó TP1 o TP2 en ganancia, FORZAR Breakeven como piso mínimo
+                has_closed_profit = sym in closed_winners
 
                 # Trailing Ratchet Estructural
                 if r_profit >= 5.0:
@@ -1691,11 +1713,12 @@ class TradeManager:
                     profit_buffer = sl_dist * 1.2
                     target_sl = round(entry_price + profit_buffer, d_prec) if side == "LONG" else round(entry_price - profit_buffer, d_prec)
                     status_msg = "PROTEGIDO_TP1 (+1.2R)"
-                elif r_profit >= 1.0:
-                    target_sl = round(entry_price, d_prec)
-                    status_msg = "PROTEGIDO_FAST_BE"
+                elif r_profit >= 1.0 or has_closed_profit:
+                    be_offset = max(entry_price * 0.0001, 3.0 if "US" in sym else 0.0001)
+                    target_sl = round(entry_price + be_offset, d_prec) if side == "LONG" else round(entry_price - be_offset, d_prec)
+                    status_msg = "PROTEGIDO_FAST_BE (TP1_WINNER)" if has_closed_profit else "PROTEGIDO_FAST_BE"
 
-                # ProtecciA3n de Fin de Semana Swing: si flota >= 0.8R en ventana de fin de semana, forzar BE
+                # Protección de Fin de Semana Swing: si flota >= 0.8R en ventana de fin de semana, forzar BE
                 if is_weekend_window and r_profit >= 0.8:
                     if target_sl is None or (side == "LONG" and target_sl < entry_price) or (side == "SHORT" and target_sl > entry_price):
                         target_sl = round(entry_price, d_prec)
@@ -1703,15 +1726,19 @@ class TradeManager:
 
                 should_update = False
                 if target_sl is not None:
-                    if side == "LONG" and (cur_sl <= 0 or target_sl > cur_sl * 1.0001):
-                        should_update = True
-                    elif side == "SHORT" and (cur_sl <= 0 or target_sl < cur_sl * 0.9999):
-                        should_update = True
+                    if side == "LONG":
+                        # Solo actualizar si el nuevo SL mejora estrictamente el SL actual
+                        if cur_sl <= 0 or target_sl > cur_sl:
+                            should_update = True
+                    elif side == "SHORT":
+                        # Solo actualizar si el nuevo SL es más bajo (más favorable a la baja)
+                        if cur_sl <= 0 or target_sl < cur_sl:
+                            should_update = True
 
                 if should_update:
                     mt5_bridge.modify_position_sl(symbol=sym, ticket=ticket, new_sl=target_sl)
                     action_taken = f"SL_ACTUALIZADO (${target_sl})"
-                    logger.info(f"dY>,? [MT5_GUARDIAN] Posicion {sym} {side} (+{r_profit:.2f}R) protegida con SL=${target_sl} ({status_msg}).")
+                    logger.info(f"🛡️ [MT5_GUARDIAN] Posición {sym} {side} (+{r_profit:.2f}R) protegida con SL=${target_sl} ({status_msg}).")
 
                 managed_results.append({
                     "symbol": sym,

@@ -376,8 +376,51 @@ class MT5Bridge:
         except Exception as e:
             logger.error(f"❌ [MT5_BRIDGE] Error calculando spreads en MT5: {e}")
             return {}
+
+    def cancel_order(self, ticket: int) -> bool:
+        """Cancela una orden pendiente (LIMIT/STOP) en MetaTrader 5."""
+        if not MT5_AVAILABLE or self.dry_run or not self.ensure_connected():
+            logger.info(f"🏛️ [MT5_BRIDGE:SIMULATED] Cancelación simulada de orden #{ticket}")
+            return True
+        try:
+            request = {
+                "action": mt5.TRADE_ACTION_REMOVE,
+                "order": ticket,
+                "magic": self.MAGIC_NUMBER
+            }
+            res = mt5.order_send(request)
+            if res and res.retcode == mt5.TRADE_RETCODE_DONE:
+                logger.info(f"🗑️ [MT5_BRIDGE] Orden pendiente #{ticket} cancelada exitosamente.")
+                return True
+            else:
+                ret = res.retcode if res else "UNKNOWN"
+                msg = res.comment if res else "Error"
+                logger.warning(f"⚠️ [MT5_BRIDGE] Fallo cancelando orden #{ticket}: {ret} - {msg}")
+                return False
+        except Exception as e:
+            logger.error(f"❌ [MT5_BRIDGE] Excepción cancelando orden #{ticket}: {e}")
+            return False
+
+    def cancel_all_pending_orders(self) -> int:
+        """Cancela todas las órdenes límite/stop pendientes en MetaTrader 5 (Fail-Closed Killswitch)."""
+        if not MT5_AVAILABLE or self.dry_run or not self.ensure_connected():
+            return 0
+        try:
+            orders = mt5.orders_get() or []
+            cancelled = 0
+            for o in orders:
+                if self.cancel_order(o.ticket):
+                    cancelled += 1
+            if cancelled > 0:
+                logger.warning(f"🛑 [MT5_BRIDGE:KILLSWITCH] {cancelled} órdenes pendientes purgadas por seguridad.")
+            return cancelled
+        except Exception as e:
+            logger.error(f"❌ [MT5_BRIDGE] Error en cancel_all_pending_orders: {e}")
+            return 0
+
+    def modify_position_sl(self, symbol: str, ticket: int, new_sl: float, new_tp: Optional[float] = None) -> bool:
         """Modifica el Stop Loss en MetaTrader 5 respetando la Invarianza Monótona."""
-        if self.dry_run or not self.connected or not MT5_AVAILABLE:
+        if not MT5_AVAILABLE or self.dry_run or not self.ensure_connected():
             logger.info(f"🏛️ [MT5_BRIDGE:DRY_RUN] Modificación simulada de SL para ticket #{ticket} ({symbol}) a ${new_sl}")
             return True
         try:

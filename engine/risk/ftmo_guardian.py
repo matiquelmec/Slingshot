@@ -98,6 +98,17 @@ class FtmoGuardianShield:
         except Exception as e:
             logger.debug(f"[FTMO_GUARDIAN] Error guardando estado: {e}")
 
+    def _purge_mt5_pending_orders_on_lockout(self):
+        """Cancela inmediatamente todas las órdenes pendientes en MT5 al activarse un Kill-Switch."""
+        try:
+            from engine.execution.mt5_bridge import mt5_bridge
+            if mt5_bridge.ensure_connected():
+                purged = mt5_bridge.cancel_all_pending_orders()
+                if purged > 0:
+                    logger.warning(f"🛑 [FTMO_GUARDIAN] {purged} órdenes pendientes canceladas por activación de Kill-Switch.")
+        except Exception as e:
+            logger.debug(f"[FTMO_GUARDIAN] Error purgando órdenes en MT5: {e}")
+
     def set_phase(self, phase: str):
         """Actualiza la fase de evaluación de FTMO."""
         p_up = phase.upper()
@@ -148,6 +159,7 @@ class FtmoGuardianShield:
             self.lockout_reason = f"KILL-SWITCH DIARIO ACTIVADO ({self.phase}): Pérdida diaria alcanzada ({daily_dd_pct:.2f}% >= {daily_limit}%). Bot bloqueado por seguridad FTMO."
             logger.error(f"🛑 [FTMO_GUARDIAN] {self.lockout_reason}")
             self._save_state()
+            self._purge_mt5_pending_orders_on_lockout()
 
         # 4. Evaluar Kill-Switch Total (-7.5% en Fase 1 / -5.0% en Fase 2)
         total_limit = self.MAX_TOTAL_DRAWDOWN_PCT
@@ -156,6 +168,7 @@ class FtmoGuardianShield:
             self.lockout_reason = f"KILL-SWITCH TOTAL ACTIVADO ({self.phase}): Drawdown total ({total_dd_pct:.2f}% >= {total_limit}%). Bot congelado."
             logger.error(f"🛑 [FTMO_GUARDIAN] {self.lockout_reason}")
             self._save_state()
+            self._purge_mt5_pending_orders_on_lockout()
             
         # 5. Evaluar Progreso de Fase
         target_pct = self.current_config["target_pct"]

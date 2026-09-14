@@ -154,35 +154,81 @@ class TradFiScanner:
                         try:
                             from engine.execution.mt5_bridge import mt5_bridge
                             import MetaTrader5 as mt5
-                            
-                                                        # [SOP-19 / SWING NEWS SLIPPAGE SHIELD]
+
+                            # [SOP-19 / SWING NEWS SLIPPAGE SHIELD]
                             from engine.indicators.news_interceptor import news_interceptor
                             if news_interceptor.is_macro_news_blackout(now_utc, symbol):
-                                logger.warning(f"dY>` [NEWS_SLIPPAGE_SHIELD] Orden {symbol} {direction} pospuesta por spread ensanchado de noticia macro.")
+                                logger.warning(f"🛡️ [NEWS_SLIPPAGE_SHIELD] Orden {symbol} {direction} pospuesta por spread ensanchado de noticia macro.")
                                 continue
 
                             sym_mt5 = symbol.replace("USDT", "USD")
                             if ".cash" not in sym_mt5 and any(idx in sym_mt5 for idx in ["US100", "US30", "US500", "GER40"]):
                                 sym_mt5 = f"{sym_mt5}.cash"
 
+                            # [ANTI-CHURNING COOLDOWN SENTINEL]
+                            # Bloquear reentradas durante 120 min si la última operación cerró en Stop Loss
+                            if not hasattr(self, "_symbol_cooldowns"):
+                                self._symbol_cooldowns = {}
+                            if not hasattr(self, "_daily_loss_counts"):
+                                self._daily_loss_counts = {}
+
+                            now_ts = time.time()
+                            # 1. Comprobar cooldown activo en memoria
+                            if sym_mt5 in self._symbol_cooldowns:
+                                cooldown_until = self._symbol_cooldowns[sym_mt5]
+                                if now_ts < cooldown_until:
+                                    rem_min = int((cooldown_until - now_ts) / 60)
+                                    logger.info(f"⏳ [ANTI_CHURNING] {sym_mt5} en cooldown activo ({rem_min} min restantes tras Stop Loss). Orden omitida.")
+                                    continue
+                                else:
+                                    del self._symbol_cooldowns[sym_mt5]
+
+                            # 2. Sincronizar deals recientes desde MT5 para detectar cierres en SL
+                            if mt5_bridge.ensure_connected():
+                                from datetime import timedelta
+                                recent_deals = mt5.history_deals_get(datetime.now() - timedelta(hours=3), datetime.now()) or []
+                                sl_hit_detected = False
+                                for d in reversed(recent_deals):
+                                    if d.symbol == sym_mt5 and d.entry == 1: # Trade Exit
+                                        if d.profit < 0.0:
+                                            # Cierre con pérdida reciente
+                                            sl_age = (datetime.now().timestamp() - d.time)
+                                            if sl_age < 7200: # menos de 2 horas (120 min)
+                                                self._symbol_cooldowns[sym_mt5] = now_ts + (7200 - sl_age)
+                                                sl_hit_detected = True
+                                                rem_min = int((7200 - sl_age) / 60)
+                                                logger.warning(f"🛑 [ANTI_CHURNING] Detectado SL reciente en MT5 para {sym_mt5} (hace {int(sl_age/60)}m). Activando cooldown de {rem_min} min.")
+                                                break
+                                        elif d.profit >= 0.0:
+                                            break # Última salida fue positiva, no hay cooldown
+                                if sl_hit_detected:
+                                    continue
+
                             # [CORRELATION GOVERNOR US100 / US30]
-                            # Prevenir duplicaciA3n de riesgo direccional a 1.50% ($1,500 USD) en A-ndices correlacionados > 85%
+                            # Prevenir duplicación de riesgo direccional a 1.50% ($1,500 USD) en índices correlacionados > 85%
                             if "US100" in sym_mt5 or "US30" in sym_mt5:
                                 other_idx = "US30.cash" if "US100" in sym_mt5 else "US100.cash"
-                                other_orders = mt5.orders_get(symbol=other_idx) or [] if mt5_bridge.connected else []
-                                other_pos = mt5.positions_get(symbol=other_idx) or [] if mt5_bridge.connected else []
+                                is_conn = mt5_bridge.ensure_connected()
+                                other_orders = mt5.orders_get(symbol=other_idx) or [] if is_conn else []
+                                other_pos = mt5.positions_get(symbol=other_idx) or [] if is_conn else []
                                 has_corr_conflict = False
                                 for op in list(other_orders) + list(other_pos):
                                     op_type = getattr(op, "type", None)
                                     op_is_long = op_type in (0, 2) if op_type is not None else True
-                                    if (direction == "LONG" and op_is_long) or (direction == "SHORT" and not op_is_long):
-                                        has_corr_conflict = True
-                                        break
+                                    # Si la posición en el otro índice ya está en breakeven o asegurada, se permite
+                                    op_sl = float(getattr(op, "sl", 0.0) or 0.0)
+                                    op_open = float(getattr(op, "price_open", 0.0) or 0.0)
+                                    is_secured = (op_is_long and op_sl >= op_open) or (not op_is_long and op_sl > 0 and op_sl <= op_open)
+                                    if not is_secured:
+                                        if (direction == "LONG" and op_is_long) or (direction == "SHORT" and not op_is_long):
+                                            has_corr_conflict = True
+                                            break
                                 if has_corr_conflict:
-                                    logger.info(f"dY>` [CORRELATION_GOVERNOR] Veto de orden {sym_mt5} {direction}: ya existe exposiciA3n activa en {other_idx} en la misma direcciA3n. Riesgo protegido al 0.75%.")
+                                    logger.info(f"🛡️ [CORRELATION_GOVERNOR] Veto de orden {sym_mt5} {direction}: ya existe exposición en riesgo no asegurado en {other_idx}. Riesgo protegido al 0.75%.")
                                     continue
+
                             has_order = False
-                            if mt5_bridge.connected and not mt5_bridge.dry_run:
+                            if mt5_bridge.ensure_connected() and not mt5_bridge.dry_run:
                                 ex_orders = mt5.orders_get(symbol=sym_mt5) or []
                                 ex_pos = mt5.positions_get(symbol=sym_mt5) or []
                                 if len(ex_orders) > 0 or len(ex_pos) > 0:
@@ -208,7 +254,7 @@ class TradFiScanner:
                                     if not hasattr(self, "_active_orders"):
                                         self._active_orders = set()
                                     self._active_orders.add(sym_mt5)
-                                    logger.info(f"s [TRADFI_AUTOLIMIT] Orden limite colocada en MT5 para {sym_mt5}: {direction} @ {candidate['price']}")
+                                    logger.info(f"🎯 [TRADFI_AUTOLIMIT] Orden límite colocada en MT5 para {sym_mt5}: {direction} @ {candidate['price']}")
                                     try:
                                         from engine.router.telegram_dispatcher import telegram_dispatcher
                                         tele_sig = {
