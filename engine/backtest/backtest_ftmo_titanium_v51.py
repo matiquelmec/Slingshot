@@ -52,7 +52,9 @@ TRADFI_PORTFOLIO_CONFIG = {
 }
 
 def load_data():
-    base_dir = r"C:\Slingshot\engine\backtest\data"
+    base_dir = os.path.join(os.path.dirname(__file__), "data")
+    if not os.path.exists(base_dir):
+        base_dir = r"C:\Slingshot\engine\backtest\data"
     data = {}
     for sym in TRADFI_PORTFOLIO_CONFIG.keys():
         path = os.path.join(base_dir, f"{sym}_15m_audited.parquet")
@@ -103,6 +105,7 @@ def run_simulation():
     closed_trades = []
     
     daily_killswitch_hits = 0
+    symbol_cooldown_until: Dict[str, pd.Timestamp] = {}
     
     # Pre-index dataframes por tiempo para O(1) lookups
     time_indices = {sym: {t: idx for idx, t in enumerate(df["time"])} for sym, df in datasets.items()}
@@ -162,6 +165,7 @@ def run_simulation():
                     pnl = -risk_usd - pos["commission"]
                     balance += pnl
                     reason = "STOP_LOSS"
+                    symbol_cooldown_until[sym] = t_step + pd.Timedelta(minutes=120)
                 pos["exit_price"] = sl
                 pos["exit_time"] = t_step
                 pos["pnl"] = pnl
@@ -175,6 +179,7 @@ def run_simulation():
                 # Corte prematuro a mercado: ahorra 35% del SL
                 pnl = (-risk_usd * 0.65) - pos["commission"]
                 balance += pnl
+                symbol_cooldown_until[sym] = t_step + pd.Timedelta(minutes=120)
                 pos["exit_price"] = c_close
                 pos["exit_time"] = t_step
                 pos["pnl"] = pnl
@@ -221,7 +226,7 @@ def run_simulation():
                     pos["harvested_pnl"] += harvest_pnl
                     pos["exit_price"] = tp3_price
                     pos["exit_time"] = t_step
-                    pos["pnl"] = pos["harvested_pnl"]
+                    pos["pnl"] = pos["harvested_pnl"] - pos["commission"]
                     pos["reason"] = "FULL_TP3_RUNNER"
                     closed_trades.append(pos)
                     continue
@@ -293,6 +298,24 @@ def run_simulation():
             if any(p["symbol"] == sym for p in open_positions) or any(o["symbol"] == sym for o in pending_orders):
                 continue # Anti-duplicacion
                 
+            # Anti-churning cooldown check
+            if t_step < symbol_cooldown_until.get(sym, t_step):
+                continue
+                
+            # Correlation Governor: US100 vs US30 (bloquear si el otro índice tiene riesgo abierto sin asegurar)
+            if sym in ("US100", "US30"):
+                other_sym = "US30" if sym == "US100" else "US100"
+                active_conflicts = [
+                    p for p in open_positions
+                    if p["symbol"] == other_sym and not p.get("is_be", False)
+                ]
+                pending_conflicts = [
+                    o for o in pending_orders
+                    if o["symbol"] == other_sym
+                ]
+                if active_conflicts or pending_conflicts:
+                    continue # Veto de correlación: exposición no asegurada en índice hermano
+                
             idx = time_indices[sym].get(t_step)
             if idx is None or idx < 50:
                 continue
@@ -336,6 +359,18 @@ def run_simulation():
             r_dist = abs(entry_price - stop_loss)
             if r_dist <= (spec["spread_usd"] * 2):
                 continue
+                
+            # [SOP-64 CONFLUENCE SCORING SSOT]
+            score = 65
+            if (direction == "LONG" and c_close > ema200) or (direction == "SHORT" and c_close < ema200):
+                score += 15
+            c_high_bar = candle["high"]
+            c_low_bar = candle["low"]
+            if (c_low_bar <= entry_price <= c_high_bar) or (abs(c_close - entry_price) / entry_price < 0.003):
+                score += 15
+                
+            if score < 75:
+                continue # Filtro estricto de producción: solo setups de confluencia verificada
                 
             # Moduladores Cuantitativos
             # SOP-46: Ciclo semanal
@@ -405,10 +440,18 @@ def run_simulation():
         "passed_ftmo_phase_2": bool(balance >= 105000.0)
     }
     
-    os.makedirs(r"C:\Slingshot\engine\backtest\reports", exist_ok=True)
-    report_file = r"C:\Slingshot\engine\backtest\reports\ftmo_titanium_v51_report.json"
+    local_reports_dir = os.path.join(os.path.dirname(__file__), "reports")
+    os.makedirs(local_reports_dir, exist_ok=True)
+    report_file = os.path.join(local_reports_dir, "ftmo_titanium_v51_report.json")
     with open(report_file, "w", encoding="utf-8") as f:
         json.dump(report, f, indent=2, default=str)
+        
+    try:
+        os.makedirs(r"C:\Slingshot\engine\backtest\reports", exist_ok=True)
+        with open(r"C:\Slingshot\engine\backtest\reports\ftmo_titanium_v51_report.json", "w", encoding="utf-8") as f:
+            json.dump(report, f, indent=2, default=str)
+    except Exception:
+        pass
         
     print("\n" + "="*80)
     print("  RESULTADOS DEL NUEVO BACKTEST FTMO v51.0 TITANIUM (9 ACTIVOS CONCURRENTES)")
