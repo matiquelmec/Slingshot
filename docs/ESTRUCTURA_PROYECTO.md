@@ -1,11 +1,11 @@
-# 🏗️ Estructura del Proyecto Slingshot v52.0 APEX ADAPTIVE TITANIUM
+# 🏗️ Estructura del Proyecto Slingshot v55.0 APEX SOVEREIGN
 
 > Guía de referencia técnica oficial de la arquitectura, jerarquía de directorios, módulos y componentes del sistema autónomo Slingshot.
-> **Última actualización**: Septiembre 2026 (v52.0 APEX ADAPTIVE TITANIUM — Sistema de Calibración Continua en Tres Bucles: Anillo 1 Bayesiano SMC <10µs, Anillo 2 HMM/GMM y Walk-Forward ML, Anillo 3 Post-Mortem NVIDIA NIM con Veto en Gatekeeper, Arquitectura Dual Cripto Bitunix 2.5% vs FTMO MetaTrader 5 TradFi 0.75%, Persistencia SQLite WAL y Suite QA Certificada al 100% en VPS).
+> **Última actualización**: Septiembre 2026 (v55.0 APEX SOVEREIGN — Sistema de Calibración Continua en Tres Bucles: Anillo 1 Bayesiano SMC <10µs, Anillo 2 HMM/GMM y Walk-Forward ML, Anillo 3 Post-Mortem NVIDIA NIM con Veto en Gatekeeper, Circuit Breakers de Racha Anti-Churning SOP-81 a SOP-83, Arquitectura Dual Cripto Bitunix 2.5% vs FTMO MetaTrader 5 TradFi 0.75%, Persistencia SQLite WAL y Suite QA Certificada al 100% con 346 Tests en VPS).
 
 ---
 
-## 📊 Árbol de Directorios Oficial v52.0
+## 📊 Árbol de Directorios Oficial v55.0
 
 ```text
 Slingshot/
@@ -139,6 +139,7 @@ Slingshot/
 │       ├── test_bayesian_confluence_calibration.py  # 5 Pruebas Calibración Bayesiana SMC, Prior Beta(10,10) y Microsegundos (SOP-72)
 │       ├── test_hmm_regime_and_rolling_train.py     # 4 Pruebas HMM 4 Estados, Markov Transition y Hot-Reload Atómico (SOP-73)
 │       ├── test_post_mortem_and_veto_suite.py       # 3 Pruebas Agente Post-Mortem NVIDIA NIM y Veto Gatekeeper (SOP-74)
+│       ├── test_streak_circuit_breakers.py          # 4 Pruebas Circuit Breakers de Racha SOP-81/82/83 (FTMO & Bitunix)
 │       └── legacy/                                  # Pruebas históricas preservadas
 │
 ├── scripts/                         # ═══ HERRAMIENTAS CLI & DE DESPLIEGUE (SSoT) ═══
@@ -153,6 +154,7 @@ Slingshot/
     ├── README.md                    # Manual general del ecosistema y especificaciones ejecutivas
     ├── SLINGSHOT_BIBLE_V51.md       # Biblia canónica maestra v51.0 (Especificación completa del sistema)
     ├── SLINGSHOT_BIBLE_V52.md       # Biblia canónica maestra v52.0 (Tri-Loop Adaptive Calibration, SOP-72 a SOP-74)
+    ├── SLINGSHOT_BIBLE_V55.md       # Biblia canónica maestra v55.0 (Apex Sovereign, Streak Breakers SOP-81 a SOP-83)
     ├── ESTRUCTURA_PROYECTO.md       # Guía de estructura, archivos y módulos (este archivo)
     └── MULTI_ACCOUNT_INSTITUTIONAL_SPEC.md # Especificación técnica de la arquitectura multi-cuenta
 ```
