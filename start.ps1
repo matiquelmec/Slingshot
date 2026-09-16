@@ -42,13 +42,18 @@ try {
 
 # --- Sidecar HFT (Node.js en puerto 8080) ---
 Write-Host "  [0.5/2] Iniciando HFT Sidecar (http://localhost:8080)..." -ForegroundColor Yellow
+$localSidecar = Join-Path $PSScriptRoot "sidecar\index.js"
 $userProfile = $env:USERPROFILE
-$sidecarPath = "$userProfile\.gemini\config\skills\slingshot_hft_sidecar\scripts\index.js"
-if (Test-Path $sidecarPath) {
-    # Usamos cmd /c start node para máxima compatibilidad con caracteres especiales en Windows
+$globalSidecar = "$userProfile\.gemini\config\skills\slingshot_hft_sidecar\scripts\index.js"
+
+$sidecarPath = if (Test-Path $localSidecar) { $localSidecar } elseif (Test-Path $globalSidecar) { $globalSidecar } else { $null }
+
+if ($sidecarPath) {
+    # Usamos cmd /c start node para máxima compatibilidad y ejecución en segundo plano
     Start-Process cmd -ArgumentList "/c start /min node `"$sidecarPath`""
+    Write-Host "        OK - Sidecar HFT iniciado desde $sidecarPath" -ForegroundColor Green
 } else {
-    Write-Host "  [ALERTA] No se encontro la ruta global del Sidecar HFT." -ForegroundColor DarkYellow
+    Write-Host "  [ALERTA] No se encontro el archivo del Sidecar HFT." -ForegroundColor DarkYellow
 }
 
 # --- Backend (FastAPI en puerto 8000) ---

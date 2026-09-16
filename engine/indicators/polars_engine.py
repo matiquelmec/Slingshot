@@ -56,7 +56,8 @@ class PolarsEngine:
         # 2. EMAs
         ema50 = close.ewm_mean(span=50, adjust=False)
         ema200 = close.ewm_mean(span=200, adjust=False)
-        atr = tr.rolling_mean(window_size=14)
+        # SOP-18 Wilder's Smoothed ATR (alpha = 1/14) con paridad 1:1 MT5/TradingView
+        atr = tr.ewm_mean(alpha=1/14, adjust=False)
 
         # 3. FVGs Institucionales
         # Bullish FVG: low[i] > high[i-2]

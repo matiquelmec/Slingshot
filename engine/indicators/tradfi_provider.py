@@ -182,7 +182,14 @@ class TradFiProvider:
                 
                 if rates is not None and len(rates) > 20:
                     df = pd.DataFrame(rates)
-                    df["timestamp"] = pd.to_datetime(df["time"], unit="s", utc=True)
+                    # SOP-18: Dynamic Broker Timezone Anchor.
+                    # Los brokers MT5 (e.g. FTMO) operan en EET/EEST (UTC+2 / UTC+3).
+                    # Alineamos dinámicamente el tiempo de las barras a verdadero UTC para evitar desalineación en Killzones SOP-18 y Rollover SOP-85.
+                    last_bar_time = df["time"].iloc[-1]
+                    raw_offset = last_bar_time - now
+                    # Redondear a horas enteras más cercanas (e.g. 7200s = 2h, 10800s = 3h)
+                    broker_offset_seconds = int(round(raw_offset / 3600.0) * 3600) if abs(raw_offset) > 1800 else 0
+                    df["timestamp"] = pd.to_datetime(df["time"] - broker_offset_seconds, unit="s", utc=True)
                     df.rename(columns={"tick_volume": "volume"}, inplace=True)
                     df = df[["timestamp", "open", "high", "low", "close", "volume"]]
                     

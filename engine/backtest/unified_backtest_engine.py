@@ -331,20 +331,20 @@ class UnifiedBacktestEngine:
                                     outcome_r += (lock_r * rem_pos * total_multiplier)
                         break
 
-                    # TP1 (+1.2R): Cobra 40% y mueve SL a Breakeven + Fee Buffer
+                    # SOP-18 Canonical Exit Sizing: TP1 (+1.3R) cobra 50% y mueve SL a Breakeven + Fee Buffer
                     if not hit_tp1 and bh >= p_tp1:
                         hit_tp1 = True
                         tp1_idx = k
-                        outcome_r += (1.2 * 0.40 * total_multiplier)
-                        rem_pos -= 0.40
+                        outcome_r += (1.3 * 0.50 * total_multiplier)
+                        rem_pos -= 0.50
                         curr_sl = entry + (entry * 0.0008)
 
-                    # TP2 (+2.0R): Cobra 40% y sube SL a +1.0R en verde garantizado
+                    # TP2 (+2.5R): Cobra 30% y sube SL a +1.0R en verde garantizado
                     if hit_tp1 and not hit_tp2 and bh >= p_tp2:
                         hit_tp2 = True
                         tp2_idx = k
-                        outcome_r += (2.0 * 0.40 * total_multiplier)
-                        rem_pos -= 0.40
+                        outcome_r += (2.5 * 0.30 * total_multiplier)
+                        rem_pos -= 0.30
                         curr_sl = entry + (risk * 1.0)
 
                     # SOP-48: Dynamic Elastic Ratchet Lock (@ +3.5R -> Stop a +2.5R)
@@ -381,20 +381,20 @@ class UnifiedBacktestEngine:
                                     outcome_r += (lock_r * rem_pos * total_multiplier)
                         break
 
-                    # TP1 (+1.2R): Cobra 40% y mueve SL a Breakeven + Fee Buffer
+                    # SOP-18 Canonical Exit Sizing: TP1 (+1.3R) cobra 50% y mueve SL a Breakeven + Fee Buffer
                     if not hit_tp1 and bl <= p_tp1:
                         hit_tp1 = True
                         tp1_idx = k
-                        outcome_r += (1.2 * 0.40 * total_multiplier)
-                        rem_pos -= 0.40
+                        outcome_r += (1.3 * 0.50 * total_multiplier)
+                        rem_pos -= 0.50
                         curr_sl = entry - (entry * 0.0008)
 
-                    # TP2 (+2.0R): Cobra 40% y sube SL a +1.0R en verde garantizado
+                    # TP2 (+2.5R): Cobra 30% y sube SL a +1.0R en verde garantizado
                     if hit_tp1 and not hit_tp2 and bl <= p_tp2:
                         hit_tp2 = True
                         tp2_idx = k
-                        outcome_r += (2.0 * 0.40 * total_multiplier)
-                        rem_pos -= 0.40
+                        outcome_r += (2.5 * 0.30 * total_multiplier)
+                        rem_pos -= 0.30
                         curr_sl = entry - (risk * 1.0)
 
                     # SOP-48: Dynamic Elastic Ratchet Lock (@ -3.5R -> Stop a -2.5R)

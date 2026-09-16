@@ -468,13 +468,14 @@ class BitunixExecutor:
                     price_decimals = rules["price_precision"]
                     min_vol = rules["min_trade_volume"]
 
+                    # SOP-18 Canonical Exit Sizing: 50% TP1 (+1.3R), 30% TP2 (+2.5R), 20% TP3 (+4.0R Runner)
                     if qty_decimals == 0:
-                        f1 = int(round(qty_float * 0.60))
-                        f2 = int(round(qty_float * 0.20))
+                        f1 = int(round(qty_float * 0.50))
+                        f2 = int(round(qty_float * 0.30))
                         f3 = int(round(qty_float - f1 - f2))
                     else:
-                        f1 = round(qty_float * 0.60, qty_decimals)
-                        f2 = round(qty_float * 0.20, qty_decimals)
+                        f1 = round(qty_float * 0.50, qty_decimals)
+                        f2 = round(qty_float * 0.30, qty_decimals)
                         f3 = round(qty_float - f1 - f2, qty_decimals)
 
                     # Si alguna fracción queda por debajo del minTradeVolume del exchange, consolidar hacia TP1 o TP2
