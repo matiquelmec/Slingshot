@@ -7,6 +7,7 @@ cuentas FTMO / Prop-Firms, manteniendo control estricto de drawdown diario ($750
 """
 import time
 import logging
+import threading
 from typing import Dict, Any, Optional, List
 from engine.core.logger import logger
 from engine.risk.ftmo_guardian import ftmo_guardian
@@ -48,16 +49,22 @@ class MT5Bridge:
         self.dry_run = dry_run
         self.connected = False
         self._last_connect_attempt = 0.0
-        self._connect_cooldown = 60.0
+        self._connect_cooldown = 120.0  # 120s cooldown institucional
+        self._connecting_thread: Optional[threading.Thread] = None
         if not self.dry_run and MT5_AVAILABLE:
-            self._connect()
+            self._start_background_connect()
 
-    def _connect(self) -> bool:
-        """Inicializa la API local de MetaTrader 5 con fallback a rutas estándar y cooldown."""
-        if not MT5_AVAILABLE:
+    def _start_background_connect(self):
+        """Lanza intento de conexión en un hilo independiente (cero bloqueo del event loop)."""
+        if self._connecting_thread and self._connecting_thread.is_alive():
+            return
+        self._connecting_thread = threading.Thread(target=self._connect_worker, daemon=True, name="MT5-Connect-Worker")
+        self._connecting_thread.start()
+
+    def _connect_worker(self) -> bool:
+        """Trabajador en hilo dedicado que intenta inicializar MetaTrader 5."""
+        if not MT5_AVAILABLE or self.dry_run:
             return False
-        now = time.time()
-        self._last_connect_attempt = now
         try:
             # 1. Intentar inicialización automática
             if mt5.initialize():
@@ -78,30 +85,32 @@ class MT5Bridge:
                             self.connected = True
                             return True
 
-            logger.warning("[MT5_BRIDGE] No se pudo inicializar la terminal MetaTrader 5 (cooldown 60s activo).")
+            logger.warning(f"[MT5_BRIDGE] Terminal MetaTrader 5 no disponible en Session 0/IPC (próximo reintento en {int(self._connect_cooldown)}s).")
+            self.connected = False
             return False
         except Exception as e:
-            logger.error(f"[MT5_BRIDGE] Error inicializando MT5: {e}")
+            logger.error(f"[MT5_BRIDGE] Error en inicialización MT5: {e}")
+            self.connected = False
             return False
+        finally:
+            self._last_connect_attempt = time.time()
+
+    def connect_sync(self) -> bool:
+        """Conexión síncrona explícita para testing o scripts CLI."""
+        return self._connect_worker()
 
     def ensure_connected(self) -> bool:
-        """Garantiza la conexión activa con MT5 con auto-reconexión y cooldown anti-bloqueo."""
+        """Garantiza estado de conexión de forma 100% no-bloqueante (<0.001ms)."""
         if not MT5_AVAILABLE or self.dry_run:
             return False
         if self.connected:
-            try:
-                acc = mt5.account_info()
-                if acc:
-                    return True
-            except Exception:
-                pass
-            self.connected = False
+            return True
 
         now = time.time()
-        if (now - self._last_connect_attempt) < self._connect_cooldown:
-            return False
+        if (now - self._last_connect_attempt) >= self._connect_cooldown:
+            self._start_background_connect()
 
-        return self._connect()
+        return False
 
     def place_limit_order(self, symbol: str, direction: str, entry_price: float, stop_loss: float, tp1: float, tp2: float, tp3: float, score: int = 70) -> Dict[str, Any]:
         """

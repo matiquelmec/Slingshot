@@ -115,8 +115,10 @@ class TradeManager:
         await asyncio.sleep(5)
         while not self._stop_event.is_set():
             try:
-                await self.sync_live_mt5_positions()
-                await self.sync_live_mt5_pending_orders()
+                from engine.execution.mt5_bridge import mt5_bridge
+                if mt5_bridge.connected:
+                    await self.sync_live_mt5_positions()
+                    await self.sync_live_mt5_pending_orders()
             except Exception as e:
                 logger.debug(f"[MT5_DEDICATED_LOOP] Error en ciclo MT5: {e}")
             await asyncio.sleep(4)
