@@ -8,7 +8,14 @@ import { useTelemetryStore } from '../../store/telemetryStore';
 export default function LiquidationScanner() {
     const { liquidations, latestPrice } = useTelemetryStore();
 
-    if (!latestPrice) return null;
+    if (!latestPrice) {
+        return (
+            <div className="flex flex-col h-full overflow-hidden bg-black/20 p-6 items-center justify-center">
+                <Skull size={24} className="text-neon-red/30 mb-2 animate-pulse" />
+                <p className="text-[10px] text-white/30 tracking-widest uppercase">Calculando magnetismo de liquidaciones...</p>
+            </div>
+        );
+    }
 
     // Clasificar liquidaciones por tipo
     const shortLiqs = liquidations

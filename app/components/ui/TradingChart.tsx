@@ -44,6 +44,7 @@ export default function TradingChart() {
     const smcSeriesRef = useRef<ISeriesApi<'Baseline'>[]>([]);
     const fvgSeriesRef = useRef<ISeriesApi<'Baseline'>[]>([]);
     const markersDetachRef = useRef<{ detach: () => void } | null>(null);
+    const lastFittedAssetRef = useRef<string>('');
 
     const { candles, isConnected, smcData, liquidityHeatmap, tacticalDecision, sessionData, liquidations, latestPrice, activeSymbol, activeTimeframe, auditedSignals, signalHistory } = useTelemetryStore();
     const { indicators } = useIndicatorsStore();
@@ -109,6 +110,15 @@ export default function TradingChart() {
         if (sorted.length === 0) return;
         try { candleSeriesRef.current.setData(sorted as any); } catch (e) { console.error("[Chart] setData error:", e); }
 
+        // Auto-Fit encuadre en cambio de activo o temporalidad
+        const assetKey = `${activeSymbol}-${activeTimeframe}`;
+        if (lastFittedAssetRef.current !== assetKey) {
+            lastFittedAssetRef.current = assetKey;
+            setTimeout(() => {
+                try { chartRef.current?.timeScale().fitContent(); } catch (e) {}
+            }, 50);
+        }
+
         const mainBottom = isEnabled('volume') ? 0.28 : 0.08;
         chartRef.current?.priceScale('right').applyOptions({ scaleMargins: { top: 0.05, bottom: mainBottom } });
 
@@ -145,7 +155,7 @@ export default function TradingChart() {
                 chartRef.current?.priceScale('williams_r').applyOptions({ visible: false });
             }
         }
-    }, [candles, indicators]);
+    }, [candles, indicators, activeSymbol, activeTimeframe]);
 
     // ── Precision & Live Price ──
     useEffect(() => {
@@ -237,8 +247,13 @@ export default function TradingChart() {
             } catch(e) { return null; }
         };
 
+        const bullishOBs = smcData?.order_blocks?.bullish || [];
+        const bearishOBs = smcData?.order_blocks?.bearish || [];
+        const bullishFVGs = smcData?.fvgs?.bullish || [];
+        const bearishFVGs = smcData?.fvgs?.bearish || [];
+
         if (isEnabled('smc')) {
-            smcData.order_blocks.bullish.forEach(ob => {
+            bullishOBs.forEach(ob => {
                 const s = addBaseline({
                     baseValue: { type: 'price', price: ob.bottom },
                     topFillColor1: 'rgba(0,255,136,0.4)', topFillColor2: 'rgba(0,255,136,0.1)', topLineColor: 'rgba(0,255,136,0.8)',
@@ -247,7 +262,7 @@ export default function TradingChart() {
                 }, times.filter(t => t >= ob.time).map(time => ({ time, value: ob.top })));
                 if (s) smcSeriesRef.current.push(s);
             });
-            smcData.order_blocks.bearish.forEach(ob => {
+            bearishOBs.forEach(ob => {
                 const s = addBaseline({
                     baseValue: { type: 'price', price: ob.top },
                     bottomFillColor1: 'rgba(255,0,60,0.4)', bottomFillColor2: 'rgba(255,0,60,0.1)', bottomLineColor: 'rgba(255,0,60,0.8)',
@@ -258,7 +273,7 @@ export default function TradingChart() {
             });
         }
         if (isEnabled('fvg')) {
-            smcData.fvgs.bullish.forEach(fvg => {
+            bullishFVGs.forEach(fvg => {
                 const s = addBaseline({
                     baseValue: { type: 'price', price: fvg.bottom },
                     topFillColor1: 'rgba(255,204,0,0.2)', topFillColor2: 'rgba(255,204,0,0.05)', topLineColor: 'rgba(255,204,0,0.6)',
@@ -267,7 +282,7 @@ export default function TradingChart() {
                 }, times.filter(t => t >= fvg.time).map(time => ({ time, value: fvg.top })));
                 if (s) fvgSeriesRef.current.push(s);
             });
-            smcData.fvgs.bearish.forEach(fvg => {
+            bearishFVGs.forEach(fvg => {
                 const s = addBaseline({
                     baseValue: { type: 'price', price: fvg.top },
                     bottomFillColor1: 'rgba(255,204,0,0.2)', bottomFillColor2: 'rgba(255,204,0,0.05)', bottomLineColor: 'rgba(255,204,0,0.6)',
@@ -670,10 +685,10 @@ export default function TradingChart() {
 
     return (
         <div className="w-full h-full relative" ref={chartContainerRef}>
-            {!isConnected && (
+            {candles.length === 0 && (
                 <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-black/50 backdrop-blur-sm">
                     <div className="w-12 h-12 border-2 border-t-neon-cyan border-r-neon-cyan/50 border-b-transparent border-l-transparent rounded-full animate-spin" />
-                    <p className="text-neon-cyan/80 text-xs tracking-[0.2em] mt-4 font-bold uppercase">Conectando Telemetría...</p>
+                    <p className="text-neon-cyan/80 text-xs tracking-[0.2em] mt-4 font-bold uppercase">Sincronizando Velas...</p>
                 </div>
             )}
 

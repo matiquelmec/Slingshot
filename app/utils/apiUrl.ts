@@ -6,32 +6,42 @@
  */
 
 export function getApiBaseUrl(): string {
-    if (process.env.NEXT_PUBLIC_API_URL) {
-        return process.env.NEXT_PUBLIC_API_URL.replace(/\/$/, '');
-    }
-    // En Vercel o navegador remoto, usar ruta relativa para que el proxy reescriba por HTTPS
+    // 🛡️ En navegador bajo HTTPS (Vercel): Forzar ruta relativa '' para viajar siempre por el proxy seguro de Next.js
     if (typeof window !== 'undefined') {
-        // Si estamos en localhost directo
+        if (window.location.protocol === 'https:') {
+            if (process.env.NEXT_PUBLIC_API_URL && process.env.NEXT_PUBLIC_API_URL.startsWith('https://')) {
+                return process.env.NEXT_PUBLIC_API_URL.replace(/\/$/, '');
+            }
+            return '';
+        }
+        // Localhost o LAN HTTP
         if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
             return `${window.location.protocol}//${window.location.hostname}:8000`;
         }
-        // En Vercel: usar la misma URL del sitio (''), las peticiones /api/* viajan seguras por HTTPS a Vercel y Vercel las pide al VPS
-        return '';
+    }
+    if (process.env.NEXT_PUBLIC_API_URL) {
+        return process.env.NEXT_PUBLIC_API_URL.replace(/\/$/, '');
     }
     return 'http://80.65.211.99:8000';
 }
 
 export function getWsBaseUrl(): string {
-    if (process.env.NEXT_PUBLIC_API_WS_URL) {
-        return process.env.NEXT_PUBLIC_API_WS_URL.replace(/\/$/, '');
-    }
     if (typeof window !== 'undefined') {
+        // En HTTPS: Un WebSocket sin encriptar (ws://) es bloqueado por el navegador como SecurityError (Mixed Content)
+        if (window.location.protocol === 'https:') {
+            if (process.env.NEXT_PUBLIC_API_WS_URL && process.env.NEXT_PUBLIC_API_WS_URL.startsWith('wss://')) {
+                return process.env.NEXT_PUBLIC_API_WS_URL.replace(/\/$/, '');
+            }
+            // Retorna vacío para activar de inmediato el modo Ultra-Fast REST Polling (1.5s) sin generar errores
+            return '';
+        }
         if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
             const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
             return `${protocol}//${window.location.hostname}:8000`;
         }
-        // En Vercel: los WebSockets no pasan por el proxy de Vercel. Conectar al VPS directamente:
-        return 'ws://80.65.211.99:8000';
+    }
+    if (process.env.NEXT_PUBLIC_API_WS_URL) {
+        return process.env.NEXT_PUBLIC_API_WS_URL.replace(/\/$/, '');
     }
     return 'ws://80.65.211.99:8000';
 }

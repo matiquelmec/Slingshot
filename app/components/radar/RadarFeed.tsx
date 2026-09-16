@@ -42,15 +42,19 @@ export default function RadarFeed() {
             }
         };
 
-        // Hidratación Inicial Estática (Zero-Polling)
+        // Hidratación Inicial y refresco periódico (4s) para Vercel
         fetchInitialHydration();
+        const interval = setInterval(fetchInitialHydration, 4000);
 
         // v13.1: Re-hidratar cuando el usuario vuelve al tab (cubre señales perdidas)
         const handleVisibility = () => {
             if (document.visibilityState === 'visible') fetchInitialHydration();
         };
         document.addEventListener('visibilitychange', handleVisibility);
-        return () => document.removeEventListener('visibilitychange', handleVisibility);
+        return () => {
+            clearInterval(interval);
+            document.removeEventListener('visibilitychange', handleVisibility);
+        };
     }, []);
 
     // Híbrido: Caché Base + Websocket Maestro (Memoizado)

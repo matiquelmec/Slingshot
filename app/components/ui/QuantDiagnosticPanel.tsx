@@ -106,7 +106,7 @@ export default function QuantDiagnosticPanel() {
                     <div className="space-y-1">
 
                         {/* Resistencias (encima del precio, más cercana primera) */}
-                        {[...d.key_levels.resistances].reverse().map((r, idx, arr) => {
+                        {[...(d.key_levels?.resistances || [])].reverse().map((r, idx, arr) => {
                             const rank = arr.length - idx;
                             const distPct = latestPrice ? ((r.price - latestPrice) / latestPrice * 100).toFixed(2) : null;
                             const isRR = r.origin === 'ROLE_REVERSAL';
@@ -144,7 +144,7 @@ export default function QuantDiagnosticPanel() {
                         )}
 
                         {/* Soportes (debajo del precio, más cercano primero) */}
-                        {d.key_levels.supports.map((s, idx) => {
+                        {(d.key_levels?.supports || []).map((s, idx) => {
                             const rank = idx + 1;
                             const distPct = latestPrice ? ((latestPrice - s.price) / latestPrice * 100).toFixed(2) : null;
                             const isRR = s.origin === 'ROLE_REVERSAL';

@@ -72,8 +72,10 @@ export default function ActiveAssetsMonitor() {
             }
         };
 
-        // Hidratación Inicial Estática (Zero-Polling)
+        // Hidratación Inicial y refresco periódico (5s) para Vercel
         loadInitialSync();
+        const interval = setInterval(loadInitialSync, 5000);
+        return () => clearInterval(interval);
     }, []);
 
     // 3. Fusión Híbrida Inteligente (Memoizado con Precios en Vivo)

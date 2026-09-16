@@ -76,8 +76,10 @@ export default function SignalTerminal() {
             }
         };
 
-        // Hidratación Inicial Estática (Zero-Polling)
+        // Hidratación Inicial y refresco periódico (4s) para Vercel
         fetchInitialHydration();
+        const interval = setInterval(fetchInitialHydration, 4000);
+        return () => clearInterval(interval);
     }, [searchParams, activeSymbol, connect]);
 
     // Los audiosignals siguen siendo directos para el Feed de auditoría
