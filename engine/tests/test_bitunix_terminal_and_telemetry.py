@@ -158,7 +158,7 @@ async def test_bitunix_real_api_position_payload():
         pos = res["positions"][0]
         assert pos["symbol"] == "BNBUSDT"
         assert pos["entry_price"] == 730.99
-        assert pos["mark_price"] == 726.84
+        assert pos["mark_price"] == pytest.approx(726.84, abs=0.01)
         assert pos["isolated_margin"] == 42.17
         assert pos["side"] == "LONG"
         # pos_pnl = (726.84 - 730.99) * 1.14 = -4.15 * 1.14 = -4.73

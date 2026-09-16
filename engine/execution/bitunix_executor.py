@@ -1317,6 +1317,9 @@ class BitunixExecutor:
         enriched_positions = []
         total_calc_floating_pnl = 0.0
 
+        # Medición de latencia de red neta del exchange (RTT paralelo principal)
+        net_latency_ms = round((time.time() - start_t) * 1000.0, 1)
+
         for p in raw_positions:
             sym = str(p.get("symbol", "")).upper()
             qty = float(p.get("qty") or p.get("holdAmount") or 0.0)
@@ -1331,14 +1334,6 @@ class BitunixExecutor:
                 or p.get("costPrice")
                 or 0.0
             )
-            mark_p = float(
-                p.get("markPrice")
-                or p.get("lastPrice")
-                or p.get("fairPrice")
-                or 0.0
-            )
-            if mark_p <= 0.0:
-                mark_p = entry_p
 
             pos_id = str(p.get("positionId") or "")
             raw_side = str(p.get("side") or "").upper()
@@ -1354,19 +1349,39 @@ class BitunixExecutor:
             if isolated_margin <= 0.0 and entry_p > 0 and leverage > 0:
                 isolated_margin = (qty * entry_p) / float(leverage)
 
-            # PnL no realizado de la posición
-            if entry_p > 0 and mark_p > 0:
+            # Extracción de PnL no realizado directo de Bitunix
+            raw_unrealized_pnl = (
+                p.get("unrealizedPNL")
+                if p.get("unrealizedPNL") is not None
+                else (p.get("unrealizedProfit") if p.get("unrealizedProfit") is not None else p.get("unrealizedPnl"))
+            )
+
+            # Mark Price: buscar en payload o deducir matemáticamente con precisión SSoT
+            mark_p = float(
+                p.get("markPrice")
+                or p.get("lastPrice")
+                or p.get("fairPrice")
+                or 0.0
+            )
+
+            if raw_unrealized_pnl is not None:
+                pos_pnl = float(raw_unrealized_pnl)
+                # Si el exchange no mandó markPrice pero tenemos entry_p y PnL, derivamos el precio de mercado real
+                if mark_p <= 0.0 and entry_p > 0 and qty > 0:
+                    if side == "LONG":
+                        mark_p = entry_p + (pos_pnl / qty)
+                    else:
+                        mark_p = entry_p - (pos_pnl / qty)
+            elif entry_p > 0 and mark_p > 0:
                 if side == "LONG":
                     pos_pnl = (mark_p - entry_p) * qty
                 else:
                     pos_pnl = (entry_p - mark_p) * qty
             else:
-                pos_pnl = float(
-                    p.get("unrealizedPNL")
-                    or p.get("unrealizedProfit")
-                    or p.get("unrealizedPnl")
-                    or 0.0
-                )
+                pos_pnl = 0.0
+
+            if mark_p <= 0.0:
+                mark_p = entry_p
 
             total_calc_floating_pnl += pos_pnl
 
@@ -1420,7 +1435,7 @@ class BitunixExecutor:
             })
 
         net_pnl = round(unrealized_pnl if unrealized_pnl != 0 else total_calc_floating_pnl, 2)
-        latency_ms = round((time.time() - start_t) * 1000.0, 1)
+        latency_ms = min(net_latency_ms, round((time.time() - start_t) * 1000.0, 1))
 
         # Regla SOP-41 de Riesgo Canónico 2.50%
         risk_pct = 0.025

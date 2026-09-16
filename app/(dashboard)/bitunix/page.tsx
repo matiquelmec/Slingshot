@@ -223,12 +223,18 @@ export default function BitunixDashboardPage() {
                     </span>
                 </div>
 
-                {/* 4. Posiciones y Órdenes Activas */}
+                {/* 4. Posiciones y Órdenes Activas + Cluster Risk Sentinel */}
                 <div className="bg-[#0A0F1D]/80 border border-white/10 rounded-2xl p-4 flex flex-col justify-between backdrop-blur-xl">
                     <div className="flex justify-between items-center">
                         <span className="text-[9px] font-mono font-bold text-white/40 uppercase">Exposición Activa</span>
                         <span className="text-[8px] font-mono font-bold text-purple-400 bg-purple-500/10 px-1.5 py-0.5 rounded border border-purple-500/20">
-                            HEDGE ISOLATED
+                            {(() => {
+                                const shorts = (data?.positions || []).filter(p => p.side === 'SHORT').length;
+                                const longs = (data?.positions || []).filter(p => p.side === 'LONG').length;
+                                if (shorts > 0 && longs === 0) return `${shorts} SHORT (RÉGIMEN BAJISTA)`;
+                                if (longs > 0 && shorts === 0) return `${longs} LONG (RÉGIMEN ALCISTA)`;
+                                return 'HEDGE ISOLATED';
+                            })()}
                         </span>
                     </div>
                     <span className="text-xl font-black font-mono text-purple-300 mt-1">
@@ -260,8 +266,14 @@ export default function BitunixDashboardPage() {
                 ) : (
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 font-mono">
                         {data.positions.map((pos) => {
-                            const isProfit = pos.unrealized_pnl >= 0;
                             const isLong = pos.side === 'LONG';
+                            // Fallback dinámico de PnL en frontend si el backend o exchange enviase 0
+                            let pnl = pos.unrealized_pnl;
+                            if (pnl === 0 && pos.entry_price > 0 && pos.mark_price > 0 && pos.qty > 0 && pos.entry_price !== pos.mark_price) {
+                                pnl = isLong ? (pos.mark_price - pos.entry_price) * pos.qty : (pos.entry_price - pos.mark_price) * pos.qty;
+                            }
+                            const isProfit = pnl >= 0;
+                            const roiPct = pos.isolated_margin > 0 ? (pnl / pos.isolated_margin) * 100 : pos.unrealized_pnl_pct;
                             return (
                                 <div key={pos.position_id || pos.symbol} className="bg-black/50 border border-white/10 hover:border-amber-500/30 rounded-xl p-4 flex flex-col justify-between transition-all shadow-lg">
                                     {/* Top Line */}
@@ -283,10 +295,10 @@ export default function BitunixDashboardPage() {
 
                                         <div className="text-right">
                                             <span className={`text-base font-black tracking-tight ${isProfit ? 'text-emerald-400 drop-shadow-[0_0_8px_rgba(52,211,153,0.4)]' : 'text-rose-400'}`}>
-                                                {isProfit ? `+$${pos.unrealized_pnl.toFixed(2)}` : `-$${Math.abs(pos.unrealized_pnl).toFixed(2)}`} USDT
+                                                {isProfit ? `+$${pnl.toFixed(2)}` : `-$${Math.abs(pnl).toFixed(2)}`} USDT
                                             </span>
                                             <span className={`text-[9px] block font-bold ${isProfit ? 'text-emerald-400/80' : 'text-rose-400/80'}`}>
-                                                ({isProfit ? '+' : ''}{pos.unrealized_pnl_pct.toFixed(2)}% ROI)
+                                                ({isProfit ? '+' : ''}{roiPct.toFixed(2)}% ROI)
                                             </span>
                                         </div>
                                     </div>
