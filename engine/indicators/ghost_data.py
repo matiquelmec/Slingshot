@@ -238,6 +238,17 @@ async def refresh_ghost_data(symbol: str = "BTCUSDT", macro_ctx: Optional[MacroS
             except Exception as e:
                 logger.debug(f"[GHOST] Error extrayendo narrativa de noticias/eventos: {e}")
 
+            # Síntesis macro y confluencia global
+            bias, bl, bs, reason = _compute_bias(
+                "BTCUSDT", _cache.fear_greed_value, _cache.btc_dominance, _cache.funding_rate,
+                dxy=_cache.dxy_trend, nasdaq=_cache.nasdaq_trend,
+                news_sentiment=_cache.news_sentiment, active_event=_cache.active_event
+            )
+            _cache.macro_bias = bias
+            _cache.block_longs = bl
+            _cache.block_shorts = bs
+            _cache.reason = reason
+
             _cache.last_updated = time.time()
             _cache.is_stale = False
             save_local_state(_cache)
@@ -286,6 +297,17 @@ def compute_symbol_ghost(global_cache: GhostState, symbol: str, local_funding: f
 
 
 def get_ghost_state() -> GhostState:
+    global _cache
+    if not _cache.reason or _cache.reason == "Sin datos macro disponibles.":
+        bias, bl, bs, reason = _compute_bias(
+            "BTCUSDT", _cache.fear_greed_value, _cache.btc_dominance, _cache.funding_rate,
+            dxy=_cache.dxy_trend, nasdaq=_cache.nasdaq_trend,
+            news_sentiment=_cache.news_sentiment, active_event=_cache.active_event
+        )
+        _cache.macro_bias = bias
+        _cache.block_longs = bl
+        _cache.block_shorts = bs
+        _cache.reason = reason
     return _cache
 
 

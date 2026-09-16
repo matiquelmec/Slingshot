@@ -89,6 +89,7 @@ export const createConnectionManager = (set: any, get: any) => {
                                 asset: clean
                             } : state.sessionData,
                             mlProjection: diag.ml_projection ?? state.mlProjection,
+                            advisorLogs: diag.advisor_log ? { ...state.advisorLogs, [clean]: diag.advisor_log } : state.advisorLogs,
                             htfBias: diag.htf_bias ?? state.htfBias,
                             ...(diag.liquidity_heatmap ? { liquidityHeatmap: diag.liquidity_heatmap } : {})
                         }));
@@ -193,6 +194,7 @@ export const createConnectionManager = (set: any, get: any) => {
                                 smcData: diag.smc ?? state.smcData,
                                 sessionData: diag.sessions ? { ...diag.sessions, asset: clean } : state.sessionData,
                                 mlProjection: diag.ml_projection ?? state.mlProjection,
+                                advisorLogs: diag.advisor_log ? { ...state.advisorLogs, [clean]: diag.advisor_log } : state.advisorLogs,
                                 htfBias: diag.htf_bias ?? state.htfBias,
                                 ...(diag.liquidity_heatmap ? { liquidityHeatmap: diag.liquidity_heatmap } : {})
                             }));
