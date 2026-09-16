@@ -56,20 +56,30 @@ export const createConnectionManager = (set: any, get: any) => {
                         if (ghostData.ghost) set({ ghostData: ghostData.ghost });
                     }
 
-                    // 2. [FAST DIAGNOSTIC] Recuperación inmediata de Retina Técnica, SMC, Niveles y Sesiones
+                    // 2. [FAST DIAGNOSTIC] Recuperación inmediata de Retina Técnica, SMC, Niveles, Sesiones y Velas del Chart
                     const diagRes = await fetch(`${BASE_URL}/api/v1/diagnostic/${clean}?timeframe=${timeframe}`);
                     if (diagRes.ok) {
                         const diag = await diagRes.json();
                         if (diag && !diag.error) {
+                            const newCandles = Array.isArray(diag.candles) && diag.candles.length > 0 ? diag.candles : [];
+                            const latestCandlePrice = newCandles.length > 0 ? Number(newCandles[newCandles.length - 1].close) : null;
+                            
                             set((state: any) => ({
                                 isCalibrating: false,
+                                isConnected: true, // Desbloquear vista de gráfico inmediatamente
+                                connectionStatus: 'CONNECTED',
+                                ...(newCandles.length > 0 ? {
+                                    candles: newCandles,
+                                    latestPrice: latestCandlePrice ?? state.latestPrice,
+                                    latestPrices: { ...state.latestPrices, [clean]: latestCandlePrice ?? state.latestPrices[clean] }
+                                } : {}),
                                 tacticalDecision: diag.tactical ? {
                                     ...state.tacticalDecision,
                                     asset: clean,
                                     regime: diag.tactical.market_regime ?? 'UNKNOWN',
                                     strategy: diag.tactical.active_strategy ?? 'STANDBY',
                                     reasoning: `Régimen: ${diag.tactical.market_regime || 'NEUTRAL'}. Soportes mapeados.`,
-                                    current_price: diag.tactical.current_price ?? state.latestPrice,
+                                    current_price: diag.tactical.current_price ?? latestCandlePrice ?? state.latestPrice,
                                     signal_history: diag.tactical.signals ?? [],
                                     ...diag.tactical
                                 } : state.tacticalDecision,
@@ -81,9 +91,21 @@ export const createConnectionManager = (set: any, get: any) => {
                                 mlProjection: diag.ml_projection ?? state.mlProjection,
                                 htfBias: diag.htf_bias ?? state.htfBias
                             }));
-                            console.log(`[TELEMETRY] 📥 Hidratación REST completa (Retina + SMC + Sesiones) para ${clean}`);
+                            console.log(`[TELEMETRY] 📥 Hidratación REST completa (Retina + Velas Chart: ${newCandles.length} + SMC + Sesiones) para ${clean}`);
                         }
                     }
+
+                    // 2.1 [LIQUIDATIONS REST HYDRATION] Carga de clusters de liquidaciones
+                    try {
+                        const liqRes = await fetch(`${BASE_URL}/api/v1/liquidations/${clean}`);
+                        if (liqRes.ok) {
+                            const liqData = await liqRes.json();
+                            if (Array.isArray(liqData) && liqData.length > 0) {
+                                set({ liquidations: liqData });
+                                console.log(`[TELEMETRY] 💀 Liquidaciones cargadas: ${liqData.length} clusters.`);
+                            }
+                        }
+                    } catch (e) {}
 
                     // 3. Fallback directo de Sesiones si aún no estaban en diagnóstico
                     if (!get().sessionData) {
@@ -167,7 +189,8 @@ export const createConnectionManager = (set: any, get: any) => {
             ws.onmessage = (e) => handleWsMessage(e, set, get, context);
 
             ws.onclose = (event) => {
-                set({ isConnected: false });
+                // Si el WebSocket se cierra o no puede conectar (ej: bloqueo en Vercel HTTPS -> WS),
+                // NO dejamos la pantalla en blanco ni en desconexión:
                 if (event.code !== 1000 && retryCount < MAX_RETRIES) {
                     const delay = Math.pow(2, retryCount) * 2000;
                     retryCount++;
@@ -175,15 +198,58 @@ export const createConnectionManager = (set: any, get: any) => {
                 }
             };
 
-            ws.onerror = () => set({ isConnected: false });
+            ws.onerror = () => {
+                console.warn("[WS] Tunnel fallback activo vía REST");
+            };
 
         } catch (error) {
-            console.error("[AUTH] WS connection failed:", error);
+            console.error("[AUTH] WS connection failed, activating continuous REST telemetry:", error);
             if (retryCount < MAX_RETRIES) {
                 const delay = Math.pow(2, retryCount) * 2000;
                 retryCount++;
                 retryTimeout = setTimeout(() => doConnect(get().activeSymbol, get().activeTimeframe, true), delay);
             }
+        }
+
+        // 🔄 [REST CONTINUOUS PULSE] Pulso de respaldo cada 3s para que Vercel siempre esté vivo
+        if (!watchdogInterval) {
+            watchdogInterval = setInterval(async () => {
+                if (connectionId !== get().activeConnectionId) return;
+                try {
+                    const clean = symbol.replace(/[\s\/]/g, '').toUpperCase();
+                    const pollRes = await fetch(`${BASE_URL}/api/v1/diagnostic/${clean}?timeframe=${timeframe}`);
+                    if (pollRes.ok) {
+                        const diag = await pollRes.json();
+                        if (diag && !diag.error) {
+                            const newCandles = Array.isArray(diag.candles) && diag.candles.length > 0 ? diag.candles : null;
+                            const latestCandlePrice = newCandles && newCandles.length > 0 ? Number(newCandles[newCandles.length - 1].close) : null;
+                            
+                            set((state: any) => ({
+                                isCalibrating: false,
+                                isConnected: true,
+                                connectionStatus: 'CONNECTED',
+                                ...(newCandles ? {
+                                    candles: newCandles,
+                                    latestPrice: latestCandlePrice ?? state.latestPrice,
+                                    latestPrices: { ...state.latestPrices, [clean]: latestCandlePrice ?? state.latestPrices[clean] }
+                                } : {}),
+                                tacticalDecision: diag.tactical ? {
+                                    ...state.tacticalDecision,
+                                    asset: clean,
+                                    regime: diag.tactical.market_regime ?? state.tacticalDecision.regime,
+                                    strategy: diag.tactical.active_strategy ?? state.tacticalDecision.strategy,
+                                    current_price: diag.tactical.current_price ?? latestCandlePrice ?? state.latestPrice,
+                                    ...diag.tactical
+                                } : state.tacticalDecision,
+                                smcData: diag.smc ?? state.smcData,
+                                sessionData: diag.sessions ? { ...diag.sessions, asset: clean } : state.sessionData,
+                                mlProjection: diag.ml_projection ?? state.mlProjection,
+                                htfBias: diag.htf_bias ?? state.htfBias
+                            }));
+                        }
+                    }
+                } catch (e) {}
+            }, 3000);
         }
     };
 
@@ -194,6 +260,10 @@ export const createConnectionManager = (set: any, get: any) => {
                 ws.onclose = null;
                 ws.close();
                 ws = null;
+            }
+            if (watchdogInterval) {
+                clearInterval(watchdogInterval);
+                watchdogInterval = null;
             }
         }
     };

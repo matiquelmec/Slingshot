@@ -26,9 +26,12 @@ export function getWsBaseUrl(): string {
         return process.env.NEXT_PUBLIC_API_WS_URL.replace(/\/$/, '');
     }
     if (typeof window !== 'undefined') {
-        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        const host = window.location.hostname;
-        return `${protocol}//${host}:8000`;
+        if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            return `${protocol}//${window.location.hostname}:8000`;
+        }
+        // En Vercel: los WebSockets no pasan por el proxy de Vercel. Conectar al VPS directamente:
+        return 'ws://80.65.211.99:8000';
     }
-    return 'ws://localhost:8000';
+    return 'ws://80.65.211.99:8000';
 }

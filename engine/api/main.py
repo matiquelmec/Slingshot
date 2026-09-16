@@ -334,6 +334,22 @@ async def get_diagnostic_state(asset: str, timeframe: str = "15m"):
     if not session_data:
         session_data = broadcaster._session_manager.get_current_state().get("data")
         
+    # 🚀 [HYDRATION] Extraer velas recientes para alimentar el chart sin latencia de WS
+    raw_history = list(broadcaster.state.live_buffer) if broadcaster.state.live_buffer else list(broadcaster.state.history)
+    clean_candles = []
+    for item in raw_history[-250:]:
+        d = item.get("data", item) if isinstance(item, dict) else item
+        raw_ts = d.get("timestamp", 0)
+        ts = int(raw_ts / 1000) if raw_ts > 10000000000 else int(raw_ts)
+        clean_candles.append({
+            "time": ts,
+            "open": float(d.get("open", 0)),
+            "high": float(d.get("high", 0)),
+            "low": float(d.get("low", 0)),
+            "close": float(d.get("close", 0)),
+            "volume": float(d.get("volume", 0))
+        })
+
     return sanitize_for_json({
         "asset": asset.upper(),
         "timeframe": timeframe,
@@ -341,8 +357,37 @@ async def get_diagnostic_state(asset: str, timeframe: str = "15m"):
         "smc": smc_data,
         "sessions": session_data,
         "ml_projection": broadcaster.state.ml_projection,
-        "htf_bias": broadcaster.state.htf_bias.to_dict() if hasattr(broadcaster.state.htf_bias, "to_dict") else broadcaster.state.htf_bias
+        "htf_bias": broadcaster.state.htf_bias.to_dict() if hasattr(broadcaster.state.htf_bias, "to_dict") else broadcaster.state.htf_bias,
+        "candles": clean_candles
     })
+
+@app.get("/api/v1/klines/{asset}")
+async def get_klines(asset: str, interval: str = "15m", limit: int = 300):
+    """
+    Retorna velas históricas listas para Lightweight Charts vía HTTP REST.
+    Permite hidratación inmediata del gráfico en Vercel sin depender de WebSocket.
+    """
+    sym = asset.upper()
+    broadcaster, _ = await registry.get_or_create(sym, interval)
+    raw_history = list(broadcaster.state.live_buffer) if (broadcaster and broadcaster.state.live_buffer) else (list(broadcaster.state.history) if broadcaster else [])
+    
+    if not raw_history:
+        raw_history = await fetch_binance_history(sym, interval, limit=min(limit, 500))
+        
+    clean_candles = []
+    for item in raw_history[-limit:]:
+        d = item.get("data", item) if isinstance(item, dict) else item
+        raw_ts = d.get("timestamp", 0)
+        ts = int(raw_ts / 1000) if raw_ts > 10000000000 else int(raw_ts)
+        clean_candles.append({
+            "time": ts,
+            "open": float(d.get("open", 0)),
+            "high": float(d.get("high", 0)),
+            "low": float(d.get("low", 0)),
+            "close": float(d.get("close", 0)),
+            "volume": float(d.get("volume", 0))
+        })
+    return sanitize_for_json(clean_candles)
 
 @app.get("/api/v1/signals")
 async def get_signals(
