@@ -224,13 +224,16 @@ class FtmoGuardianShield:
 
     def check_midnight_rollover_risk(self, hour_utc: int, minute: int) -> bool:
         """
-        [SOP-24 MIDNIGHT ROLL-OVER SHIELD]
-        Ventana de 15 minutos de corte bancario interbancario (21:50 a 22:05 UTC / 23:50 a 00:05 CE(S)T).
-        Durante estos minutos se congelan nuevas órdenes para evitar spreads ensanchados.
+        [SOP-85 EXTENDED MIDNIGHT ROLL-OVER ARMOR]
+        Ventana de 60 minutos de corte bancario interbancario (21:30 a 22:30 UTC / 23:30 a 00:30 CE(S)T).
+        Durante estos 60 minutos se congelan de forma absoluta nuevas órdenes en FTMO MT5 para
+        blindar la cuenta de fondeo contra el ensanchamiento masivo de spreads interbancarios.
         """
-        if hour_utc == 21 and minute >= 50:
+        # Ventana 21:30 a 21:59 UTC
+        if hour_utc == 21 and minute >= 30:
             return True
-        if hour_utc == 22 and minute <= 5:
+        # Ventana 22:00 a 22:30 UTC
+        if hour_utc == 22 and minute <= 30:
             return True
         return False
         

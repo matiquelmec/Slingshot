@@ -128,6 +128,33 @@ class MarketScanner:
             pass
         return {}
 
+    def is_trade_allowed_sop18(self, symbol: str, dt: datetime) -> bool:
+        """
+        [SOP-18 TIME-GATING CANONICAL SSoT]
+        Sincronizado 1:1 con unified_backtest_engine.py para filtrar horas de baja liquidez y trampas de mercado.
+        """
+        d = dt.strftime("%A")
+        h = dt.hour
+
+        # 1. Reglas Globales de Protección
+        if d == "Monday" and h <= 13: return False
+        if d == "Thursday" and h >= 16: return False
+        if h == 18: return False
+
+        # 2. Regla Específica AVAXUSDT: Solo ventanas 09:00 y 17:00 UTC
+        if symbol == "AVAXUSDT":
+            return h in [9, 17] and d in ["Tuesday", "Wednesday", "Thursday", "Saturday"]
+
+        # 3. Regla Específica RENDERUSDT: Solo ventanas 08:00, 13:00, 17:00 y 18:00 UTC
+        if symbol == "RENDERUSDT":
+            return h in [8, 13, 17, 18]
+
+        # 4. Resto de Activos (Líderes): Pausa en apertura 13h excepto Miércoles
+        if h == 13 and d != "Wednesday":
+            return False
+
+        return True
+
     def _ote_watchdog(self, direction: str, price: float, fib_data: dict) -> tuple:
         """
         OTE Watchdog: detecta si el precio persigue el mercado fuera de la zona de valor.
@@ -245,6 +272,29 @@ class MarketScanner:
                         candidates.append(self._format_opportunity(sig, is_active=True))
                     return
                 
+                # ── PROTOCOLO CANÓNICO SOP-18: TIME-GATING SSoT ──
+                now_utc = datetime.now(timezone.utc)
+                if not self.is_trade_allowed_sop18(symbol, now_utc):
+                    return
+
+                # ── PROTOCOLO CANÓNICO ANTIRUIDO: KER >= 0.35 & RVOL >= 1.10 ──
+                # Calcular métricas de eficiencia Kaufman (KER) y volumen relativo (RVOL)
+                if len(df) >= 20:
+                    change_10 = abs(float(df["close"].iloc[-1]) - float(df["close"].iloc[-10]))
+                    vol_10 = float(df["close"].diff().abs().iloc[-10:].sum())
+                    ker_val = round(change_10 / (vol_10 + 1e-9), 3)
+
+                    vol_sma = float(df["volume"].iloc[-20:].mean())
+                    cur_vol = float(df["volume"].iloc[-1])
+                    rvol_val = round(cur_vol / (vol_sma + 1e-9), 2)
+
+                    # Gating estricto idéntico al backtest: veto si el mercado está en rango sucio / chop
+                    if ker_val < 0.35 or rvol_val < 1.05:
+                        return
+                else:
+                    ker_val = 0.5
+                    rvol_val = 1.0
+
                 # Calcular clusters de liquidación en vivo para el escáner
                 from engine.indicators.liquidations import estimate_liquidation_clusters
                 liq_clusters = estimate_liquidation_clusters(df, current_price)

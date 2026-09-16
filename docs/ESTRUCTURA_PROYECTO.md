@@ -1,7 +1,7 @@
-# 🏗️ Estructura del Proyecto Slingshot v55.0 APEX SOVEREIGN
+# 🏗️ Estructura del Proyecto Slingshot v56.0 APEX PARITY
 
 > Guía de referencia técnica oficial de la arquitectura, jerarquía de directorios, módulos y componentes del sistema autónomo Slingshot.
-> **Última actualización**: Septiembre 2026 (v55.0 APEX SOVEREIGN — Sistema de Calibración Continua en Tres Bucles: Anillo 1 Bayesiano SMC <10µs, Anillo 2 HMM/GMM y Walk-Forward ML, Anillo 3 Post-Mortem NVIDIA NIM con Veto en Gatekeeper, Circuit Breakers de Racha Anti-Churning SOP-81 a SOP-83, Arquitectura Dual Cripto Bitunix 2.5% vs FTMO MetaTrader 5 TradFi 0.75%, Persistencia SQLite WAL y Suite QA Certificada al 100% con 346 Tests en VPS).
+> **Última actualización**: Septiembre 2026 (v56.0 APEX PARITY — Paridad Estricta Single Source of Truth (SSoT) entre Backtest y Producción, SOP-84 Filtro Antirruido KER ≥ 0.35 & Time-Gating SOP-18, SOP-85 Extended Midnight Roll-Over Armor de 60m en FTMO MT5, SOP-86 Exclusión Mutua US100/US30, Circuit Breakers de Racha Anti-Churning SOP-81 a SOP-83, Calibración Continua Tri-Bucle y Suite QA Certificada al 100% con 351 Tests en VPS).
 
 ---
 
