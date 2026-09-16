@@ -13,6 +13,34 @@ from engine.indicators.polars_engine import polars_engine
 from engine.api.config import settings
 from engine.indicators.data_utils import fetch_binance_history, fetch_top_liquid_tickers
 
+def is_trade_allowed_sop18(symbol: str, dt: datetime) -> bool:
+    """
+    [SOP-18 TIME-GATING CANONICAL SSoT]
+    Sincronizado 1:1 con unified_backtest_engine.py para filtrar horas de baja liquidez y trampas de mercado.
+    """
+    d = dt.strftime("%A")
+    h = dt.hour
+
+    # 1. Reglas Globales de Protección
+    if d == "Monday" and h <= 13: return False
+    if d == "Thursday" and h >= 16: return False
+    if h == 18: return False
+
+    # 2. Regla Específica AVAXUSDT: Solo ventanas 09:00 y 17:00 UTC
+    if symbol == "AVAXUSDT":
+        return h in [9, 17] and d in ["Tuesday", "Wednesday", "Thursday", "Saturday"]
+
+    # 3. Regla Específica RENDERUSDT: Solo ventanas 08:00, 13:00, 17:00 y 18:00 UTC
+    if symbol == "RENDERUSDT":
+        return h in [8, 13, 17, 18]
+
+    # 4. Resto de Activos (Líderes): Pausa en apertura 13h excepto Miércoles
+    if h == 13 and d != "Wednesday":
+        return False
+
+    return True
+
+
 class MarketScanner:
     """
     [APEX MULTI-TEMPORAL SCANNER v21.0 — DYNAMIC RVOL & KER WATCHLIST]
@@ -128,35 +156,8 @@ class MarketScanner:
             pass
         return {}
 
-def is_trade_allowed_sop18(symbol: str, dt: datetime) -> bool:
-    """
-    [SOP-18 TIME-GATING CANONICAL SSoT]
-    Sincronizado 1:1 con unified_backtest_engine.py para filtrar horas de baja liquidez y trampas de mercado.
-    """
-    d = dt.strftime("%A")
-    h = dt.hour
-
-    # 1. Reglas Globales de Protección
-    if d == "Monday" and h <= 13: return False
-    if d == "Thursday" and h >= 16: return False
-    if h == 18: return False
-
-    # 2. Regla Específica AVAXUSDT: Solo ventanas 09:00 y 17:00 UTC
-    if symbol == "AVAXUSDT":
-        return h in [9, 17] and d in ["Tuesday", "Wednesday", "Thursday", "Saturday"]
-
-    # 3. Regla Específica RENDERUSDT: Solo ventanas 08:00, 13:00, 17:00 y 18:00 UTC
-    if symbol == "RENDERUSDT":
-        return h in [8, 13, 17, 18]
-
-    # 4. Resto de Activos (Líderes): Pausa en apertura 13h excepto Miércoles
-    if h == 13 and d != "Wednesday":
-        return False
-
-    return True
 
 
-class MarketScanner:
     def is_trade_allowed_sop18(self, symbol: str, dt: datetime) -> bool:
         return is_trade_allowed_sop18(symbol, dt)
 
