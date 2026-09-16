@@ -47,13 +47,17 @@ class MT5Bridge:
     def __init__(self, dry_run: bool = True):
         self.dry_run = dry_run
         self.connected = False
+        self._last_connect_attempt = 0.0
+        self._connect_cooldown = 60.0
         if not self.dry_run and MT5_AVAILABLE:
             self._connect()
 
     def _connect(self) -> bool:
-        """Inicializa la API local de MetaTrader 5 con fallback a rutas estándar."""
+        """Inicializa la API local de MetaTrader 5 con fallback a rutas estándar y cooldown."""
         if not MT5_AVAILABLE:
             return False
+        now = time.time()
+        self._last_connect_attempt = now
         try:
             # 1. Intentar inicialización automática
             if mt5.initialize():
@@ -74,14 +78,14 @@ class MT5Bridge:
                             self.connected = True
                             return True
 
-            logger.warning("[MT5_BRIDGE] No se pudo inicializar la terminal MetaTrader 5.")
+            logger.warning("[MT5_BRIDGE] No se pudo inicializar la terminal MetaTrader 5 (cooldown 60s activo).")
             return False
         except Exception as e:
             logger.error(f"[MT5_BRIDGE] Error inicializando MT5: {e}")
             return False
 
     def ensure_connected(self) -> bool:
-        """Garantiza la conexión activa con MT5 con auto-reconexión."""
+        """Garantiza la conexión activa con MT5 con auto-reconexión y cooldown anti-bloqueo."""
         if not MT5_AVAILABLE or self.dry_run:
             return False
         if self.connected:
@@ -92,6 +96,11 @@ class MT5Bridge:
             except Exception:
                 pass
             self.connected = False
+
+        now = time.time()
+        if (now - self._last_connect_attempt) < self._connect_cooldown:
+            return False
+
         return self._connect()
 
     def place_limit_order(self, symbol: str, direction: str, entry_price: float, stop_loss: float, tp1: float, tp2: float, tp3: float, score: int = 70) -> Dict[str, Any]:

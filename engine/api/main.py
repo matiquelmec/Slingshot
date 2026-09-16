@@ -390,10 +390,11 @@ async def get_ftmo_guardian_status():
     from engine.risk.ftmo_guardian import ftmo_guardian
     from engine.execution.mt5_bridge import mt5_bridge
     
-    if mt5_bridge.ensure_connected() and not mt5_bridge.dry_run:
+    is_conn = await asyncio.to_thread(mt5_bridge.ensure_connected)
+    if is_conn and not mt5_bridge.dry_run:
         try:
             import MetaTrader5 as mt5
-            acc = mt5.account_info()
+            acc = await asyncio.to_thread(mt5.account_info)
             if acc:
                 return ftmo_guardian.update_equity(float(acc.equity), float(acc.balance))
         except Exception:
@@ -412,12 +413,12 @@ async def get_ftmo_positions_and_telemetry():
     from engine.execution.mt5_bridge import mt5_bridge
     from engine.risk.ftmo_guardian import ftmo_guardian
     
-    # Asegurar conexión viva con MT5 con auto-reconexión a terminal local
-    is_mt5_conn = mt5_bridge.ensure_connected()
+    # Asegurar conexión viva con MT5 con auto-reconexión a terminal local de forma asíncrona
+    is_mt5_conn = await asyncio.to_thread(mt5_bridge.ensure_connected)
 
-    open_pos = mt5_bridge.get_open_positions()
-    pending_orders = mt5_bridge.get_pending_orders()
-    spreads = mt5_bridge.get_realtime_spreads()
+    open_pos = await asyncio.to_thread(mt5_bridge.get_open_positions)
+    pending_orders = await asyncio.to_thread(mt5_bridge.get_pending_orders)
+    spreads = await asyncio.to_thread(mt5_bridge.get_realtime_spreads)
     
     total_floating_pnl = sum(float(p.get("profit", 0.0)) for p in open_pos)
     
@@ -432,7 +433,7 @@ async def get_ftmo_positions_and_telemetry():
     if is_mt5_conn and not mt5_bridge.dry_run:
         try:
             import MetaTrader5 as mt5
-            acc = mt5.account_info()
+            acc = await asyncio.to_thread(mt5.account_info)
             if acc:
                 account_login = acc.login
                 real_balance = round(float(acc.balance), 2)
