@@ -135,8 +135,17 @@ export default function BitunixDashboardPage() {
     const simNotional = simContracts * simEntry;
     const isExceedingNotional = simNotional > ((data?.equity ?? 711.74) * 5.0);
 
+    if (!mounted) {
+        return (
+            <div className="h-full w-full flex items-center justify-center bg-[#02040A] text-white/50 font-mono text-xs">
+                <RefreshCw className="animate-spin text-amber-400 mr-2" size={16} />
+                <span>INICIALIZANDO TERMINAL BITUNIX...</span>
+            </div>
+        );
+    }
+
     return (
-        <div suppressHydrationWarning className="h-full w-full flex flex-col p-3 lg:p-6 overflow-y-auto custom-scrollbar bg-[#02040A]">
+        <div className="h-full w-full flex flex-col p-3 lg:p-6 overflow-y-auto custom-scrollbar bg-[#02040A]">
             {/* Header */}
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 lg:pb-6 border-b border-white/5">
                 <div>
