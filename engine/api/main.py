@@ -34,6 +34,84 @@ _one_shot_router = SlingshotRouter()
 
 # ── Patches ──────────────────────────────────────────────────────────────────
 
+# ── Windows ProactorEventLoop WinError 64 Socket Protection (SOP-87) ─────────
+import sys
+if sys.platform == "win32":
+    try:
+        from asyncio.proactor_events import BaseProactorEventLoop
+        import asyncio.trsock as trsock
+        from asyncio import exceptions
+
+        _orig_start_serving = BaseProactorEventLoop._start_serving
+
+        def _hardened_start_serving(self, protocol_factory, sock, sslcontext=None, server=None, backlog=100,
+                                    ssl_handshake_timeout=None, ssl_shutdown_timeout=None):
+            def loop(f=None):
+                try:
+                    if f is not None:
+                        try:
+                            conn, addr = f.result()
+                        except OSError as exc:
+                            # WinError 64: ERROR_NETNAME_DELETED
+                            # Caused by abrupt TCP disconnect/port scan during accept.
+                            # DO NOT close listener socket! Re-arm accept immediately.
+                            if getattr(exc, 'winerror', None) == 64:
+                                if not self.is_closed():
+                                    f = self._proactor.accept(sock)
+                                    self._accept_futures[sock.fileno()] = f
+                                    f.add_done_callback(loop)
+                                return
+                            raise
+
+                        if self._debug:
+                            logger.debug("%r got a new connection from %r: %r", server, addr, conn)
+                        protocol = protocol_factory()
+                        if sslcontext is not None:
+                            self._make_ssl_transport(
+                                conn, protocol, sslcontext, server_side=True,
+                                extra={'peername': addr}, server=server,
+                                ssl_handshake_timeout=ssl_handshake_timeout,
+                                ssl_shutdown_timeout=ssl_shutdown_timeout)
+                        else:
+                            self._make_socket_transport(
+                                conn, protocol,
+                                extra={'peername': addr}, server=server)
+                    if self.is_closed():
+                        return
+                    f = self._proactor.accept(sock)
+                except OSError as exc:
+                    if getattr(exc, 'winerror', None) == 64 and sock.fileno() != -1:
+                        if not self.is_closed():
+                            try:
+                                f = self._proactor.accept(sock)
+                                self._accept_futures[sock.fileno()] = f
+                                f.add_done_callback(loop)
+                            except Exception:
+                                sock.close()
+                        return
+                    if sock.fileno() != -1:
+                        self.call_exception_handler({
+                            'message': 'Accept failed on a socket',
+                            'exception': exc,
+                            'socket': trsock.TransportSocket(sock),
+                        })
+                        sock.close()
+                    elif self._debug:
+                        logger.debug("Accept failed on socket %r", sock, exc_info=True)
+                except exceptions.CancelledError:
+                    sock.close()
+                else:
+                    self._accept_futures[sock.fileno()] = f
+                    f.add_done_callback(loop)
+
+            self.call_soon(loop)
+
+        BaseProactorEventLoop._start_serving = _hardened_start_serving
+        logger.info("🛡️ [NETWORK-ARMOR] ProactorEventLoop WinError 64 socket protection active.")
+    except Exception as _patch_err:
+        logger.warning(f"⚠️ [NETWORK-ARMOR] Could not apply ProactorEventLoop patch: {_patch_err}")
+
+
 # Parchar WebSocket.send_json para usar el encoder robusto globalmente
 _original_send_json = WebSocket.send_json
 async def _safe_send_json(self, data, mode="text"):
