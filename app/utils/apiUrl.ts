@@ -9,12 +9,16 @@ export function getApiBaseUrl(): string {
     if (process.env.NEXT_PUBLIC_API_URL) {
         return process.env.NEXT_PUBLIC_API_URL.replace(/\/$/, '');
     }
+    // En Vercel o navegador remoto, usar ruta relativa para que el proxy reescriba por HTTPS
     if (typeof window !== 'undefined') {
-        const protocol = window.location.protocol;
-        const host = window.location.hostname;
-        return `${protocol}//${host}:8000`;
+        // Si estamos en localhost directo
+        if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+            return `${window.location.protocol}//${window.location.hostname}:8000`;
+        }
+        // En Vercel: usar la misma URL del sitio (''), las peticiones /api/* viajan seguras por HTTPS a Vercel y Vercel las pide al VPS
+        return '';
     }
-    return 'http://localhost:8000';
+    return 'http://80.65.211.99:8000';
 }
 
 export function getWsBaseUrl(): string {

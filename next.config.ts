@@ -13,6 +13,15 @@ const nextConfig: NextConfig = {
     // Evita que el bug de ESLint 9 (circular structure) bloquee el build en Vercel
     ignoreDuringBuilds: true,
   },
+  async rewrites() {
+    const backendUrl = process.env.BACKEND_INTERNAL_URL || 'http://80.65.211.99:8000';
+    return [
+      {
+        source: '/api/:path*',
+        destination: `${backendUrl}/api/:path*`,
+      },
+    ];
+  },
 };
 
 export default nextConfig;
