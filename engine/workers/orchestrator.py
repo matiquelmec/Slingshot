@@ -1,4 +1,4 @@
-﻿from engine.core.logger import logger
+from engine.core.logger import logger
 import asyncio
 from typing import List, Dict, Optional
 from engine.api.config import settings
@@ -62,10 +62,7 @@ class SlingshotOrchestrator:
         asyncio.create_task(self.news_worker.start())
         # Iniciar Worker de Calendario Económico
         asyncio.create_task(self.calendar_worker.start())
-        # Iniciar Worker Semanal de Tear Sheets SOP-60 a Telegram (v50.0)
-        asyncio.create_task(self._weekly_tear_sheet_worker())
-        # Iniciar Agente Autónomo de Régimen Cuantitativo SOP-63 (v50.0)
-        asyncio.create_task(self._regime_agent_worker())
+        # NOTA: Workers de Tear Sheet y Régimen removidos para mantener Telegram 100% puro en SEÑALES y silente en balances.
         
         # 🚀 [APEX] Iniciar Dashboard de Ejecución Nexus (v10.0 - Auto-start en __init__)
         # nexus.start_dashboard() # Removido: Redundante y causa crash
@@ -405,7 +402,21 @@ class SlingshotOrchestrator:
         Monitorea cada 4 horas (o ante inicio) el régimen macro y notifica a Telegram.
         """
         logger.info("🧭 [REGIME WORKER] Centinela de régimen de mercado SOP-63 activado.")
+        # Restaurar último régimen persistido para evitar alertas falsas al reiniciar el motor
         last_regime = None
+        try:
+            from engine.core.vault import vault
+            with vault._get_connection() as conn:
+                row = conn.execute("SELECT regime FROM regime_history ORDER BY id DESC LIMIT 1").fetchone()
+                if row:
+                    last_regime = row[0]
+                    logger.info(f"🧭 [REGIME WORKER] Último régimen restaurado desde SQLite Vault: {last_regime}")
+        except Exception as init_reg_err:
+            logger.debug(f"[REGIME WORKER] Fallback inicializando last_regime: {init_reg_err}")
+
+        # Retardo inicial de calentamiento (20s) para permitir sincronización de buffers WebSocket/HFT
+        await asyncio.sleep(20)
+
         while not self._stop_event.is_set():
             try:
                 from engine.agents.regime_agent import regime_agent
@@ -419,17 +430,21 @@ class SlingshotOrchestrator:
                 symbols_data = {}
                 for sym in ["BTCUSDT", "SOLUSDT", "ETHUSDT", "FETUSDT"]:
                     df_sym = store.get_klines(sym, "15m") if hasattr(store, "get_klines") else None
-                    if df_sym is not None and not df_sym.empty:
+                    if df_sym is not None and not df_sym.empty and len(df_sym) >= 20:
                         symbols_data[sym] = df_sym
 
-                assessment = regime_agent.evaluate_market_regime(symbols_data, btc_htf_trend=btc_trend)
+                # SILENCIO TELEGRAM EN ARRANQUE: No disparar alertas si no hay suficientes velas reales
+                if not symbols_data:
+                    logger.info("🧭 [REGIME WORKER] Datos de velas insuficientes para régimen en este ciclo. Omitiendo notificación.")
+                else:
+                    assessment = regime_agent.evaluate_market_regime(symbols_data, btc_htf_trend=btc_trend)
 
-                # Si hubo cambio de régimen o es la primera evaluación, notificar a Telegram
-                if last_regime != assessment.regime.value:
-                    briefing = regime_agent.format_telegram_regime_report(assessment)
-                    await telegram_dispatcher.send_raw_message(briefing)
-                    last_regime = assessment.regime.value
-                    logger.info(f"🧭 [REGIME WORKER] Transición de régimen notificada a Telegram: {assessment.regime.value}")
+                    # Si hubo cambio de régimen genuino, notificar a Telegram
+                    if last_regime != assessment.regime.value:
+                        briefing = regime_agent.format_telegram_regime_report(assessment)
+                        await telegram_dispatcher.send_raw_message(briefing)
+                        last_regime = assessment.regime.value
+                        logger.info(f"🧭 [REGIME WORKER] Transición de régimen notificada a Telegram: {assessment.regime.value}")
 
             except Exception as reg_err:
                 logger.debug(f"[REGIME WORKER] Error evaluando régimen de mercado: {reg_err}")

@@ -1400,15 +1400,14 @@ class TradeManager:
 
                             filled_order = next((o for o in hist_orders if o.get("status") == "FILLED"), {})
 
-                            real_pnl_usd = float(filled_order.get("realizedPnl", 0.0) or 0.0)
+                            real_pnl_usd = float(filled_order.get("realizedPNL") or filled_order.get("realizedPnl") or 0.0)
 
                             order_side = str(filled_order.get("side", "SELL")).upper()
 
                             exit_label = "MANUAL_CLIENT" if is_manual else "EXIT_REACHED"
 
-                            # EstimaciA3n de R asumiendo 2.5% de riesgo base
-
-                            est_r = round(real_pnl_usd / 2.0, 2) if real_pnl_usd != 0 else 0.0
+                            # Estimación de R asumiendo 2.5% de riesgo base ($19.58 base aprox)
+                            est_r = round(real_pnl_usd / 19.58, 2) if real_pnl_usd != 0 else 0.0
 
                             closed_id = vault.record_closed_trade(
                                 account_id=acc_id,
