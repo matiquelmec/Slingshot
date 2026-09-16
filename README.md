@@ -1,15 +1,16 @@
-# 🛡️ SLINGSHOT v56.0 APEX PARITY — Autonomous Institutional Dual Terminal
+# 🛡️ SLINGSHOT v57.0 APEX HYBRID — Autonomous Institutional Dual Terminal
+## High-Availability Edge & 24/7 Sovereign VPS Execution
 
-> **"Terminal Cuantitativa Autónoma de Grado Institucional. Slingshot v56.0 APEX PARITY: Paridad Estricta Single Source of Truth (SSoT) entre el Motor de Backtest Institucional (+478.2% ROI, Sharpe 4.56) y los Scanners de Producción 24/7 (MarketScanner & TradFiScanner). Implementa la inyección incondicional del Protocolo SOP-84 (Filtro Antirruido KER ≥ 0.35, RVOL ≥ 1.05 y Time-Gating SOP-18 para erradicación de pérdidas fuera de sesión y fines de semana), SOP-85 (Extended Midnight Roll-Over Armor de 60 minutos: 21:30 a 22:30 UTC / 23:30 a 00:30 CE(S)T contra ensanchamiento interbancario de spreads en FTMO MT5), y SOP-86 (Single Equity Index Slot con exclusión mutua estricta US100 / US30). Integra el consorcio agéntico NVIDIA AI-Q Blueprint (Kumo Relational, nemotron-3-embed-1b, deepseek-v4-flash, nemotron-3.5-lightning y nemotron-3-ultra-550b), Calibración Continua en Tres Bucles Adaptativos (SOP-72, SOP-73, SOP-74), Circuit Breakers de Racha (SOP-81, SOP-82, SOP-83) y la Canon Inmutable de los 86 Protocolos de Seguridad Operativa (SOP-01 a SOP-86) con Certificación QA Global al 100% (351 Pruebas Automatizadas)."**
+> **"Terminal Cuantitativa Autónoma de Grado Institucional. Slingshot v57.0 APEX HYBRID: Desacoplamiento Soberano de Alta Disponibilidad entre la Retina Edge en la nube (Vercel CDN / Next.js 15) y el Núcleo Cuantitativo de Ejecución (Windows Server VPS 24/7 en Frankfurt). Integra la canonización de los Protocolos SOP-87 (Protección de Sockets Proactor WinError 64), SOP-88 (Eliminación de Mixed Content mediante Proxy Seguro Next.js Rewrites), SOP-89 (Arquitectura de Telemetría Ultra-Rápida REST a 1.5s para hidratación integral de velas, SMC, sesiones mundiales y liquidaciones), SOP-90 (Hidratación Viva de Inteligencia Táctica Dual: Inferencia Activa XGBoost + Pipeline Cloud NVIDIA Nemotron-3.5 NIM) y SOP-91 (Guardián Autónomo Sentinel Watchdog con Auto-Recuperación de Procesos en <5s para MT5, FastAPI y HFT Sidecar). Incluye el Runbook Operativo de Mejores Prácticas para Supervisión Cuantitativa Institucional."**
 
 ![Status](https://img.shields.io/badge/Status-100%25_AUTONOMOUS_&_SSOT_VERIFIED-0d2a1a?style=for-the-badge&logo=codeproject&logoColor=fff)
-![Version](https://img.shields.io/badge/Version-56.0_Apex_Parity-1a3a6e?style=for-the-badge)
+![Version](https://img.shields.io/badge/Version-57.0_Apex_Hybrid-1a3a6e?style=for-the-badge)
 ![NVIDIA AI-Q](https://img.shields.io/badge/AI_Engine-NVIDIA_AI--Q_Blueprint_&_NIM-76b900?style=for-the-badge&logo=nvidia&logoColor=fff)
 ![Adaptive System](https://img.shields.io/badge/Adaptive_Engine-Tri--Loop_Bayes_HMM_NIM-9b59b6?style=for-the-badge)
 ![Crypto Engine](https://img.shields.io/badge/Bitunix_Crypto-2.5%25_Compounded_Live-f39c12?style=for-the-badge&logo=bitcoin&logoColor=fff)
 ![MetaTrader 5](https://img.shields.io/badge/MetaTrader_5-FTMO_Institutional_Live-2980b9?style=for-the-badge&logo=windows&logoColor=fff)
 ![Execution Engine](https://img.shields.io/badge/Execution-SOP--64_Auto--Dispatcher_≥75%25-green?style=for-the-badge)
-![Security](https://img.shields.io/badge/Security_Protocols-SOP--01%20to%20SOP--86-emerald?style=for-the-badge)
+![Security](https://img.shields.io/badge/Security_Protocols-SOP--01%20to%20SOP--91-emerald?style=for-the-badge)
 ![QA Suite](https://img.shields.io/badge/QA_Suite-351_Tests_100%25_Passed-success?style=for-the-badge)
 ![Crypto Return](https://img.shields.io/badge/Crypto_Compounded_ROI-%2B478.2%25_(5.8x)-gold?style=for-the-badge)
 ![Total Alpha](https://img.shields.io/badge/Total_Alpha-%2B74.07_R-gold?style=for-the-badge)
