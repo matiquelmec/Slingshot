@@ -135,13 +135,9 @@ export default function BitunixDashboardPage() {
     const simNotional = simContracts * simEntry;
     const isExceedingNotional = simNotional > ((data?.equity ?? 711.74) * 5.0);
 
+    // Anti-Hydration Mismatch SSoT: En Next.js SSR, retornar null hasta que el cliente monte el DOM
     if (!mounted) {
-        return (
-            <div className="h-full w-full flex items-center justify-center bg-[#02040A] text-white/50 font-mono text-xs">
-                <RefreshCw className="animate-spin text-amber-400 mr-2" size={16} />
-                <span>INICIALIZANDO TERMINAL BITUNIX...</span>
-            </div>
-        );
+        return null;
     }
 
     return (
