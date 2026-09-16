@@ -128,32 +128,37 @@ class MarketScanner:
             pass
         return {}
 
+def is_trade_allowed_sop18(symbol: str, dt: datetime) -> bool:
+    """
+    [SOP-18 TIME-GATING CANONICAL SSoT]
+    Sincronizado 1:1 con unified_backtest_engine.py para filtrar horas de baja liquidez y trampas de mercado.
+    """
+    d = dt.strftime("%A")
+    h = dt.hour
+
+    # 1. Reglas Globales de Protección
+    if d == "Monday" and h <= 13: return False
+    if d == "Thursday" and h >= 16: return False
+    if h == 18: return False
+
+    # 2. Regla Específica AVAXUSDT: Solo ventanas 09:00 y 17:00 UTC
+    if symbol == "AVAXUSDT":
+        return h in [9, 17] and d in ["Tuesday", "Wednesday", "Thursday", "Saturday"]
+
+    # 3. Regla Específica RENDERUSDT: Solo ventanas 08:00, 13:00, 17:00 y 18:00 UTC
+    if symbol == "RENDERUSDT":
+        return h in [8, 13, 17, 18]
+
+    # 4. Resto de Activos (Líderes): Pausa en apertura 13h excepto Miércoles
+    if h == 13 and d != "Wednesday":
+        return False
+
+    return True
+
+
+class MarketScanner:
     def is_trade_allowed_sop18(self, symbol: str, dt: datetime) -> bool:
-        """
-        [SOP-18 TIME-GATING CANONICAL SSoT]
-        Sincronizado 1:1 con unified_backtest_engine.py para filtrar horas de baja liquidez y trampas de mercado.
-        """
-        d = dt.strftime("%A")
-        h = dt.hour
-
-        # 1. Reglas Globales de Protección
-        if d == "Monday" and h <= 13: return False
-        if d == "Thursday" and h >= 16: return False
-        if h == 18: return False
-
-        # 2. Regla Específica AVAXUSDT: Solo ventanas 09:00 y 17:00 UTC
-        if symbol == "AVAXUSDT":
-            return h in [9, 17] and d in ["Tuesday", "Wednesday", "Thursday", "Saturday"]
-
-        # 3. Regla Específica RENDERUSDT: Solo ventanas 08:00, 13:00, 17:00 y 18:00 UTC
-        if symbol == "RENDERUSDT":
-            return h in [8, 13, 17, 18]
-
-        # 4. Resto de Activos (Líderes): Pausa en apertura 13h excepto Miércoles
-        if h == 13 and d != "Wednesday":
-            return False
-
-        return True
+        return is_trade_allowed_sop18(symbol, dt)
 
     def _ote_watchdog(self, direction: str, price: float, fib_data: dict) -> tuple:
         """
@@ -272,28 +277,25 @@ class MarketScanner:
                         candidates.append(self._format_opportunity(sig, is_active=True))
                     return
                 
-                # ── PROTOCOLO CANÓNICO SOP-18: TIME-GATING SSoT ──
+                # ── PROTOCOLO CANÓNICO SOP-18 & ANTIRUIDO: EVALUACIÓN DE SALUD DE MERCADO ──
                 now_utc = datetime.now(timezone.utc)
-                if not self.is_trade_allowed_sop18(symbol, now_utc):
-                    return
+                is_time_allowed = self.is_trade_allowed_sop18(symbol, now_utc)
 
-                # ── PROTOCOLO CANÓNICO ANTIRUIDO: KER >= 0.35 & RVOL >= 1.10 ──
                 # Calcular métricas de eficiencia Kaufman (KER) y volumen relativo (RVOL)
                 if len(df) >= 20:
                     change_10 = abs(float(df["close"].iloc[-1]) - float(df["close"].iloc[-10]))
                     vol_10 = float(df["close"].diff().abs().iloc[-10:].sum())
                     ker_val = round(change_10 / (vol_10 + 1e-9), 3)
 
+                    # Para RVOL en vivo se evalúa la última vela cerrada si está disponible
                     vol_sma = float(df["volume"].iloc[-20:].mean())
-                    cur_vol = float(df["volume"].iloc[-1])
+                    cur_vol = float(df["volume"].iloc[-2]) if len(df) >= 2 else float(df["volume"].iloc[-1])
                     rvol_val = round(cur_vol / (vol_sma + 1e-9), 2)
-
-                    # Gating estricto idéntico al backtest: veto si el mercado está en rango sucio / chop
-                    if ker_val < 0.35 or rvol_val < 1.05:
-                        return
                 else:
                     ker_val = 0.5
                     rvol_val = 1.0
+
+                is_ker_clean = ker_val >= 0.35
 
                 # Calcular clusters de liquidación en vivo para el escáner
                 from engine.indicators.liquidations import estimate_liquidation_clusters
@@ -438,6 +440,34 @@ class MarketScanner:
                             "detail": f"🛑 {cluster_reason}",
                         })
 
+                    # ── EVALUACIÓN CANÓNICA SOP-18: TIME-GATING SSoT ──
+                    if not is_time_allowed:
+                        checklist.append({
+                            "factor": "Ventana Operativa (SOP-18)",
+                            "status": "VETO",
+                            "detail": f"🛑 Fuera de sesión institucional ({now_utc.strftime('%A %H:%M')} UTC)",
+                        })
+                    else:
+                        checklist.append({
+                            "factor": "Ventana Operativa (SOP-18)",
+                            "status": "CUMPLIDO",
+                            "detail": f"✅ Ventana institucional activa ({now_utc.strftime('%A %H:%M')} UTC)",
+                        })
+
+                    # ── EVALUACIÓN CANÓNICA ANTIRUIDO: KER >= 0.35 ──
+                    if not is_ker_clean:
+                        checklist.append({
+                            "factor": "Filtro Antirruido KER (SOP-84)",
+                            "status": "VETO",
+                            "detail": f"🛑 KER={ker_val:.2f} < 0.35 (Mercado en rango sucio / chop)",
+                        })
+                    else:
+                        checklist.append({
+                            "factor": "Filtro Antirruido KER (SOP-84)",
+                            "status": "CUMPLIDO",
+                            "detail": f"✅ KER={ker_val:.2f} >= 0.35 (Estructura direccional limpia)",
+                        })
+
                     cand = {
                         "asset":             symbol,
                         "direction":         direction,
@@ -456,6 +486,8 @@ class MarketScanner:
                         "ote_chasing":       is_chasing,
                         "is_cluster_blocked": not can_open_cluster,
                         "cluster_reason":    cluster_reason,
+                        "is_time_blocked":   not is_time_allowed,
+                        "is_ker_blocked":    not is_ker_clean,
                         "session":           session_data.get("current_session", "UNKNOWN"),
                         "asset_health":      conf_res.get("asset_health", {}),
                     }
@@ -482,7 +514,7 @@ class MarketScanner:
             candidates,
             key=lambda x: (
                 1 if x["is_active_trigger"] else 0,
-                0 if (x.get("ote_chasing") or x.get("is_cluster_blocked")) else 1,
+                0 if (x.get("ote_chasing") or x.get("is_cluster_blocked") or x.get("is_time_blocked") or x.get("is_ker_blocked")) else 1,
                 x["confluence_score"],
                 x["rr_ratio_tp3"]
             ),
@@ -493,7 +525,7 @@ class MarketScanner:
         # Generar hipótesis para el Top-3 de oportunidades válidas
         try:
             from engine.api.advisor import generate_scanner_hypotheses_batch
-            eligible_for_ai = [c for c in sorted_candidates if c["confluence_score"] >= 60 and not c.get("ote_chasing") and not c.get("is_cluster_blocked")]
+            eligible_for_ai = [c for c in sorted_candidates if c["confluence_score"] >= 60 and not c.get("ote_chasing") and not c.get("is_cluster_blocked") and not c.get("is_time_blocked") and not c.get("is_ker_blocked")]
             if eligible_for_ai:
                 hypotheses = await generate_scanner_hypotheses_batch(eligible_for_ai[:3])
                 hyp_by_asset = {h.get("asset"): h for h in hypotheses if isinstance(h, dict) and h.get("asset")}
@@ -510,17 +542,20 @@ class MarketScanner:
         await store.save_scanner_opportunities(store_key, sorted_candidates)
         logger.info(f"🔍 [MARKET_SCANNER v19.1] Guardados {len(sorted_candidates)} setups de {store_key} en el Escáner de Oportunidades.")
 
-        # 🚀 [TELEGRAM APEX SNIPER DISPATCHER] ──
-        # Despacho automático de oportunidades con confluencia >= 60% sin persecución de precio, sin cuarentena ni veto de cluster
+        # 🚀 [TELEGRAM APEX SNIPER DISPATCHER & LIVE TRADING GATE] ──
+        # Despacho automático y ejecución condicional estricta:
+        # Requiere: confluencia >= 60%, sin OTE chasing, sin veto de cluster, ventana SOP-18 activa y KER >= 0.35
         from engine.router.telegram_dispatcher import telegram_dispatcher
         for top_c in sorted_candidates:
             score = top_c.get("confluence_score", 0)
             is_chasing = top_c.get("ote_chasing", False)
             is_cluster_blocked = top_c.get("is_cluster_blocked", False)
+            is_time_blocked = top_c.get("is_time_blocked", False)
+            is_ker_blocked = top_c.get("is_ker_blocked", False)
             is_quarantined = top_c.get("asset_health", {}).get("is_quarantined", False)
             min_score = 65 if is_quarantined else 60
 
-            if score >= min_score and not is_chasing and not is_cluster_blocked:
+            if score >= min_score and not is_chasing and not is_cluster_blocked and not is_time_blocked and not is_ker_blocked:
                 dist_sl = abs(float(top_c["price"]) - float(top_c["stop_loss"]))
                 is_long = "LONG" in top_c["direction"].upper()
                 be_val = top_c.get("be_price") or (float(top_c["price"]) + (dist_sl * 1.0) if is_long else float(top_c["price"]) - (dist_sl * 1.0))

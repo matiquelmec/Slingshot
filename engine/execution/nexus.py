@@ -1153,6 +1153,18 @@ class NexusNode:
             logger.info(f"🛑 [NEXUS AUTO-LIMIT SOP-31] Omitida orden límite para {asset}: {regime_msg}")
             return
 
+        # ── SOP-18: TIME-GATING CANONICAL SSoT GUARD ──
+        from engine.workers.market_scanner import is_trade_allowed_sop18
+        now_utc = datetime.now(timezone.utc)
+        if not is_trade_allowed_sop18(asset, now_utc):
+            logger.info(f"⏳ [NEXUS AUTO-LIMIT SOP-18] Omitida orden límite para {asset}: Fuera de ventana institucional operativa ({now_utc.strftime('%A %H:%M')} UTC).")
+            return
+
+        # ── SOP-84: KER ANTINOISE SSoT GUARD ──
+        if ker_val < 0.35:
+            logger.info(f"🛡️ [NEXUS AUTO-LIMIT SOP-84] Omitida orden límite para {asset}: KER={ker_val:.2f} < 0.35 (mercado en rango sucio / chop).")
+            return
+
         try:
             # ── SOP-33 & SOP-38 & SOP-63: ALPHA-TIER SIZING CON MODULACIÓN DE RÉGIMEN ──
             from engine.risk.risk_manager import RiskManager
