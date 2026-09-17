@@ -145,20 +145,48 @@ class TradFiScanner:
                     "is_killzone": is_tradfi_killzone,
                     "timestamp": datetime.now(timezone.utc).isoformat()
                 }
+                # [SOP-92 PRE-NEWS PROTECTIVE SHIELD FOR OPEN POSITIONS]
+                from engine.indicators.news_interceptor import news_interceptor
+                from engine.execution.mt5_bridge import mt5_bridge
+                now_utc = datetime.now(timezone.utc)
+
+                # 1. Comprobar si hay evento High-Impact inminente (< 15 min) para proteger posiciones abiertas
+                news_threat = news_interceptor.get_upcoming_event_threat(symbol, lookahead_mins=15)
+                if news_threat:
+                    mt5_bridge.apply_pre_news_protective_shield(symbol, news_threat.get("title", "HighImpactNews"))
+
+                # 2. Comprobar si está activa la ventana post-noticia institucional
+                from engine.indicators.post_news_sniper import post_news_sniper
+                post_news_info = post_news_sniper.is_post_news_window_active(symbol, now=now_utc)
+                if post_news_info:
+                    post_setup = post_news_sniper.evaluate_post_news_setup(df, symbol, post_news_info)
+                    if post_setup and post_setup.get("confluence_score", 0) >= 80:
+                        candidate["type"] = "POST_NEWS_INSTITUTIONAL_SNIPER"
+                        candidate["confluence_score"] = post_setup["confluence_score"]
+                        candidate["direction"] = post_setup["direction"]
+                        candidate["price"] = post_setup["price"]
+                        candidate["stop_loss"] = post_setup["stop_loss"]
+                        candidate["tp1"] = post_setup["tp1"]
+                        candidate["tp2"] = post_setup["tp2"]
+                        candidate["tp3"] = post_setup["tp3"]
+                        candidate["checklist"].append({
+                            "factor": f"Post-News Sniper ({post_news_info['event_title']})",
+                            "status": "CUMPLIDO",
+                            "detail": f"{post_news_info['elapsed_minutes']}m post-evento | OTE + FVG institucional"
+                        })
+                        score = post_setup["confluence_score"]
+
                 candidates.append(candidate)
                 
                 # [SOP-64 FTMO AUTO-DISPATCHER] Disparo Automatico a MT5 EXCLUSIVO dentro de Killzone para confluencia >= 75%
                 if score >= 75 and is_tradfi_killzone and not ftmo_guardian.is_daily_lockout:
-                    now_utc = datetime.now(timezone.utc)
                     if not ftmo_guardian.check_midnight_rollover_risk(now_utc.hour, now_utc.minute):
                         try:
-                            from engine.execution.mt5_bridge import mt5_bridge
                             import MetaTrader5 as mt5
 
-                            # [SOP-19 / SWING NEWS SLIPPAGE SHIELD]
-                            from engine.indicators.news_interceptor import news_interceptor
+                            # [SOP-92 DYNAMIC NEWS SLIPPAGE SHIELD]
                             if news_interceptor.is_macro_news_blackout(now_utc, symbol):
-                                logger.warning(f"🛡️ [NEWS_SLIPPAGE_SHIELD] Orden {symbol} {direction} pospuesta por spread ensanchado de noticia macro.")
+                                logger.warning(f"🛡️ [NEWS_SLIPPAGE_SHIELD SOP-92] Orden {symbol} {direction} pospuesta por ventana de noticia macro de alto impacto.")
                                 continue
 
                             sym_mt5 = symbol.replace("USDT", "USD")

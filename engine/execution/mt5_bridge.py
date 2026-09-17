@@ -567,6 +567,58 @@ class MT5Bridge:
             logger.error(f"❌ [MT5_BRIDGE] Excepción cerrando parcialmente #{ticket}: {e}")
             return False
 
+    def apply_pre_news_protective_shield(self, symbol: str, event_name: str) -> Dict[str, Any]:
+        """
+        [SOP-92 PRE-NEWS PROTECTIVE SHIELD]
+        Gobernanza defensiva para posiciones abiertas antes de un evento High-Impact:
+        1. Si la posición está en ganancia (profit > 0), mueve SL a Breakeven (+0.1R).
+        2. Si la posición está en pérdida o flotante vulnerable, reduce el 50% del volumen
+           para mitigar el impacto de ensanchamiento de spreads y deslizamiento (slippage).
+        """
+        if not MT5_AVAILABLE or not self.ensure_connected() or self.dry_run:
+            return {"shielded": False, "reason": "MT5 no conectado o en dry-run"}
+
+        try:
+            sym_mt5 = symbol.replace("USDT", "USD")
+            if ".cash" not in sym_mt5 and any(idx in sym_mt5 for idx in ["US100", "US30", "US500", "GER40"]):
+                sym_mt5 = f"{sym_mt5}.cash"
+
+            positions = mt5.positions_get(symbol=sym_mt5) or []
+            if not positions:
+                return {"shielded": False, "reason": f"No hay posiciones abiertas en {sym_mt5}"}
+
+            actions = []
+            for p in positions:
+                profit = float(p.profit)
+                ticket = p.ticket
+                is_buy = (p.type == mt5.POSITION_TYPE_BUY)
+                open_price = float(p.price_open)
+                cur_sl = float(p.sl)
+
+                # Si está en profit: asegurar a breakeven (+ buffer de comisión/spread)
+                if profit > 10.0:
+                    digits = self.get_symbol_digits(symbol) if hasattr(self, "get_symbol_digits") else 2
+                    spread_offset = 0.05 if "XAU" in symbol else (2.0 if any(i in symbol for i in ["US30", "US100"]) else 0.00010)
+                    target_sl = round(open_price + spread_offset if is_buy else open_price - spread_offset, digits)
+
+                    need_be = (is_buy and cur_sl < target_sl) or (not is_buy and (cur_sl > target_sl or cur_sl <= 0.0))
+                    if need_be:
+                        ok = self.modify_position_sl(sym_mt5, ticket, target_sl)
+                        actions.append(f"Ticket #{ticket} movido a BREAKEVEN ({target_sl}) por noticia: {event_name} (Éxito: {ok})")
+                else:
+                    # Si está en pérdida o cerca de cero: reducir 50% de volumen para mitigar ensanchamiento de spread
+                    half_vol = round(float(p.volume) * 0.5, 2)
+                    if half_vol >= 0.01:
+                        closed_ok = self.close_partial_position(sym_mt5, ticket, half_vol, comment=f"PreNews_{event_name[:8]}")
+                        actions.append(f"Ticket #{ticket} reducido 50% ({half_vol} lotes) para amortiguar noticia {event_name} (Éxito: {closed_ok})")
+
+            logger.info(f"🛡️ [PRE_NEWS_SHIELD] {len(actions)} acciones defensivas ejecutadas en {sym_mt5}: {actions}")
+            return {"shielded": True, "actions": actions}
+
+        except Exception as shield_err:
+            logger.error(f"❌ [PRE_NEWS_SHIELD] Error protegiendo posiciones de {symbol}: {shield_err}")
+            return {"shielded": False, "error": str(shield_err)}
+
 
 # Instancia singleton
 mt5_bridge = MT5Bridge(dry_run=False)

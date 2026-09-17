@@ -556,7 +556,11 @@ class MarketScanner:
             is_quarantined = top_c.get("asset_health", {}).get("is_quarantined", False)
             min_score = 65 if is_quarantined else 60
 
-            if score >= min_score and not is_chasing and not is_cluster_blocked and not is_time_blocked and not is_ker_blocked:
+            # [SOP-92 DYNAMIC HIGH-IMPACT NEWS SENTINEL]
+            from engine.indicators.news_interceptor import news_interceptor
+            is_news_blocked = news_interceptor.is_macro_news_blackout(datetime.now(timezone.utc), top_c["asset"])
+
+            if score >= min_score and not is_chasing and not is_cluster_blocked and not is_time_blocked and not is_ker_blocked and not is_news_blocked:
                 dist_sl = abs(float(top_c["price"]) - float(top_c["stop_loss"]))
                 is_long = "LONG" in top_c["direction"].upper()
                 be_val = top_c.get("be_price") or (float(top_c["price"]) + (dist_sl * 1.0) if is_long else float(top_c["price"]) - (dist_sl * 1.0))
