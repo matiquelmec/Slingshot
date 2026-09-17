@@ -83,7 +83,7 @@ class DynamicNewsInterceptor:
 
     def is_macro_news_blackout(
         self,
-        dt: Optional[datetime] = None,
+        dt_or_asset: Any = None,
         asset: str = "",
         buffer_before_mins: Optional[int] = None,
         buffer_after_mins: Optional[int] = None,
@@ -92,8 +92,16 @@ class DynamicNewsInterceptor:
         """
         Determina si el momento actual (o `dt`) se encuentra en una ventana de blackout
         para el activo especificado frente a eventos de impacto HIGH en Forex Factory.
+        Acepta tanto (asset, dt) como (dt, asset).
         """
-        now = dt or datetime.now(timezone.utc)
+        now = datetime.now(timezone.utc)
+        target_asset = asset
+
+        if isinstance(dt_or_asset, str):
+            target_asset = dt_or_asset
+        elif isinstance(dt_or_asset, datetime):
+            now = dt_or_asset
+
         if now.tzinfo is None:
             now = now.replace(tzinfo=timezone.utc)
 
@@ -131,9 +139,9 @@ class DynamicNewsInterceptor:
 
         if not events:
             # Fallback seguro: Si no hay eventos cargados, aplicar reglas estáticas de rescate
-            return self._static_emergency_blackout(now, asset)
+            return self._static_emergency_blackout(now, target_asset)
 
-        target_currencies = self._get_relevant_currencies(asset)
+        target_currencies = self._get_relevant_currencies(target_asset)
 
         for event in events:
             # Solo eventos de alto impacto ("High") o eventos globales de la Fed / BCE
@@ -163,7 +171,7 @@ class DynamicNewsInterceptor:
                     mins_to_event = int((event_dt - now).total_seconds() / 60)
                     time_desc = f"en {mins_to_event} min" if mins_to_event >= 0 else f"hace {abs(mins_to_event)} min"
                     logger.warning(
-                        f"🛡️ [NEWS_BLACKOUT SOP-92] Operación bloqueada para {asset}. "
+                        f"🛡️ [NEWS_BLACKOUT SOP-92] Operación bloqueada para {target_asset}. "
                         f"Evento de ALTO IMPACTO: [{event_country}] {event.get('title')} ({time_desc})."
                     )
                     return True
