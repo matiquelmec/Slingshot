@@ -22,7 +22,7 @@ class ClusterRiskGuard:
     
     DEFAULT_CORRELATION_THRESHOLD = 0.75
     MAX_UNPROTECTED_PER_CLUSTER = 2
-    QUARANTINE_ASSETS = ["LINK", "LINKUSDT", "TIA", "TIAUSDT"]
+    QUARANTINE_ASSETS = ["TIA", "TIAUSDT"]
     
     # Clusters Estructurales de Fallback (cuando no hay buffer de precios suficiente)
     STRUCTURAL_CLUSTERS = {

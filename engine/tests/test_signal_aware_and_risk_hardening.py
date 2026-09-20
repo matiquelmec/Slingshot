@@ -229,13 +229,14 @@ async def test_sop42_hard_clamp_prevents_outsized_loss_and_notional():
 
 def test_quarantine_assets_vetoed():
     """
-    [SOP-44] Verifica que los activos en cuarentena (LINK, TIA) sean vetados de inmediato.
+    [SOP-44] Verifica que TIA esté en cuarentena y que LINK opere normalmente.
     """
     guard = ClusterRiskGuard()
+    # LINKUSDT está rehabilitado: puede abrir si no hay saturación de cluster
     can_open_link, reason_link = guard.can_open_position("LINKUSDT", "LONG", 90.0, {})
-    assert can_open_link is False
-    assert "cuarentena" in reason_link.lower()
+    assert can_open_link is True
 
+    # TIAUSDT permanece en cuarentena estricta
     can_open_tia, reason_tia = guard.can_open_position("TIAUSDT", "SHORT", 90.0, {})
     assert can_open_tia is False
     assert "cuarentena" in reason_tia.lower()
