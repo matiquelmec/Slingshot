@@ -1336,18 +1336,13 @@ class TradeManager:
 
             try:
 
-                # 1. Regla D: Si la cuenta ya tiene 4 posiciones con riesgo, purgar AA3rdenes lAA-mite de esa cuenta
-
+                # 1. HARD CAP FÍSICO ABSOLUTO: Si la cuenta ya tiene 4 posiciones abiertas, purgar órdenes límite
+                active_symbols = {p.get("symbol") for p in (await bitunix.get_pending_positions() or []) if p.get("symbol")}
                 unprotected_risk = nexus.get_unprotected_risk_count(account_id=acc_id)
 
-                if unprotected_risk >= nexus.MAX_CONCURRENT_POSITIONS:
-
-                    logger.info(f"dY>` [LIMIT SENTINEL] [{bitunix.account_label}] MAximo de {nexus.MAX_CONCURRENT_POSITIONS} operaciones con riesgo alcanzado ({unprotected_risk} en riesgo). Purgando lA-mites.")
-
-                    await nexus.purge_all_pending_limit_orders(reason=f"MAX_4_RISK_SLOTS_REACHED_{acc_id}", account_id=acc_id)
-
-                    # Protected TPs: only entry limits purged
-
+                if len(active_symbols) >= nexus.MAX_CONCURRENT_POSITIONS or unprotected_risk >= nexus.MAX_CONCURRENT_POSITIONS:
+                    logger.info(f"🛑 [LIMIT SENTINEL] [{bitunix.account_label}] Techo físico de {nexus.MAX_CONCURRENT_POSITIONS} operaciones alcanzado ({len(active_symbols)} abiertas / {unprotected_risk} en riesgo). Purgando límites.")
+                    await nexus.purge_all_pending_limit_orders(reason=f"MAX_4_SLOTS_REACHED_{acc_id}", account_id=acc_id)
                     continue
 
 
@@ -1555,17 +1550,15 @@ class TradeManager:
 
 
 
-                    # Chequeo 3: ExpiraciAA3n TTL
-
+                    # Chequeo 3: Expiración TTL Estricta (SOP-40 / 45 minutos = 2700s)
                     if not cancel_reason:
-
                         age_seconds = (now_ms - ctime) / 1000
-
-                        price_drift_pct = abs(cur_price - entry_price) / entry_price
-
-                        if age_seconds > 10800 and price_drift_pct > 0.015:
-
-                            cancel_reason = f"TTL_EXPIRED (Orden con {age_seconds/3600:.1f}h de antigAAedad y precio desfasado {price_drift_pct*100:.1f}%)"
+                        if age_seconds > 2700:
+                            cancel_reason = f"TTL_EXPIRED_STRICT (Orden límite expiró tras superar 45 minutos sin llenar: {age_seconds/60:.1f} min)"
+                        elif age_seconds > 1800:
+                            price_drift_pct = abs(cur_price - entry_price) / entry_price if entry_price > 0 else 0
+                            if price_drift_pct > 0.012:
+                                cancel_reason = f"TTL_DRIFT_EXPIRED (Orden con {age_seconds/60:.1f} min y precio desfasado {price_drift_pct*100:.1f}%)"
 
 
 

@@ -392,16 +392,30 @@ class BitunixExecutor:
                 raw_qty = nominal_usd / entry_price
 
             # ── PROTOCOLO SOP-42: PRE-FLIGHT RISK HARD-CLAMP (CIRCUIT BREAKER) ──
+            MAX_ABSOLUTE_LOSS_USDT = 5.00
+            MAX_NOTIONAL_USDT = 150.00
+
+            # 1. Clamp nocional institucional
+            if entry_price and float(entry_price) > 0:
+                current_notional = raw_qty * float(entry_price)
+                if current_notional > MAX_NOTIONAL_USDT:
+                    clamped_qty = MAX_NOTIONAL_USDT / float(entry_price)
+                    logger.warning(f"🛑 [SOP-42 NOTIONAL CLAMP] Nocional proyectado (${current_notional:.2f}) excede ${MAX_NOTIONAL_USDT}. Ajustando raw_qty de {raw_qty:.4f} -> {clamped_qty:.4f}")
+                    raw_qty = clamped_qty
+
+            # 2. Clamp por Stop Loss
             stop_loss = signal.get("stop_loss")
             if stop_loss and float(stop_loss) > 0 and entry_price and float(entry_price) > 0:
                 sl_dist = abs(float(entry_price) - float(stop_loss))
-                projected_loss = raw_qty * sl_dist
-                
-                verified_bal = self._last_verified_balance if self._last_verified_balance > 0 else await self.get_available_margin_usdt()
-                if verified_bal > 0:
-                    max_loss_allowed = verified_bal * 0.026 # Tolerancia máxima 2.6% ($2.13 USD en $82 USD)
+                if sl_dist > 0:
+                    projected_loss = raw_qty * sl_dist
+                    verified_bal = self._last_verified_balance if self._last_verified_balance > 0 else await self.get_available_margin_usdt()
+                    if verified_bal <= 0:
+                        verified_bal = 100.0 # Fallback conservador
+                    
+                    max_loss_allowed = min(MAX_ABSOLUTE_LOSS_USDT, verified_bal * 0.026)
                     if projected_loss > max_loss_allowed:
-                        safe_qty = (verified_bal * 0.025) / sl_dist
+                        safe_qty = max_loss_allowed / sl_dist
                         logger.warning(f"🛑 [SOP-42 HARD-CLAMP] Orden sobredimensionada en {symbol}! Pérdida proyectada: ${projected_loss:.2f} USDT > Límite: ${max_loss_allowed:.2f} USDT. Clampando Qty de {raw_qty:.4f} -> {safe_qty:.4f}")
                         raw_qty = safe_qty
 
@@ -433,24 +447,31 @@ class BitunixExecutor:
                 order_id = main_order.get("data", {}).get("orderId", f"bitunix_order_{uuid.uuid4().hex[:8]}")
                 logger.info(f"✅ [BITUNIX] Orden principal colocada con éxito. ID: {order_id}")
 
-                # 1. Obtener el positionId real recién creado en Bitunix para asociar SL y TPs
+                # 1. Obtener el positionId real recién creado en Bitunix para asociar SL y TPs (con reintentos)
                 real_position_id = None
-                try:
-                    open_p = await self.get_pending_positions()
-                    for pos_item in (open_p or []):
-                        if pos_item.get("symbol") == symbol:
-                            real_position_id = pos_item.get("positionId")
+                for attempt in range(4):
+                    try:
+                        open_p = await self.get_pending_positions()
+                        for pos_item in (open_p or []):
+                            if pos_item.get("symbol") == symbol:
+                                real_position_id = pos_item.get("positionId")
+                                break
+                        if real_position_id:
                             break
-                except Exception as pos_chk_err:
-                    logger.debug(f"[BITUNIX] Error consultando positionId: {pos_chk_err}")
+                    except Exception as pos_chk_err:
+                        logger.debug(f"[BITUNIX] Intento {attempt+1} consultando positionId: {pos_chk_err}")
+                    await asyncio.sleep(0.3)
 
                 # 2. ⚡ [INSTANT SL] Colocar Stop Loss oficial en Bitunix de inmediato (<200ms)
-                if stop_loss and float(stop_loss) > 0 and real_position_id:
-                    try:
-                        logger.info(f"🛡️ [BITUNIX INSTANT SL] Blindando posición {symbol} con SL @ {stop_loss} (PosId: {real_position_id})...")
-                        await self.place_position_tpsl(symbol=symbol, position_id=str(real_position_id), sl_price=float(stop_loss))
-                    except Exception as sl_err:
-                        logger.error(f"❌ [BITUNIX INSTANT SL] Error colocando SL inmediato en {symbol}: {sl_err}")
+                if stop_loss and float(stop_loss) > 0:
+                    if real_position_id:
+                        try:
+                            logger.info(f"🛡️ [BITUNIX INSTANT SL] Blindando posición {symbol} con SL @ {stop_loss} (PosId: {real_position_id})...")
+                            await self.place_position_tpsl(symbol=symbol, position_id=str(real_position_id), sl_price=float(stop_loss))
+                        except Exception as sl_err:
+                            logger.error(f"❌ [BITUNIX INSTANT SL] Error colocando SL inmediato en {symbol}: {sl_err}")
+                    else:
+                        logger.warning(f"⚠️ [BITUNIX INSTANT SL] No se pudo obtener positionId para {symbol} tras reintentos. SL garantizado por orden principal.")
                 
                 # 4. Colocar órdenes de límite Take Profit fragmentadas (60% / 20% / 20%)
                 protection_ids = []

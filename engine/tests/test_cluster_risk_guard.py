@@ -96,7 +96,7 @@ def test_allows_independent_clusters_concurrently():
     assert "Aprobado" in reason
 
 def test_elite_confluence_override():
-    guard = ClusterRiskGuard(correlation_threshold=0.75, max_per_cluster=2)
+    guard = ClusterRiskGuard(correlation_threshold=0.75, max_per_cluster=2, allow_elite_override=True)
     
     active_positions = {
         "SOLUSDT": {"signal": {"type": "LONG", "price": 180.0, "stop_loss": 175.0}, "smart_trailing": {"be_active": False}},

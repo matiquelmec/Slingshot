@@ -801,27 +801,91 @@ class NexusNode:
         asset = acc_signal.get("asset")
         acc_id = getattr(account, "account_id", "primary")
 
-        # 1. Regla de Riesgo Aislada por Cuenta: Máximo 4 operaciones con riesgo flotante
-        unprotected_count = self.get_unprotected_risk_count(account_id=acc_id)
-        if unprotected_count >= self.MAX_CONCURRENT_POSITIONS:
-            logger.warning(f"🛑 [NEXUS RIESGO] [{account.label}] Límite de {self.MAX_CONCURRENT_POSITIONS} operaciones en riesgo alcanzado ({unprotected_count} activas). Rechazando entrada en {asset}.")
+        # 0. QUARANTINE GUARD INSTITUCIONAL
+        from engine.risk.cluster_risk_guard import cluster_risk_guard
+        if asset in cluster_risk_guard.QUARANTINE_ASSETS or any(asset.startswith(qa) for qa in cluster_risk_guard.QUARANTINE_ASSETS):
+            logger.warning(f"🛑 [NEXUS QUARANTINE] Rechazada orden para {asset}: Activo en lista de exclusión temporal.")
             return None
 
-        # 1.1 🛡️ DEDUP GUARD EN MEMORIA: Evitar abrir si ya existe posición registrada para esta cuenta
-        acc_pos_key = f"{acc_id}_{asset}"
-        if acc_pos_key in self._active_positions or (acc_id == "primary" and asset in self._active_positions):
-            logger.warning(f"🛑 [NEXUS DEDUP GUARD MEM] [{account.label}] Rechazando orden a mercado en {asset}: Posición ya registrada en memoria interna.")
-            return None
-
-        # 1.2 🛡️ DEDUP GUARD EN VIVO BITUNIX (Defensa en profundidad): Consultar el exchange directamente
+        # 1. HARD CAP FÍSICO ABSOLUTO (SOP-40): Máximo 4 posiciones abiertas simultáneamente en la cuenta
+        mem_symbols = set()
+        for k, p in self._active_positions.items():
+            pos_acc = p.get("account_id", "primary")
+            if pos_acc == acc_id:
+                sig_p = p.get("signal", {})
+                sym_p = sig_p.get("asset", sig_p.get("symbol", k.split("_")[-1])).upper()
+                mem_symbols.add(sym_p)
+        
+        exchange_symbols = set()
+        open_pos = []
         if not executor.dry_run:
             try:
-                open_pos = await executor.get_pending_positions()
-                if open_pos and any(p.get("symbol") == asset for p in open_pos):
-                    logger.warning(f"🛑 [NEXUS DEDUP GUARD EXCHANGE] [{account.label}] Rechazando orden a mercado en {asset}: Ya existe una posición abierta en Bitunix.")
+                open_pos = await executor.get_pending_positions() or []
+                for p in open_pos:
+                    if p.get("symbol"):
+                        exchange_symbols.add(p["symbol"].upper())
+            except Exception as e:
+                logger.debug(f"[NEXUS HARD CAP] Error al consultar exchange: {e}")
+
+        total_active_symbols = mem_symbols.union(exchange_symbols)
+        if len(total_active_symbols) >= self.MAX_CONCURRENT_POSITIONS:
+            logger.warning(
+                f"🛑 [NEXUS HARD CAP ABSOLUTO] [{account.label}] Techo físico de {self.MAX_CONCURRENT_POSITIONS} "
+                f"posiciones abiertas alcanzado ({len(total_active_symbols)} activas: {', '.join(total_active_symbols)}). "
+                f"Rechazando entrada en {asset}."
+            )
+            return None
+
+        # 1.1 🛡️ SIGNAL-AWARE REVERSAL GUARD & DEDUP (SOP-46)
+        acc_pos_key = f"{acc_id}_{asset}"
+        existing_pos = self._active_positions.get(acc_pos_key) or (self._active_positions.get(asset) if acc_id == "primary" else None)
+        
+        existing_exchange_pos = None
+        for p in open_pos:
+            if p.get("symbol") == asset:
+                existing_exchange_pos = p
+                break
+
+        new_direction = str(acc_signal.get("type", acc_signal.get("signal_type", "LONG"))).upper()
+        conf_score = float(acc_signal.get("score") or acc_signal.get("confluence_score", 0))
+
+        if existing_pos or existing_exchange_pos:
+            existing_dir = "LONG"
+            if existing_pos:
+                sig_e = existing_pos.get("signal", {})
+                existing_dir = str(sig_e.get("type", sig_e.get("signal_type", "LONG"))).upper()
+            elif existing_exchange_pos:
+                side_e = existing_exchange_pos.get("side", "").upper()
+                existing_dir = "LONG" if side_e in ("BUY", "LONG") else "SHORT"
+
+            is_opposite = ("LONG" in new_direction and "SHORT" in existing_dir) or \
+                          ("SHORT" in new_direction and "LONG" in existing_dir)
+
+            if is_opposite:
+                if conf_score >= 75.0:
+                    logger.warning(
+                        f"🚨 [NEXUS REVERSAL GUARD SOP-46] [{account.label}] Señal contraria confirmada para {asset} "
+                        f"({new_direction} vs {existing_dir} activo, Confluencia: {conf_score}% >= 75%). "
+                        f"Ejecutando cierre preventivo a mercado de la posición anterior..."
+                    )
+                    try:
+                        if hasattr(executor, "close_position_market"):
+                            await executor.close_position_market(asset)
+                        self._active_positions.pop(acc_pos_key, None)
+                        if acc_id == "primary":
+                            self._active_positions.pop(asset, None)
+                        logger.info(f"✅ [NEXUS REVERSAL GUARD] Posición contraria en {asset} cerrada con éxito.")
+                    except Exception as close_err:
+                        logger.error(f"❌ [NEXUS REVERSAL GUARD] Error al cerrar posición contraria en {asset}: {close_err}")
+                else:
+                    logger.info(
+                        f"🛡️ [NEXUS REVERSAL GUARD] Señal opuesta en {asset} recibida pero confluencia insuficiente "
+                        f"({conf_score}% < 75%). Manteniendo posición {existing_dir} actual."
+                    )
                     return None
-            except Exception as chk_err:
-                logger.debug(f"[NEXUS DEDUP GUARD] [{account.label}] Error al verificar posiciones pendientes en Bitunix: {chk_err}")
+            else:
+                logger.warning(f"🛑 [NEXUS DEDUP GUARD] [{account.label}] Rechazando orden a mercado en {asset}: Ya existe una posición {existing_dir} activa.")
+                return None
 
         try:
             avail_margin = await getattr(executor, 'get_net_available_margin_usdt', executor.get_available_margin_usdt)()
@@ -1240,10 +1304,37 @@ class NexusNode:
         asset = acc_signal.get("asset", acc_signal.get("symbol", "")).upper()
         acc_id = getattr(account, "account_id", "primary")
 
-        # 1. Regla de Riesgo por cuenta: Máximo 4 operaciones con riesgo flotante para esta cuenta
-        unprotected_count = self.get_unprotected_risk_count(account_id=acc_id)
-        if unprotected_count >= self.MAX_CONCURRENT_POSITIONS:
-            logger.info(f"🛑 [NEXUS AUTO-LIMIT RIESGO] [{account.label}] Máximo de {self.MAX_CONCURRENT_POSITIONS} operaciones con riesgo alcanzado ({unprotected_count} activas). Pausando nuevas órdenes.")
+        # 0. QUARANTINE GUARD INSTITUCIONAL
+        from engine.risk.cluster_risk_guard import cluster_risk_guard
+        if asset in cluster_risk_guard.QUARANTINE_ASSETS or any(asset.startswith(qa) for qa in cluster_risk_guard.QUARANTINE_ASSETS):
+            logger.warning(f"🛑 [NEXUS AUTO-LIMIT QUARANTINE] Rechazada orden límite para {asset}: Activo en cuarentena.")
+            return None
+
+        # 1. HARD CAP FÍSICO ABSOLUTO (SOP-40): Máximo 4 operaciones abiertas para esta cuenta
+        mem_symbols = set()
+        for k, p in self._active_positions.items():
+            pos_acc = p.get("account_id", "primary")
+            if pos_acc == acc_id:
+                sig_p = p.get("signal", {})
+                sym_p = sig_p.get("asset", sig_p.get("symbol", k.split("_")[-1])).upper()
+                mem_symbols.add(sym_p)
+        
+        exchange_symbols = set()
+        if not executor.dry_run:
+            try:
+                open_pos = await executor.get_pending_positions() or []
+                for p in open_pos:
+                    if p.get("symbol"):
+                        exchange_symbols.add(p["symbol"].upper())
+            except Exception as e:
+                logger.debug(f"[NEXUS AUTO-LIMIT HARD CAP] Error al consultar exchange: {e}")
+
+        total_active_symbols = mem_symbols.union(exchange_symbols)
+        if len(total_active_symbols) >= self.MAX_CONCURRENT_POSITIONS:
+            logger.info(
+                f"🛑 [NEXUS AUTO-LIMIT HARD CAP] [{account.label}] Techo físico de {self.MAX_CONCURRENT_POSITIONS} "
+                f"posiciones alcanzado ({len(total_active_symbols)} activas). Pausando nuevas órdenes límite."
+            )
             score_val = float(acc_signal.get("confluence_score", acc_signal.get("score", 0)))
             if score_val >= 60.0:
                 self.enqueue_high_confluence_opportunity(acc_signal, acc_id)

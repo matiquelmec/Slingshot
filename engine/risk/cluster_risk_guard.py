@@ -22,6 +22,7 @@ class ClusterRiskGuard:
     
     DEFAULT_CORRELATION_THRESHOLD = 0.75
     MAX_UNPROTECTED_PER_CLUSTER = 2
+    QUARANTINE_ASSETS = ["LINK", "LINKUSDT", "TIA", "TIAUSDT"]
     
     # Clusters Estructurales de Fallback (cuando no hay buffer de precios suficiente)
     STRUCTURAL_CLUSTERS = {
@@ -32,9 +33,15 @@ class ClusterRiskGuard:
         "FOREX_MAJORS": ["EURUSD", "GBPUSD", "USDJPY", "AUDUSD", "GBPJPY"]
     }
     
-    def __init__(self, correlation_threshold: float = DEFAULT_CORRELATION_THRESHOLD, max_per_cluster: int = MAX_UNPROTECTED_PER_CLUSTER):
+    def __init__(
+        self,
+        correlation_threshold: float = DEFAULT_CORRELATION_THRESHOLD,
+        max_per_cluster: int = MAX_UNPROTECTED_PER_CLUSTER,
+        allow_elite_override: bool = False
+    ):
         self.correlation_threshold = correlation_threshold
         self.max_per_cluster = max_per_cluster
+        self.allow_elite_override = allow_elite_override
         self._price_buffers: Dict[str, List[float]] = {}
         
     def update_price_history(self, asset: str, prices: List[float]):
@@ -112,10 +119,15 @@ class ClusterRiskGuard:
         Retorna:
             (aprobado: bool, motivo: str)
         """
+        new_sym = self._clean_symbol(new_asset)
+        if new_sym in self.QUARANTINE_ASSETS or any(new_sym.startswith(qa) for qa in self.QUARANTINE_ASSETS):
+            reason = f"Activo en cuarentena preventiva institucional (SOP-44/QUARANTINE: {new_sym})."
+            logger.warning(f"🛑 [QUARANTINE GUARD] Rechazando entrada en {new_sym}: {reason}")
+            return False, reason
+
         if not active_positions:
             return True, "Cluster libre (sin posiciones activas)"
             
-        new_sym = self._clean_symbol(new_asset)
         new_dir = str(new_direction).upper()
         new_cluster = self.get_cluster_name(new_sym)
         
@@ -139,7 +151,8 @@ class ClusterRiskGuard:
             sl = float(sig.get("stop_loss", 0))
             entry = float(sig.get("price", sig.get("entry_price", 0)))
             
-            sl_at_be = (active_dir == "LONG" and entry > 0 and sl >= entry * 0.999) or                        (active_dir == "SHORT" and entry > 0 and sl > 0 and sl <= entry * 1.001)
+            sl_at_be = (active_dir == "LONG" and entry > 0 and sl >= entry * 0.999) or \
+                       (active_dir == "SHORT" and entry > 0 and sl > 0 and sl <= entry * 1.001)
                        
             # Si la posición está en Breakeven, su slot de riesgo queda liberado
             if be_active or sl_at_be:
@@ -173,16 +186,15 @@ class ClusterRiskGuard:
                         same_dir_conflicts.append(act_sym)
                         
             if same_dir_crypto_count >= self.max_per_cluster:
-                if confluence_score >= 88.0:
+                if self.allow_elite_override and confluence_score >= 88.0:
                     logger.info(f"💎 [SOP-44 DIRECTIONAL GUARD] Confluencia Élite ({confluence_score}%) aprueba 3er {new_dir} en {new_sym}.")
                     return True, f"Aprobado por Confluencia Élite ({confluence_score}% >= 88%)"
-                reason = f"Límite direccional alcanzado (SOP-44 DIRECTIONAL VETO: {same_dir_crypto_count}/{self.max_per_cluster} {new_dir} en riesgo). Conflicto con: {', '.join(same_dir_conflicts)}"
+                reason = f"Límite de cluster alcanzado (SOP-30 BETA VETO / SOP-44 DIRECTIONAL VETO: {same_dir_crypto_count}/{self.max_per_cluster} {new_dir} en riesgo). Conflicto con: {', '.join(same_dir_conflicts)}"
                 logger.warning(f"{reason} para {new_sym}")
                 return False, reason
 
         if correlated_risk_count >= self.max_per_cluster:
-            # Excepción por confluencia élite si el score es excepcionalmente alto (>= 88%)
-            if confluence_score >= 88.0:
+            if self.allow_elite_override and confluence_score >= 88.0:
                 logger.info(f"💎 [CLUSTER RISK GUARD] Confluencia ÉLITE ({confluence_score}%) supera el umbral de cluster para {new_sym}.")
                 return True, f"Aprobado por Confluencia Élite ({confluence_score}% >= 88%)"
                 
