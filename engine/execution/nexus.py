@@ -708,13 +708,6 @@ class NexusNode:
         asset = signal.get("asset")
         sig_type = signal.get("type", "LONG")
 
-        # ── 🧠 BIO-INHIBICIÓN LATERAL (Drosophila Feedforward Inhibition) ──
-        from engine.risk.bio_connectome_guard import lateral_inhibition_engine
-        is_inhibited, inhib_msg = lateral_inhibition_engine.is_inhibited(asset, sig_type)
-        if is_inhibited:
-            logger.warning(f"🛑 [NEXUS BIO-INHIBITION] {inhib_msg}")
-            return
-
         # ── REGLA DE CLUSTER DE CORRELACIÓN CRUZADA (v26.0 CLUSTER FORTRESS) ──
         confluence_score = float(signal.get("confluence_score") or (signal.get("confluence") or {}).get("score", 70.0))
         can_open, cluster_reason = cluster_risk_guard.can_open_position(
