@@ -170,6 +170,22 @@ class NexusNode:
                     if current_price <= 0:
                         continue
 
+                    # 0. ⚡ [GIANT FIBER REFLEX - DROSOPHILA ESCAPE CIRCUIT]
+                    # Monitoreo de aceleración adversa ultrarrápida (ΔP / Δt) para evacuación de emergencia
+                    from engine.risk.bio_connectome_guard import giant_fiber_reflex
+                    should_escape, escape_reason = giant_fiber_reflex.check_emergency_escape(
+                        asset=asset,
+                        current_price=current_price,
+                        position_side=sig.get("type", "LONG"),
+                        entry_price=entry
+                    )
+                    if should_escape:
+                        logger.critical(f"⚡ [NEXUS BIO-REFLEX] Evacuando {asset} inmediatamente: {escape_reason}")
+                        try:
+                            await target_ex.close_position_market(asset)
+                        except Exception as esc_err:
+                            logger.error(f"❌ [NEXUS BIO-REFLEX] Fallo al forzar escape de mercado en {asset}: {esc_err}")
+
                     # Solo evaluar SL si no estamos en período de gracia de apertura
                     is_sl = False
                     if not in_grace_period:
@@ -691,6 +707,13 @@ class NexusNode:
         """
         asset = signal.get("asset")
         sig_type = signal.get("type", "LONG")
+
+        # ── 🧠 BIO-INHIBICIÓN LATERAL (Drosophila Feedforward Inhibition) ──
+        from engine.risk.bio_connectome_guard import lateral_inhibition_engine
+        is_inhibited, inhib_msg = lateral_inhibition_engine.is_inhibited(asset, sig_type)
+        if is_inhibited:
+            logger.warning(f"🛑 [NEXUS BIO-INHIBITION] {inhib_msg}")
+            return
 
         # ── REGLA DE CLUSTER DE CORRELACIÓN CRUZADA (v26.0 CLUSTER FORTRESS) ──
         confluence_score = float(signal.get("confluence_score") or (signal.get("confluence") or {}).get("score", 70.0))
