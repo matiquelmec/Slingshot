@@ -55,9 +55,9 @@ flowchart TD
 ### SOP-44: Cluster Fortress & Cuarentena Preventiva
 - **Eliminación del Bypass de Confluencia:** Se suprimió la excepción de confluencia $\ge 88\%$ que permitía una 3ª o 4ª posición en criptomonedas. La regla de correlación es una restricción matemática de portafolio y es inviolable.
 - **Cuarentena Preventiva de Activos (`QUARANTINE_ASSETS`):**
-  * `LINKUSDT`: Excluido por comportamiento anómalo y sobredimensionamiento.
-  * `TIAUSDT`: Excluido por racha perdedora persistente (-$53.27 USDT en 8 pérdidas).
-  * Cualquier señal generada en estos activos es vetada inmediatamente antes del dimensionamiento.
+  * `LINKUSDT`: **Rehabilitado a operativa normal protegida.** Se determinó que el drawdown previo se debió a un ajuste manual externo de margen en el exchange, no a falla de alfa. Con el Hard Clamp de SOP-42 ($5 USD max loss y $150 USD nocional) está blindado contra sobreapalancamiento.
+  * `TIAUSDT`: **Mantenido en cuarentena estricta.** Excluido por comportamiento anómalo y racha perdedora persistente (-$53.27 USDT en 8 pérdidas debido a mechas erráticas de baja capitalización).
+  * Cualquier señal generada en activos en cuarentena es vetada inmediatamente antes del dimensionamiento.
 
 ### SOP-93: Order TTL Sentinel (Expiración a 45 Minutos)
 - **Definición:** Toda orden límite colocada en el libro de órdenes tiene un tiempo de vida máximo de **45 minutos** (2700 segundos / 3 velas de 15m).
