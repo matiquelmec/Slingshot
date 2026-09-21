@@ -146,7 +146,9 @@ async def test_valid_sl_update_with_invariance():
     
     # Mock de _request para simular get_pending_orders, cancel_order y place_order
     async def mock_request(method, endpoint, params=None, json_body=None):
-        if "get_pending_orders" in endpoint:
+        if "modify_order" in endpoint:
+            return {"code": 10001, "msg": "modify not supported"}
+        elif "get_pending_orders" in endpoint:
             return {"code": 0, "data": [{"id": "old_sl_1", "slPrice": "140.00"}]}
         elif "cancel_order" in endpoint:
             return {"code": 0, "msg": "Success"}

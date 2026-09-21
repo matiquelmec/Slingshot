@@ -693,9 +693,31 @@ class RiskManager:
                     # Zona de premium adaptativa
                     is_in_ote = current_price >= f_val
 
-        final_reward_tp3 = abs(tp3 - current_price)
         # [FAST BREAKEVEN LOCK v17.2] Nivel exacto a +1.0R para blindar la operación a $0 riesgo
         be_price = current_price + (final_risk * 1.0) if signal_type == "LONG" else current_price - (final_risk * 1.0)
+
+        # [SOP-48 ADAPTIVE STRUCTURAL RUNNER v14.0]
+        # Determinar si el régimen y el sesgo fractal habilitan un Open Runner o si se mantiene Fixed Target
+        htf_dir = getattr(htf_bias, "direction", "NEUTRAL").upper() if htf_bias else "NEUTRAL"
+        htf_aligned = (signal_type == "LONG" and htf_dir == "BULLISH") or (signal_type == "SHORT" and htf_dir == "BEARISH")
+        is_expansion_regime = (signal_type == "LONG" and regime_upper in ["MARKUP", "EXPANSION", "BULLISH"]) or \
+                               (signal_type == "SHORT" and regime_upper in ["MARKDOWN", "EXPANSION", "BEARISH"])
+
+        is_ranging_regime = any(r in regime_upper for r in ["CHOP", "RANGE", "RANGING", "CONSOLIDATION"])
+
+        # Para habilitar OPEN_RUNNER se requiere expansión activa Y alineación HTF, nunca en rangos
+        if is_expansion_regime and htf_aligned and confluence_score >= 65 and not is_ranging_regime:
+            runner_mode = "OPEN_RUNNER"
+            tp1_pct = 0.50
+            tp2_pct = 0.30
+            tp3_pct = 0.10
+            runner_pct = 0.10
+        else:
+            runner_mode = "FIXED_TARGET"
+            tp1_pct = 0.50
+            tp2_pct = 0.30
+            tp3_pct = 0.20
+            runner_pct = 0.00
 
         return {
             "entry_price": round(current_price, 5),
@@ -707,6 +729,11 @@ class RiskManager:
             "tp3": round(tp3, 5),
             "take_profit_3r": round(tp3, 5),  # Corregido: apunta al target final estructural tp3
             "tp1_vol_pct": tuning["tp1_vol"],
+            "runner_mode": runner_mode,
+            "tp1_pct": tp1_pct,
+            "tp2_pct": tp2_pct,
+            "tp3_pct": tp3_pct,
+            "runner_pct": runner_pct,
             "risk_amount_usdt": round(risk_amount_usdt, 2), # Compatibility fix
             "risk_usd": round(risk_amount_usdt, 2),
             "risk_pct": round(actual_risk_pct * 100, 2),

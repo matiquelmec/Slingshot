@@ -77,6 +77,7 @@ class TradeManager:
         self._task: Optional[asyncio.Task] = None
         self._last_active_positions: Dict[str, set] = {}
         self._mt5_partial_states: Dict[str, Any] = self._load_mt5_partial_states()
+        self._initial_risk_cache: Dict[str, float] = {}
 
     def _load_mt5_partial_states(self) -> Dict[str, Any]:
         path = r"C:\Slingshot\data\mt5_partial_states.json"
@@ -199,15 +200,10 @@ class TradeManager:
 
 
         # 2. Monitoreo de Trades Activos
-
         active = [
-
             s for s in signals
-
-            if s.get("status") in ("ACTIVE", "BREAKEVEN", "TRAILING", "APPROVED", "FILLED")
-
+            if s.get("status") in ("ACTIVE", "BREAKEVEN", "TRAILING", "RUNNER_EXPANSION", "APPROVED", "FILLED")
                and s.get("price") and s.get("stop_loss") and s.get("tp1")
-
         ]
 
 
@@ -495,53 +491,45 @@ class TradeManager:
 
 
 
-        # A??,A??, Fase 3: TRAILING activo A??,A??,A??,A??,A??,A??,A??,A??,A??,A??,A??,A??,A??,A??,A??,A??,A??,A??,A??,A??,A??,A??,A??,A??,A??,A??,A??,A??,A??,A??,A??,A??,A??,A??,A??,A??,A??,A??,A??,A??,A??,A??,
-
-        if phase == "TRAILING":
-
-            # Comprobar si el TP3 fue tocado
-
+        # ── Fase 3: TRAILING / RUNNER_EXPANSION activo ──
+        if phase in ("TRAILING", "RUNNER_EXPANSION"):
+            runner_mode = signal.get("runner_mode", "FIXED_TARGET")
+            # Comprobar si el TP3 fue tocado (solo relevante en fase TRAILING)
             tp3_hit = tp3 > 0 and ((is_long and current_price >= tp3) or (not is_long and current_price <= tp3))
-
             sl_hit  = (is_long and current_price <= current_sl) or (not is_long and current_price >= current_sl)
 
-
-
-            if tp3_hit:
-
-                await self._apply_sl_update(signal, current_sl, "CLOSED",
-
-                    f"TP3 alcanzado ({tp3:.6f}). Trade cerrado con exito.")
-
-                logger.info(f"[TRADE_MANAGER] {asset} -> CERRADO en TP3")
-
-                return
-
-
-
             if sl_hit:
-
                 await self._apply_sl_update(signal, current_sl, "CLOSED",
-
                     f"SL hit en {current_sl:.6f}. Trade cerrado.")
-
-                logger.info(f"[TRADE_MANAGER] {asset} -> SL HIT en {current_sl:.6f}")
-
+                logger.info(f"[TRADE_MANAGER] {asset} -> SL HIT en {current_sl:.6f} ({phase})")
                 return
 
+            if tp3_hit and phase == "TRAILING":
+                if runner_mode == "OPEN_RUNNER":
+                    # SOP-48: No cerramos el trade. Activamos la fase de RUNNER_EXPANSION
+                    # y elevamos el SL inmediatamente a TP2 o al último swing para blindar la ganancia.
+                    new_runner_sl = tp2 if (is_long and tp2 > current_sl) or (not is_long and tp2 < current_sl) else current_sl
+                    structural_sl = self._find_structural_sl(df, current_price, is_long, atr_val)
+                    if structural_sl and self._sl_improved(new_runner_sl, structural_sl, is_long):
+                        new_runner_sl = structural_sl
 
+                    await self._apply_sl_update(signal, new_runner_sl, "RUNNER_EXPANSION",
+                        f"🚀 [SOP-48 RUNNER EXPANSION] TP3 alcanzado ({tp3:.6f}). Runner libre activado. SL blindado a {new_runner_sl:.6f}")
+                    logger.info(f"🚀 [TRADE_MANAGER] {asset} -> TP3 alcanzado. Transición a RUNNER_EXPANSION (SL: {new_runner_sl:.6f})")
+                    return
+                else:
+                    await self._apply_sl_update(signal, current_sl, "CLOSED",
+                        f"TP3 alcanzado ({tp3:.6f}). Trade cerrado con éxito (FIXED_TARGET).")
+                    logger.info(f"[TRADE_MANAGER] {asset} -> CERRADO en TP3")
+                    return
 
-            # Actualizar trailing: buscar nuevo swing estructural mAAs favorable
-
+            # Actualizar trailing: buscar nuevo swing estructural más favorable (aplica para TRAILING y RUNNER_EXPANSION)
             structural_sl = self._find_structural_sl(df, current_price, is_long, atr_val)
-
             if structural_sl and self._sl_improved(current_sl, structural_sl, is_long):
-
-                await self._apply_sl_update(signal, structural_sl, "TRAILING",
-
-                    f"Trailing actualizado a nuevo soporte estructural = {structural_sl:.6f}")
-
-                logger.info(f"[TRADE_MANAGER] {asset} -> TRAILING update: SL = {structural_sl:.6f}")
+                tag = "RUNNER_EXPANSION" if phase == "RUNNER_EXPANSION" else "TRAILING"
+                await self._apply_sl_update(signal, structural_sl, tag,
+                    f"Trailing actualizado a nuevo soporte estructural = {structural_sl:.6f} ({tag})")
+                logger.info(f"[TRADE_MANAGER] {asset} -> {tag} update: SL = {structural_sl:.6f}")
 
 
 
@@ -843,7 +831,7 @@ class TradeManager:
 
             executors = mgr.get_all_executors(enabled_only=True)
 
-            global_pos_id = signal.get("position_id") or signal.get("main_order_id")
+            global_pos_id = signal.get("position_id") or signal.get("id") or signal.get("main_order_id")
 
             pos_map = signal.get("account_position_ids", {})
 
@@ -973,40 +961,31 @@ class TradeManager:
 
 
 
-                    # Buscar si existe una seAAal registrada para recuperar su initial_stop_loss exacto
-
+                    # Buscar si existe una señal registrada para recuperar su initial_stop_loss exacto
                     known_signals = await store.get_signals(asset=sym)
-
                     matched_sig = known_signals[-1] if known_signals else None
-
                     initial_sl = float(matched_sig.get("initial_stop_loss", 0.0)) if matched_sig else 0.0
 
-
-
                     # Distancia de riesgo inicial (1R)
-
                     is_defensive_sl = (side == "LONG" and 0 < cur_sl < entry_price) or (side == "SHORT" and cur_sl > entry_price)
 
+                    cached_key = f"{acc_id}_{sym}_{pos_id}" if pos_id else f"{acc_id}_{sym}"
+                    cached_risk = self._initial_risk_cache.get(cached_key)
 
-
-                    if initial_sl > 0:
-
+                    if cached_risk and cached_risk > 0:
+                        sl_dist = cached_risk
+                    elif initial_sl > 0:
                         sl_dist = abs(entry_price - initial_sl)
-
+                        self._initial_risk_cache[cached_key] = sl_dist
                     elif is_defensive_sl and abs(entry_price - cur_sl) > (entry_price * 0.002):
-
                         sl_dist = abs(entry_price - cur_sl)
-
+                        self._initial_risk_cache[cached_key] = sl_dist
                     else:
-
                         default_risk_pct = 0.010 if self.is_megacap(sym) else 0.015
-
                         sl_dist = entry_price * default_risk_pct
-
-                    
+                        self._initial_risk_cache[cached_key] = sl_dist
 
                     if sl_dist <= 0:
-
                         sl_dist = entry_price * 0.015
 
 

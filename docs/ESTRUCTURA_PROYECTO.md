@@ -1,7 +1,7 @@
-# 🏗️ Estructura del Proyecto Slingshot v56.0 APEX PARITY
+# 🏗️ Estructura del Proyecto Slingshot v59.0 APEX SOVEREIGN RUNNER
 
 > Guía de referencia técnica oficial de la arquitectura, jerarquía de directorios, módulos y componentes del sistema autónomo Slingshot.
-> **Última actualización**: Septiembre 2026 (v56.0 APEX PARITY — Paridad Estricta Single Source of Truth (SSoT) entre Backtest y Producción, SOP-84 Filtro Antirruido KER ≥ 0.35 & Time-Gating SOP-18, SOP-85 Extended Midnight Roll-Over Armor de 60m en FTMO MT5, SOP-86 Exclusión Mutua US100/US30, Circuit Breakers de Racha Anti-Churning SOP-81 a SOP-83, Calibración Continua Tri-Bucle y Suite QA Certificada al 100% con 351 Tests en VPS).
+> **Última actualización**: Septiembre 2026 (v59.0 APEX SOVEREIGN RUNNER — Canonización del protocolo **SOP-48: Adaptive Structural Runner** con división 50/30/10/10 en tendencias de alta eficiencia y toma de beneficios fija 50/30/20 en rangos, fase dinámica `RUNNER_EXPANSION`, suite unitaria `test_adaptive_runner.py`, SSoT en [SLINGSHOT_BIBLE_V59.md](SLINGSHOT_BIBLE_V59.md)).
 
 ---
 

@@ -416,6 +416,9 @@ class NexusNode:
                             "is_reconstructed": True,
                             "timestamp": datetime.now(timezone.utc).isoformat(),
                             "id": position_id,
+                            "position_id": position_id,
+                            "main_order_id": position_id,
+                            "initial_stop_loss": sl_price,
                             "account_id": acc_id
                         }
 
@@ -990,6 +993,13 @@ class NexusNode:
             result = await executor.execute_signal(acc_signal, fragments=fragments)
             if result.get("status") == "success":
                 logger.info(f"✅ [NEXUS] [{account.label}] Posición abierta en {asset}. ID: {result.get('main_order_id')}")
+                real_pos_id = result.get("main_order_id")
+                if real_pos_id:
+                    acc_signal["position_id"] = real_pos_id
+                    acc_signal["id"] = real_pos_id
+                    acc_signal["main_order_id"] = real_pos_id
+                if "initial_stop_loss" not in acc_signal and "stop_loss" in acc_signal:
+                    acc_signal["initial_stop_loss"] = float(acc_signal["stop_loss"])
                 pos_entry = {
                     "signal": acc_signal,
                     "execution": result,
@@ -1158,6 +1168,7 @@ class NexusNode:
                 "type": best_opp.get("type", "SMC Sniper"),
                 "price": float(best_opp.get("price", 0)),
                 "stop_loss": float(best_opp.get("stop_loss", 0)),
+                "initial_stop_loss": float(best_opp.get("stop_loss", 0)),
                 "be_price": round(be_val, 5),
                 "tp1": float(best_opp.get("tp1", 0)),
                 "tp2": float(best_opp.get("tp2", 0)),

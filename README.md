@@ -1,17 +1,17 @@
-# 🛡️ SLINGSHOT v58.0 APEX INSTITUTIONAL HARDENING — Autonomous Dual Terminal
+# 🛡️ SLINGSHOT v59.0 APEX SOVEREIGN RUNNER — Autonomous Dual Terminal
 ## High-Availability Edge, 24/7 Sovereign VPS Execution & Fortress Risk Architecture
 
-> **"Terminal Cuantitativa Autónoma de Grado Institucional. Slingshot v58.0 APEX INSTITUTIONAL HARDENING: Desacoplamiento Soberano de Alta Disponibilidad entre la Retina Edge (Vercel CDN / Next.js 15) y el Núcleo Cuantitativo de Ejecución (Windows Server VPS 24/7 en Frankfurt). Integra la canonización de los Protocolos SOP-40 (Hard Cap Físico Absoluto de 4 Posiciones), SOP-46 (Signal-Aware Position Management & Reversal Guard con Cierre a Mercado ante Reversión $\ge 75\%$), SOP-42 (Pre-Flight Dollar Risk & Notional Hard-Clamp), SOP-44 (Cluster Fortress sin Bypasses y Cuarentena Preventiva de Activos) y SOP-93 (Order TTL Sentinel de 45 minutos). Documentación canónica completa en [SLINGSHOT_BIBLE_V58.md](docs/SLINGSHOT_BIBLE_V58.md)."**
+> **"Terminal Cuantitativa Autónoma de Grado Institucional. Slingshot v59.0 APEX SOVEREIGN RUNNER: Desacoplamiento Soberano de Alta Disponibilidad entre la Retina Edge (Vercel CDN / Next.js 15) y el Núcleo Cuantitativo de Ejecución (Windows Server VPS 24/7 en Frankfurt). Integra la canonización del Protocolo SOP-48 (Adaptive Structural Runner & Regime-Conditioned Exit Engine con esquema 50/30/10/10 en tendencias de alta eficiencia y toma completa 50/30/20 en rangos), consolidando los Protocolos SOP-40 (Hard Cap Físico de 4 Posiciones), SOP-46 (Reversal Guard ante Confluencia $\ge 75\%$), SOP-42 (Pre-Flight Dollar Risk & Notional Hard-Clamp) y SOP-44 (Cluster Fortress sin Bypasses). Documentación canónica completa en [SLINGSHOT_BIBLE_V59.md](docs/SLINGSHOT_BIBLE_V59.md)."**
 
 ![Status](https://img.shields.io/badge/Status-100%25_AUTONOMOUS_&_SSOT_VERIFIED-0d2a1a?style=for-the-badge&logo=codeproject&logoColor=fff)
-![Version](https://img.shields.io/badge/Version-58.0_Institutional_Hardening-1a3a6e?style=for-the-badge)
+![Version](https://img.shields.io/badge/Version-59.0_Sovereign_Runner-1a3a6e?style=for-the-badge)
 ![NVIDIA AI-Q](https://img.shields.io/badge/AI_Engine-NVIDIA_AI--Q_Blueprint_&_NIM-76b900?style=for-the-badge&logo=nvidia&logoColor=fff)
 ![Adaptive System](https://img.shields.io/badge/Adaptive_Engine-Tri--Loop_Bayes_HMM_NIM-9b59b6?style=for-the-badge)
 ![Crypto Engine](https://img.shields.io/badge/Bitunix_Crypto-2.5%25_Compounded_Live-f39c12?style=for-the-badge&logo=bitcoin&logoColor=fff)
 ![MetaTrader 5](https://img.shields.io/badge/MetaTrader_5-FTMO_Institutional_Live-2980b9?style=for-the-badge&logo=windows&logoColor=fff)
 ![Execution Engine](https://img.shields.io/badge/Execution-SOP--64_Auto--Dispatcher_≥75%25-green?style=for-the-badge)
-![Security](https://img.shields.io/badge/Security_Protocols-SOP--01%20to%20SOP--92-emerald?style=for-the-badge)
-![QA Suite](https://img.shields.io/badge/QA_Suite-351_Tests_100%25_Passed-success?style=for-the-badge)
+![Security](https://img.shields.io/badge/Security_Protocols-SOP--01%20to%20SOP--93-emerald?style=for-the-badge)
+![QA Suite](https://img.shields.io/badge/QA_Suite-354_Tests_100%25_Passed-success?style=for-the-badge)
 ![Crypto Return](https://img.shields.io/badge/Crypto_Compounded_ROI-%2B478.2%25_(5.8x)-gold?style=for-the-badge)
 ![Total Alpha](https://img.shields.io/badge/Total_Alpha-%2B74.07_R-gold?style=for-the-badge)
 ![Profit Factor](https://img.shields.io/badge/Profit_Factor-1.97_Institucional-blue?style=for-the-badge)
@@ -31,7 +31,7 @@ Slingshot es una **Terminal de Inteligencia y Ejecución Cuantitativa Institucio
    * **Pure Dollar-Risk Sizing (SOP-41) & Pre-Flight Hard-Clamp (SOP-42):** Dimensionamiento matemático exacto por distancia al Stop Loss y validación atómica antes del envío al exchange.
    * **Guardián de Margen Libre (SOP-40):** Mínimo 50% de saldo libre garantizado para inmunidad ante mechas de volatilidad.
    * **Apalancamiento Adaptativo (SOP-32):** Inverso a la volatilidad del activo ($18\text{X}$ en BTC, $\le 8\text{X}$ en altcoins).
-   * **Malla de Salidas MFE (SOP-26):** Cosecha institucional de 40% a +1.2R (SL a BE $+0.08\%$), 40% a +2.0R (+1.0R en verde) y 20% como **Runner Elástico KER a +5.0R** (**SOP-48**).
+   * **Malla de Salidas Adaptativa (SOP-48):** Cosecha institucional 50/30/20 en rangos y 50% TP1 (+1.2R con BE + Fee Absorber), 30% TP2 (+2.0R a +2.5R), 10% TP3 (+3.5R a +5.0R) y **10% Runner Libre en fase RUNNER_EXPANSION** con trailing stop estructural sin límite superior en mega-expansiones.
    * **Convicción "Trinidad del Alfa" (SOP-47):** Bono Kelly de **1.20x** para `BNBUSDT`, `SOLUSDT` y `FETUSDT` (PF > 2.7).
    * **Modulación Cíclica Semanal (SOP-46):** **1.20x en Martes y Miércoles** (expansión institucional) y **0.80x en Jueves y Viernes** (defensa de capital).
    * **Bóveda Criptográfica Multi-Cuenta (SOP-57 / SOP-58):** Despacho concurrente aislado para múltiples cuentas de inversores con cifrado AES-256 Fernet (`enc:v1:`) en reposo, enmascaramiento estricto de secretos y centinela de intervención manual de clientes (**SOP-59**).
