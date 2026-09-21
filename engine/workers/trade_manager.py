@@ -932,29 +932,22 @@ class TradeManager:
 
 
 
-                # Consultar AA3rdenes TPSL activas en Bitunix para conocer el SL real configurado
-
-                tpsl_res = await bitunix._request("GET", "/api/v1/futures/tpsl/get_pending_orders")
-
+                # Pre-consultar órdenes TPSL de Bitunix pasando params={'symbol': s} para cada símbolo
+                distinct_syms = list({str(p.get("symbol", "")).upper() for p in (positions or []) if p.get("symbol")})
                 tpsl_map = {}
-
-                if tpsl_res.get("code") == 0 and isinstance(tpsl_res.get("data"), list):
-
-                    for to in tpsl_res["data"]:
-
-                        sym_key = to.get("symbol")
-
-                        raw_val = to.get("slPrice") or to.get("triggerPrice")
-
-                        if sym_key and raw_val:
-
-                            try:
-
-                                tpsl_map[sym_key] = float(raw_val)
-
-                            except (ValueError, TypeError):
-
-                                pass
+                if distinct_syms:
+                    tpsl_tasks = [bitunix._request("GET", "/api/v1/futures/tpsl/get_pending_orders", params={"symbol": s}) for s in distinct_syms]
+                    tpsl_responses = await asyncio.gather(*tpsl_tasks, return_exceptions=True)
+                    for s, r in zip(distinct_syms, tpsl_responses):
+                        if isinstance(r, dict) and isinstance(r.get("data"), list):
+                            for to in r["data"]:
+                                raw_val = to.get("slPrice") or to.get("triggerPrice")
+                                if raw_val:
+                                    try:
+                                        tpsl_map[s] = float(raw_val)
+                                        break
+                                    except (ValueError, TypeError):
+                                        pass
 
 
 
@@ -1168,7 +1161,7 @@ class TradeManager:
 
                         status_msg = "PROTEGIDO_TP2 (+1.0R BLOQUEADO)"
 
-                    elif r_profit >= be_threshold:
+                    elif r_profit >= be_threshold or (side == "LONG" and cur_price > entry_price * 1.01) or (side == "SHORT" and cur_price < entry_price * 0.99):
 
                         target_sl = round(entry_price + fee_buffer, 4) if side == "LONG" else round(entry_price - fee_buffer, 4)
 
