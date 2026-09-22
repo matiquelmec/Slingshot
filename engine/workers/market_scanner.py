@@ -469,10 +469,46 @@ class MarketScanner:
                             "detail": f"✅ KER={ker_val:.2f} >= 0.35 (Estructura direccional limpia)",
                         })
 
+                    # ── EVALUACIÓN CANÓNICA SOP-95: SESSION ANCHORED VWAP (AVWAP) ──
+                    from engine.indicators.volume import calculate_session_anchored_vwap
+                    df_avwap = calculate_session_anchored_vwap(df)
+                    cur_avwap = float(df_avwap["session_avwap"].iloc[-1])
+                    cur_avwap_dist = float(df_avwap["session_avwap_dist_pct"].iloc[-1])
+                    cur_session = str(df_avwap["session_name"].iloc[-1])
+
+                    is_avwap_aligned = (direction == "LONG" and current_price >= cur_avwap * 0.999) or \
+                                       (direction == "SHORT" and current_price <= cur_avwap * 1.001)
+
+                    if is_avwap_aligned:
+                        base_score = min(100, base_score + 8)
+                        checklist.append({
+                            "factor": f"Session AVWAP ({cur_session})",
+                            "status": "CUMPLIDO",
+                            "detail": f"✅ ALINEADO A FLUJO INSTITUCIONAL (Precio ${current_price:,.2f} vs AVWAP ${cur_avwap:,.2f} | Dist: {cur_avwap_dist:+.2f}%)",
+                        })
+                    else:
+                        base_score = max(0, base_score - 12)
+                        checklist.append({
+                            "factor": f"Session AVWAP ({cur_session})",
+                            "status": "ALERTA",
+                            "detail": f"⚠️ CONTRA FLUJO DE SESIÓN {cur_session} (Precio ${current_price:,.2f} vs AVWAP ${cur_avwap:,.2f} | Dist: {cur_avwap_dist:+.2f}%)",
+                        })
+
+                    # ── DETERMINACIÓN DE PLAYBOOK INSTITUCIONAL (TRADEZELLA STYLE) ──
+                    if bool(df.get("recent_sweep_bull", pd.Series([False])).iloc[-1]) or bool(df.get("recent_sweep_bear", pd.Series([False])).iloc[-1]):
+                        playbook_name = "LIQUIDITY_SWEEP_FVG"
+                    elif valid_obs:
+                        playbook_name = "OB_DISCOUNT_RETEST"
+                    elif is_trend_aligned and ker_val >= 0.45:
+                        playbook_name = "BOS_MOMENTUM_EXPANSION"
+                    else:
+                        playbook_name = "TREND_CONTINUATION_EMA"
+
                     cand = {
                         "asset":             symbol,
                         "direction":         direction,
                         "type":              "Virtual Setup",
+                        "playbook":          playbook_name,
                         "price":             optimal_entry,
                         "stop_loss":         risk_data["stop_loss"],
                         "sl_dist_pct":       risk_data.get("sl_dist_pct", 1.8),
@@ -490,6 +526,9 @@ class MarketScanner:
                         "is_time_blocked":   not is_time_allowed,
                         "is_ker_blocked":    not is_ker_clean,
                         "session":           session_data.get("current_session", "UNKNOWN"),
+                        "session_avwap":     round(cur_avwap, 4),
+                        "session_avwap_dist_pct": round(cur_avwap_dist, 2),
+                        "is_avwap_aligned":  is_avwap_aligned,
                         "asset_health":      conf_res.get("asset_health", {}),
                     }
                     candidates.append(cand)

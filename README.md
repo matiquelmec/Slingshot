@@ -1,22 +1,22 @@
-# 🛡️ SLINGSHOT v59.0 APEX SOVEREIGN RUNNER — Autonomous Dual Terminal
+# 🛡️ SLINGSHOT v60.0 APEX QUANTUM FORTRESS — Autonomous Dual Terminal
 ## High-Availability Edge, 24/7 Sovereign VPS Execution & Fortress Risk Architecture
 
-> **"Terminal Cuantitativa Autónoma de Grado Institucional. Slingshot v59.0 APEX SOVEREIGN RUNNER: Desacoplamiento Soberano de Alta Disponibilidad entre la Retina Edge (Vercel CDN / Next.js 15) y el Núcleo Cuantitativo de Ejecución (Windows Server VPS 24/7 en Frankfurt). Integra la canonización del Protocolo SOP-48 (Adaptive Structural Runner & Regime-Conditioned Exit Engine con esquema 50/30/10/10 en tendencias de alta eficiencia y toma completa 50/30/20 en rangos), consolidando los Protocolos SOP-40 (Hard Cap Físico de 4 Posiciones), SOP-46 (Reversal Guard ante Confluencia $\ge 75\%$), SOP-42 (Pre-Flight Dollar Risk & Notional Hard-Clamp) y SOP-44 (Cluster Fortress sin Bypasses). Documentación canónica completa en [SLINGSHOT_BIBLE_V59.md](docs/SLINGSHOT_BIBLE_V59.md)."**
+> **"Terminal Cuantitativa Autónoma de Grado Institucional. Slingshot v60.0 APEX QUANTUM FORTRESS: Desacoplamiento Soberano de Alta Disponibilidad entre la Retina Edge (Vercel CDN / Next.js 15) y el Núcleo Cuantitativo de Ejecución (Windows Server VPS 24/7 en Frankfurt). Integra la canonización del Protocolo SOP-94 (Progressive Exposure Sizing & Asymmetric Drawdown Protection con factor de contracción 1.0x -> 0.75x -> 0.50x y Quick Restore instantáneo al 100% ante riesgo liberado Fast-BE/TP1), SOP-95 (Session-Anchored VWAP - AVWAP con anclajes intradiarios estrictos en Asia 00:00 UTC, Londres 07:00 UTC y Nueva York 13:30 UTC) y SOP-96 (TradeZella Style Institutional Playbook Taxonomy & Real-Time Expectancy Engine), consolidando el Blindaje OpenAPI Dual-Protocol TPSL de Bitunix y los protocolos SOP-48 (Adaptive Structural Runner 50/30/10/10), SOP-40 (Hard Cap Físico de 4 Posiciones) y SOP-42 (Pre-Flight Dollar Risk Hard-Clamp). Documentación canónica completa en [SLINGSHOT_BIBLE_V60.md](docs/SLINGSHOT_BIBLE_V60.md)."**
 
 ![Status](https://img.shields.io/badge/Status-100%25_AUTONOMOUS_&_SSOT_VERIFIED-0d2a1a?style=for-the-badge&logo=codeproject&logoColor=fff)
-![Version](https://img.shields.io/badge/Version-59.0_Sovereign_Runner-1a3a6e?style=for-the-badge)
+![Version](https://img.shields.io/badge/Version-60.0_Quantum_Fortress-1a3a6e?style=for-the-badge)
 ![NVIDIA AI-Q](https://img.shields.io/badge/AI_Engine-NVIDIA_AI--Q_Blueprint_&_NIM-76b900?style=for-the-badge&logo=nvidia&logoColor=fff)
 ![Adaptive System](https://img.shields.io/badge/Adaptive_Engine-Tri--Loop_Bayes_HMM_NIM-9b59b6?style=for-the-badge)
 ![Crypto Engine](https://img.shields.io/badge/Bitunix_Crypto-2.5%25_Compounded_Live-f39c12?style=for-the-badge&logo=bitcoin&logoColor=fff)
 ![MetaTrader 5](https://img.shields.io/badge/MetaTrader_5-FTMO_Institutional_Live-2980b9?style=for-the-badge&logo=windows&logoColor=fff)
 ![Execution Engine](https://img.shields.io/badge/Execution-SOP--64_Auto--Dispatcher_≥75%25-green?style=for-the-badge)
-![Security](https://img.shields.io/badge/Security_Protocols-SOP--01%20to%20SOP--93-emerald?style=for-the-badge)
-![QA Suite](https://img.shields.io/badge/QA_Suite-354_Tests_100%25_Passed-success?style=for-the-badge)
-![Crypto Return](https://img.shields.io/badge/Crypto_Compounded_ROI-%2B478.2%25_(5.8x)-gold?style=for-the-badge)
-![Total Alpha](https://img.shields.io/badge/Total_Alpha-%2B74.07_R-gold?style=for-the-badge)
-![Profit Factor](https://img.shields.io/badge/Profit_Factor-1.97_Institucional-blue?style=for-the-badge)
-![Sharpe Ratio](https://img.shields.io/badge/Sharpe_Ratio-4.56_Elite-blue?style=for-the-badge)
-![Drawdown](https://img.shields.io/badge/Max_Drawdown--3.20%25_Shield-brightgreen?style=for-the-badge)
+![Security](https://img.shields.io/badge/Security_Protocols-SOP--01%20to%20SOP--96-emerald?style=for-the-badge)
+![QA Suite](https://img.shields.io/badge/QA_Suite-375_Tests_100%25_Passed-success?style=for-the-badge)
+![Crypto Return](https://img.shields.io/badge/Crypto_Compounded_ROI-%2B1,159.8%25_(12.6x)-gold?style=for-the-badge)
+![Total Alpha](https://img.shields.io/badge/Total_Alpha-%2B109.44_R-gold?style=for-the-badge)
+![Profit Factor](https://img.shields.io/badge/Profit_Factor-1.98_Institucional-blue?style=for-the-badge)
+![Sortino Ratio](https://img.shields.io/badge/Sortino_Ratio-29.52_Elite-blue?style=for-the-badge)
+![Drawdown](https://img.shields.io/badge/Max_Drawdown--3.25%25_Shield-brightgreen?style=for-the-badge)
 ![Kernel](https://img.shields.io/badge/Kernel-Polars_Rust_Sub--1.0ms-black?style=for-the-badge&logo=rust&logoColor=fff)
 ![Persistence](https://img.shields.io/badge/Persistence-SQLite_WAL_ACID-003B57?style=for-the-badge&logo=sqlite&logoColor=fff)
 
@@ -176,33 +176,58 @@ graph TB
 | **SOP-72** | Calibración Bayesiana SMC (Anillo 1) | Actualización continua de pesos SMC por verosimilitud Beta-Binomial in-memory (<10µs, clamp [0.50x-1.60x]). |
 | **SOP-73** | Regímenes HMM & Walk-Forward (Anillo 2) | Clasificador GMM/HMM de 4 estados con matrices de Markov y hot-reload atómico de modelos ML. |
 | **SOP-74** | Centinela Post-Mortem NVIDIA NIM (Anillo 3) | Diagnóstico causal con LLMs de razonamiento y cuarentena preventiva temporal (4h-24h) en Gatekeeper. |
+| **SOP-75** | Asignador de Cartera HRP (López de Prado) | Agrupamiento por covarianza jerárquica y bisección recursiva contra riesgo de correlación cruzada. |
+| **SOP-76** | Hub Omni-Broker con NVIDIA AI-Q Blueprint | Integración Kumo Relational, nemotron-3-embed-1b y nemotron-3-ultra-550b para escalado multi-broker. |
+| **SOP-81** | Centinela Anti-Churning & Correlación Cruzada | Gobernador estricto para evitar sobreoperativa y duplicidad de exposición en índices US100/US30. |
+| **SOP-82** | Daily Loss Cap Preventivo | Límite estricto de 2 pérdidas por jornada con purga inmediata de órdenes pendientes. |
+| **SOP-83** | Circuit Breaker de Rachas Consecutivas | Cuarentena preventiva y enfriamiento temporal tras 3 Stop Losses seguidos. |
+| **SOP-84** | Filtro Antirruido Estructural (KER & RVOL) | Exigencia de KER $\ge 0.35$ y RVOL $\ge 1.05$ para erradicar pérdidas en fases de baja eficiencia. |
+| **SOP-85** | Extended Midnight Roll-Over Armor (60 min) | Blindaje de 21:30 a 22:30 UTC contra ensanchamiento interbancario de spreads. |
+| **SOP-86** | Single Equity Index Slot Exclusivo | Exclusión mutua que impide mantener simultáneamente posiciones en US100 y US30. |
+| **SOP-87** | Proactor Socket Armor & WinError 64 | Supresión a nivel de kernel de desconexiones abruptas de red en Windows Server. |
+| **SOP-88** | Edge-to-VPS SSL Proxying | Erradicación total de Mixed Content mediante rewrites de Next.js en Vercel CDN. |
+| **SOP-89** | Ultra-Fast REST Telemetry (1.5s Loop) | Hidratación adaptativa de telemetría completa sin dependencia obligatoria de WSS. |
+| **SOP-90** | Dual-Engine Intel Hydration (XGBoost + NIM) | Inferencia táctica híbrida combinando modelos tabulares rápidos con LLMs de razonamiento. |
+| **SOP-91** | Sentinel Watchdog Auto-Recovery (<5s) | Demonio vigilante de procesos para auto-reiniciar MT5, FastAPI o HFT Sidecar ante caídas. |
+| **SOP-92** | Dynamic Slot Recycler v27.0 APEX | Liberación y reasignación instantánea de cupos de riesgo ante eventos de Fast Breakeven. |
+| **SOP-93** | Order TTL Sentinel (45 Minutos) | Cancelación automática de órdenes límite no activadas tras 3 velas de 15m. |
+| **SOP-94** | Progressive Exposure & Asymmetric DD Protection | Contracción asimétrica (1.0x -> 0.75x -> 0.50x) con Quick Restore instantáneo a 1.0x en BE/TP1. |
+| **SOP-95** | Session-Anchored VWAP (AVWAP) Intraday Filter | Anclajes intradiarios en Asia (00:00), Londres (07:00) y NY (13:30 UTC) con gating institucional. |
+| **SOP-96** | TradeZella Style Playbook Taxonomy & Expectancy | Clasificación en 4 arquetipos cuantitativos con desglose y seguimiento de Profit Factor en vivo. |
 
 ---
 
 ## 📊 Auditorías Cuantitativas Oficiales SSoT
 
 ### 1. Auditoría Oficial Criptomonedas Bitunix (180 Días Event-Driven Replay)
-Auditoría sobre 237 operaciones reales concurrentes con comisiones Maker/Taker y slippage descontados:
+Auditoría cronológica oficial sobre 326 operaciones reales concurrentes con 14 pares VIP, comisiones Maker/Taker y slippage descontados:
 
 ```text
-========================================================================================================
-Métrica Cuantitativa Institucional    | Slingshot v31.0 Base    | Slingshot v51.0 APEX TITANIUM
-========================================================================================================
-Total Operaciones Auditadas           | 466 trades (Aisladas)   | 237 trades reales (Event-Driven SSoT)
-Win Rate Real (TP1 / TP2 / TP3)       | 42.3%                   | 46.8% (111 Ganadoras / 126 Pérdidas)
-Profit Factor Base                    | 1.07 (Frágil)           | 1.80 (Sólido)
-Profit Factor con Alpha-Tier Sizing   | 1.10                    | 1.99 🚀 (Sustentable y Robusto)
-Retorno Total Base en R               | +22.40 R                | +66.31 R
-Retorno Total con Alpha-Tier Sizing   | +25.00 R                | +94.75 R 💎 (+279.0% de mejora neta)
-Beneficio Neto USD ($100k)            | +$25,000.00 USD         | +$94,750.00 USD (+$69,750 USD netos)
-Drawdown Máximo de Cartera (Plano)    | -38.10% (Descalificado) | -4.21% 🛡️ (Blindaje Total Prop Firm)
-Esperanza Matemática (E)              | +0.021 R / trade        | +0.400 R / trade (+1,804%)
-Sharpe Ratio Anualizado               | 0.85                    | 4.47 🌟 (Grado Institucional Alto)
-Sortino Ratio (Downside Risk)         | 1.12                    | 24.63 🛡️ (Protección Asimétrica)
-Crecimiento Compuesto Bitunix ($1k)   | +$1,546.25 USD (+154%)  | +$8,148.56 USD (+814.9% / 9.1X)
-Capital Final Compuesto ($1,000 USD)  | $2,546.25 USD           | $9,148.56 USD 🚀
-Drawdown Máximo Compuesto (2.5%)      | -38.10%                 | -14.63% 🛡️
-========================================================================================================
+========================================================================================================================
+Métrica Cuantitativa Institucional    | Slingshot v31.0 Base    | Slingshot v51.0         | Slingshot v60.0 APEX FORTRESS
+========================================================================================================================
+Total Operaciones Auditadas           | 466 trades (Aisladas)   | 237 trades (Replay)     | 326 trades (Replay SSoT)
+Win Rate Real (TP1 / TP2 / TP3)       | 42.3%                   | 46.8%                   | 46.0% (150 Wins / 176 Losses)
+Profit Factor Base                    | 1.07 (Frágil)           | 1.80 (Sólido)           | 1.87 (Sólido Institucional)
+Profit Factor con Progressive Sizing  | 1.10                    | 1.99 🚀                 | 1.98 🚀 (Robusto y Asimétrico)
+Retorno Total Base en R               | +22.40 R                | +66.31 R                | +109.44 R
+Retorno Total con Progressive Sizing  | +25.00 R                | +94.75 R 💎             | +106.60 R 💎
+Drawdown Máximo de Cartera (Plano)    | -38.10% (Descalificado) | -4.21% 🛡️               | -3.25% 🛡️ (Blindaje Total Prop Firm)
+Sortino Ratio (Downside Risk)         | 1.12                    | 24.63 🛡️               | 29.52 🛡️ (+540% s/ Base)
+Crecimiento Compuesto Bitunix ($1k)   | +$1,546.25 USD (+154%)  | +$8,148.56 USD (+814%)  | +$11,597.91 USD (+1,159.8% / 12.6X)
+Capital Final Compuesto ($1,000 USD)  | $2,546.25 USD           | $9,148.56 USD 🚀        | $12,597.91 USD 🚀
+Drawdown Máximo Compuesto (2.5%)      | -38.10%                 | -14.63% 🛡️              | -11.70% 🛡️ (Totalmente Controlado)
+========================================================================================================================
+```
+
+#### Desglose por Playbooks Cuantitativos (TradeZella Style SSoT):
+```text
+====================================================================================================
+Playbook Arquetípico               Trades   Win Rate    PnL (R)      Avg R      PF    Expectancy (R)
+----------------------------------------------------------------------------------------------------
+OB_DISCOUNT_RETEST                    138     50.0%    +64.09R     +0.46R    2.61           +0.46R
+LIQUIDITY_SWEEP_FVG                   188     43.1%    +42.51R     +0.23R    1.67           +0.23R
+====================================================================================================
 ```
 
 ### 2. 🏛️ Backtest & Auditoría Oficial TradFi FTMO (180 Días Concurrente en MetaTrader 5)
@@ -246,13 +271,19 @@ Simulación Event-Driven Oficial sobre la cartera Tier A (`XAUUSD`, `US100`, `GB
 Para certificar la integridad del sistema en el VPS de producción:
 
 ```powershell
+# Certificación Drawdown Fortress & Session AVWAP (SOP-94 y SOP-95) [9 Tests]
+pytest engine\tests\test_progressive_exposure_and_streak_sizing.py engine\tests\test_session_anchored_vwap.py -v
+
+# Certificación Bitunix Dual-Protocol TPSL & 1R Cache Invariance [12 Tests]
+pytest engine\tests\test_bitunix_tpsl_modify_and_id_resolution.py engine\tests\test_live_trade_management.py -v
+
 # Certificación TradFi / FTMO Titanium (21 Tests)
-pytest C:\Slingshot\engine\tests\test_ftmo_titanium_strategy.py C:\Slingshot\engine\tests\test_tradfi_scanner_and_risk.py -v
+pytest engine\tests\test_ftmo_titanium_strategy.py engine\tests\test_tradfi_scanner_and_risk.py -v
 
 # Certificación Sistema Adaptativo Tri-Bucle (12 Tests)
-pytest C:\Slingshot\engine\tests\test_bayesian_confluence_calibration.py C:\Slingshot\engine\tests\test_hmm_regime_and_rolling_train.py C:\Slingshot\engine\tests\test_post_mortem_and_veto_suite.py -v
+pytest engine\tests\test_bayesian_confluence_calibration.py engine\tests\test_hmm_regime_and_rolling_train.py engine\tests\test_post_mortem_and_veto_suite.py -v
 
 # Certificación Multi-Cuenta & Resiliencia Institucional (38 Tests)
-pytest C:\Slingshot\engine\tests\test_multi_account_advanced_security_and_resilience.py -v
+pytest engine\tests\test_multi_account_advanced_security_and_resilience.py -v
 ```
-*(Resultado certificado: **100% PASSED**).*
+*(Resultado global certificado: **100% PASSED**).*

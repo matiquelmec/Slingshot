@@ -1023,3 +1023,40 @@ class RiskManager:
             f"✅ [SOP-44 HEAT OK] Calor direccional proyectado: ${projected_heat:.2f} / ${max_allowed_heat:.2f} USDT.",
             current_heat_usd
         )
+
+    # ── PROTOCOLO SOP-94: PROGRESSIVE EXPOSURE & ASYMMETRIC DRAWDOWN PROTECTION v60.0 ─────────
+    @staticmethod
+    def calculate_streak_exposure_multiplier(
+        recent_outcomes: Optional[List[float]] = None,
+        consecutive_losses: int = 0,
+        risk_released_recently: bool = False,
+        mode: str = "balanced"
+    ) -> float:
+        """
+        [SOP-94 PROGRESSIVE EXPOSURE SIZING & ASYMMETRIC DRAWDOWN PROTECTION — WORDS OF RIZDOM INSIGHT]
+        Inspirado en la gestión de drawdown asimétrico (Umar Ashraf / Christian Flanders).
+
+        Reglas Cuantitativas:
+        - Normal (consecutive_losses == 0): 1.00x.
+        - 1 pérdida consecutiva: 0.85x (ajuste preventivo suave).
+        - >= 2 pérdidas consecutivas: 0.65x (balanced) o 0.50x (prop_firm).
+        - Quick Restore: Si la última posición liberó riesgo (TP1 o Breakeven),
+          se restaura inmediatamente al 1.00x para capturar todo el alfa del rebote.
+        """
+        if risk_released_recently:
+            return 1.00
+
+        if recent_outcomes:
+            streak = 0
+            for r in reversed(recent_outcomes):
+                if float(r) < 0:
+                    streak += 1
+                else:
+                    break
+            consecutive_losses = max(consecutive_losses, streak)
+
+        if consecutive_losses >= 2:
+            return 0.50 if mode == "prop_firm" else 0.65
+        elif consecutive_losses == 1:
+            return 0.85
+        return 1.00

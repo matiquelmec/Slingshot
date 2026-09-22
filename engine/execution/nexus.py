@@ -40,6 +40,8 @@ class NexusNode:
         self._load_buffer_from_disk()
         self._pending_limit_symbols = set()
         self._asset_cooldown: Dict[str, float] = {}
+        self._consecutive_losses: Dict[str, int] = {}
+        self._risk_released_recently: Dict[str, bool] = {}
         logger.info(f"🛡️ [NEXUS] Nodo de Ejecución Multi-Cuenta inicializado (Dry Run: {dry_run})")
 
     def is_asset_in_cooldown(self, asset: str) -> bool:
@@ -934,6 +936,18 @@ class NexusNode:
                     hour_utc=hour_now
                 )
             
+            # SOP-94: Progressive Exposure Multiplier (Words of Rizdom Insight)
+            streak_losses = getattr(self, "_consecutive_losses", {}).get(acc_id, 0)
+            risk_released = getattr(self, "_risk_released_recently", {}).get(acc_id, False)
+            streak_mult = RiskManager.calculate_streak_exposure_multiplier(
+                consecutive_losses=streak_losses,
+                risk_released_recently=risk_released,
+                mode="balanced"
+            )
+            dyn_risk_pct = dyn_risk_pct * streak_mult
+            if streak_mult < 1.0:
+                logger.warning(f"🛡️ [NEXUS SOP-94] [{account.label}] Aplicando Progressive Exposure ({streak_mult:.2f}x) tras racha de pérdidas ({streak_losses}).")
+
             risk_calc = RiskManager.calculate_dollar_risk_position(
                 account_balance=avail_margin,
                 risk_pct=dyn_risk_pct,
@@ -1091,11 +1105,18 @@ class NexusNode:
           3. Cierre MANUAL realizado por el usuario directamente en el exchange
         """
         try:
-            # 🛡️ Si el cierre fue por Stop Loss, activar enfriamiento preventivo (SOP-52)
-            if "STOP_LOSS" in reason.upper() or "SL" in reason.upper() or "PERDIDA" in reason.upper():
+            # 🛡️ Actualización de rachas y Progressive Exposure (SOP-94)
+            if any(term in reason.upper() for term in ("STOP_LOSS", "SL", "PERDIDA", "INVALI")):
+                self._consecutive_losses[account_id] = self._consecutive_losses.get(account_id, 0) + 1
+                self._risk_released_recently[account_id] = False
+                logger.warning(f"📉 [SOP-94 STREAK] Racha de pérdidas consecutivas en [{account_id}]: {self._consecutive_losses[account_id]}.")
                 for part in reason.split("_"):
                     if "USDT" in part:
                         self.set_asset_cooldown(part, duration_sec=3600, reason=reason)
+            elif "FAST_BE" in reason.upper() or "BREAKEVEN" in reason.upper() or "TP" in reason.upper() or "PROTEGIDO" in reason.upper():
+                self._consecutive_losses[account_id] = 0
+                self._risk_released_recently[account_id] = True
+                logger.info(f"⚡ [SOP-94 QUICK RESTORE] Riesgo liberado en [{account_id}]. Racha de pérdidas reseteada a 0 y exposición restaurada al 100%.")
 
             unprotected = self.get_unprotected_risk_count(account_id=account_id)
             if unprotected >= self.MAX_CONCURRENT_POSITIONS:
@@ -1405,9 +1426,21 @@ class NexusNode:
             return None
 
         qty_decimals, _ = await executor.get_symbol_precision(asset)
+        # SOP-94: Progressive Exposure Multiplier (Words of Rizdom Insight)
+        streak_losses = getattr(self, "_consecutive_losses", {}).get(acc_id, 0)
+        risk_released = getattr(self, "_risk_released_recently", {}).get(acc_id, False)
+        streak_mult = RiskManager.calculate_streak_exposure_multiplier(
+            consecutive_losses=streak_losses,
+            risk_released_recently=risk_released,
+            mode="balanced"
+        )
+        acc_risk_base = getattr(account, "risk_pct", 0.025) * streak_mult
+        if streak_mult < 1.0:
+            logger.info(f"🛡️ [NEXUS AUTO-LIMIT SOP-94] [{account.label}] Modulando riesgo a {acc_risk_base*100:.2f}% ({streak_mult:.2f}x) por racha de {streak_losses} pérdidas.")
+
         risk_calc = RiskManager.calculate_dollar_risk_position(
             account_balance=avail_margin,
-            risk_pct=getattr(account, "risk_pct", 0.025),
+            risk_pct=acc_risk_base,
             entry_price=entry_p,
             sl_price=sl_p,
             leverage=safe_lev,

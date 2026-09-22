@@ -1,7 +1,7 @@
-# 🏗️ Estructura del Proyecto Slingshot v59.0 APEX SOVEREIGN RUNNER
+# 🏗️ Estructura del Proyecto Slingshot v60.0 APEX QUANTUM FORTRESS
 
 > Guía de referencia técnica oficial de la arquitectura, jerarquía de directorios, módulos y componentes del sistema autónomo Slingshot.
-> **Última actualización**: Septiembre 2026 (v59.0 APEX SOVEREIGN RUNNER — Canonización del protocolo **SOP-48: Adaptive Structural Runner** con división 50/30/10/10 en tendencias de alta eficiencia y toma de beneficios fija 50/30/20 en rangos, fase dinámica `RUNNER_EXPANSION`, suite unitaria `test_adaptive_runner.py`, SSoT en [SLINGSHOT_BIBLE_V59.md](SLINGSHOT_BIBLE_V59.md)).
+> **Última actualización**: Septiembre 2026 (v60.0 APEX QUANTUM FORTRESS — Canonización de los protocolos **SOP-94: Progressive Exposure Sizing & Asymmetric Drawdown Protection**, **SOP-95: Session-Anchored VWAP**, **SOP-96: TradeZella Style Playbook Taxonomy**, y Blindaje Dual-Protocol OpenAPI TPSL de Bitunix, SSoT en [SLINGSHOT_BIBLE_V60.md](SLINGSHOT_BIBLE_V60.md)).
 
 ---
 
@@ -140,6 +140,9 @@ Slingshot/
 │       ├── test_hmm_regime_and_rolling_train.py     # 4 Pruebas HMM 4 Estados, Markov Transition y Hot-Reload Atómico (SOP-73)
 │       ├── test_post_mortem_and_veto_suite.py       # 3 Pruebas Agente Post-Mortem NVIDIA NIM y Veto Gatekeeper (SOP-74)
 │       ├── test_streak_circuit_breakers.py          # 4 Pruebas Circuit Breakers de Racha SOP-81/82/83 (FTMO & Bitunix)
+│       ├── test_progressive_exposure_and_streak_sizing.py # 6 Pruebas SOP-94 Contracción de Racha (1.0x/0.75x/0.50x) y Quick Restore
+│       ├── test_session_anchored_vwap.py            # 3 Pruebas SOP-95 Session AVWAP (Asia 00:00, Londres 07:00, NY 13:30 UTC)
+│       ├── test_bitunix_tpsl_modify_and_id_resolution.py # 6 Pruebas Bitunix Dual-Protocol TPSL, Auto-Resolución ID y 1R Risk Cache
 │       └── legacy/                                  # Pruebas históricas preservadas
 │
 ├── scripts/                         # ═══ HERRAMIENTAS CLI & DE DESPLIEGUE (SSoT) ═══

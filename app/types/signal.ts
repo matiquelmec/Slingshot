@@ -66,6 +66,7 @@ export interface Signal {
     trailing_phase?: string;
     trailing_reason?: string;
     session?: string;
+    playbook?: string;
     sl_dist_pct?: number;
     suggested_position_usdt?: number;
     entry_zone_bottom?: number;

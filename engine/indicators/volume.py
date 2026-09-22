@@ -373,6 +373,56 @@ def calculate_vwap(df: pd.DataFrame) -> pd.DataFrame:
     df['vwap_dist_pct'] = (df['close'] - df['d_vwap']) / np.maximum(df['d_vwap'], 1e-5) * 100.0
     return df
 
+def calculate_session_anchored_vwap(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    [SOP-95 SESSION ANCHORED VWAP (AVWAP) — WORDS OF RIZDOM INSIGHT]
+    Calcula el precio medio ponderado por volumen (VWAP) anclado al inicio de las sesiones
+    clave de liquidez institucional (Asia 00:00 UTC, Londres 07:00 UTC, Nueva York 13:30 UTC).
+    
+    Permite identificar si el inventario institucional de la sesión en curso está en
+    acumulación (precio > session_avwap) o en distribución (precio < session_avwap).
+    """
+    df = df.copy()
+    if df.empty or 'volume' not in df.columns or 'close' not in df.columns:
+        df['session_avwap'] = df['close'] if 'close' in df.columns else 0.0
+        df['session_avwap_dist_pct'] = 0.0
+        df['session_name'] = "UNKNOWN"
+        return df
+
+    ts_col = 'timestamp' if 'timestamp' in df.columns else 't'
+    if ts_col in df.columns:
+        if not pd.api.types.is_datetime64_any_dtype(df[ts_col]):
+            dt_series = pd.to_datetime(df[ts_col], unit='s' if float(df[ts_col].iloc[0]) < 1e11 else 'ms', errors='coerce')
+        else:
+            dt_series = df[ts_col]
+    else:
+        dt_series = pd.date_range(end=pd.Timestamp.now(tz='UTC'), periods=len(df), freq='15min')
+
+    # Identificar la sesión institucional y crear clave de anclaje (fecha + id_sesion)
+    hours = dt_series.dt.hour
+    minutes = dt_series.dt.minute
+    total_minutes = hours * 60 + minutes
+
+    # 00:00 a 06:59 -> ASIA (0)
+    # 07:00 a 13:29 -> LONDON (1)
+    # 13:30 a 23:59 -> NEW_YORK (2)
+    session_ids = np.where(total_minutes < 420, 0, np.where(total_minutes < 810, 1, 2))
+    session_names = np.where(session_ids == 0, "ASIA", np.where(session_ids == 1, "LONDON", "NEW_YORK"))
+    
+    dates = dt_series.dt.date.astype(str)
+    session_keys = dates + "_" + session_ids.astype(str)
+
+    typical_price = (df['high'] + df['low'] + df['close']) / 3.0 if 'high' in df.columns else df['close']
+    tp_vol = typical_price * df['volume']
+
+    cum_vol = df.groupby(session_keys)['volume'].cumsum()
+    cum_tp_vol = tp_vol.groupby(session_keys).cumsum()
+
+    df['session_avwap'] = cum_tp_vol / np.maximum(cum_vol, 1e-5)
+    df['session_avwap_dist_pct'] = (df['close'] - df['session_avwap']) / np.maximum(df['session_avwap'], 1e-5) * 100.0
+    df['session_name'] = session_names
+    return df
+
 if __name__ == "__main__":
     import time
     start = time.time()

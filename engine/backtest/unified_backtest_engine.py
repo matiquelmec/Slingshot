@@ -118,6 +118,53 @@ class UnifiedBacktestEngine:
 
         return True
 
+    @staticmethod
+    def calculate_performance_metrics(trades: List[Dict[str, Any]], initial_balance: float = 10_000.0, risk_pct: float = 0.01) -> Dict[str, Any]:
+        """Calcula las métricas de rendimiento formales para un conjunto de operaciones."""
+        if not trades:
+            return {
+                "total_trades": 0, "win_rate": 0.0, "breakeven_rate": 0.0, "total_r": 0.0,
+                "profit_factor": 0.0, "expectancy_r": 0.0, "max_drawdown_pct": 0.0,
+                "sharpe_ratio": 0.0, "sortino_ratio": 0.0, "calmar_ratio": 0.0,
+                "net_profit_usd": 0.0, "exit_breakdown": {}
+            }
+        df = pd.DataFrame(trades)
+        total = len(df)
+        winners = df[df["outcome_r"] > 0]
+        losers = df[df["outcome_r"] < 0]
+        breakevens = df[df["outcome_r"] == 0]
+        wr = (len(winners) / total) * 100
+        be_rate = (len(breakevens) / total) * 100
+        total_r = float(df["outcome_r"].sum())
+        gp = float(winners["outcome_r"].sum()) if len(winners) > 0 else 0.0
+        gl = abs(float(losers["outcome_r"].sum())) if len(losers) > 0 else 1.0
+        pf = gp / gl if gl > 0 else 99.0
+        exp_r = total_r / total
+        risk_usd = initial_balance * risk_pct
+        df["pnl_usd"] = df["outcome_r"] * risk_usd
+        df["equity"] = initial_balance + df["pnl_usd"].cumsum()
+        df["peak"] = df["equity"].cummax()
+        max_dd = abs(float(((df["equity"] - df["peak"]) / df["peak"] * 100).min()))
+        from engine.core.tear_sheet import calculate_portfolio_metrics
+        sop60 = calculate_portfolio_metrics(df["outcome_r"].tolist())
+        net_usd = float(df["pnl_usd"].sum())
+        calmar = (net_usd / initial_balance * 100) / max_dd if max_dd > 0 else 99.0
+        exit_breakdown = dict(df["close_reason"].value_counts()) if "close_reason" in df.columns else {}
+        return {
+            "total_trades": total,
+            "win_rate": wr,
+            "breakeven_rate": be_rate,
+            "total_r": total_r,
+            "profit_factor": pf,
+            "expectancy_r": exp_r,
+            "max_drawdown_pct": max_dd,
+            "sharpe_ratio": sop60.get("sharpe_ratio", 0.0),
+            "sortino_ratio": sop60.get("sortino_ratio", 0.0),
+            "calmar_ratio": calmar,
+            "net_profit_usd": net_usd,
+            "exit_breakdown": exit_breakdown
+        }
+
     def run_single_asset(
         self,
         symbol: str,
@@ -179,8 +226,9 @@ class UnifiedBacktestEngine:
         df["rvol"] = df["volume"] / (df["vol_sma"] + 1e-9)
         change = (df["close"] - df["close"].shift(10)).abs()
         vol = (df["close"] - df["close"].shift(1)).abs().rolling(10).sum()
-        df["ker"] = change / (vol + 1e-9)
         df = calculate_vwap(df)
+        from engine.indicators.volume import calculate_session_anchored_vwap
+        df = calculate_session_anchored_vwap(df)
 
         trades = []
         n = len(df)
@@ -244,6 +292,13 @@ class UnifiedBacktestEngine:
             vwap_dist = float(row.get("vwap_dist_pct", 0.0))
             is_vwap_ok, _ = RiskManager.check_vwap_exhaustion(direction, vwap_dist)
             if not is_vwap_ok:
+                continue
+
+            # ── PROTOCOLO SOP-95: SESSION ANCHORED VWAP (AVWAP) ──
+            session_avwap_dist = float(row.get("session_avwap_dist_pct", 0.0))
+            if direction == "LONG" and session_avwap_dist < -0.40:
+                continue
+            elif direction == "SHORT" and session_avwap_dist > 0.40:
                 continue
 
             # 2. Entrada Límite en Descuento OTE / FVG (SOP-26 Grid 40/40/20 & SOP-48 Elastic Runner)
@@ -417,9 +472,20 @@ class UnifiedBacktestEngine:
             fee_friction_r = (self.maker_fee + self.taker_fee + self.slippage) * nominal_leverage * 0.5
             net_outcome_r = outcome_r - (fee_friction_r if outcome_r != 0 else 0.0)
 
+            # [PLAYBOOK TAGGING - TRADEZELLA STYLE]
+            if bool(row.get("recent_sweep_bull", False)) or bool(row.get("recent_sweep_bear", False)):
+                playbook = "LIQUIDITY_SWEEP_FVG"
+            elif bool(row.get("recent_ob_bull", False)) or bool(row.get("recent_ob_bear", False)):
+                playbook = "OB_DISCOUNT_RETEST"
+            elif ker_val >= 0.50:
+                playbook = "BOS_MOMENTUM_EXPANSION"
+            else:
+                playbook = "TREND_CONTINUATION_EMA"
+
             trades.append({
                 "symbol": symbol,
                 "interval": interval,
+                "playbook": playbook,
                 "entry_time": str(df.iloc[fill_idx]["timestamp"]),
                 "exit_time": str(df.iloc[exit_idx]["timestamp"]),
                 "tp1_time": str(df.iloc[tp1_idx]["timestamp"]) if hit_tp1 and tp1_idx is not None else None,
@@ -574,7 +640,8 @@ class UnifiedBacktestEngine:
         enable_regime_agent: bool = False,
         enable_streak_circuit_breaker: bool = True,
         max_consecutive_losses: int = 3,
-        streak_cooldown_trades: int = 1
+        streak_cooldown_trades: int = 1,
+        enable_progressive_exposure: bool = True
     ) -> Dict[str, Any]:
         """
         [EVENT-DRIVEN TIMELINE REPLAY v50.0]
@@ -639,9 +706,10 @@ class UnifiedBacktestEngine:
         rejected_toxic_hours = 0
         rejected_streak_breaker = 0
         
-        # [SOP-70 STREAK CIRCUIT BREAKER]
+        # [SOP-70 & SOP-94 STREAK CIRCUIT BREAKER & PROGRESSIVE EXPOSURE]
         consecutive_losses = 0
         skip_trades_remaining = 0
+        risk_released_recently = False
 
         for idx, tr in df_all.iterrows():
             entry_dt = pd.to_datetime(tr["entry_time"])
@@ -699,17 +767,29 @@ class UnifiedBacktestEngine:
                 "risk_freed_time": risk_freed_dt,
                 "exit_time": exit_dt
             })
+
+            # [SOP-94] Progressive Exposure Sizing (Words of Rizdom Insight)
+            streak_mult = 1.0
+            if enable_progressive_exposure:
+                streak_mult = RiskManager.calculate_streak_exposure_multiplier(
+                    consecutive_losses=consecutive_losses,
+                    risk_released_recently=risk_released_recently,
+                    mode="balanced"
+                )
+            tr["streak_mult"] = streak_mult
             executed_trades.append(tr)
             
-            # [SOP-70] Actualizar contador de pérdidas consecutivas
+            # [SOP-70 & SOP-94] Actualizar contador de pérdidas consecutivas y Quick Restore
             outcome_r = float(tr.get("outcome_r", 0.0))
             if outcome_r < 0:
                 consecutive_losses += 1
+                risk_released_recently = False
                 if enable_streak_circuit_breaker and consecutive_losses >= max_consecutive_losses:
                     skip_trades_remaining = streak_cooldown_trades
                     consecutive_losses = 0 # reset racha tras activar enfriamiento
             else:
                 consecutive_losses = 0
+                risk_released_recently = True
 
         df_exec = pd.DataFrame(executed_trades).reset_index(drop=True)
         executed_count = len(df_exec)
@@ -745,7 +825,7 @@ class UnifiedBacktestEngine:
                 else:
                     reg_mult = 1.00
 
-            return RiskManager.calculate_alpha_tier_sizing(
+            alpha_sizing = RiskManager.calculate_alpha_tier_sizing(
                 s,
                 confluence_score=cs,
                 hour_utc=h,
@@ -755,6 +835,8 @@ class UnifiedBacktestEngine:
                 apply_golden_hours=enable_golden_hours,
                 regime_mult=reg_mult
             )
+            # Modulación asimétrica por racha (SOP-94 Words of Rizdom)
+            return alpha_sizing * float(row.get("streak_mult", 1.0))
 
         df_exec["sizing_mult"] = df_exec.apply(get_trade_sizing, axis=1)
 
@@ -849,6 +931,23 @@ class UnifiedBacktestEngine:
         print(f" • Esperanza Matemática (E)     : {sop60_metrics['expectancy_r']:>+7.3f} R / trade")
         print(f" • Ganancia Media vs Pérdida    : +{sop60_metrics['avg_win_r']:.2f}R / {sop60_metrics['avg_loss_r']:.2f}R")
         print(f" • Max Drawdown en R            : -{sop60_metrics['max_drawdown_r']:.2f} R")
+        print("=" * 88)
+
+        # 5. Desglose Cuantitativo por Playbook (TradeZella Style)
+        print("🎯 5. DESGLOSE CUANTITATIVO POR PLAYBOOK (TRADEZELLA STYLE):")
+        print("-" * 88)
+        print(f"{'Playbook':<28} | {'Trades':<8} | {'Win Rate':<10} | {'Total R':<10} | {'Profit Factor':<12}")
+        print("-" * 88)
+        if "playbook" in df_exec.columns:
+            for pb, group in df_exec.groupby("playbook"):
+                pb_wins = group[group["outcome_r"] > 0]
+                pb_loss = group[group["outcome_r"] < 0]
+                pb_wr = (len(pb_wins) / len(group)) * 100 if len(group) > 0 else 0
+                pb_tot_r = (group["outcome_r"] * group["sizing_mult"]).sum()
+                pb_gp = (pb_wins["outcome_r"] * pb_wins["sizing_mult"]).sum() if len(pb_wins) > 0 else 0.0
+                pb_gl = abs((pb_loss["outcome_r"] * pb_loss["sizing_mult"]).sum()) if len(pb_loss) > 0 else 0.0
+                pb_pf = (pb_gp / pb_gl) if pb_gl > 0 else (99.0 if pb_gp > 0 else 0.0)
+                print(f"{pb:<28} | {len(group):<8} | {pb_wr:>7.1f}%  | {pb_tot_r:>+8.2f}R | {pb_pf:>10.2f}")
         print("=" * 88)
 
         # Exportar reporte inmutable

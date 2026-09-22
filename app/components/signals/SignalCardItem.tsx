@@ -261,6 +261,13 @@ const SignalCardItem: React.FC<SignalCardItemProps> = ({ signal, currentPrice, p
                         </span>
                     )}
 
+                    {/* Badge de Playbook TradeZella (SOP-96) */}
+                    {signal.playbook && (
+                        <span className="text-[8px] font-mono px-1.5 py-0.5 rounded border border-purple-500/30 bg-purple-500/10 text-purple-300 font-bold tracking-tight">
+                            📖 {signal.playbook}
+                        </span>
+                    )}
+
                     {/* Badge OTE Watchdog Alert */}
                     {isChasing && (
                         <span className="text-[8px] font-mono px-1.5 py-0.5 rounded border border-amber-500/20 bg-amber-500/10 text-amber-400 font-bold">
