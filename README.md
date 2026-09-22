@@ -1,7 +1,7 @@
 # 🛡️ SLINGSHOT v60.0 APEX QUANTUM FORTRESS — Autonomous Dual Terminal
 ## High-Availability Edge, 24/7 Sovereign VPS Execution & Fortress Risk Architecture
 
-> **"Terminal Cuantitativa Autónoma de Grado Institucional. Slingshot v60.0 APEX QUANTUM FORTRESS: Desacoplamiento Soberano de Alta Disponibilidad entre la Retina Edge (Vercel CDN / Next.js 15) y el Núcleo Cuantitativo de Ejecución (Windows Server VPS 24/7 en Frankfurt). Integra la canonización de los Protocolos SOP-94 (Progressive Exposure Sizing & Asymmetric Drawdown Protection), SOP-95 (Session-Anchored AVWAP), SOP-96 (TradeZella Playbook Taxonomy), SOP-97 (Multi-Asset Dynamic Heat & Slot Allocation Engine: MAX 2 Unprotected Risk Positions, MAX 4 Concurrent Positions & Alpha Trinity 1.25x Prioritization) y SOP-98 (Dynamic Liquidity & Relative Volume Screener Hardening con filtro de spread bid/ask <= 0.12%), consolidando el Blindaje OpenAPI Dual-Protocol TPSL de Bitunix y los protocolos SOP-48 (Adaptive Structural Runner) y SOP-42 (Pre-Flight Dollar Risk Hard-Clamp). Documentación canónica completa en [SLINGSHOT_BIBLE_V60.md](docs/SLINGSHOT_BIBLE_V60.md)."**
+> **"Terminal Cuantitativa Autónoma de Grado Institucional. Slingshot v60.0 APEX QUANTUM FORTRESS: Desacoplamiento Soberano de Alta Disponibilidad entre la Retina Edge (Vercel CDN / Next.js 15) y el Núcleo Cuantitativo de Ejecución (Windows Server VPS 24/7 en Frankfurt). Integra la canonización de los Protocolos SOP-94 (Progressive Exposure Sizing & Asymmetric Drawdown Protection), SOP-95 (Session-Anchored AVWAP), SOP-96 (TradeZella Playbook Taxonomy), SOP-97 (Multi-Asset Dynamic Heat & Slot Allocation), SOP-98 (Dynamic Screener Hardening) y SOP-99 (Dynamic Slot Elasticity & Macro Decoupled Expansion con capacidad elástica 1-3 riesgos y 3-5 concurrentes), consolidando el Blindaje OpenAPI Dual-Protocol TPSL de Bitunix y los protocolos SOP-48 (Adaptive Structural Runner) y SOP-42 (Pre-Flight Dollar Risk Hard-Clamp). Documentación canónica completa en [SLINGSHOT_BIBLE_V60.md](docs/SLINGSHOT_BIBLE_V60.md)."**
 
 ![Status](https://img.shields.io/badge/Status-100%25_AUTONOMOUS_&_SSOT_VERIFIED-0d2a1a?style=for-the-badge&logo=codeproject&logoColor=fff)
 ![Version](https://img.shields.io/badge/Version-60.0_Quantum_Fortress-1a3a6e?style=for-the-badge)
@@ -10,8 +10,8 @@
 ![Crypto Engine](https://img.shields.io/badge/Bitunix_Crypto-2.5%25_Compounded_Live-f39c12?style=for-the-badge&logo=bitcoin&logoColor=fff)
 ![MetaTrader 5](https://img.shields.io/badge/MetaTrader_5-FTMO_Institutional_Live-2980b9?style=for-the-badge&logo=windows&logoColor=fff)
 ![Execution Engine](https://img.shields.io/badge/Execution-SOP--64_Auto--Dispatcher_≥75%25-green?style=for-the-badge)
-![Security](https://img.shields.io/badge/Security_Protocols-SOP--01%20to%20SOP--98-emerald?style=for-the-badge)
-![QA Suite](https://img.shields.io/badge/QA_Suite-381_Tests_100%25_Passed-success?style=for-the-badge)
+![Security](https://img.shields.io/badge/Security_Protocols-SOP--01%20to%20SOP--99-emerald?style=for-the-badge)
+![QA Suite](https://img.shields.io/badge/QA_Suite-388_Tests_100%25_Passed-success?style=for-the-badge)
 ![Crypto Return](https://img.shields.io/badge/Crypto_Compounded_ROI-%2B1,159.8%25_(12.6x)-gold?style=for-the-badge)
 ![Total Alpha](https://img.shields.io/badge/Total_Alpha-%2B109.44_R-gold?style=for-the-badge)
 ![Profit Factor](https://img.shields.io/badge/Profit_Factor-1.98_Institucional-blue?style=for-the-badge)

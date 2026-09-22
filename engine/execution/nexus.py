@@ -16,7 +16,7 @@ Responsabilidad:
 import asyncio
 import time
 from datetime import datetime, timezone
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, Tuple
 from engine.core.logger import logger
 from engine.execution.bitunix_executor import BitunixExecutor
 from engine.api.config import settings
@@ -699,6 +699,73 @@ class NexusNode:
                 unprotected += 1
         return unprotected
 
+    def get_dynamic_slot_capacity(
+        self,
+        account_id: str,
+        candidate_signal: Dict[str, Any],
+        free_margin_pct: float = 100.0,
+        active_symbols: Optional[List[str]] = None
+    ) -> Tuple[int, int, str]:
+        """
+        [SOP-99 DYNAMIC SLOT ELASTICITY & MACRO DECOUPLED EXPANSION]
+        Calcula la capacidad de slots (max_unprotected, max_concurrent, mode_label)
+        para una cuenta y una oportunidad específica.
+        
+        Niveles:
+        - CONTRAIDO (1 riesgo, 3 concurrentes):
+            Si racha de pérdidas >= 2 (SOP-94) o ventana macro de alto impacto (SOP-19).
+        - EXPANDIDO (3 riesgos, 5 concurrentes):
+            Si score >= 85.0% (God Mode), activo descorrelacionado (ρ < 0.35 frente a activos abiertos),
+            margen libre >= 65% y cero pérdidas consecutivas.
+        - ESTÁNDAR (2 riesgos, 4 concurrentes):
+            Por defecto según SOP-97 SSoT.
+        """
+        losses = self._consecutive_losses.get(account_id, 0)
+        
+        # 1. Contracción Defensiva por Racha (SOP-94) o Noticias Macro (SOP-19 / SOP-92)
+        from engine.risk.cluster_risk_guard import cluster_risk_guard
+        from engine.indicators.news_interceptor import news_interceptor
+        
+        cand_sym = candidate_signal.get("asset", candidate_signal.get("symbol", "")).upper()
+        is_news_blocked = False
+        try:
+            is_news_blocked = news_interceptor.is_macro_news_blackout(cand_sym)
+        except Exception:
+            pass
+            
+        if losses >= 2 or is_news_blocked:
+            reason = f"Racha de pérdidas ({losses})" if losses >= 2 else "Ventana Macro Activa (SOP-19)"
+            return 1, 3, f"DEFENSIVE_CONTRACTION ({reason})"
+
+        # 2. Expansión Elástica Institucional (SOP-99)
+        score = float(candidate_signal.get("confluence_score", candidate_signal.get("score", 0)))
+        
+        if score >= 85.0 and losses == 0 and free_margin_pct >= 65.0:
+            # Identificar todos los activos activos y los desprotegidos en esta cuenta
+            all_active_assets = []
+            unprotected_assets = []
+            if active_symbols is None:
+                for k, p in self._active_positions.items():
+                    if p.get("account_id", "primary") == account_id:
+                        sig_p = p.get("signal", {})
+                        sym_p = sig_p.get("asset", sig_p.get("symbol", p.get("symbol", k.split("_")[-1]))).upper()
+                        all_active_assets.append(sym_p)
+                        be = p.get("be_active", False) or p.get("smart_trailing", {}).get("be_active", False)
+                        if not be:
+                            unprotected_assets.append(sym_p)
+            else:
+                all_active_assets = active_symbols
+                unprotected_assets = active_symbols
+
+            # Para expandir slots, el candidato debe estar descorrelacionado de los activos abiertos
+            eval_assets = all_active_assets if len(all_active_assets) >= 4 else unprotected_assets
+            is_decoupled, max_corr = cluster_risk_guard.is_asset_decoupled(cand_sym, eval_assets, threshold=0.35)
+            if is_decoupled and eval_assets:
+                return 3, 5, f"ELASTIC_EXPANSION (God Mode {score:.0f}%, Descorrelacionado ρ={max_corr:.2f}, Margen={free_margin_pct:.1f}%)"
+
+        # 3. Nivel Estándar SSoT (SOP-97)
+        return self.MAX_UNPROTECTED_RISK_POSITIONS, self.MAX_CONCURRENT_POSITIONS, "STANDARD_SOP97"
+
     @staticmethod
     def _fragment_order(signal: Dict[str, Any]) -> List[Dict[str, Any]]:
         """Fragmentación Alpha Maximizer 50/30/20 (v24.0 APEX ALPHA)."""
@@ -877,21 +944,38 @@ class NexusNode:
             except Exception as e:
                 logger.debug(f"[NEXUS HARD CAP] Error al consultar exchange: {e}")
 
+        # 1. HARD CAP FÍSICO Y ELASTICIDAD DINÁMICA DE SLOTS (SOP-99)
+        free_margin_pct = 100.0
+        if not executor.dry_run:
+            try:
+                avail_m = await executor.get_available_margin_usdt()
+                bal_m = await executor.get_account_balance()
+                if bal_m and bal_m > 0:
+                    free_margin_pct = (avail_m / bal_m) * 100.0
+            except Exception:
+                pass
+
+        max_unprotected, max_concurrent, mode_label = self.get_dynamic_slot_capacity(
+            account_id=acc_id,
+            candidate_signal=acc_signal,
+            free_margin_pct=free_margin_pct
+        )
+
         total_active_symbols = mem_symbols.union(exchange_symbols)
-        if len(total_active_symbols) >= self.MAX_CONCURRENT_POSITIONS:
+        if len(total_active_symbols) >= max_concurrent:
             logger.warning(
-                f"🛑 [NEXUS HARD CAP ABSOLUTO] [{account.label}] Techo físico de {self.MAX_CONCURRENT_POSITIONS} "
-                f"posiciones abiertas alcanzado ({len(total_active_symbols)} activas: {', '.join(total_active_symbols)}). "
+                f"🛑 [NEXUS HARD CAP ABSOLUTO] [{account.label}] Techo físico de {max_concurrent} "
+                f"posiciones abiertas alcanzado ({len(total_active_symbols)} activas: {', '.join(total_active_symbols)} | Modo: {mode_label}). "
                 f"Rechazando entrada en {asset}."
             )
             return None
 
-        # 1.05 🛡️ SOP-97 UNPROTECTED RISK SLOTS GUARD (MÁXIMO 2 POSICIONES CON RIESGO FLOTANTE)
+        # 1.05 🛡️ SOP-99 UNPROTECTED RISK SLOTS GUARD (ELASTICIDAD DINÁMICA)
         unprotected_count = self.get_unprotected_risk_count(account_id=acc_id)
-        if unprotected_count >= self.MAX_UNPROTECTED_RISK_POSITIONS:
+        if unprotected_count >= max_unprotected:
             logger.info(
-                f"🛑 [NEXUS SOP-97 RISK CAP] [{account.label}] Cupo de riesgo real cubierto "
-                f"({unprotected_count}/{self.MAX_UNPROTECTED_RISK_POSITIONS} posiciones desprotegidas). "
+                f"🛑 [NEXUS SOP-99 RISK CAP] [{account.label}] Cupo de riesgo real cubierto "
+                f"({unprotected_count}/{max_unprotected} posiciones desprotegidas | Modo: {mode_label}). "
                 f"Encolando oportunidad para {asset}."
             )
             score_val = float(acc_signal.get("confluence_score", acc_signal.get("score", 0)))
@@ -1202,9 +1286,18 @@ class NexusNode:
             unprotected = self.get_unprotected_risk_count(account_id=account_id)
             total_active = len([p for p in self._active_positions.values() if p.get("account_id") == account_id])
             if unprotected >= self.MAX_UNPROTECTED_RISK_POSITIONS or total_active >= self.MAX_CONCURRENT_POSITIONS:
-                return
+                # Verificar si el candidato en buffer califica para expansión elástica (SOP-99)
+                queue = self._high_confluence_buffer.get(account_id, []) if hasattr(self, "_high_confluence_buffer") else []
+                can_expand = False
+                if queue:
+                    u_cap, c_cap, mode_str = self.get_dynamic_slot_capacity(account_id, queue[0])
+                    if unprotected < u_cap and total_active < c_cap:
+                        can_expand = True
+                        logger.info(f"🔓 [SLOT RECYCLER SOP-99] Autorizada expansión elástica para buffer [{account_id}]: {mode_str}")
+                if not can_expand:
+                    return
 
-            logger.info(f"♻️ [SLOT RECYCLER - SOP-97] Cupo liberado en [{account_id}] (Desprotegidas: {unprotected}/{self.MAX_UNPROTECTED_RISK_POSITIONS}, Total: {total_active}/{self.MAX_CONCURRENT_POSITIONS}) por: {reason}. Evaluando mejor oportunidad...")
+            logger.info(f"♻️ [SLOT RECYCLER - SOP-97/99] Cupo liberado/disponible en [{account_id}] (Desprotegidas: {unprotected}, Total: {total_active}) por: {reason}. Evaluando mejor oportunidad...")
 
             if hasattr(self, "_high_confluence_buffer") and isinstance(self._high_confluence_buffer, dict):
                 queue = self._high_confluence_buffer.get(account_id, [])
@@ -1459,23 +1552,40 @@ class NexusNode:
             except Exception as e:
                 logger.debug(f"[NEXUS AUTO-LIMIT HARD CAP] Error al consultar exchange: {e}")
 
+        # 1. HARD CAP FÍSICO Y ELASTICIDAD DINÁMICA DE SLOTS (SOP-99)
+        free_margin_pct = 100.0
+        if not executor.dry_run:
+            try:
+                avail_m = await executor.get_available_margin_usdt()
+                bal_m = await executor.get_account_balance()
+                if bal_m and bal_m > 0:
+                    free_margin_pct = (avail_m / bal_m) * 100.0
+            except Exception:
+                pass
+
+        max_unprotected, max_concurrent, mode_label = self.get_dynamic_slot_capacity(
+            account_id=acc_id,
+            candidate_signal=acc_signal,
+            free_margin_pct=free_margin_pct
+        )
+
         total_active_symbols = mem_symbols.union(exchange_symbols)
-        if len(total_active_symbols) >= self.MAX_CONCURRENT_POSITIONS:
+        if len(total_active_symbols) >= max_concurrent:
             logger.info(
-                f"🛑 [NEXUS AUTO-LIMIT HARD CAP] [{account.label}] Techo físico de {self.MAX_CONCURRENT_POSITIONS} "
-                f"posiciones alcanzado ({len(total_active_symbols)} activas). Pausando nuevas órdenes límite."
+                f"🛑 [NEXUS AUTO-LIMIT HARD CAP] [{account.label}] Techo físico de {max_concurrent} "
+                f"posiciones alcanzado ({len(total_active_symbols)} activas | Modo: {mode_label}). Pausando nuevas órdenes límite."
             )
             score_val = float(acc_signal.get("confluence_score", acc_signal.get("score", 0)))
             if score_val >= 60.0:
                 self.enqueue_high_confluence_opportunity(acc_signal, acc_id)
             return None
 
-        # 1.05 🛡️ SOP-97 UNPROTECTED RISK SLOTS GUARD (MÁXIMO 2 POSICIONES CON RIESGO FLOTANTE)
+        # 1.05 🛡️ SOP-99 UNPROTECTED RISK SLOTS GUARD (ELASTICIDAD DINÁMICA)
         unprotected_limit_count = self.get_unprotected_risk_count(account_id=acc_id)
-        if unprotected_limit_count >= self.MAX_UNPROTECTED_RISK_POSITIONS:
+        if unprotected_limit_count >= max_unprotected:
             logger.info(
-                f"🛑 [NEXUS AUTO-LIMIT SOP-97 RISK CAP] [{account.label}] Techo de riesgo de {self.MAX_UNPROTECTED_RISK_POSITIONS} "
-                f"posiciones alcanzado ({unprotected_limit_count} desprotegidas). Encolando orden límite en buffer."
+                f"🛑 [NEXUS AUTO-LIMIT SOP-99 RISK CAP] [{account.label}] Techo de riesgo de {max_unprotected} "
+                f"posiciones alcanzado ({unprotected_limit_count} desprotegidas | Modo: {mode_label}). Encolando orden límite en buffer."
             )
             score_val = float(acc_signal.get("confluence_score", acc_signal.get("score", 0)))
             if score_val >= 60.0:

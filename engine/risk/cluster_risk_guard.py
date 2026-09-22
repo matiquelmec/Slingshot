@@ -106,6 +106,36 @@ class ClusterRiskGuard:
         else:
             return 0.15 # Descorrelacionados (ej. Cripto vs Oro o TradFi)
 
+    def is_asset_decoupled(
+        self,
+        candidate_asset: str,
+        active_assets: List[str],
+        threshold: float = 0.35
+    ) -> Tuple[bool, float]:
+        """
+        [SOP-99 DECOUPLED EXPANSION GUARD]
+        Verifica si un activo candidato está genuinamente descorrelacionado
+        respecto a todas las posiciones activas con riesgo flotante (ρ < threshold).
+        Retorna (is_decoupled: bool, max_correlation: float).
+        """
+        if not active_assets:
+            return True, 0.0
+            
+        cand_clean = self._clean_symbol(candidate_asset)
+        max_corr = 0.0
+        
+        for active in active_assets:
+            act_clean = self._clean_symbol(active)
+            if act_clean == cand_clean:
+                return False, 1.0
+            corr = self.calculate_correlation(cand_clean, act_clean)
+            if corr > max_corr:
+                max_corr = corr
+            if corr >= threshold:
+                return False, corr
+                
+        return True, max_corr
+
     def can_open_position(
         self,
         new_asset: str,

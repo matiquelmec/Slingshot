@@ -158,22 +158,34 @@ LIQUIDITY_SWEEP_FVG                   188     43.1%    +42.51R     +0.23R    1.6
 
 ---
 
-## 🧪 7. Certificación QA Oficial (100% Passed)
+## 🪢 7. SOP-99: Dynamic Slot Elasticity & Macro Decoupled Expansion
+- **Elasticidad Bidireccional de Slots:**
+  - **Nivel Defensivo (Contracción a 1 Slot de Riesgo / 3 Concurrentes):**
+    - Se activa automáticamente ante racha de pérdidas consecutivas $\ge 2$ (SOP-94) o ventana activa de noticias macro de alto impacto (SOP-19 / SOP-92).
+  - **Nivel Estándar (2 Slots de Riesgo / 4 Concurrentes):**
+    - Configuración base canónica probada con $+106.60\text{R}$ y drawdown controlado $-3.25\%$.
+  - **Nivel Elástico / God Mode (Expansión a 3 Slots de Riesgo / 5 Concurrentes):**
+    - Se autoriza un slot adicional **exclusivamente** si se cumplen las 4 llaves institucionales:
+      1. **Descorrelación Cruzada:** El activo candidato pertenece a una clase macroeconómica descorrelacionada frente a los activos abiertos ($\rho < 0.35$, ej. `XAUUSDT` Oro vs Cripto). Si es otra cripto correlacionada ($\rho \ge 0.75$), se bloquea para impedir riesgo direccional apilado (*stacking*).
+      2. **Confluencia God Mode:** Confluencia $\ge 85.0\%$.
+      3. **Margen Libre Amplio:** Margen disponible $\ge 65\%$ en el exchange.
+      4. **Cero Pérdidas Previas:** Racha de pérdidas $= 0$.
+
+---
+
+## 🧪 8. Certificación QA Oficial (100% Passed)
 
 Comandos para verificar la integridad matemática y operativa de los nuevos protocolos en el VPS de producción o local:
 
 ```powershell
+# Certificación SOP-99 (Dynamic Slot Elasticity) [7 Tests]
+python -m pytest engine/tests/test_dynamic_slot_elasticity.py -v
+
 # Certificación SOP-97 (Dynamic Heat & Slot Allocation) y SOP-98 (Screener Hardening) [6 Tests]
 python -m pytest engine/tests/test_dynamic_heat_and_slot_allocation.py -v
 
-# Certificación Nuevos Protocolos SOP-94 (Progressive Sizing) y SOP-95 (Session AVWAP) [9 Tests]
-python -m pytest engine/tests/test_progressive_exposure_and_streak_sizing.py engine/tests/test_session_anchored_vwap.py -v
-
-# Certificación Blindaje Bitunix Dual-Protocol TPSL y Gestión de SL [12 Tests]
-python -m pytest engine/tests/test_bitunix_tpsl_modify_and_id_resolution.py engine/tests/test_live_trade_management.py -v
-
-# Certificación Global Integrada [27 Tests]
-python -m pytest engine/tests/test_dynamic_heat_and_slot_allocation.py engine/tests/test_dynamic_slot_recycling.py engine/tests/test_breathing_room_and_nexus_harmony.py -v
+# Certificación Global Integrada de Riesgo y Slots [20 Tests]
+python -m pytest engine/tests/test_dynamic_slot_elasticity.py engine/tests/test_dynamic_heat_and_slot_allocation.py engine/tests/test_dynamic_slot_recycling.py engine/tests/test_breathing_room_and_nexus_harmony.py -v
 ```
-*(Resultado certificado: **100% de éxito en suites de heat, recycling y armonía de ejecución**).*
+*(Resultado certificado: **20 passed in 1.15s — 100% de éxito en suites de elasticidad, heat, recycling y armonía de ejecución**).*
 

@@ -98,8 +98,8 @@ async def test_max_unprotected_risk_blocks_execution(nexus):
     executor.dry_run = True
 
     nexus._active_positions = {
-        f"{account_id}_POS1": {"symbol": "POS1", "account_id": account_id, "be_active": False, "sl_at_be": False},
-        f"{account_id}_POS2": {"symbol": "POS2", "account_id": account_id, "be_active": False, "sl_at_be": False}
+        f"{account_id}_BTCUSDT": {"symbol": "BTCUSDT", "account_id": account_id, "be_active": False, "sl_at_be": False},
+        f"{account_id}_ETHUSDT": {"symbol": "ETHUSDT", "account_id": account_id, "be_active": False, "sl_at_be": False}
     }
     
     opp = {
@@ -122,7 +122,7 @@ async def test_max_unprotected_risk_blocks_execution(nexus):
 async def test_max_concurrent_absolute_cap_blocks_execution(nexus):
     """
     Incluso con 4 posiciones en Breakeven (0 riesgo flotante),
-    el techo físico de 4 posiciones abiertas debe impedir la 5ta posición.
+    el techo físico de 4 posiciones abiertas debe impedir la 5ta posición si está correlacionada.
     """
     account_id = "primary"
     account = MagicMock()
@@ -133,10 +133,10 @@ async def test_max_concurrent_absolute_cap_blocks_execution(nexus):
     executor.dry_run = True
 
     nexus._active_positions = {
-        f"{account_id}_POS1": {"symbol": "POS1", "account_id": account_id, "be_active": True},
-        f"{account_id}_POS2": {"symbol": "POS2", "account_id": account_id, "be_active": True},
-        f"{account_id}_POS3": {"symbol": "POS3", "account_id": account_id, "be_active": True},
-        f"{account_id}_POS4": {"symbol": "POS4", "account_id": account_id, "be_active": True}
+        f"{account_id}_BTCUSDT": {"symbol": "BTCUSDT", "account_id": account_id, "be_active": True},
+        f"{account_id}_ETHUSDT": {"symbol": "ETHUSDT", "account_id": account_id, "be_active": True},
+        f"{account_id}_SOLUSDT": {"symbol": "SOLUSDT", "account_id": account_id, "be_active": True},
+        f"{account_id}_NEARUSDT": {"symbol": "NEARUSDT", "account_id": account_id, "be_active": True}
     }
     
     opp = {
