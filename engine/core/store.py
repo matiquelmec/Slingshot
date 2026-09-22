@@ -139,7 +139,7 @@ class MemoryStore:
                 self._signal_events.append(signal_data)
                 return signal_data
 
-    async def get_signals(self, asset: Optional[str] = None, status: Optional[str] = None) -> List[Dict[str, Any]]:
+    async def get_signals(self, asset: Optional[str] = None, status: Optional[str] = None, limit: Optional[int] = None) -> List[Dict[str, Any]]:
         """Busca señales en el buffer circular con filtros."""
         async with self._lock:
             filtered = list(self._signal_events)
@@ -147,6 +147,8 @@ class MemoryStore:
                 filtered = [s for s in filtered if s["asset"] == asset]
             if status:
                 filtered = [s for s in filtered if s.get("status") == status]
+            if limit is not None and limit > 0:
+                filtered = filtered[-limit:]
             return filtered
 
     async def save_news(self, news_item: Dict[str, Any]):

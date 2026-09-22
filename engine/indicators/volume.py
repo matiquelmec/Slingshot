@@ -394,9 +394,16 @@ def calculate_session_anchored_vwap(df: pd.DataFrame) -> pd.DataFrame:
         if not pd.api.types.is_datetime64_any_dtype(df[ts_col]):
             dt_series = pd.to_datetime(df[ts_col], unit='s' if float(df[ts_col].iloc[0]) < 1e11 else 'ms', errors='coerce')
         else:
-            dt_series = df[ts_col]
+            dt_series = pd.to_datetime(df[ts_col])
     else:
         dt_series = pd.date_range(end=pd.Timestamp.now(tz='UTC'), periods=len(df), freq='15min')
+
+    # Garantizar cálculo en UTC estricto (inmune a husos horarios de Windows/VPS)
+    if hasattr(dt_series, 'dt'):
+        if dt_series.dt.tz is None:
+            dt_series = dt_series.dt.tz_localize('UTC')
+        else:
+            dt_series = dt_series.dt.tz_convert('UTC')
 
     # Identificar la sesión institucional y crear clave de anclaje (fecha + id_sesion)
     hours = dt_series.dt.hour

@@ -42,6 +42,7 @@ class NexusNode:
         self._asset_cooldown: Dict[str, float] = {}
         self._consecutive_losses: Dict[str, int] = {}
         self._risk_released_recently: Dict[str, bool] = {}
+        self._load_streak_state()
         logger.info(f"🛡️ [NEXUS] Nodo de Ejecución Multi-Cuenta inicializado (Dry Run: {dry_run})")
 
     def is_asset_in_cooldown(self, asset: str) -> bool:
@@ -301,10 +302,20 @@ class NexusNode:
                     closed_acc = pos_info.get("account_id", "primary") if pos_info else "primary"
                     closed_sym = pos_info.get("signal", {}).get("asset", mem_key.split("_")[-1]) if pos_info else mem_key
                     pnl_val = float(pos_info.get("unrealized_pnl", 0.0)) if pos_info else 0.0
-                    reason_close = f"POSICION_CERRADA_{closed_sym}"
-                    if pnl_val < -0.5:
+                    sig_ref = pos_info.get("signal", {}) if pos_info else {}
+                    is_be_or_tp = (
+                        pos_info.get("smart_trailing", {}).get("be_active", False)
+                        or sig_ref.get("trailing_phase") in ("BREAKEVEN", "TRAILING")
+                        or pos_info.get("status") in ("BREAKEVEN", "TRAILING")
+                    ) if pos_info else False
+
+                    # Si el PnL fue negativo o no había alcanzado Breakeven, computar como Stop Loss
+                    if pnl_val < -0.1 or not is_be_or_tp:
                         reason_close = f"POSICION_CERRADA_SL_{closed_sym}"
-                        self.set_asset_cooldown(closed_sym, duration_sec=3600, reason=f"Cierre en pérdida ({pnl_val:.2f} USDT)")
+                        self.set_asset_cooldown(closed_sym, duration_sec=3600, reason=f"Cierre en pérdida/SL ({pnl_val:.2f} USDT)")
+                    else:
+                        reason_close = f"POSICION_CERRADA_TP_PROTEGIDO_{closed_sym}"
+
                     asyncio.create_task(self.on_risk_released(closed_acc, reason=reason_close))
                     sym_clean = pos_info.get("signal", {}).get("asset", mem_key.split("_")[-1]) if pos_info else mem_key
                     self.remove_pending_limit_symbol(sym_clean)
@@ -1034,7 +1045,44 @@ class NexusNode:
 
 
 
-    DB_PATH = r"C:\Slingshot\data\slingshot.db"
+    _DEFAULT_DB_DIR = r"C:\Slingshot\data" if os.path.exists(r"C:\Slingshot") else os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "data")
+    DB_PATH = os.path.join(_DEFAULT_DB_DIR, "slingshot.db")
+
+    def _init_streak_db(self):
+        try:
+            os.makedirs(os.path.dirname(self.DB_PATH), exist_ok=True)
+            with sqlite3.connect(self.DB_PATH) as conn:
+                conn.execute("CREATE TABLE IF NOT EXISTS streak_state (account_id TEXT PRIMARY KEY, consecutive_losses INTEGER, risk_released_recently INTEGER, updated_at REAL)")
+                conn.commit()
+        except Exception as db_err:
+            logger.debug(f"[NEXUS STREAK DB] Error inicializando tabla: {db_err}")
+
+    def _persist_streak_state(self):
+        try:
+            self._init_streak_db()
+            with sqlite3.connect(self.DB_PATH) as conn:
+                for acc_id, losses in self._consecutive_losses.items():
+                    released = 1 if self._risk_released_recently.get(acc_id, False) else 0
+                    conn.execute(
+                        "INSERT OR REPLACE INTO streak_state (account_id, consecutive_losses, risk_released_recently, updated_at) VALUES (?, ?, ?, ?)",
+                        (acc_id, int(losses), released, time.time())
+                    )
+                conn.commit()
+        except Exception as err:
+            logger.debug(f"[NEXUS STREAK DB] Error persistiendo rachas: {err}")
+
+    def _load_streak_state(self):
+        try:
+            self._init_streak_db()
+            with sqlite3.connect(self.DB_PATH) as conn:
+                cursor = conn.execute("SELECT account_id, consecutive_losses, risk_released_recently FROM streak_state")
+                for acc_id, losses, released in cursor.fetchall():
+                    self._consecutive_losses[acc_id] = int(losses)
+                    self._risk_released_recently[acc_id] = bool(released)
+                if self._consecutive_losses:
+                    logger.info(f"💾 [NEXUS STREAK DB] Rachas restauradas desde disco: {self._consecutive_losses}")
+        except Exception as err:
+            logger.debug(f"[NEXUS STREAK DB] Error cargando rachas: {err}")
 
     def _init_buffer_db(self):
         try:
@@ -1106,9 +1154,10 @@ class NexusNode:
         """
         try:
             # 🛡️ Actualización de rachas y Progressive Exposure (SOP-94)
-            if any(term in reason.upper() for term in ("STOP_LOSS", "SL", "PERDIDA", "INVALI")):
+            if any(term in reason.upper() for term in ("STOP_LOSS", "SL", "PERDIDA", "INVALI", "EARLY_EXIT", "STOP")):
                 self._consecutive_losses[account_id] = self._consecutive_losses.get(account_id, 0) + 1
                 self._risk_released_recently[account_id] = False
+                self._persist_streak_state()
                 logger.warning(f"📉 [SOP-94 STREAK] Racha de pérdidas consecutivas en [{account_id}]: {self._consecutive_losses[account_id]}.")
                 for part in reason.split("_"):
                     if "USDT" in part:
@@ -1116,6 +1165,7 @@ class NexusNode:
             elif "FAST_BE" in reason.upper() or "BREAKEVEN" in reason.upper() or "TP" in reason.upper() or "PROTEGIDO" in reason.upper():
                 self._consecutive_losses[account_id] = 0
                 self._risk_released_recently[account_id] = True
+                self._persist_streak_state()
                 logger.info(f"⚡ [SOP-94 QUICK RESTORE] Riesgo liberado en [{account_id}]. Racha de pérdidas reseteada a 0 y exposición restaurada al 100%.")
 
             unprotected = self.get_unprotected_risk_count(account_id=account_id)

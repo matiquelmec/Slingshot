@@ -1048,7 +1048,7 @@ class TradeManager:
 
                                     from engine.execution.nexus import nexus
 
-                                    asyncio.create_task(nexus.on_risk_released(acc_id, reason=f"SOP25_EARLY_EXIT_{sym}"))
+                                    asyncio.create_task(nexus.on_risk_released(acc_id, reason=f"SOP25_EARLY_INVALIDATION_SL_{sym}"))
 
                                     try:
 
