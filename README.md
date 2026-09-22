@@ -194,29 +194,32 @@ graph TB
 | **SOP-94** | Progressive Exposure & Asymmetric DD Protection | Contracción asimétrica (1.0x -> 0.75x -> 0.50x) con Quick Restore instantáneo a 1.0x en BE/TP1. |
 | **SOP-95** | Session-Anchored VWAP (AVWAP) Intraday Filter | Anclajes intradiarios en Asia (00:00), Londres (07:00) y NY (13:30 UTC) con gating institucional. |
 | **SOP-96** | TradeZella Style Playbook Taxonomy & Expectancy | Clasificación en 4 arquetipos cuantitativos con desglose y seguimiento de Profit Factor en vivo. |
+| **SOP-97** | Multi-Asset Dynamic Heat & Slot Allocation | Gestión dual: 2 posiciones con riesgo no protegido máx y 4 físicas máx con liberación en Breakeven. |
+| **SOP-98** | Dynamic Screener Hardening & Spread Shield | Filtro bid/ask spread $\le 0.12\%$, volumen $\ge \$30\text{M}$ USDT y descarte de micro-tokens. |
+| **SOP-99** | Dynamic Slot Elasticity & Macro Decoupling | Elasticidad 1-3 riesgos y 3-5 físicas (contracción por racha $\ge 2$, expansión macro $\rho < 0.35$). |
 
 ---
 
 ## 📊 Auditorías Cuantitativas Oficiales SSoT
 
 ### 1. Auditoría Oficial Criptomonedas Bitunix (180 Días Event-Driven Replay)
-Auditoría cronológica oficial sobre 326 operaciones reales concurrentes con 14 pares VIP, comisiones Maker/Taker y slippage descontados:
+Auditoría cronológica oficial sobre 328 operaciones reales concurrentes con 14 pares VIP, comisiones Maker/Taker y slippage descontados:
 
 ```text
 ========================================================================================================================
 Métrica Cuantitativa Institucional    | Slingshot v31.0 Base    | Slingshot v51.0         | Slingshot v60.0 APEX FORTRESS
 ========================================================================================================================
-Total Operaciones Auditadas           | 466 trades (Aisladas)   | 237 trades (Replay)     | 326 trades (Replay SSoT)
-Win Rate Real (TP1 / TP2 / TP3)       | 42.3%                   | 46.8%                   | 46.0% (150 Wins / 176 Losses)
-Profit Factor Base                    | 1.07 (Frágil)           | 1.80 (Sólido)           | 1.87 (Sólido Institucional)
-Profit Factor con Progressive Sizing  | 1.10                    | 1.99 🚀                 | 1.98 🚀 (Robusto y Asimétrico)
-Retorno Total Base en R               | +22.40 R                | +66.31 R                | +109.44 R
-Retorno Total con Progressive Sizing  | +25.00 R                | +94.75 R 💎             | +106.60 R 💎
-Drawdown Máximo de Cartera (Plano)    | -38.10% (Descalificado) | -4.21% 🛡️               | -3.25% 🛡️ (Blindaje Total Prop Firm)
-Sortino Ratio (Downside Risk)         | 1.12                    | 24.63 🛡️               | 29.52 🛡️ (+540% s/ Base)
-Crecimiento Compuesto Bitunix ($1k)   | +$1,546.25 USD (+154%)  | +$8,148.56 USD (+814%)  | +$11,597.91 USD (+1,159.8% / 12.6X)
-Capital Final Compuesto ($1,000 USD)  | $2,546.25 USD           | $9,148.56 USD 🚀        | $12,597.91 USD 🚀
-Drawdown Máximo Compuesto (2.5%)      | -38.10%                 | -14.63% 🛡️              | -11.70% 🛡️ (Totalmente Controlado)
+Total Operaciones Auditadas           | 466 trades (Aisladas)   | 237 trades (Replay)     | 328 trades (Replay SSoT)
+Win Rate Real (TP1 / TP2 / TP3)       | 42.3%                   | 46.8%                   | 44.2% (145 Wins / 183 Losses)
+Profit Factor Base                    | 1.07 (Frágil)           | 1.80 (Sólido)           | 1.79 (Sólido Institucional)
+Profit Factor con Progressive Sizing  | 1.10                    | 1.99 🚀                 | 1.90 🚀 (Robusto y Asimétrico)
+Retorno Total Base en R               | +22.40 R                | +66.31 R                | +94.82 R
+Retorno Total con Progressive Sizing  | +25.00 R                | +94.75 R 💎             | +96.80 R 💎 (Alpha-Tier Sizing)
+Drawdown Máximo de Cartera (Plano)    | -38.10% (Descalificado) | -4.21% 🛡️               | -3.87% 🛡️ (Blindaje Total Prop Firm)
+Sortino Ratio (Downside Risk)         | 1.12                    | 24.63 🛡️               | 28.13 🛡️ (+520% s/ Base)
+Crecimiento Compuesto Bitunix ($1k)   | +$1,546.25 USD (+154%)  | +$8,148.56 USD (+814%)  | +$8,874.04 USD (+887.4% / 9.9X)
+Capital Final Compuesto ($1,000 USD)  | $2,546.25 USD           | $9,148.56 USD 🚀        | $9,874.04 USD 🚀
+Drawdown Máximo Compuesto (2.5%)      | -38.10%                 | -14.63% 🛡️              | -14.58% 🛡️ (Totalmente Controlado)
 ========================================================================================================================
 ```
 
@@ -225,8 +228,8 @@ Drawdown Máximo Compuesto (2.5%)      | -38.10%                 | -14.63% 🛡�
 ====================================================================================================
 Playbook Arquetípico               Trades   Win Rate    PnL (R)      Avg R      PF    Expectancy (R)
 ----------------------------------------------------------------------------------------------------
-OB_DISCOUNT_RETEST                    138     50.0%    +64.09R     +0.46R    2.61           +0.46R
-LIQUIDITY_SWEEP_FVG                   188     43.1%    +42.51R     +0.23R    1.67           +0.23R
+OB_DISCOUNT_RETEST                    136     48.5%    +59.47R     +0.44R    2.52           +0.44R
+LIQUIDITY_SWEEP_FVG                   192     41.2%    +37.34R     +0.19R    1.55           +0.19R
 ====================================================================================================
 ```
 
@@ -266,11 +269,14 @@ Simulación Event-Driven Oficial sobre la cartera Tier A (`XAUUSD`, `US100`, `GB
 
 ---
 
-## 🧪 Certificación QA Oficial
+## 🧪 Certificación QA Oficial (402 Tests 100% Passed)
 
-Para certificar la integridad del sistema en el VPS de producción:
+Para certificar la integridad del sistema en el VPS de producción o local:
 
 ```powershell
+# Certificación SSoT Paridad de Backtest y Elasticidad Dinámica (SOP-97, SOP-98, SOP-99) [17 Tests]
+pytest engine\tests\test_chronological_backtest_parity.py engine\tests\test_dynamic_slot_elasticity.py engine\tests\test_dynamic_heat_and_slot_allocation.py -v
+
 # Certificación Drawdown Fortress & Session AVWAP (SOP-94 y SOP-95) [9 Tests]
 pytest engine\tests\test_progressive_exposure_and_streak_sizing.py engine\tests\test_session_anchored_vwap.py -v
 
@@ -280,10 +286,7 @@ pytest engine\tests\test_bitunix_tpsl_modify_and_id_resolution.py engine\tests\t
 # Certificación TradFi / FTMO Titanium (21 Tests)
 pytest engine\tests\test_ftmo_titanium_strategy.py engine\tests\test_tradfi_scanner_and_risk.py -v
 
-# Certificación Sistema Adaptativo Tri-Bucle (12 Tests)
-pytest engine\tests\test_bayesian_confluence_calibration.py engine\tests\test_hmm_regime_and_rolling_train.py engine\tests\test_post_mortem_and_veto_suite.py -v
-
-# Certificación Multi-Cuenta & Resiliencia Institucional (38 Tests)
-pytest engine\tests\test_multi_account_advanced_security_and_resilience.py -v
+# Certificación Suite Completa (402 Tests)
+pytest engine\tests -q
 ```
-*(Resultado global certificado: **100% PASSED**).*
+*(Resultado global certificado: **402 passed in 102.96s — 100% PASSED**).*
