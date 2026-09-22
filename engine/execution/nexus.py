@@ -645,7 +645,25 @@ class NexusNode:
             await asyncio.sleep(15)
 
     MAX_CONCURRENT_POSITIONS = 4
+    MAX_UNPROTECTED_RISK_POSITIONS = 2  # SOP-97: Máximo 2 operaciones con riesgo real flotante simultáneas
     DEFAULT_MARGIN_USDT = 17.00 # SOP-39: 2.5% de riesgo real para cuenta de $200 USD (~8.5% de margen a ~12X con SL medio)
+
+    @staticmethod
+    def calculate_priority_score(opportunity: Dict[str, Any]) -> float:
+        """
+        [SOP-97 ALPHA-TIER PRIORITY SCORING]
+        Calcula la puntuación ponderada para desempate y selección en cola.
+        Alpha Trinity (ETH, SOL, BNB, INJ) reciben multiplicador Tier 1 (1.25x).
+        """
+        score = float(opportunity.get("confluence_score") or opportunity.get("score", 70.0))
+        asset = str(opportunity.get("asset", opportunity.get("symbol", ""))).upper()
+        if any(t1 in asset for t1 in ("ETH", "SOL", "BNB", "INJ")):
+            multiplier = 1.25
+        elif any(t2 in asset for t2 in ("AVAX", "NEAR", "SUI", "XRP", "BTC")):
+            multiplier = 1.00
+        else:
+            multiplier = 0.85
+        return round(score * multiplier, 2)
 
     def get_unprotected_risk_count(self, account_id: Optional[str] = None) -> int:
         """
@@ -670,7 +688,7 @@ class NexusNode:
                 continue
             counted_symbols.add(acc_sym_key)
 
-            be_active = pos.get("smart_trailing", {}).get("be_active", False)
+            be_active = pos.get("be_active", False) or pos.get("smart_trailing", {}).get("be_active", False)
             is_long = "LONG" in str(sig.get("type", sig.get("signal_type", "LONG"))).upper()
             entry = float(sig.get("price", 0))
             sl = float(sig.get("stop_loss", 0))
@@ -866,6 +884,19 @@ class NexusNode:
                 f"posiciones abiertas alcanzado ({len(total_active_symbols)} activas: {', '.join(total_active_symbols)}). "
                 f"Rechazando entrada en {asset}."
             )
+            return None
+
+        # 1.05 🛡️ SOP-97 UNPROTECTED RISK SLOTS GUARD (MÁXIMO 2 POSICIONES CON RIESGO FLOTANTE)
+        unprotected_count = self.get_unprotected_risk_count(account_id=acc_id)
+        if unprotected_count >= self.MAX_UNPROTECTED_RISK_POSITIONS:
+            logger.info(
+                f"🛑 [NEXUS SOP-97 RISK CAP] [{account.label}] Cupo de riesgo real cubierto "
+                f"({unprotected_count}/{self.MAX_UNPROTECTED_RISK_POSITIONS} posiciones desprotegidas). "
+                f"Encolando oportunidad para {asset}."
+            )
+            score_val = float(acc_signal.get("confluence_score", acc_signal.get("score", 0)))
+            if score_val >= 65.0:
+                self.enqueue_high_confluence_opportunity(acc_signal, acc_id)
             return None
 
         # 1.1 🛡️ SIGNAL-AWARE REVERSAL GUARD & DEDUP (SOP-46)
@@ -1139,14 +1170,14 @@ class NexusNode:
         score = float(signal.get("confluence_score", signal.get("score", 0)))
         logger.info(f"📥 [NEXUS BUFFER] Guardando oportunidad institucional en buffer para [{account_id}]: {asset} ({score:.0f}%)")
         queue.append(dict(signal))
-        queue.sort(key=lambda s: float(s.get("confluence_score", s.get("score", 0))), reverse=True)
+        queue.sort(key=lambda s: self.calculate_priority_score(s), reverse=True)
         self._persist_buffer_to_disk()
         if len(queue) > 5:
             queue.pop()
 
     async def on_risk_released(self, account_id: str, reason: str = ""):
         """
-        [DYNAMIC SLOT RECYCLER v27.0 APEX]
+        [DYNAMIC SLOT RECYCLER v27.0 APEX - SOP-97]
         Se dispara ante CUALQUIER evento de liberacion de riesgo:
           1. Paso de posicion a Breakeven ($0.00 riesgo flotante)
           2. Cierre de posicion por TP/SL en Bitunix
@@ -1169,10 +1200,11 @@ class NexusNode:
                 logger.info(f"⚡ [SOP-94 QUICK RESTORE] Riesgo liberado en [{account_id}]. Racha de pérdidas reseteada a 0 y exposición restaurada al 100%.")
 
             unprotected = self.get_unprotected_risk_count(account_id=account_id)
-            if unprotected >= self.MAX_CONCURRENT_POSITIONS:
+            total_active = len([p for p in self._active_positions.values() if p.get("account_id") == account_id])
+            if unprotected >= self.MAX_UNPROTECTED_RISK_POSITIONS or total_active >= self.MAX_CONCURRENT_POSITIONS:
                 return
 
-            logger.info(f"♻️ [SLOT RECYCLER] Cupo liberado en [{account_id}] ({unprotected}/{self.MAX_CONCURRENT_POSITIONS}) por: {reason}. Evaluando mejor oportunidad...")
+            logger.info(f"♻️ [SLOT RECYCLER - SOP-97] Cupo liberado en [{account_id}] (Desprotegidas: {unprotected}/{self.MAX_UNPROTECTED_RISK_POSITIONS}, Total: {total_active}/{self.MAX_CONCURRENT_POSITIONS}) por: {reason}. Evaluando mejor oportunidad...")
 
             if hasattr(self, "_high_confluence_buffer") and isinstance(self._high_confluence_buffer, dict):
                 queue = self._high_confluence_buffer.get(account_id, [])
@@ -1183,7 +1215,7 @@ class NexusNode:
                         logger.info(f"❄️ [SLOT RECYCLER] Omitiendo {sym_c} por período de enfriamiento/cuarentena activo (SOP-52).")
                         continue
                     if sym_c not in self._active_positions and f"{account_id}_{sym_c}" not in self._active_positions:
-                        logger.info(f"⚡ [SLOT RECYCLER] Activando senal prioritaria desde buffer para [{account_id}]: {sym_c} ({top_cand.get('confluence_score', 0)}%)")
+                        logger.info(f"⚡ [SLOT RECYCLER] Activando senal prioritaria desde buffer para [{account_id}]: {sym_c} (Score Prioridad: {self.calculate_priority_score(top_cand):.1f})")
                         asyncio.create_task(self.process_limit_setup(top_cand))
                         return
 
@@ -1215,7 +1247,7 @@ class NexusNode:
                     continue
                 valid_cands.append(c)
 
-            valid_cands.sort(key=lambda x: float(x.get("confluence_score", x.get("score", 0))), reverse=True)
+            valid_cands.sort(key=lambda x: self.calculate_priority_score(x), reverse=True)
 
             if not valid_cands:
                 logger.debug(f"[SLOT RECYCLER] Ninguna oportunidad supera los filtros institucionales (min 72%) para [{account_id}].")
@@ -1432,6 +1464,18 @@ class NexusNode:
             logger.info(
                 f"🛑 [NEXUS AUTO-LIMIT HARD CAP] [{account.label}] Techo físico de {self.MAX_CONCURRENT_POSITIONS} "
                 f"posiciones alcanzado ({len(total_active_symbols)} activas). Pausando nuevas órdenes límite."
+            )
+            score_val = float(acc_signal.get("confluence_score", acc_signal.get("score", 0)))
+            if score_val >= 60.0:
+                self.enqueue_high_confluence_opportunity(acc_signal, acc_id)
+            return None
+
+        # 1.05 🛡️ SOP-97 UNPROTECTED RISK SLOTS GUARD (MÁXIMO 2 POSICIONES CON RIESGO FLOTANTE)
+        unprotected_limit_count = self.get_unprotected_risk_count(account_id=acc_id)
+        if unprotected_limit_count >= self.MAX_UNPROTECTED_RISK_POSITIONS:
+            logger.info(
+                f"🛑 [NEXUS AUTO-LIMIT SOP-97 RISK CAP] [{account.label}] Techo de riesgo de {self.MAX_UNPROTECTED_RISK_POSITIONS} "
+                f"posiciones alcanzado ({unprotected_limit_count} desprotegidas). Encolando orden límite en buffer."
             )
             score_val = float(acc_signal.get("confluence_score", acc_signal.get("score", 0)))
             if score_val >= 60.0:

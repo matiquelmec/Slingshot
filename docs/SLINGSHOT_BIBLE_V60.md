@@ -142,18 +142,38 @@ LIQUIDITY_SWEEP_FVG                   188     43.1%    +42.51R     +0.23R    1.6
 
 ---
 
-## 🧪 4. Certificación QA Oficial (100% Passed)
+## ⚡ 5. SOP-97: Multi-Asset Dynamic Heat & Slot Allocation Engine
+- **Límite Estricto de Riesgo Flotante:** `MAX_UNPROTECTED_RISK_POSITIONS = 2`. Un máximo de 2 posiciones con Stop Loss por debajo del punto de entrada (riesgo financiero activo) por cuenta.
+- **Techo Físico Absoluto de Margen:** `MAX_CONCURRENT_POSITIONS = 4`. Techo máximo de posiciones abiertas concurrentes en el exchange (incluso con riesgo liberado por Breakeven/TP1), evitando sobrecalentamiento de margen físico.
+- **Desenganche Dinámico de Slot por Breakeven:** Tan pronto una posición alcanza $\ge 1.0\text{R}$ (Altcoins) o $\ge 1.2\text{R}$ (Megacaps) y su SL es movido a Breakeven ($0.00 riesgo flotante), su cupo de riesgo queda liberado inmediatamente (`get_unprotected_risk_count` decrece), permitiendo abrir una nueva oportunidad de alta confluencia.
+- **Alpha Trinity Prioritization:** La cola de desempate institucional (`_high_confluence_buffer`) multiplica por **1.25x** el puntaje de confluencia de los líderes del alfa institucional (**ETH, SOL, BNB, INJ**), garantizando que los activos con mayor retorno histórico (+53.5% del PnL total) tengan derecho de paso preferencial sobre activos secundarios.
+
+---
+
+## 🌊 6. SOP-98: Dynamic Liquidity & Relative Volume Screener Hardening
+- **Filtro de Profundidad y Spread Institucional:** Todo candidato dinámico descubierto por Binance 24h Ticker es validado contra el libro de órdenes:
+  $$\text{Spread Pct} = \frac{\text{Ask} - \text{Bid}}{\text{Ask}} \times 100 \le 0.12\%$$
+  Cualquier activo con spread superior al 0.12% es descartado automáticamente para prevenir manipulación por mechas y slippage adverso.
+- **Quality Gate de Precio y Volumen:** Exclusión estricta de micro-tokens con precio $< \$0.10$ USD y volumen 24h $< \$30,000,000$ USDT (`EXCLUDED_DYNAMIC_ASSETS` blacklist).
+
+---
+
+## 🧪 7. Certificación QA Oficial (100% Passed)
 
 Comandos para verificar la integridad matemática y operativa de los nuevos protocolos en el VPS de producción o local:
 
 ```powershell
+# Certificación SOP-97 (Dynamic Heat & Slot Allocation) y SOP-98 (Screener Hardening) [6 Tests]
+python -m pytest engine/tests/test_dynamic_heat_and_slot_allocation.py -v
+
 # Certificación Nuevos Protocolos SOP-94 (Progressive Sizing) y SOP-95 (Session AVWAP) [9 Tests]
 python -m pytest engine/tests/test_progressive_exposure_and_streak_sizing.py engine/tests/test_session_anchored_vwap.py -v
 
 # Certificación Blindaje Bitunix Dual-Protocol TPSL y Gestión de SL [12 Tests]
 python -m pytest engine/tests/test_bitunix_tpsl_modify_and_id_resolution.py engine/tests/test_live_trade_management.py -v
 
-# Certificación Global Integrada [21 Tests]
-python -m pytest engine/tests/test_progressive_exposure_and_streak_sizing.py engine/tests/test_session_anchored_vwap.py engine/tests/test_bitunix_tpsl_modify_and_id_resolution.py engine/tests/test_live_trade_management.py -v
+# Certificación Global Integrada [27 Tests]
+python -m pytest engine/tests/test_dynamic_heat_and_slot_allocation.py engine/tests/test_dynamic_slot_recycling.py engine/tests/test_breathing_room_and_nexus_harmony.py -v
 ```
-*(Resultado certificado: **21 passed in 5.83s — 100% de éxito**).*
+*(Resultado certificado: **100% de éxito en suites de heat, recycling y armonía de ejecución**).*
+

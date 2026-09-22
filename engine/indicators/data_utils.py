@@ -1,4 +1,4 @@
-﻿import httpx
+import httpx
 import asyncio
 import random
 from engine.core.logger import logger
@@ -132,9 +132,16 @@ async def fetch_top_liquid_tickers(min_volume_usdt: float = 30_000_000.0, limit:
                     continue
                 quote_vol = float(item.get("quoteVolume", 0.0))
                 last_price = float(item.get("lastPrice", 0.0))
+                bid_price = float(item.get("bidPrice", 0.0))
+                ask_price = float(item.get("askPrice", 0.0))
                 
-                # SOP-28: Exigir volumen mínimo y precio >= $0.10 USDT
+                # SOP-98 & SOP-28: Exigir volumen mínimo, precio >= $0.10 USDT y spread <= 0.12%
                 if quote_vol >= min_volume_usdt and last_price >= min_price_usd:
+                    if ask_price > 0 and bid_price > 0:
+                        spread_pct = (ask_price - bid_price) / ask_price * 100.0
+                        if spread_pct > 0.12:
+                            # Descartar por spread anómalo/falta de profundidad de libro
+                            continue
                     candidates.append((sym, quote_vol))
                     
             # Ordenar de mayor a menor volumen

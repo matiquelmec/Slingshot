@@ -143,6 +143,7 @@ Slingshot/
 │       ├── test_progressive_exposure_and_streak_sizing.py # 6 Pruebas SOP-94 Contracción de Racha (1.0x/0.75x/0.50x) y Quick Restore
 │       ├── test_session_anchored_vwap.py            # 3 Pruebas SOP-95 Session AVWAP (Asia 00:00, Londres 07:00, NY 13:30 UTC)
 │       ├── test_bitunix_tpsl_modify_and_id_resolution.py # 6 Pruebas Bitunix Dual-Protocol TPSL, Auto-Resolución ID y 1R Risk Cache
+│       ├── test_dynamic_heat_and_slot_allocation.py # 6 Pruebas SOP-97 Dynamic Heat & Slot Allocation y SOP-98 Screener Hardening
 │       └── legacy/                                  # Pruebas históricas preservadas
 │
 ├── scripts/                         # ═══ HERRAMIENTAS CLI & DE DESPLIEGUE (SSoT) ═══
@@ -158,6 +159,7 @@ Slingshot/
     ├── SLINGSHOT_BIBLE_V51.md       # Biblia canónica maestra v51.0 (Especificación completa del sistema)
     ├── SLINGSHOT_BIBLE_V52.md       # Biblia canónica maestra v52.0 (Tri-Loop Adaptive Calibration, SOP-72 a SOP-74)
     ├── SLINGSHOT_BIBLE_V55.md       # Biblia canónica maestra v55.0 (Apex Sovereign, Streak Breakers SOP-81 a SOP-83)
+    ├── SLINGSHOT_BIBLE_V60.md       # Biblia canónica maestra v60.0 (Playbooks, AVWAP, SOP-97 Heat & SOP-98 Screener)
     ├── ESTRUCTURA_PROYECTO.md       # Guía de estructura, archivos y módulos (este archivo)
     └── MULTI_ACCOUNT_INSTITUTIONAL_SPEC.md # Especificación técnica de la arquitectura multi-cuenta
 ```

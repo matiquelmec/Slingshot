@@ -25,19 +25,19 @@ async def test_slot_recycler_triggers_best_opportunity_from_store():
     engine._high_confluence_buffer = {} # Aislar para que consulte store
     engine.MAX_CONCURRENT_POSITIONS = 4
     fake_opps = [
-        {"asset": "PAXGUSDT", "confluence_score": 62, "direction": "LONG", "price": 4350.0, "stop_loss": 4300.0, "tp1": 4400.0, "tp2": 4450.0, "tp3": 4500.0},
-        {"asset": "SOLUSDT", "confluence_score": 75, "direction": "LONG", "price": 105.0, "stop_loss": 102.0, "tp1": 108.0, "tp2": 110.0, "tp3": 115.0}
+        {"asset": "PAXGUSDT", "confluence_score": 73, "direction": "LONG", "price": 4350.0, "stop_loss": 4300.0, "tp1": 4400.0, "tp2": 4450.0, "tp3": 4500.0},
+        {"asset": "SOLUSDT", "confluence_score": 80, "direction": "LONG", "price": 105.0, "stop_loss": 102.0, "tp1": 108.0, "tp2": 110.0, "tp3": 115.0}
     ]
     await store.save_scanner_opportunities("swing", fake_opps)
 
-    with patch.object(engine, "get_unprotected_risk_count", return_value=3):
+    with patch.object(engine, "get_unprotected_risk_count", return_value=1):
         with patch.object(engine, "process_limit_setup", new_callable=AsyncMock) as mock_limit:
             await engine.on_risk_released("primary", reason="POSICION_CERRADA_MANUAL")
             await asyncio.sleep(0.05)
             assert mock_limit.call_count == 1
             call_sig = mock_limit.call_args[0][0]
             assert call_sig["asset"] == "SOLUSDT"
-            assert call_sig["confluence_score"] == 75
+            assert call_sig["confluence_score"] == 80
 
 @pytest.mark.asyncio
 async def test_slot_recycler_deduplicates_existing_positions():
@@ -46,12 +46,12 @@ async def test_slot_recycler_deduplicates_existing_positions():
     engine.MAX_CONCURRENT_POSITIONS = 4
     engine._active_positions["primary_SOLUSDT"] = {"asset": "SOLUSDT"}
     fake_opps = [
-        {"asset": "PAXGUSDT", "confluence_score": 62, "direction": "LONG", "price": 4350.0, "stop_loss": 4300.0, "tp1": 4400.0, "tp2": 4450.0, "tp3": 4500.0},
-        {"asset": "SOLUSDT", "confluence_score": 75, "direction": "LONG", "price": 105.0, "stop_loss": 102.0, "tp1": 108.0, "tp2": 110.0, "tp3": 115.0}
+        {"asset": "PAXGUSDT", "confluence_score": 76, "direction": "LONG", "price": 4350.0, "stop_loss": 4300.0, "tp1": 4400.0, "tp2": 4450.0, "tp3": 4500.0},
+        {"asset": "SOLUSDT", "confluence_score": 80, "direction": "LONG", "price": 105.0, "stop_loss": 102.0, "tp1": 108.0, "tp2": 110.0, "tp3": 115.0}
     ]
     await store.save_scanner_opportunities("swing", fake_opps)
 
-    with patch.object(engine, "get_unprotected_risk_count", return_value=3):
+    with patch.object(engine, "get_unprotected_risk_count", return_value=1):
         with patch.object(engine, "process_limit_setup", new_callable=AsyncMock) as mock_limit:
             await engine.on_risk_released("primary", reason="FAST_BE_ACTIVADO")
             await asyncio.sleep(0.05)
