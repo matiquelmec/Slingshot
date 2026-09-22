@@ -180,7 +180,9 @@ class DynamicNewsInterceptor:
                 logger.debug(f"[NEWS_INTERCEPTOR] Error parseando fecha de evento '{date_str}': {parse_err}")
                 continue
 
-        return False
+        if store_events is not None:
+            return False
+        return self._static_emergency_blackout(now, target_asset)
 
     def get_upcoming_event_threat(
         self,

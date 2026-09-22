@@ -145,7 +145,8 @@ Slingshot/
 │       ├── test_bitunix_tpsl_modify_and_id_resolution.py # 6 Pruebas Bitunix Dual-Protocol TPSL, Auto-Resolución ID y 1R Risk Cache
 │       ├── test_dynamic_heat_and_slot_allocation.py # 6 Pruebas SOP-97 Dynamic Heat & Slot Allocation y SOP-98 Screener Hardening
 │       ├── test_dynamic_slot_elasticity.py        # 7 Pruebas SOP-99 Dynamic Slot Elasticity & Macro Decoupled Expansion
-│       └── legacy/                                  # Pruebas históricas preservadas
+│       ├── test_chronological_backtest_parity.py    # 4 Pruebas Paridad SSoT 1:1 Unified Backtest vs Live Engine SOP-97/99
+│       └── legacy/                                  # Pruebas históricas preservadas (test_bitunix_multi_pos.py, test_ftmo_swing.py)
 │
 ├── scripts/                         # ═══ HERRAMIENTAS CLI & DE DESPLIEGUE (SSoT) ═══
 │   ├── verificar_sistema.bat        # Script de verificación integral en Windows/VPS (56 tests)

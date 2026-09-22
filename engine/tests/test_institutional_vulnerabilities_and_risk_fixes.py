@@ -115,6 +115,8 @@ async def test_atomic_tpsl_emergency_fallback_and_alert():
             return {"code": 0, "msg": "Cancelled"}
         if "place_order" in path:
             return {"code": 500, "msg": "Bitunix 502 Bad Gateway"}
+        if "modify_order" in path:
+            return {"code": 500, "msg": "Bitunix 500 Modify Failed"}
         return {"code": 0, "data": {}}
 
     with patch.object(ex, "_request", side_effect=fake_request), \

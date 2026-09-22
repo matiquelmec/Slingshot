@@ -16,12 +16,12 @@ class SlingshotML:
         self.is_loaded = False
         self.engineer = FeatureEngineer(target_horizon=2)
         
-        # Prioridad: 1. filename explícito, 2. v3 Triple-Barrier, 3. v2 fallback
+        # Prioridad: 1. filename explícito si se pasa, 2. defaults
         models_dir = Path(__file__).parent / "models"
-        candidates = []
         if model_filename:
-            candidates.append(model_filename)
-        candidates.extend(["slingshot_xgb_15m_v3.json", "slingshot_xgb_15m_v2.json"])
+            candidates = [model_filename]
+        else:
+            candidates = ["slingshot_xgb_15m_v3.json", "slingshot_xgb_15m_v2.json"]
         
         loaded_fn = None
         for fn in candidates:

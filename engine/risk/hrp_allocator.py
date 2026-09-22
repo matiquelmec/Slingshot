@@ -45,8 +45,8 @@ class HierarchicalRiskParityAllocator:
         clean_df = returns_df.replace([np.inf, -np.inf], np.nan).fillna(0.0)
 
         # 1. Matriz de Correlación y Covarianza
-        corr = clean_df.corr().fillna(0.0).values
-        cov = clean_df.cov().fillna(0.0).values
+        corr = clean_df.corr().fillna(0.0).values.copy()
+        cov = clean_df.cov().fillna(0.0).values.copy()
         assets = list(clean_df.columns)
 
         # Asegurar diagonal unitaria en correlación

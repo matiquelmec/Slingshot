@@ -76,14 +76,16 @@ class TestApexInfinityLifecycleAndOrphanPurge(unittest.TestCase):
         Verifica que el escudo de medianoche detecte con exactitud la ventana
         crítica de corte interbancario de FTMO (21:50 a 22:05 UTC).
         """
-        # Dentro de la ventana crítica
+        # Dentro de la ventana crítica (SOP-85: 21:30 a 22:30 UTC)
+        self.assertTrue(self.ftmo.check_midnight_rollover_risk(hour_utc=21, minute=35))
         self.assertTrue(self.ftmo.check_midnight_rollover_risk(hour_utc=21, minute=55))
         self.assertTrue(self.ftmo.check_midnight_rollover_risk(hour_utc=22, minute=2))
+        self.assertTrue(self.ftmo.check_midnight_rollover_risk(hour_utc=22, minute=25))
 
         # Fuera de la ventana crítica
         self.assertFalse(self.ftmo.check_midnight_rollover_risk(hour_utc=14, minute=30))
-        self.assertFalse(self.ftmo.check_midnight_rollover_risk(hour_utc=21, minute=40))
-        self.assertFalse(self.ftmo.check_midnight_rollover_risk(hour_utc=22, minute=10))
+        self.assertFalse(self.ftmo.check_midnight_rollover_risk(hour_utc=21, minute=20))
+        self.assertFalse(self.ftmo.check_midnight_rollover_risk(hour_utc=22, minute=40))
 
 
 if __name__ == "__main__":

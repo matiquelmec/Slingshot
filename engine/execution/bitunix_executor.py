@@ -841,22 +841,28 @@ class BitunixExecutor:
                     mod_payload["tpPrice"] = formatted_tp
 
                 mod_res = await self._request("POST", "/api/v1/futures/tpsl/position/modify_order", json_body=mod_payload)
-                if isinstance(mod_res, dict) and mod_res.get("code") == 0:
+                if isinstance(mod_res, dict) and mod_res.get("code") == 0 and mod_res.get("data"):
                     data = mod_res.get("data")
-                    order_id = (data.get("orderId") or data.get("id")) if isinstance(data, dict) else eo_id
-                    logger.info(f"✅ [BITUNIX] TP/SL de posición modificado exitosamente vía modify_order para {sym}. Order ID: {order_id}")
-                    return str(order_id)
-                else:
-                    msg = mod_res.get('msg') if isinstance(mod_res, dict) else str(mod_res)
-                    logger.debug(f"ℹ️ [BITUNIX] modify_order devolvió '{msg}'. Procediendo con fallback cancel-and-place.")
+                    order_id = (data.get("orderId") or data.get("id")) if isinstance(data, dict) else None
+                    if order_id:
+                        logger.info(f"✅ [BITUNIX] TP/SL de posición modificado exitosamente vía modify_order para {sym}. Order ID: {order_id}")
+                        return str(order_id)
+                msg = mod_res.get('msg') if isinstance(mod_res, dict) else str(mod_res)
+                logger.debug(f"ℹ️ [BITUNIX] modify_order devolvió '{msg}'. Procediendo con fallback cancel-and-place.")
             except Exception as mod_err:
                 logger.debug(f"[BITUNIX] Excepción en modify_order: {mod_err}. Fallback cancel-and-place.")
 
         # B) Fallback / Nueva orden: si existía orden previa y modify_order falló, purgarla antes de place_order
+        prior_sl_purged = False
         if eo_id and not order_id:
             try:
-                await self._request("POST", "/api/v1/futures/trade/cancel_order", json_body={"symbol": sym, "orderId": str(eo_id)})
-                logger.info(f"🗑️ [BITUNIX SOP-58] SL previo #{eo_id} purgado preventivamente antes de emitir nuevo SL para {sym}.")
+                res_cancel = await self._request("POST", "/api/v1/futures/trade/cancel_order", json_body={"symbol": sym, "orderId": str(eo_id)})
+                if isinstance(res_cancel, dict) and res_cancel.get("code") == 0:
+                    logger.info(f"🗑️ [BITUNIX SOP-58] SL previo #{eo_id} purgado preventivamente antes de emitir nuevo SL para {sym}.")
+                    prior_sl_purged = True
+                else:
+                    logger.debug(f"[BITUNIX] No se pudo cancelar SL previo #{eo_id} (sigue activo): {res_cancel}")
+                    prior_sl_purged = False
             except Exception as ce:
                 logger.debug(f"[BITUNIX] Error cancelando TPSL previo {ce}")
 
@@ -889,10 +895,10 @@ class BitunixExecutor:
                             logger.debug(f"[BITUNIX] Error cancelando TPSL previo {cancel_id}: {ce}")
             return str(order_id)
 
-        # 4. [RESCUE MECHANISM]: Solo si la posición está TOTALMENTE DESPROTEGIDA (sin ningún SL previo)
+        # 4. [RESCUE MECHANISM]: Solo si la posición está TOTALMENTE DESPROTEGIDA (sin ningún SL previo o purgado)
         # y fallaron todos los intentos de colocar el SL inicial, ejecutar cierre de emergencia a mercado.
-        if not eo_id:
-            logger.critical(f"🚨 [SOP-58 RESCUE] Fallo persistente al colocar SL inicial para {sym}. Ejecutando CIERRE A MERCADO DE EMERGENCIA...")
+        if not eo_id or prior_sl_purged:
+            logger.critical(f"🚨 [SOP-58 RESCUE] Fallo persistente al colocar SL para {sym}. Ejecutando CIERRE A MERCADO DE EMERGENCIA...")
             try:
                 await self.close_position_market(symbol=sym, position_id=position_id)
                 logger.info(f"[SOP-58] Posicion {sym} cerrada a mercado exitosamente para salvaguardar balance.")
@@ -903,7 +909,7 @@ class BitunixExecutor:
 
         # Si fallaron los intentos
         err_msg = last_res.get('msg') if isinstance(last_res, dict) else str(last_res)
-        if not eo_id:
+        if not eo_id or prior_sl_purged:
             logger.critical(f"🚨 [EMERGENCY SL ALERT] Posición {sym} quedó sin Stop Loss o fallaron {max_tpsl_attempts} reintentos!")
             try:
                 from engine.router.telegram_dispatcher import telegram_dispatcher

@@ -1,7 +1,7 @@
 # 📖 SLINGSHOT BIBLE v60.0 — THE MASTER CANONICAL SPECIFICATION (SSoT)
 ## QUANTITATIVE DRAWDOWN FORTRESS: PROGRESSIVE EXPOSURE SIZING (SOP-94), SESSION-ANCHORED VWAP (SOP-95), TRADEZELLA PLAYBOOK TAXONOMY (SOP-96) & DUAL-PROTOCOL OPENAPI BITUNIX TPSL RUNBOOK
 
-> **"Manual Técnico Canónico y Especificación SSoT del Ecosistema Autónomo Slingshot. Versión v60.0 APEX QUANTUM FORTRESS: Incorpora la canonización de los Protocolos SOP-94 (Progressive Exposure Sizing & Asymmetric Drawdown Protection con factor de contracción 1.0x -> 0.75x -> 0.50x y Quick Restore instantáneo al 100% ante riesgo liberado Fast-BE/TP1), SOP-95 (Session-Anchored VWAP - AVWAP con anclajes intradiarios estrictos en Asia 00:00 UTC, Londres 07:00 UTC y Nueva York 13:30 UTC), SOP-96 (TradeZella Style Institutional Playbook Taxonomy & Real-Time Expectancy Engine con clasificación exhaustiva en 4 arquetipos: OB_DISCOUNT_RETEST, LIQUIDITY_SWEEP_FVG, BOS_MOMENTUM_EXPANSION y TREND_CONTINUATION_EMA), consolidando el Blindaje OpenAPI Dual-Protocol TPSL de Bitunix (auto-resolución de ID, protocolo modify-order vs cancel-and-replace, preservación estricta del denominador 1R y protección del rescue mechanism) y los resultados récord de la auditoría oficial cronológica de 180 días (+109.44 R, Max Drawdown -3.25%, y crecimiento compuesto de $1,000 a $12,597.91 USD en Bitunix)."**
+> **"Manual Técnico Canónico y Especificación SSoT del Ecosistema Autónomo Slingshot. Versión v60.0 APEX QUANTUM FORTRESS: Incorpora la canonización de los Protocolos SOP-94 (Progressive Exposure Sizing & Asymmetric Drawdown Protection con factor de contracción 1.0x -> 0.75x -> 0.50x y Quick Restore instantáneo al 100% ante riesgo liberado Fast-BE/TP1), SOP-95 (Session-Anchored VWAP - AVWAP con anclajes intradiarios estrictos en Asia 00:00 UTC, Londres 07:00 UTC y Nueva York 13:30 UTC), SOP-96 (TradeZella Style Institutional Playbook Taxonomy & Real-Time Expectancy Engine con clasificación exhaustiva en 4 arquetipos: OB_DISCOUNT_RETEST, LIQUIDITY_SWEEP_FVG, BOS_MOMENTUM_EXPANSION y TREND_CONTINUATION_EMA), consolidando el Blindaje OpenAPI Dual-Protocol TPSL de Bitunix (auto-resolución de ID, protocolo modify-order vs cancel-and-replace, preservación estricta del denominador 1R y protección del rescue mechanism) y los resultados récord de la auditoría oficial cronológica de 180 días (+96.80 R Alpha / +94.82 R Base, Max Drawdown -3.87%, y crecimiento compuesto de $1,000 a $9,874.04 USD en Bitunix con 402 tests certificados)."**
 
 ---
 
@@ -114,17 +114,17 @@ Replay cronológico oficial sobre 14 activos VIP (`BTC`, `ETH`, `SOL`, `BNB`, `X
 ========================================================================================================================
 Métrica Cuantitativa Institucional    | Slingshot v31.0 Base    | Slingshot v51.0         | Slingshot v60.0 APEX FORTRESS
 ========================================================================================================================
-Total Operaciones Auditadas           | 466 trades (Aisladas)   | 237 trades (Replay)     | 326 trades (Replay SSoT)
-Win Rate Efectivo                     | 42.3%                   | 46.8%                   | 46.0% (150 Wins / 176 Losses)
-Profit Factor Base                    | 1.07 (Frágil)           | 1.80                    | 1.87 (Robusto)
-Profit Factor con Progressive Sizing  | 1.10                    | 1.99                    | 1.98 🚀 (Consistencia Alta)
-Retorno Total Base en R               | +22.40 R                | +66.31 R                | +109.44 R
-Retorno Total con Progressive Sizing  | +25.00 R                | +94.75 R                | +106.60 R 💎
-Drawdown Máximo de Cartera (Plano)    | -38.10%                 | -4.21%                  | -3.25% 🛡️ (Blindaje Prop Firm)
-Sortino Ratio (Riesgo a la Baja)      | 1.12                    | 24.63                   | 29.52 🛡️ (+540% s/ Base)
-Crecimiento Compuesto Bitunix ($1k)   | +$1,546.25 USD (+154%)  | +$8,148.56 USD (+814%)  | +$11,597.91 USD (+1,159.8% / 12.6X)
-Capital Final Compuesto ($1,000 USD)  | $2,546.25 USD           | $9,148.56 USD           | $12,597.91 USD 🚀
-Drawdown Máximo Compuesto en Cuenta   | -38.10%                 | -14.63%                 | -11.70% 🛡️ (Totalmente Controlado)
+Total Operaciones Auditadas           | 466 trades (Aisladas)   | 237 trades (Replay)     | 328 trades (Replay SSoT)
+Win Rate Efectivo                     | 42.3%                   | 46.8%                   | 44.2% (145 Wins / 183 Losses)
+Profit Factor Base                    | 1.07 (Frágil)           | 1.80                    | 1.79 (Robusto)
+Profit Factor con Progressive Sizing  | 1.10                    | 1.99                    | 1.90 🚀 (Consistencia Alta)
+Retorno Total Base en R               | +22.40 R                | +66.31 R                | +94.82 R
+Retorno Total con Progressive Sizing  | +25.00 R                | +94.75 R                | +96.80 R 💎 (Alpha-Tier Sizing)
+Drawdown Máximo de Cartera (Plano)    | -38.10%                 | -4.21%                  | -3.87% 🛡️ (Blindaje Prop Firm < 5%)
+Sortino Ratio (Riesgo a la Baja)      | 1.12                    | 24.63                   | 28.13 🛡️ (+520% s/ Base)
+Crecimiento Compuesto Bitunix ($1k)   | +$1,546.25 USD (+154%)  | +$8,148.56 USD (+814%)  | +$8,874.04 USD (+887.4% / 9.9X)
+Capital Final Compuesto ($1,000 USD)  | $2,546.25 USD           | $9,148.56 USD           | $9,874.04 USD 🚀
+Drawdown Máximo Compuesto en Cuenta   | -38.10%                 | -14.63%                 | -14.58% 🛡️ (Totalmente Controlado)
 ========================================================================================================================
 ```
 
@@ -135,8 +135,8 @@ Drawdown Máximo Compuesto en Cuenta   | -38.10%                 | -14.63%      
 ====================================================================================================
 Playbook Arquetípico               Trades   Win Rate    PnL (R)      Avg R      PF    Expectancy (R)
 ----------------------------------------------------------------------------------------------------
-OB_DISCOUNT_RETEST                    138     50.0%    +64.09R     +0.46R    2.61           +0.46R
-LIQUIDITY_SWEEP_FVG                   188     43.1%    +42.51R     +0.23R    1.67           +0.23R
+OB_DISCOUNT_RETEST                    136     48.5%    +59.47R     +0.44R    2.52           +0.44R
+LIQUIDITY_SWEEP_FVG                   192     41.2%    +37.34R     +0.19R    1.55           +0.19R
 ====================================================================================================
 ```
 

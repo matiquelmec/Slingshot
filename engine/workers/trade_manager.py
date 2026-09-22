@@ -1314,7 +1314,7 @@ class TradeManager:
 
                 if len(active_symbols) >= nexus.MAX_CONCURRENT_POSITIONS or unprotected_risk >= nexus.MAX_CONCURRENT_POSITIONS:
                     logger.info(f"🛑 [LIMIT SENTINEL] [{bitunix.account_label}] Techo físico de {nexus.MAX_CONCURRENT_POSITIONS} operaciones alcanzado ({len(active_symbols)} abiertas / {unprotected_risk} en riesgo). Purgando límites.")
-                    await nexus.purge_all_pending_limit_orders(reason=f"MAX_4_SLOTS_REACHED_{acc_id}", account_id=acc_id)
+                    await nexus.purge_all_pending_limit_orders(reason=f"MAX_4_RISK_SLOTS_REACHED_{acc_id}", account_id=acc_id)
                     continue
 
 

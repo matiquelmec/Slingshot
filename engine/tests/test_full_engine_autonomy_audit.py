@@ -66,24 +66,25 @@ async def test_slot_recycling_frees_risk_on_breakeven():
     from engine.execution.nexus import NexusNode
     node = NexusNode(dry_run=False)
     
-    # 4 Posiciones activas: 3 con riesgo inicial y 1 en Breakeven
+    # 4 Posiciones activas: 2 con riesgo inicial y 2 en Breakeven (AVAX y ETH)
     node._active_positions = {
         "SOLUSDT": {"signal": {"price": 100.0, "stop_loss": 95.0, "type": "LONG"}, "smart_trailing": {"be_active": False}},
         "ATOMUSDT": {"signal": {"price": 1.50, "stop_loss": 1.40, "type": "LONG"}, "smart_trailing": {"be_active": False}},
-        "AVAXUSDT": {"signal": {"price": 7.50, "stop_loss": 7.00, "type": "LONG"}, "smart_trailing": {"be_active": False}},
+        "AVAXUSDT": {"signal": {"price": 7.50, "stop_loss": 7.50, "type": "LONG"}, "smart_trailing": {"be_active": True}}, # Breakeven!
         "ETHUSDT": {"signal": {"price": 2433.29, "stop_loss": 2433.29, "type": "LONG"}, "smart_trailing": {"be_active": True}}, # Breakeven!
     }
     
-    # El conteo de riesgo debe ser 3 (ETH liberó su slot)
-    assert node.get_unprotected_risk_count() == 3, "ETH en Breakeven DEBE liberar el slot de riesgo"
+    # El conteo de riesgo debe ser 2 (AVAX y ETH liberaron su slot)
+    assert node.get_unprotected_risk_count() == 2, "Posiciones en Breakeven DEBEN liberar el slot de riesgo"
     
     # Al simular una 5ta orden (RENDERUSDT), no debe ser rechazada por límite de 4
     with patch.object(node.executor, "place_limit_signal", new_callable=AsyncMock) as mock_limit, \
          patch.object(node.executor, "get_pending_orders", new_callable=AsyncMock, return_value=[]), \
-         patch.object(node.executor, "get_available_margin_usdt", new_callable=AsyncMock, return_value=82.23):
+         patch.object(node.executor, "get_available_margin_usdt", new_callable=AsyncMock, return_value=82.23), \
+         patch("engine.workers.market_scanner.is_trade_allowed_sop18", return_value=True):
         mock_limit.return_value = {"status": "success", "order_id": "dry_new_1"}
         
-        new_sig = {"asset": "RENDERUSDT", "price": 4.50, "stop_loss": 4.20, "tp1": 5.0, "type": "LONG", "confluence_score": 90.0}
+        new_sig = {"asset": "XAUUSDT", "price": 2500.0, "stop_loss": 2480.0, "tp1": 2530.0, "type": "LONG", "confluence_score": 90.0, "ker": 0.45, "adx": 30.0}
         await node.process_limit_setup(new_sig)
         
-        assert mock_limit.called, "Debe permitir colocar la 5ta orden porque hay un slot liberado por BE"
+        assert mock_limit.called, "Debe permitir colocar la 5ta orden porque hay un slot liberado por BE y XAUUSDT expande elásticamente a 5 (SOP-99)"

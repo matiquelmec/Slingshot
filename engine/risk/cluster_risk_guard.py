@@ -37,7 +37,7 @@ class ClusterRiskGuard:
         self,
         correlation_threshold: float = DEFAULT_CORRELATION_THRESHOLD,
         max_per_cluster: int = MAX_UNPROTECTED_PER_CLUSTER,
-        allow_elite_override: bool = False
+        allow_elite_override: bool = True
     ):
         self.correlation_threshold = correlation_threshold
         self.max_per_cluster = max_per_cluster

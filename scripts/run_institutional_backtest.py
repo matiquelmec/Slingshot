@@ -65,10 +65,22 @@ def main():
         help="Modo de ejecución: 'chronological' (Event-Driven SSoT con límites de slots y macro) o 'isolated' (R plano por activo)"
     )
     parser.add_argument(
-        "--max-slots",
+        "--max-unprotected",
         type=int,
         default=2,
-        help="Máximo de posiciones LONG simultáneas con riesgo flotante (SOP-30, default: 2)"
+        help="Máximo de posiciones simultáneas con riesgo flotante sin Breakeven (SOP-97, default: 2)"
+    )
+    parser.add_argument(
+        "--max-concurrent",
+        type=int,
+        default=4,
+        help="Máximo de posiciones físicas totales abiertas en el exchange (SOP-97 / SOP-99, default: 4)"
+    )
+    parser.add_argument(
+        "--max-slots",
+        type=int,
+        default=None,
+        help="Alias legado para --max-unprotected (SOP-30)"
     )
     parser.add_argument(
         "--compounding-usd",
@@ -120,8 +132,10 @@ def main():
     if args.portfolio or (not args.symbol):
         if args.mode == "chronological":
             print("\n🚀 Ejecutando Auditoría Oficial Cronológica Unificada (Event-Driven SSoT)...")
+            unprotected_slots = args.max_slots if args.max_slots is not None else args.max_unprotected
             summary = engine.run_chronological_portfolio_replay(
-                max_concurrent_longs=args.max_slots,
+                max_unprotected_positions=unprotected_slots,
+                max_concurrent_positions=args.max_concurrent,
                 compounding_initial_usd=args.compounding_usd,
                 enable_alpha_cycle=alpha_cycle,
                 enable_trinity_boost=trinity_boost,

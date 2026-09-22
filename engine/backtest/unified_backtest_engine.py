@@ -39,6 +39,7 @@ from engine.strategies.smc import SMCInstitutionalStrategy
 from engine.core.confluence import confluence_manager
 from engine.core.execution_kernel import execution_kernel
 from engine.risk.risk_manager import RiskManager
+from engine.risk.cluster_risk_guard import cluster_risk_guard
 from engine.core.logger import logger
 
 logger.setLevel("ERROR")
@@ -47,6 +48,7 @@ DATA_DIR = os.path.join(os.path.dirname(__file__), "data")
 
 MEGA_CAPS = ["BTCUSDT", "ETHUSDT", "SOLUSDT", "XRPUSDT", "AVAXUSDT", "LINKUSDT"]
 HIGH_BETA_ALTS = ["INJUSDT", "BNBUSDT", "NEARUSDT", "FETUSDT", "SUIUSDT", "RENDERUSDT", "ATOMUSDT"]
+TRADFI_METALS = ["XAUUSDT"]
 
 
 class UnifiedBacktestEngine:
@@ -176,17 +178,26 @@ class UnifiedBacktestEngine:
         Ejecuta la simulación cuantitativa institucional v31.0.
         """
         target_file = None
-        f_180 = os.path.join(DATA_DIR, f"{symbol}_{interval}_180d.parquet")
-        f_aud = os.path.join(DATA_DIR, f"{symbol}_{interval}_audited.parquet")
-        
-        if os.path.exists(f_180):
-            target_file = f_180
-        elif os.path.exists(f_aud):
-            target_file = f_aud
-        else:
-            file_candidates = glob.glob(os.path.join(DATA_DIR, f"{symbol}_{interval}_*.parquet"))
-            if file_candidates:
-                target_file = file_candidates[0]
+        data_candidates = [symbol]
+        if symbol in ("XAUUSDT", "GOLD", "XAUUSD"):
+            data_candidates.extend(["PAXGUSDT", "XAUUSD"])
+        elif symbol == "PAXGUSDT":
+            data_candidates.extend(["XAUUSDT", "XAUUSD"])
+
+        for s_cand in data_candidates:
+            f_180 = os.path.join(DATA_DIR, f"{s_cand}_{interval}_180d.parquet")
+            f_aud = os.path.join(DATA_DIR, f"{s_cand}_{interval}_audited.parquet")
+            if os.path.exists(f_180):
+                target_file = f_180
+                break
+            elif os.path.exists(f_aud):
+                target_file = f_aud
+                break
+            else:
+                file_candidates = glob.glob(os.path.join(DATA_DIR, f"{s_cand}_{interval}_*.parquet"))
+                if file_candidates:
+                    target_file = file_candidates[0]
+                    break
 
         if not target_file:
             f15 = os.path.join(DATA_DIR, f"{symbol}_15m_180d.parquet")
@@ -625,7 +636,9 @@ class UnifiedBacktestEngine:
 
     def run_chronological_portfolio_replay(
         self,
-        max_concurrent_longs: int = 2,
+        max_unprotected_positions: int = 2,
+        max_concurrent_positions: int = 4,
+        max_concurrent_longs: Optional[int] = None,
         max_heat_pct: float = 7.5,
         strict_btc_macro: bool = True,
         toxic_hours: Optional[List[int]] = None,
@@ -644,36 +657,43 @@ class UnifiedBacktestEngine:
         enable_progressive_exposure: bool = True
     ) -> Dict[str, Any]:
         """
-        [EVENT-DRIVEN TIMELINE REPLAY v50.0]
+        [EVENT-DRIVEN TIMELINE REPLAY v60.0 SSoT]
         Simulador Cronológico Unificado de Cartera con Réplica 1-a-1 de Producción:
         - Reloj Global Unificado cruzando todos los activos en el tiempo.
         - Filtro Macro BTC dinámico en tiempo real (btc_aligned).
-        - Concurrencia de cartera y reciclaje dinámico de slots (SOP-30 & SOP-44).
+        - [SOP-97] Separación Estricta: Max Unprotected Risk (2) vs Max Concurrent Physical (4).
+        - [SOP-97] Ponderación y Desempate Concurrente por Alpha Trinity (1.25x en ETH, SOL, BNB, INJ).
+        - [SOP-99] Dynamic Slot Elasticity & Macro Decoupled Expansion (Oro ρ < 0.35 -> 3/5 slots).
         - Modo Dual: R Base / Alpha-Tier (1% plano) e Interés Compuesto Dinámico (2.5% Bitunix).
-        - Embudo de telemetría de señales.
+        - Embudo de telemetría de señales y tracking de rechazos.
         - Modulación Táctica de Régimen de Mercado SOP-63 (SlingshotRegimeAgent).
-        - [SOP-70] Streak Circuit Breaker: Pausa preventiva tras 3 pérdidas consecutivas.
+        - [SOP-70] Streak Circuit Breaker: Pausa preventiva tras pérdidas consecutivas.
         """
+        if max_concurrent_longs is not None and max_concurrent_longs != 2:
+            max_unprotected_positions = max_concurrent_longs
+
         toxic_hours = [10, 14] if toxic_hours is None else toxic_hours
         excluded_assets = ["RENDERUSDT"] if excluded_assets is None else excluded_assets
 
         btc_map = self._load_btc_macro_map()
-        all_assets = MEGA_CAPS + HIGH_BETA_ALTS
+        all_assets = MEGA_CAPS + HIGH_BETA_ALTS + TRADFI_METALS
         all_results = []
         seen = set()
 
         print("=" * 88)
-        print("🏛️  SIMULADOR CRONOLÓGICO UNIFICADO DE CARTERA (EVENT-DRIVEN SSoT v50.0)")
+        print("🏛️  SIMULADOR CRONOLÓGICO UNIFICADO DE CARTERA (EVENT-DRIVEN SSoT v60.0)")
         print("=" * 88)
-        print(f"⚙️  Concurrencia Máxima Longs : {max_concurrent_longs} posiciones simultáneas (SOP-30)")
-        print(f"🛡️  Calor Máximo de Cartera   : {max_heat_pct}% (SOP-44 Directional Heat Guardrail)")
-        print(f"🧭  Filtro Macro BTC         : {'ACTIVO (btc_aligned dinámico)' if strict_btc_macro else 'DESACTIVADO'}")
-        print(f"⏳  Quirófano Horario        : Vetadas horas {toxic_hours} UTC (Trampa Londres & Apertura NY)")
-        print(f"✂️  Poda de Activos Tóxicos  : Excluidos {excluded_assets}")
-        print(f"🔄  Reciclaje de Slots       : ACTIVO (Liberación de riesgo al tocar TP1 @ Breakeven)")
+        print(f"⚙️  Riesgo Flotante Base (SOP-97): {max_unprotected_positions} posiciones simultáneas sin BE")
+        print(f"🧱  Techo Físico Base   (SOP-97): {max_concurrent_positions} posiciones concurrentes totales")
+        print(f"🌊  Elasticidad Dinámica(SOP-99): ACTIVA (Contracción racha >=2 | Expansión desacoplada 3/5)")
+        print(f"🛡️  Calor Máximo de Cartera     : {max_heat_pct}% (SOP-44 Directional Heat Guardrail)")
+        print(f"🧭  Filtro Macro BTC           : {'ACTIVO (btc_aligned dinámico)' if strict_btc_macro else 'DESACTIVADO'}")
+        print(f"⏳  Quirófano Horario          : Vetadas horas {toxic_hours} UTC (Trampa Londres & Apertura NY)")
+        print(f"✂️  Poda de Activos Tóxicos    : Excluidos {excluded_assets}")
+        print(f"🔄  Reciclaje de Slots         : ACTIVO (Liberación de riesgo al tocar TP1 @ Breakeven)")
         adv_active = enable_alpha_cycle or enable_trinity_boost or enable_elastic_runner or enable_golden_hours or enable_regime_agent
         if adv_active:
-            print(f"🌟  Protocolos Alpha Avanzados: SOP-46 Cycle: {enable_alpha_cycle} | SOP-47 Trinity: {enable_trinity_boost} | SOP-48 KER: {enable_elastic_runner} | SOP-49 Hours: {enable_golden_hours} | SOP-63 Regime: {enable_regime_agent}")
+            print(f"🌟  Protocolos Alpha Avanzados : SOP-46 Cycle: {enable_alpha_cycle} | SOP-47 Trinity: {enable_trinity_boost} | SOP-48 KER: {enable_elastic_runner} | SOP-49 Hours: {enable_golden_hours} | SOP-63 Regime: {enable_regime_agent}")
         print("=" * 88)
 
         # 1. Extracción de setups brutos
@@ -694,17 +714,34 @@ class UnifiedBacktestEngine:
             print("⚠️ No se encontraron operaciones para los criterios seleccionados.")
             return {}
 
-        df_all = df_all.sort_values("entry_time").reset_index(drop=True)
+        # SOP-97: Ponderación de Prioridad para desempate cronológico (Alpha Trinity 1.25x)
+        def calculate_priority_score(row) -> float:
+            score = float(row.get("confluence_score", 70.0))
+            s = str(row.get("symbol", "")).upper()
+            if any(t1 in s for t1 in ("ETH", "SOL", "BNB", "INJ")):
+                multiplier = 1.25
+            elif any(t2 in s for t2 in ("AVAX", "NEAR", "SUI", "XRP", "BTC")):
+                multiplier = 1.00
+            else:
+                multiplier = 0.85
+            return round(score * multiplier, 2)
+
+        df_all["priority_score"] = df_all.apply(calculate_priority_score, axis=1)
+        df_all = df_all.sort_values(by=["entry_time", "priority_score"], ascending=[True, False]).reset_index(drop=True)
         raw_signal_count = len(df_all)
 
-        # 2. Replay Cronológico con Máquina de Estados
-        active_risk_positions = []
+        # 2. Replay Cronológico con Máquina de Estados (SOP-97 y SOP-99)
+        active_unprotected_positions = []
+        active_physical_positions = []
         executed_trades = []
         rejected_macro_btc = 0
         rejected_max_slots = 0
+        rejected_unprotected_cap = 0
+        rejected_physical_cap = 0
         rejected_portfolio_heat = 0
         rejected_toxic_hours = 0
         rejected_streak_breaker = 0
+        rejected_already_open = 0
         
         # [SOP-70 & SOP-94 STREAK CIRCUIT BREAKER & PROGRESSIVE EXPOSURE]
         consecutive_losses = 0
@@ -737,36 +774,76 @@ class UnifiedBacktestEngine:
                 continue
 
             # Veto Macro BTC en Vivo (btc_aligned)
-            if strict_btc_macro and sym != "BTCUSDT":
+            if strict_btc_macro and sym not in ("BTCUSDT", "XAUUSDT", "PAXGUSDT"):
                 btc_trend = btc_map.get(entry_dt, "NEUTRAL")
                 aligned = (direction == "LONG" and btc_trend == "BULLISH") or (direction == "SHORT" and btc_trend == "BEARISH")
                 if not aligned:
                     rejected_macro_btc += 1
                     continue
 
-            # Limpiar posiciones que ya liberaron su riesgo antes de este timestamp
-            active_risk_positions = [p for p in active_risk_positions if p["risk_freed_time"] > entry_dt]
+            # Limpiar posiciones expiradas antes de este timestamp
+            active_unprotected_positions = [p for p in active_unprotected_positions if p["risk_freed_time"] > entry_dt]
+            active_physical_positions = [p for p in active_physical_positions if p["exit_time"] > entry_dt]
+            open_symbols = [p["symbol"] for p in active_physical_positions]
 
-            # Verificación de Concurrencia de Cartera (SOP-30)
-            same_dir_active = [p for p in active_risk_positions if p["direction"] == direction]
-            if direction == "LONG" and len(same_dir_active) >= max_concurrent_longs:
+            # Deduplicación: no abrir dos operaciones del mismo activo simultáneamente
+            if sym in open_symbols:
+                rejected_already_open += 1
+                continue
+
+            # [SOP-99 DYNAMIC SLOT ELASTICITY & MACRO DECOUPLED EXPANSION]
+            conf_score = float(tr.get("confluence_score", 70.0))
+            if consecutive_losses >= 2:
+                # Contracción defensiva
+                dyn_max_unprotected = 1
+                dyn_max_concurrent = 3
+                slot_mode = "DEFENSIVE_CONTRACTION"
+            elif consecutive_losses == 0 and conf_score >= 85.0:
+                # Expansión God Mode si activo desacoplado de los abiertos
+                is_dec, corr_val = cluster_risk_guard.is_asset_decoupled(sym, open_symbols, threshold=0.35)
+                if is_dec and open_symbols:
+                    dyn_max_unprotected = 3
+                    dyn_max_concurrent = 5
+                    slot_mode = "GOD_MODE_DECOUPLED_EXPANSION"
+                else:
+                    dyn_max_unprotected = max_unprotected_positions
+                    dyn_max_concurrent = max_concurrent_positions
+                    slot_mode = "STANDARD_SOP97"
+            else:
+                dyn_max_unprotected = max_unprotected_positions
+                dyn_max_concurrent = max_concurrent_positions
+                slot_mode = "STANDARD_SOP97"
+
+            # Verificación de Techo Físico Concurrente (SOP-97 / SOP-99)
+            if len(active_physical_positions) >= dyn_max_concurrent:
                 rejected_max_slots += 1
+                rejected_physical_cap += 1
+                continue
+
+            # Verificación de Posiciones con Riesgo Flotante Desprotegido (SOP-97 / SOP-99)
+            if len(active_unprotected_positions) >= dyn_max_unprotected:
+                rejected_max_slots += 1
+                rejected_unprotected_cap += 1
                 continue
 
             # Verificación de Calor de Cartera (SOP-44)
-            current_heat = len(active_risk_positions) * (self.risk_pct * 100)
+            current_heat = len(active_unprotected_positions) * (self.risk_pct * 100)
             if current_heat + (self.risk_pct * 100) > max_heat_pct:
                 rejected_portfolio_heat += 1
                 continue
 
-            # Registrar posición activa en riesgo (libera slot al tocar TP1 @ Breakeven)
-            active_risk_positions.append({
+            # Registrar posición activa
+            pos_info = {
                 "symbol": sym,
                 "direction": direction,
                 "entry_time": entry_dt,
                 "risk_freed_time": risk_freed_dt,
-                "exit_time": exit_dt
-            })
+                "exit_time": exit_dt,
+                "slot_mode": slot_mode
+            }
+            active_physical_positions.append(pos_info)
+            if risk_freed_dt > entry_dt:
+                active_unprotected_positions.append(pos_info)
 
             # [SOP-94] Progressive Exposure Sizing (Words of Rizdom Insight)
             streak_mult = 1.0
@@ -777,6 +854,7 @@ class UnifiedBacktestEngine:
                     mode="balanced"
                 )
             tr["streak_mult"] = streak_mult
+            tr["slot_mode"] = slot_mode
             executed_trades.append(tr)
             
             # [SOP-70 & SOP-94] Actualizar contador de pérdidas consecutivas y Quick Restore
@@ -894,7 +972,8 @@ class UnifiedBacktestEngine:
         print(f" • Señales Estructurales Brutas Detectadas : {raw_signal_count}")
         print(f" • Vetadas por Filtro Macro BTC (btc_aligned): {rejected_macro_btc:>4} ({rejected_macro_btc/raw_signal_count*100:.1f}%)")
         print(f" • Vetadas por Horas Tóxicas (10h/14h UTC)  : {rejected_toxic_hours:>4} ({rejected_toxic_hours/raw_signal_count*100:.1f}%)")
-        print(f" • Vetadas por Límite de Slots (SOP-30)     : {rejected_max_slots:>4} ({rejected_max_slots/raw_signal_count*100:.1f}%)")
+        print(f" • Vetadas por Límite de Slots (SOP-97/99)  : {rejected_max_slots:>4} ({rejected_max_slots/raw_signal_count*100:.1f}%) [Riesgo: {rejected_unprotected_cap} | Físicas: {rejected_physical_cap}]")
+        print(f" • Vetadas por Activo Ya Abierto (Dedup)    : {rejected_already_open:>4} ({rejected_already_open/raw_signal_count*100:.1f}%)")
         print(f" • Vetadas por Calor de Cartera (SOP-44)   : {rejected_portfolio_heat:>4} ({rejected_portfolio_heat/raw_signal_count*100:.1f}%)")
         print(f" • Vetadas por Streak Breaker (SOP-70)     : {rejected_streak_breaker:>4} ({rejected_streak_breaker/raw_signal_count*100:.1f}%)")
         print(f" • Operaciones Reales Ejecutadas            : {executed_count:>4} ({executed_count/raw_signal_count*100:.1f}%)")
@@ -957,7 +1036,7 @@ class UnifiedBacktestEngine:
 
         summary_payload = {
             "audit_date": datetime.now().isoformat(),
-            "engine_version": "v50.0 APEX EXPANSION (Event-Driven Timeline SSoT)",
+            "engine_version": "v60.0 APEX EXPANSION (Event-Driven Timeline SSoT SOP-97 & SOP-99)",
             "advanced_protocols": {
                 "alpha_cycle_sop46": enable_alpha_cycle,
                 "trinity_boost_sop47": enable_trinity_boost,
@@ -969,7 +1048,12 @@ class UnifiedBacktestEngine:
                 "raw_signals": raw_signal_count,
                 "rejected_macro_btc": rejected_macro_btc,
                 "rejected_max_slots": rejected_max_slots,
+                "rejected_unprotected_cap": rejected_unprotected_cap,
+                "rejected_physical_cap": rejected_physical_cap,
+                "rejected_already_open": rejected_already_open,
                 "rejected_portfolio_heat": rejected_portfolio_heat,
+                "rejected_toxic_hours": rejected_toxic_hours,
+                "rejected_streak_breaker": rejected_streak_breaker,
                 "executed_trades": executed_count
             },
             "institutional_mode": {
