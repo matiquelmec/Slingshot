@@ -769,7 +769,11 @@ class NexusNode:
         
         Niveles:
         - CONTRAIDO (1 riesgo, 3 concurrentes):
-            Si racha de pérdidas >= 2 (SOP-94) o ventana macro de alto impacto (SOP-19).
+            Exclusivamente ante ventana macro de alto impacto (SOP-19 / SOP-92).
+        - ESCUDO DE RACHA (2 riesgos, 4 concurrentes):
+            Si racha de pérdidas >= 2 (SOP-94). Mantiene los 2 cupos para evitar parálisis por
+            activo lento (Slow-Asset Slot Starvation), bloquea la expansión a 3 cupos y modula
+            el riesgo monetario al 0.65x (calor total máx 3.25% < 5.00% estándar).
         - EXPANDIDO (3 riesgos, 5 concurrentes):
             Si score >= 85.0% (God Mode), activo descorrelacionado (ρ < 0.35 frente a activos abiertos),
             margen libre >= 65% y cero pérdidas consecutivas.
@@ -778,7 +782,7 @@ class NexusNode:
         """
         losses = self._consecutive_losses.get(account_id, 0)
         
-        # 1. Contracción Defensiva por Racha (SOP-94) o Noticias Macro (SOP-19 / SOP-92)
+        # 1. Contracción Defensiva por Noticias Macro (SOP-19 / SOP-92)
         from engine.risk.cluster_risk_guard import cluster_risk_guard
         from engine.indicators.news_interceptor import news_interceptor
         
@@ -789,9 +793,15 @@ class NexusNode:
         except Exception:
             pass
             
-        if losses >= 2 or is_news_blocked:
-            reason = f"Racha de pérdidas ({losses})" if losses >= 2 else "Ventana Macro Activa (SOP-19)"
-            return 1, 3, f"DEFENSIVE_CONTRACTION ({reason})"
+        if is_news_blocked:
+            return 1, 3, "DEFENSIVE_CONTRACTION (Ventana Macro Activa SOP-19)"
+
+        if losses >= 2:
+            return (
+                self.MAX_UNPROTECTED_RISK_POSITIONS,
+                self.MAX_CONCURRENT_POSITIONS,
+                f"STANDARD_SOP97 (SOP-94 Streak Shield {losses}L @ 0.65x)"
+            )
 
         # 2. Expansión Elástica Institucional (SOP-99)
         score = float(candidate_signal.get("confluence_score", candidate_signal.get("score", 0)))

@@ -95,16 +95,20 @@ def test_elastic_expansion_blocked_by_insufficient_margin(nexus):
     assert mode == "STANDARD_SOP97"
 
 def test_elastic_contraction_under_loss_streak(nexus):
-    """Racha de 2 pérdidas consecutivas (SOP-94) contrae la capacidad a 1 solo riesgo flotante."""
+    """Racha de 2 pérdidas consecutivas (SOP-94) mantiene 2 cupos de riesgo para evitar bloqueo por activo lento, pero bloquea la expansión a 3 cupos."""
     account_id = "primary"
     nexus._consecutive_losses[account_id] = 2
+    nexus._active_positions = {
+        f"{account_id}_BTCUSDT": {"symbol": "BTCUSDT", "account_id": account_id, "be_active": False},
+        f"{account_id}_SOLUSDT": {"symbol": "SOLUSDT", "account_id": account_id, "be_active": False}
+    }
     
-    opp = {"asset": "SOLUSDT", "confluence_score": 92.0}
+    opp = {"asset": "XAUUSDT", "symbol": "XAUUSDT", "confluence_score": 92.0}
     u_cap, c_cap, mode = nexus.get_dynamic_slot_capacity(account_id, opp, free_margin_pct=80.0)
     
-    assert u_cap == 1
-    assert c_cap == 3
-    assert "DEFENSIVE_CONTRACTION" in mode
+    assert u_cap == 2
+    assert c_cap == 4
+    assert "SOP-94 Streak Shield" in mode
 
 def test_elastic_contraction_under_macro_news(nexus):
     """Ventana macro activa (SOP-19 / SOP-92) contrae la capacidad a 1 solo riesgo flotante."""

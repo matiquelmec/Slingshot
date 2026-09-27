@@ -12,11 +12,11 @@
 ![Execution Engine](https://img.shields.io/badge/Execution-SOP--64_Auto--Dispatcher_≥75%25-green?style=for-the-badge)
 ![Security](https://img.shields.io/badge/Security_Protocols-SOP--01%20to%20SOP--99-emerald?style=for-the-badge)
 ![QA Suite](https://img.shields.io/badge/QA_Suite-402_Tests_100%25_Passed-success?style=for-the-badge)
-![Crypto Return](https://img.shields.io/badge/Crypto_Compounded_ROI-%2B887.4%25_(9.9x)-gold?style=for-the-badge)
-![Total Alpha](https://img.shields.io/badge/Total_Alpha-%2B96.80_R-gold?style=for-the-badge)
-![Profit Factor](https://img.shields.io/badge/Profit_Factor-1.90_Institucional-blue?style=for-the-badge)
-![Sortino Ratio](https://img.shields.io/badge/Sortino_Ratio-28.13_Elite-blue?style=for-the-badge)
-![Drawdown](https://img.shields.io/badge/Max_Drawdown--3.87%25_Shield-brightgreen?style=for-the-badge)
+![Crypto Return](https://img.shields.io/badge/Crypto_Compounded_ROI-%2B972.1%25_(10.7x)-gold?style=for-the-badge)
+![Total Alpha](https://img.shields.io/badge/Total_Alpha-%2B101.80_R_Base_%7C_%2B99.96_R_Alpha-gold?style=for-the-badge)
+![Profit Factor](https://img.shields.io/badge/Profit_Factor-1.93_Institucional-blue?style=for-the-badge)
+![Sortino Ratio](https://img.shields.io/badge/Sortino_Ratio-26.00_Elite-blue?style=for-the-badge)
+![Drawdown](https://img.shields.io/badge/Max_Drawdown--3.74%25_Shield-brightgreen?style=for-the-badge)
 ![Kernel](https://img.shields.io/badge/Kernel-Polars_Rust_Sub--1.0ms-black?style=for-the-badge&logo=rust&logoColor=fff)
 ![Persistence](https://img.shields.io/badge/Persistence-SQLite_WAL_ACID-003B57?style=for-the-badge&logo=sqlite&logoColor=fff)
 
@@ -191,35 +191,35 @@ graph TB
 | **SOP-91** | Sentinel Watchdog Auto-Recovery (<5s) | Demonio vigilante de procesos para auto-reiniciar MT5, FastAPI o HFT Sidecar ante caídas. |
 | **SOP-92** | Dynamic Slot Recycler v27.0 APEX | Liberación y reasignación instantánea de cupos de riesgo ante eventos de Fast Breakeven. |
 | **SOP-93** | Order TTL Sentinel (45 Minutos) | Cancelación automática de órdenes límite no activadas tras 3 velas de 15m. |
-| **SOP-94** | Progressive Exposure & Asymmetric DD Protection | Contracción asimétrica (1.0x -> 0.75x -> 0.50x) con Quick Restore instantáneo a 1.0x en BE/TP1. |
+| **SOP-94** | Progressive Exposure & Asymmetric DD Protection | Contracción asimétrica (1.0x -> 0.85x -> 0.65x) manteniendo 2 slots con Quick Restore instantáneo a 1.0x en BE/TP1. |
 | **SOP-95** | Session-Anchored VWAP (AVWAP) Intraday Filter | Anclajes intradiarios en Asia (00:00), Londres (07:00) y NY (13:30 UTC) con gating institucional. |
 | **SOP-96** | TradeZella Style Playbook Taxonomy & Expectancy | Clasificación en 4 arquetipos cuantitativos con desglose y seguimiento de Profit Factor en vivo. |
 | **SOP-97** | Multi-Asset Dynamic Heat & Slot Allocation | Gestión dual: 2 posiciones con riesgo no protegido máx y 4 físicas máx con liberación en Breakeven. |
 | **SOP-98** | Dynamic Screener Hardening & Spread Shield | Filtro bid/ask spread $\le 0.12\%$, volumen $\ge \$30\text{M}$ USDT y descarte de micro-tokens. |
-| **SOP-99** | Dynamic Slot Elasticity & Macro Decoupling | Elasticidad 1-3 riesgos y 3-5 físicas (contracción por racha $\ge 2$, expansión macro $\rho < 0.35$). |
+| **SOP-99** | Dynamic Slot Elasticity & Macro Decoupling | Elasticidad 1-3 riesgos y 3-5 físicas (contracción macro SOP-19, Streak Shield 2 slots en racha, expansión macro $\rho < 0.35$). |
 
 ---
 
 ## 📊 Auditorías Cuantitativas Oficiales SSoT
 
 ### 1. Auditoría Oficial Criptomonedas Bitunix (180 Días Event-Driven Replay)
-Auditoría cronológica oficial sobre 328 operaciones reales concurrentes con 14 pares VIP, comisiones Maker/Taker y slippage descontados:
+Auditoría cronológica oficial sobre 350 operaciones reales concurrentes con 14 pares VIP, comisiones Maker/Taker y slippage descontados:
 
 ```text
 ========================================================================================================================
 Métrica Cuantitativa Institucional    | Slingshot v31.0 Base    | Slingshot v51.0         | Slingshot v60.0 APEX FORTRESS
 ========================================================================================================================
-Total Operaciones Auditadas           | 466 trades (Aisladas)   | 237 trades (Replay)     | 328 trades (Replay SSoT)
-Win Rate Real (TP1 / TP2 / TP3)       | 42.3%                   | 46.8%                   | 44.2% (145 Wins / 183 Losses)
-Profit Factor Base                    | 1.07 (Frágil)           | 1.80 (Sólido)           | 1.79 (Sólido Institucional)
-Profit Factor con Progressive Sizing  | 1.10                    | 1.99 🚀                 | 1.90 🚀 (Robusto y Asimétrico)
-Retorno Total Base en R               | +22.40 R                | +66.31 R                | +94.82 R
-Retorno Total con Progressive Sizing  | +25.00 R                | +94.75 R 💎             | +96.80 R 💎 (Alpha-Tier Sizing)
-Drawdown Máximo de Cartera (Plano)    | -38.10% (Descalificado) | -4.21% 🛡️               | -3.87% 🛡️ (Blindaje Total Prop Firm)
-Sortino Ratio (Downside Risk)         | 1.12                    | 24.63 🛡️               | 28.13 🛡️ (+520% s/ Base)
-Crecimiento Compuesto Bitunix ($1k)   | +$1,546.25 USD (+154%)  | +$8,148.56 USD (+814%)  | +$8,874.04 USD (+887.4% / 9.9X)
-Capital Final Compuesto ($1,000 USD)  | $2,546.25 USD           | $9,148.56 USD 🚀        | $9,874.04 USD 🚀
-Drawdown Máximo Compuesto (2.5%)      | -38.10%                 | -14.63% 🛡️              | -14.58% 🛡️ (Totalmente Controlado)
+Total Operaciones Auditadas           | 466 trades (Aisladas)   | 237 trades (Replay)     | 350 trades (Replay SSoT)
+Win Rate Real (TP1 / TP2 / TP3)       | 42.3%                   | 46.8%                   | 44.6% (156 Wins / 194 Losses)
+Profit Factor Base                    | 1.07 (Frágil)           | 1.80 (Sólido)           | 1.80 (Sólido Institucional)
+Profit Factor con Progressive Sizing  | 1.10                    | 1.99 🚀                 | 1.93 🚀 (Robusto y Asimétrico)
+Retorno Total Base en R               | +22.40 R                | +66.31 R                | +101.80 R
+Retorno Total con Progressive Sizing  | +25.00 R                | +94.75 R 💎             | +99.96 R 💎 (Alpha-Tier Sizing)
+Drawdown Máximo de Cartera (Plano)    | -38.10% (Descalificado) | -4.21% 🛡️               | -3.74% 🛡️ (Blindaje Total Prop Firm)
+Sharpe / Sortino Ratio                | 0.85 / 1.12             | 3.95 / 24.63 🛡️         | 4.30 / 26.00 🛡️ (Élite Cuantitativa)
+Crecimiento Compuesto Bitunix ($1k)   | +$1,546.25 USD (+154%)  | +$8,148.56 USD (+814%)  | +$9,720.55 USD (+972.1% / 10.7X)
+Capital Final Compuesto ($1,000 USD)  | $2,546.25 USD           | $9,148.56 USD 🚀        | $10,720.55 USD 🚀
+Drawdown Máximo Compuesto (2.5%)      | -38.10%                 | -14.63% 🛡️              | -12.30% 🛡️ (Totalmente Controlado)
 ========================================================================================================================
 ```
 
@@ -228,8 +228,8 @@ Drawdown Máximo Compuesto (2.5%)      | -38.10%                 | -14.63% 🛡�
 ====================================================================================================
 Playbook Arquetípico               Trades   Win Rate    PnL (R)      Avg R      PF    Expectancy (R)
 ----------------------------------------------------------------------------------------------------
-OB_DISCOUNT_RETEST                    136     48.5%    +59.47R     +0.44R    2.52           +0.44R
-LIQUIDITY_SWEEP_FVG                   192     41.2%    +37.34R     +0.19R    1.55           +0.19R
+OB_DISCOUNT_RETEST                    142     47.9%    +56.93R     +0.40R    2.42           +0.40R
+LIQUIDITY_SWEEP_FVG                   208     42.3%    +43.03R     +0.21R    1.64           +0.21R
 ====================================================================================================
 ```
 

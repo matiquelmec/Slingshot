@@ -651,7 +651,7 @@ class UnifiedBacktestEngine:
         enable_elastic_runner: bool = False,
         enable_golden_hours: bool = False,
         enable_regime_agent: bool = False,
-        enable_streak_circuit_breaker: bool = True,
+        enable_streak_circuit_breaker: bool = False,
         max_consecutive_losses: int = 3,
         streak_cooldown_trades: int = 1,
         enable_progressive_exposure: bool = True
@@ -794,10 +794,11 @@ class UnifiedBacktestEngine:
             # [SOP-99 DYNAMIC SLOT ELASTICITY & MACRO DECOUPLED EXPANSION]
             conf_score = float(tr.get("confluence_score", 70.0))
             if consecutive_losses >= 2:
-                # Contracción defensiva
-                dyn_max_unprotected = 1
-                dyn_max_concurrent = 3
-                slot_mode = "DEFENSIVE_CONTRACTION"
+                # Escudo de Racha SOP-94: Mantiene 2 cupos para evitar parálisis por activo lento,
+                # bloquea expansión a 3 cupos y reduce el riesgo monetario al 0.65x.
+                dyn_max_unprotected = max_unprotected_positions
+                dyn_max_concurrent = max_concurrent_positions
+                slot_mode = "STREAK_SHIELD_SOP94"
             elif consecutive_losses == 0 and conf_score >= 85.0:
                 # Expansión God Mode si activo desacoplado de los abiertos
                 is_dec, corr_val = cluster_risk_guard.is_asset_decoupled(sym, open_symbols, threshold=0.35)

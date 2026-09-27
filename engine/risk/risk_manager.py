@@ -1055,6 +1055,13 @@ class RiskManager:
                     break
             consecutive_losses = max(consecutive_losses, streak)
 
+        if mode == "institutional_growth":
+            if consecutive_losses >= 3:
+                return 0.70
+            elif consecutive_losses == 2:
+                return 0.85
+            return 1.00
+
         if consecutive_losses >= 2:
             return 0.50 if mode == "prop_firm" else 0.65
         elif consecutive_losses == 1:

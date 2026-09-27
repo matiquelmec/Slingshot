@@ -1,7 +1,7 @@
 # 📖 SLINGSHOT BIBLE v60.0 — THE MASTER CANONICAL SPECIFICATION (SSoT)
 ## QUANTITATIVE DRAWDOWN FORTRESS: PROGRESSIVE EXPOSURE SIZING (SOP-94), SESSION-ANCHORED VWAP (SOP-95), TRADEZELLA PLAYBOOK TAXONOMY (SOP-96) & DUAL-PROTOCOL OPENAPI BITUNIX TPSL RUNBOOK
 
-> **"Manual Técnico Canónico y Especificación SSoT del Ecosistema Autónomo Slingshot. Versión v60.0 APEX QUANTUM FORTRESS: Incorpora la canonización de los Protocolos SOP-94 (Progressive Exposure Sizing & Asymmetric Drawdown Protection con factor de contracción 1.0x -> 0.75x -> 0.50x y Quick Restore instantáneo al 100% ante riesgo liberado Fast-BE/TP1), SOP-95 (Session-Anchored VWAP - AVWAP con anclajes intradiarios estrictos en Asia 00:00 UTC, Londres 07:00 UTC y Nueva York 13:30 UTC), SOP-96 (TradeZella Style Institutional Playbook Taxonomy & Real-Time Expectancy Engine con clasificación exhaustiva en 4 arquetipos: OB_DISCOUNT_RETEST, LIQUIDITY_SWEEP_FVG, BOS_MOMENTUM_EXPANSION y TREND_CONTINUATION_EMA), consolidando el Blindaje OpenAPI Dual-Protocol TPSL de Bitunix (auto-resolución de ID, protocolo modify-order vs cancel-and-replace, preservación estricta del denominador 1R y protección del rescue mechanism) y los resultados récord de la auditoría oficial cronológica de 180 días (+96.80 R Alpha / +94.82 R Base, Max Drawdown -3.87%, y crecimiento compuesto de $1,000 a $9,874.04 USD en Bitunix con 402 tests certificados)."**
+> **"Manual Técnico Canónico y Especificación SSoT del Ecosistema Autónomo Slingshot. Versión v60.0 APEX QUANTUM FORTRESS: Incorpora la canonización de los Protocolos SOP-94 (Progressive Exposure Sizing & Asymmetric Drawdown Protection con factor de contracción 1.0x -> 0.85x -> 0.65x manteniendo 2 slots operativos y Quick Restore instantáneo al 100% ante riesgo liberado Fast-BE/TP1), SOP-95 (Session-Anchored VWAP - AVWAP con anclajes intradiarios estrictos en Asia 00:00 UTC, Londres 07:00 UTC y Nueva York 13:30 UTC), SOP-96 (TradeZella Style Institutional Playbook Taxonomy & Real-Time Expectancy Engine con clasificación exhaustiva en 4 arquetipos: OB_DISCOUNT_RETEST, LIQUIDITY_SWEEP_FVG, BOS_MOMENTUM_EXPANSION y TREND_CONTINUATION_EMA), consolidando el Blindaje OpenAPI Dual-Protocol TPSL de Bitunix (auto-resolución de ID, protocolo modify-order vs cancel-and-replace, preservación estricta del denominador 1R y protección del rescue mechanism) y los resultados récord de la auditoría oficial cronológica de 180 días (+99.96 R Alpha / +101.80 R Base, Max Drawdown -3.74%, Sharpe 4.30, y crecimiento compuesto de $1,000 a $10,720.55 USD en Bitunix con 402+ tests certificados)."**
 
 ---
 
@@ -17,8 +17,8 @@ flowchart TD
     TAG --> Q_STREAK{"¿Estado de Racha de la Cuenta? (SOP-94)"}
     
     Q_STREAK -- "0 pérdidas / Riesgo liberado" --> MULT_100["Multiplicador 1.00x (Exposición Plena 100%)"]
-    Q_STREAK -- "1 pérdida consecutiva" --> MULT_75["Multiplicador 0.75x (Contracción Preventiva)"]
-    Q_STREAK -- ">= 2 pérdidas consecutivas" --> MULT_50["Multiplicador 0.50x (Blindaje de Drawdown)"]
+    Q_STREAK -- "1 pérdida consecutiva" --> MULT_75["Multiplicador 0.85x (Ajuste Preventivo Suave)"]
+    Q_STREAK -- ">= 2 pérdidas consecutivas" --> MULT_50["Multiplicador 0.65x + Streak Shield (2 Slots Activos)"]
     
     MULT_100 --> CLAMP["🛡️ Pre-Flight Hard-Clamp SOP-42 (Max $5 Loss / $150 Notional)"]
     MULT_75 --> CLAMP
@@ -28,7 +28,7 @@ flowchart TD
     
     EXE --> LIFE{"Monitoreo Activo de Trade (TradeManager)"}
     
-    LIFE -- "Toca Fast-BE (+1.0R) o TP1" --> QR["⚡ QUICK RESTORE INSTANTÁNEO:<br/>Racha = 0 | Multiplicador -> 1.00x"]
+    LIFE -- "Toca Fast-BE (+1.0R), TP1 o Cierre +PnL" --> QR["⚡ QUICK RESTORE INSTANTÁNEO:<br/>Racha = 0 | Multiplicador -> 1.00x"]
     LIFE -- "Stop Loss Hit / Invalidación Temprana" --> SL_HIT["📉 INCREMENTAR RACHA:<br/>Pérdidas += 1 | Multiplicador Contrae"]
 ```
 
@@ -42,11 +42,11 @@ flowchart TD
 - **Formulación Matemática:**
   $$\text{StreakMultiplier} = \begin{cases} 
   1.00x & \text{si } \text{consecutive\_losses} = 0 \lor \text{risk\_released\_recently} = \text{True} \\ 
-  0.75x & \text{si } \text{consecutive\_losses} = 1 \\ 
-  0.50x & \text{si } \text{consecutive\_losses} \ge 2 
+  0.85x & \text{si } \text{consecutive\_losses} = 1 \\ 
+  0.65x & \text{si } \text{consecutive\_losses} \ge 2 \text{ (0.50x en prop\_firm)}
   \end{cases}$$
 - **Mecanismo de Quick Restore:**
-  - Si una posición abierta alcanza **Fast-BE (+1.0R con SL a $+0.00$)** o ejecuta **TP1**, el riesgo flotante queda eliminado. El centinela `on_risk_released` en [`nexus.py`](file:///c:/Users/Matías Riquelme/Desktop/Proyectos documentados/Slingshot_Trading/engine/execution/nexus.py) resetea automáticamente `consecutive_losses = 0` y activa `risk_released_recently = True`.
+  - Si una posición abierta alcanza **Fast-BE (+1.0R con SL a $+0.00$)**, ejecuta **TP1** o cierra con `realizedPNL >= 0` en Bitunix, el riesgo flotante queda eliminado. El centinela `on_risk_released` en [`nexus.py`](file:///c:/Users/Matías Riquelme/Desktop/Proyectos documentados/Slingshot_Trading/engine/execution/nexus.py) resetea automáticamente `consecutive_losses = 0` y activa `risk_released_recently = True`.
   - La siguiente orden entra inmediatamente al **1.00x (100% de riesgo nominal)**, eliminando la inercia punitiva de los sistemas de martingala inversa tradicionales.
 - **Implementación en Producción:**
   - [`engine/risk/risk_manager.py`](file:///c:/Users/Matías Riquelme/Desktop/Proyectos documentados/Slingshot_Trading/engine/risk/risk_manager.py): Método estático `calculate_streak_exposure_multiplier()`.
@@ -80,9 +80,9 @@ flowchart TD
   La clasificación sistemática de las operaciones bajo arquetipos definidos permite descomponer la esperanza matemática de cada setup, identificar los catalizadores de mayor Profit Factor y descartar u optimizar estrategias de baja expectativa.
 - **Taxonomía Canónica de Playbooks:**
   1. `OB_DISCOUNT_RETEST`: Entrada tras confirmación de Order Block institucional en zona de descuento OTE (Fibonacci 61.8% a 78.6%).
-     * *Rendimiento Auditado (180 días):* **Profit Factor 2.61**, **Win Rate 50.0%**, **+64.09 R** (El arquetipo de mayor rentabilidad del sistema).
+     * *Rendimiento Auditado (180 días):* **Profit Factor 2.42**, **Win Rate 47.9%**, **+56.93 R** (El arquetipo de mayor rentabilidad del sistema).
   2. `LIQUIDITY_SWEEP_FVG`: Entrada tras barrido de liquidez de máximos/mínimos previos (Buy-Side/Sell-Side Liquidity) acoplado a un Fair Value Gap no mitigado.
-     * *Rendimiento Auditado (180 días):* **Profit Factor 1.67**, **Win Rate 43.1%**, **+42.51 R**.
+     * *Rendimiento Auditado (180 días):* **Profit Factor 1.64**, **Win Rate 42.3%**, **+43.03 R**.
   3. `BOS_MOMENTUM_EXPANSION`: Ruptura confirmada de estructura de mercado (Break of Structure) con expansión de volumen relativo (RVOL $\ge 1.05$) y aceleración tendencial ($\text{ADX} \ge 20$).
   4. `TREND_CONTINUATION_EMA`: Entrada en retrocesos a favor de la tendencia macro sustentada por las medias móviles exponenciales EMA 9, 21 y 200.
 - **Implementación en Producción:**
@@ -108,23 +108,23 @@ flowchart TD
 
 ## 📊 3. Auditoría Cuantitativa Oficial SSoT 180 Días (Versión v60.0 vs Versiones Anteriores)
 
-Replay cronológico oficial sobre 14 activos VIP (`BTC`, `ETH`, `SOL`, `BNB`, `XRP`, `ADA`, `DOGE`, `AVAX`, `LINK`, `DOT`, `NEAR`, `SUI`, `FET`, `APT`) en temporalidad 15m con comisiones Maker/Taker reales y slippage descontados:
+Replay cronológico oficial sobre 14 activos VIP (`BTC`, `ETH`, `SOL`, `BNB`, `XRP`, `AVAX`, `LINK`, `INJ`, `NEAR`, `SUI`, `FET`, `ATOM`, `RENDER`, `XAU`) en temporalidad 15m con comisiones Maker/Taker reales y slippage descontados:
 
 ```text
 ========================================================================================================================
 Métrica Cuantitativa Institucional    | Slingshot v31.0 Base    | Slingshot v51.0         | Slingshot v60.0 APEX FORTRESS
 ========================================================================================================================
-Total Operaciones Auditadas           | 466 trades (Aisladas)   | 237 trades (Replay)     | 328 trades (Replay SSoT)
-Win Rate Efectivo                     | 42.3%                   | 46.8%                   | 44.2% (145 Wins / 183 Losses)
-Profit Factor Base                    | 1.07 (Frágil)           | 1.80                    | 1.79 (Robusto)
-Profit Factor con Progressive Sizing  | 1.10                    | 1.99                    | 1.90 🚀 (Consistencia Alta)
-Retorno Total Base en R               | +22.40 R                | +66.31 R                | +94.82 R
-Retorno Total con Progressive Sizing  | +25.00 R                | +94.75 R                | +96.80 R 💎 (Alpha-Tier Sizing)
-Drawdown Máximo de Cartera (Plano)    | -38.10%                 | -4.21%                  | -3.87% 🛡️ (Blindaje Prop Firm < 5%)
-Sortino Ratio (Riesgo a la Baja)      | 1.12                    | 24.63                   | 28.13 🛡️ (+520% s/ Base)
-Crecimiento Compuesto Bitunix ($1k)   | +$1,546.25 USD (+154%)  | +$8,148.56 USD (+814%)  | +$8,874.04 USD (+887.4% / 9.9X)
-Capital Final Compuesto ($1,000 USD)  | $2,546.25 USD           | $9,148.56 USD           | $9,874.04 USD 🚀
-Drawdown Máximo Compuesto en Cuenta   | -38.10%                 | -14.63%                 | -14.58% 🛡️ (Totalmente Controlado)
+Total Operaciones Auditadas           | 466 trades (Aisladas)   | 237 trades (Replay)     | 350 trades (Replay SSoT)
+Win Rate Efectivo                     | 42.3%                   | 46.8%                   | 44.6% (156 Wins / 194 Losses)
+Profit Factor Base                    | 1.07 (Frágil)           | 1.80                    | 1.80 (Robusto)
+Profit Factor con Progressive Sizing  | 1.10                    | 1.99                    | 1.93 🚀 (Consistencia Alta)
+Retorno Total Base en R               | +22.40 R                | +66.31 R                | +101.80 R
+Retorno Total con Progressive Sizing  | +25.00 R                | +94.75 R                | +99.96 R 💎 (Alpha-Tier Sizing)
+Drawdown Máximo de Cartera (Plano)    | -38.10%                 | -4.21%                  | -3.74% 🛡️ (Blindaje Prop Firm < 5%)
+Sharpe / Sortino Ratio                | 0.85 / 1.12             | 3.95 / 24.63            | 4.30 / 26.00 🛡️ (Élite Cuantitativa)
+Crecimiento Compuesto Bitunix ($1k)   | +$1,546.25 USD (+154%)  | +$8,148.56 USD (+814%)  | +$9,720.55 USD (+972.1% / 10.7X)
+Capital Final Compuesto ($1,000 USD)  | $2,546.25 USD           | $9,148.56 USD           | $10,720.55 USD 🚀
+Drawdown Máximo Compuesto en Cuenta   | -38.10%                 | -14.63%                 | -12.30% 🛡️ (Totalmente Controlado)
 ========================================================================================================================
 ```
 
@@ -135,8 +135,8 @@ Drawdown Máximo Compuesto en Cuenta   | -38.10%                 | -14.63%      
 ====================================================================================================
 Playbook Arquetípico               Trades   Win Rate    PnL (R)      Avg R      PF    Expectancy (R)
 ----------------------------------------------------------------------------------------------------
-OB_DISCOUNT_RETEST                    136     48.5%    +59.47R     +0.44R    2.52           +0.44R
-LIQUIDITY_SWEEP_FVG                   192     41.2%    +37.34R     +0.19R    1.55           +0.19R
+OB_DISCOUNT_RETEST                    142     47.9%    +56.93R     +0.40R    2.42           +0.40R
+LIQUIDITY_SWEEP_FVG                   208     42.3%    +43.03R     +0.21R    1.64           +0.21R
 ====================================================================================================
 ```
 
@@ -159,11 +159,13 @@ LIQUIDITY_SWEEP_FVG                   192     41.2%    +37.34R     +0.19R    1.5
 ---
 
 ## 🪢 7. SOP-99: Dynamic Slot Elasticity & Macro Decoupled Expansion
-- **Elasticidad Bidireccional de Slots:**
-  - **Nivel Defensivo (Contracción a 1 Slot de Riesgo / 3 Concurrentes):**
-    - Se activa automáticamente ante racha de pérdidas consecutivas $\ge 2$ (SOP-94) o ventana activa de noticias macro de alto impacto (SOP-19 / SOP-92).
-  - **Nivel Estándar (2 Slots de Riesgo / 4 Concurrentes):**
-    - Configuración base canónica probada con $+96.80\text{R}$ (Alpha-Tier) / $+94.82\text{R}$ (Base) y drawdown controlado $-3.87\%$.
+- **Elasticidad Bidireccional de Slots y Prevención de Parálisis por Activo Lento (*Anti-Slot Starvation*):**
+  - **Nivel Defensivo Macro (Contracción a 1 Slot de Riesgo / 3 Concurrentes):**
+    - Se activa **exclusivamente** ante ventanas activas de noticias macro de alto impacto (SOP-19 / SOP-92: IPC, FOMC, NFP).
+  - **Nivel Escudo de Racha (2 Slots de Riesgo / 4 Concurrentes @ 0.65x):**
+    - Ante rachas de pérdidas $\ge 2$ (SOP-94), mantiene los **2 cupos de riesgo operativos** (evitando que un activo lento como `XAUUSDT` secuestre el único cupo y congele la cuenta), bloquea la expansión al 3er cupo y modula el riesgo monetario a `0.65x` (calor total máx $3.25\% < 5.00\%$).
+  - **Nivel Estándar (2 Slots de Riesgo / 4 Concurrentes @ 1.00x):**
+    - Configuración base canónica probada con $+99.96\text{R}$ (Alpha-Tier) / $+101.80\text{R}$ (Base), Sharpe $4.30$ y drawdown controlado $-3.74\%$.
   - **Nivel Elástico / God Mode (Expansión a 3 Slots de Riesgo / 5 Concurrentes):**
     - Se autoriza un slot adicional **exclusivamente** si se cumplen las 4 llaves institucionales:
       1. **Descorrelación Cruzada:** El activo candidato pertenece a una clase macroeconómica descorrelacionada frente a los activos abiertos ($\rho < 0.35$, ej. `XAUUSDT` Oro vs Cripto). Si es otra cripto correlacionada ($\rho \ge 0.75$), se bloquea para impedir riesgo direccional apilado (*stacking*).

@@ -60,6 +60,10 @@ def test_streak_multiplier_two_or_more_losses_balanced_and_prop_firm():
     )
     assert mult_prop == 0.50
 
+    assert RiskManager.calculate_streak_exposure_multiplier(consecutive_losses=1, mode="institutional_growth") == 1.00
+    assert RiskManager.calculate_streak_exposure_multiplier(consecutive_losses=2, mode="institutional_growth") == 0.85
+    assert RiskManager.calculate_streak_exposure_multiplier(consecutive_losses=3, mode="institutional_growth") == 0.70
+
 
 def test_streak_multiplier_quick_restore_on_risk_released():
     """
