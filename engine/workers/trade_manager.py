@@ -1522,15 +1522,22 @@ class TradeManager:
 
 
 
-                    # Chequeo 3: Expiración TTL Estricta (SOP-40 / 45 minutos = 2700s)
+                    # Chequeo 3: Expiración TTL Adaptativa Institucional (SOP-40 / OTE Scalp 3h vs Swing 8h)
                     if not cancel_reason:
                         age_seconds = (now_ms - ctime) / 1000
-                        if age_seconds > 2700:
-                            cancel_reason = f"TTL_EXPIRED_STRICT (Orden límite expiró tras superar 45 minutos sin llenar: {age_seconds/60:.1f} min)"
-                        elif age_seconds > 1800:
+                        tf_setup = matching_setup.get("interval", matching_setup.get("timeframe", "15m")) if matching_setup else "15m"
+                        is_swing = "1H" in str(tf_setup).upper() or "SWING" in str(tf_setup).upper()
+
+                        max_ttl_strict = 28800 if is_swing else 10800  # 8 horas en 1h swing / 3 horas en 15m scalp
+                        drift_ttl_start = 14400 if is_swing else 5400  # 4 horas swing / 90 min scalp
+                        max_drift_pct = 0.045 if is_swing else 0.035   # 4.5% swing / 3.5% scalp
+
+                        if age_seconds > max_ttl_strict:
+                            cancel_reason = f"TTL_EXPIRED_STRICT (Orden límite expiró tras {age_seconds/3600:.1f}h sin llenar [{tf_setup}])"
+                        elif age_seconds > drift_ttl_start:
                             price_drift_pct = abs(cur_price - entry_price) / entry_price if entry_price > 0 else 0
-                            if price_drift_pct > 0.012:
-                                cancel_reason = f"TTL_DRIFT_EXPIRED (Orden con {age_seconds/60:.1f} min y precio desfasado {price_drift_pct*100:.1f}%)"
+                            if price_drift_pct > max_drift_pct:
+                                cancel_reason = f"TTL_DRIFT_EXPIRED (Orden con {age_seconds/60:.1f} min y precio desfasado {price_drift_pct*100:.1f}% > {max_drift_pct*100:.1f}%)"
 
 
 

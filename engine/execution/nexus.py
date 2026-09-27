@@ -301,16 +301,48 @@ class NexusNode:
                     pos_info = self._active_positions.pop(mem_key, None)
                     closed_acc = pos_info.get("account_id", "primary") if pos_info else "primary"
                     closed_sym = pos_info.get("signal", {}).get("asset", mem_key.split("_")[-1]) if pos_info else mem_key
+                    if closed_acc == "primary":
+                        self._active_positions.pop(closed_sym, None)
                     pnl_val = float(pos_info.get("unrealized_pnl", 0.0)) if pos_info else 0.0
                     sig_ref = pos_info.get("signal", {}) if pos_info else {}
+                    entry_ref = float(sig_ref.get("price") or sig_ref.get("entry_price") or 0.0)
+                    sl_ref = float(sig_ref.get("stop_loss") or 0.0)
+                    raw_side_ref = str(sig_ref.get("signal_type") or sig_ref.get("direction") or sig_ref.get("type") or "LONG").upper()
+                    is_long_ref = "SHORT" not in raw_side_ref and "SELL" not in raw_side_ref
+                    sl_at_be = (
+                        (is_long_ref and entry_ref > 0 and sl_ref >= entry_ref * 0.999)
+                        or (not is_long_ref and entry_ref > 0 and sl_ref > 0 and sl_ref <= entry_ref * 1.001)
+                    )
                     is_be_or_tp = (
-                        pos_info.get("smart_trailing", {}).get("be_active", False)
+                        pos_info.get("be_active", False)
+                        or pos_info.get("smart_trailing", {}).get("be_active", False)
                         or sig_ref.get("trailing_phase") in ("BREAKEVEN", "TRAILING")
-                        or pos_info.get("status") in ("BREAKEVEN", "TRAILING")
+                        or pos_info.get("status") in ("BREAKEVEN", "TRAILING", "TAKE_PROFIT")
+                        or sig_ref.get("status") in ("BREAKEVEN", "TRAILING", "TAKE_PROFIT")
+                        or sl_at_be
                     ) if pos_info else False
 
-                    # Si el PnL fue negativo o no había alcanzado Breakeven, computar como Stop Loss
-                    if pnl_val < -0.1 or not is_be_or_tp:
+                    p_acc = pos_info.get("account_id", "primary") if pos_info else "primary"
+                    t_ex = executors.get(p_acc) or self.executor
+
+                    # Consultar PnL realizado real en Bitunix antes de asumir Stop Loss
+                    realized_pnl_found = False
+                    try:
+                        hist_res = await t_ex._request("GET", "/api/v1/futures/trade/get_history_orders", params={"symbol": closed_sym, "pageSize": 5})
+                        hist_orders = hist_res.get("data", {}).get("orderList", []) if isinstance(hist_res, dict) and isinstance(hist_res.get("data"), dict) else []
+                        for ho in hist_orders:
+                            if ho.get("status") == "FILLED":
+                                raw_rpnl = ho.get("realizedPNL") if ho.get("realizedPNL") is not None else ho.get("realizedPnl")
+                                if raw_rpnl is not None:
+                                    pnl_val = float(raw_rpnl)
+                                    realized_pnl_found = True
+                                    break
+                    except Exception as hist_err:
+                        logger.debug(f"[NEXUS SYNC] Fallback historial para {closed_sym}: {hist_err}")
+
+                    # Computar como Stop Loss únicamente si hubo pérdida neta real (< -0.10 USDT) o cierre SL explícito sin BE
+                    is_genuine_sl = (pnl_val < -0.10) if realized_pnl_found else ((pnl_val < -0.10 or sig_ref.get("status") == "STOP_LOSS") and not is_be_or_tp)
+                    if is_genuine_sl:
                         reason_close = f"POSICION_CERRADA_SL_{closed_sym}"
                         self.set_asset_cooldown(closed_sym, duration_sec=3600, reason=f"Cierre en pérdida/SL ({pnl_val:.2f} USDT)")
                     else:
@@ -320,8 +352,6 @@ class NexusNode:
                     sym_clean = pos_info.get("signal", {}).get("asset", mem_key.split("_")[-1]) if pos_info else mem_key
                     self.remove_pending_limit_symbol(sym_clean)
                     # 🧹 [SOP-22 PURGA ATÓMICA] Cancelar órdenes huérfanas de ese activo solo en la cuenta correspondiente
-                    p_acc = pos_info.get("account_id", "primary") if pos_info else "primary"
-                    t_ex = executors.get(p_acc) or self.executor
                     try:
                         await t_ex.cancel_all_orders_for_symbol(sym_clean)
                     except Exception as purge_err:
@@ -342,8 +372,34 @@ class NexusNode:
                     for symbol, p in acc_pos_map.items():
                         mem_key = f"{acc_id}_{symbol}"
                         
-                        # Si ya está registrada en memoria bajo la clave aislada de cuenta, continuar
+                        # Si ya está registrada en memoria bajo la clave aislada de cuenta, sincronizar su PnL y estado BE en vivo
                         if mem_key in self._active_positions:
+                            existing_entry = self._active_positions[mem_key]
+                            live_upnl = p.get("unrealizedPnl") if p.get("unrealizedPnl") is not None else p.get("unrealizedPNL")
+                            if live_upnl is not None:
+                                try:
+                                    existing_entry["unrealized_pnl"] = float(live_upnl)
+                                except (ValueError, TypeError):
+                                    pass
+                            sig_e = existing_entry.get("signal", {})
+                            entry_e = float(sig_e.get("price") or p.get("avgOpenPrice") or 0.0)
+                            live_sl_raw = p.get("slPrice") or p.get("stopLoss") or sig_e.get("stop_loss") or 0.0
+                            try:
+                                live_sl_val = float(live_sl_raw)
+                            except (ValueError, TypeError):
+                                live_sl_val = float(sig_e.get("stop_loss") or 0.0)
+                            if live_sl_val > 0:
+                                sig_e["stop_loss"] = live_sl_val
+                            side_e = str(sig_e.get("signal_type") or sig_e.get("direction") or sig_e.get("type") or "LONG").upper()
+                            is_long_e = "SHORT" not in side_e and "SELL" not in side_e
+                            sl_is_be = (
+                                (is_long_e and entry_e > 0 and live_sl_val >= entry_e * 0.999)
+                                or (not is_long_e and entry_e > 0 and live_sl_val > 0 and live_sl_val <= entry_e * 1.001)
+                            )
+                            if sl_is_be:
+                                existing_entry["be_active"] = True
+                                existing_entry.setdefault("smart_trailing", {})["be_active"] = True
+                                sig_e["trailing_phase"] = "BREAKEVEN"
                             continue
 
                         qty = float(p.get("qty", 0))
@@ -1167,7 +1223,11 @@ class NexusNode:
         try:
             os.makedirs(os.path.dirname(self.DB_PATH), exist_ok=True)
             with sqlite3.connect(self.DB_PATH) as conn:
-                conn.execute("CREATE TABLE IF NOT EXISTS streak_state (account_id TEXT PRIMARY KEY, consecutive_losses INTEGER, risk_released_recently INTEGER, updated_at REAL)")
+                conn.execute("CREATE TABLE IF NOT EXISTS streak_state (account_id TEXT PRIMARY KEY, consecutive_losses INTEGER, risk_released_recently INTEGER, updated_at REAL, schema_v2 INTEGER DEFAULT 0)")
+                try:
+                    conn.execute("ALTER TABLE streak_state ADD COLUMN schema_v2 INTEGER DEFAULT 0")
+                except sqlite3.OperationalError:
+                    pass
                 conn.commit()
         except Exception as db_err:
             logger.debug(f"[NEXUS STREAK DB] Error inicializando tabla: {db_err}")
@@ -1179,7 +1239,7 @@ class NexusNode:
                 for acc_id, losses in self._consecutive_losses.items():
                     released = 1 if self._risk_released_recently.get(acc_id, False) else 0
                     conn.execute(
-                        "INSERT OR REPLACE INTO streak_state (account_id, consecutive_losses, risk_released_recently, updated_at) VALUES (?, ?, ?, ?)",
+                        "INSERT OR REPLACE INTO streak_state (account_id, consecutive_losses, risk_released_recently, updated_at, schema_v2) VALUES (?, ?, ?, ?, 1)",
                         (acc_id, int(losses), released, time.time())
                     )
                 conn.commit()
@@ -1189,13 +1249,22 @@ class NexusNode:
     def _load_streak_state(self):
         try:
             self._init_streak_db()
+            healed_any = False
             with sqlite3.connect(self.DB_PATH) as conn:
-                cursor = conn.execute("SELECT account_id, consecutive_losses, risk_released_recently FROM streak_state")
-                for acc_id, losses, released in cursor.fetchall():
-                    self._consecutive_losses[acc_id] = int(losses)
-                    self._risk_released_recently[acc_id] = bool(released)
+                cursor = conn.execute("SELECT account_id, consecutive_losses, risk_released_recently, schema_v2 FROM streak_state")
+                for acc_id, losses, released, schema_v2 in cursor.fetchall():
+                    if not schema_v2 and int(losses or 0) > 0:
+                        logger.info(f"🩹 [NEXUS STREAK DB] Saneando racha legacy falsamente acumulada para [{acc_id}] ({losses} -> 0) tras migración SSoT v2.")
+                        self._consecutive_losses[acc_id] = 0
+                        self._risk_released_recently[acc_id] = True
+                        healed_any = True
+                    else:
+                        self._consecutive_losses[acc_id] = int(losses or 0)
+                        self._risk_released_recently[acc_id] = bool(released)
                 if self._consecutive_losses:
                     logger.info(f"💾 [NEXUS STREAK DB] Rachas restauradas desde disco: {self._consecutive_losses}")
+            if healed_any:
+                self._persist_streak_state()
         except Exception as err:
             logger.debug(f"[NEXUS STREAK DB] Error cargando rachas: {err}")
 
@@ -1354,14 +1423,16 @@ class NexusNode:
             dist_sl = abs(float(best_opp.get("price", 0)) - float(best_opp.get("stop_loss", 0)))
             is_long = "LONG" in best_opp.get("direction", best_opp.get("signal_type", "LONG")).upper()
             be_val = best_opp.get("be_price") or (float(best_opp["price"]) + (dist_sl * 1.0) if is_long else float(best_opp["price"]) - (dist_sl * 1.0))
+            clean_dir = "LONG" if is_long else "SHORT"
             
             deploy_sig = {
                 "asset": best_sym,
                 "symbol": best_sym,
                 "interval": best_opp.get("interval", "15m"),
-                "signal_type": best_opp.get("direction", "LONG"),
-                "direction": best_opp.get("direction", "LONG"),
-                "type": best_opp.get("type", "SMC Sniper"),
+                "signal_type": clean_dir,
+                "direction": clean_dir,
+                "type": clean_dir,
+                "strategy_label": best_opp.get("type", "SMC Sniper"),
                 "price": float(best_opp.get("price", 0)),
                 "stop_loss": float(best_opp.get("stop_loss", 0)),
                 "initial_stop_loss": float(best_opp.get("stop_loss", 0)),
@@ -1373,7 +1444,10 @@ class NexusNode:
                 "confluence_score": best_score,
                 "score": best_score,
                 "session": best_opp.get("session", "NEW_YORK"),
-                "asset_health": best_opp.get("asset_health", {})
+                "asset_health": best_opp.get("asset_health", {}),
+                "ker": float((best_opp.get("asset_health") or {}).get("ker", 0.40)),
+                "adx": float((best_opp.get("asset_health") or {}).get("adx", 25.0)),
+                "vwap_dist_pct": float(best_opp.get("session_avwap_dist_pct", 0.0))
             }
             asyncio.create_task(self.process_limit_setup(deploy_sig))
 
@@ -1394,63 +1468,72 @@ class NexusNode:
             logger.info(f"⚡ [NEXUS BUFFER TRIGGER] Cupo liberado en [{account_id}] ({unprotected}/{self.MAX_CONCURRENT_POSITIONS}). Disparando orden en espera: {asset}!")
             asyncio.create_task(self.process_limit_setup(top_sig))
 
-    async def process_limit_setup(self, signal: Dict[str, Any]):
+    async def process_limit_setup(self, signal: Dict[str, Any]) -> Dict[str, Any]:
         """
         [NEXUS AUTO-LIMIT]
         Coloca automáticamente una orden LÍMITE en Bitunix para oportunidades institucionales del escáner.
         Evita duplicar órdenes si ya existe una posición o una orden límite activa para ese activo.
+        Retorna dict estructurado con el estado de la ejecución:
+          {"placed": bool, "status": str, "reason": str, "order_id": Optional[str]}
         """
+        # ── NORMALIZACIÓN CANÓNICA DE DIRECCIÓN SSoT ──
+        raw_dir = str(signal.get("signal_type") or signal.get("direction") or signal.get("type") or "LONG").upper()
+        sig_dir = "SHORT" if ("SHORT" in raw_dir or "SELL" in raw_dir) else "LONG"
+        signal["signal_type"] = sig_dir
+        signal["direction"] = sig_dir
+        signal["type"] = sig_dir
+
         asset = signal.get("asset", signal.get("symbol", "")).upper()
         if not asset or self.dry_run:
-            return
+            return {"placed": False, "status": "DRY_RUN_OR_EMPTY", "reason": "Modo Dry Run o activo vacío", "order_id": None}
 
         # ── SOP-52: COOLDOWN GUARD (ANTI-CASCADE RE-ENTRY) ──
         if self.is_asset_in_cooldown(asset):
             logger.info(f"❄️ [NEXUS AUTO-LIMIT SOP-52] Omitida orden límite para {asset}: Activo en enfriamiento temporal post-stopout.")
-            return
-
-        # [SOP-45] Riesgo descentralizado: validado por cuenta en _place_limit_for_account
+            return {"placed": False, "status": "BLOCKED_COOLDOWN", "reason": "Activo en enfriamiento post-stopout", "order_id": None}
 
         # ── REGLA DE CLUSTER DE CORRELACIÓN CRUZADA (v26.0 CLUSTER FORTRESS) ──
         confluence_score = float(signal.get("confluence_score") or (signal.get("confluence") or {}).get("score", 70.0))
         can_open, cluster_reason = cluster_risk_guard.can_open_position(
             new_asset=asset,
-            new_direction=signal.get("type", signal.get("signal_type", "LONG")),
+            new_direction=sig_dir,
             confluence_score=confluence_score,
             active_positions=self._active_positions
         )
         if not can_open:
             logger.info(f"🛑 [NEXUS AUTO-LIMIT] Omitida orden límite para {asset}: {cluster_reason}")
-            return
+            return {"placed": False, "status": "BLOCKED_CLUSTER", "reason": cluster_reason, "order_id": None}
 
         # ── SOP-27: VWAP EXHAUSTION SHIELD (ANTI-SHORT TRAP) ──
         from engine.risk.risk_manager import RiskManager
-        sig_dir = signal.get("type", signal.get("signal_type", "LONG"))
-        vwap_dist = float(signal.get("vwap_dist_pct") or 0.0)
+        vwap_dist = float(signal.get("vwap_dist_pct") or signal.get("session_avwap_dist_pct") or 0.0)
         is_vwap_ok, vwap_msg = RiskManager.check_vwap_exhaustion(sig_dir, vwap_dist)
         if not is_vwap_ok:
             logger.info(f"🛑 [NEXUS AUTO-LIMIT SOP-27] Omitida orden límite para {asset}: {vwap_msg}")
-            return
+            return {"placed": False, "status": "BLOCKED_VWAP", "reason": vwap_msg, "order_id": None}
 
         # ── SOP-31: REGIME QUARANTINE GUARD (ANTI-CHOP) ──
-        adx_val = float(signal.get("adx") or 25.0)
-        ker_val = float(signal.get("ker") or 0.40)
+        asset_health = signal.get("asset_health") if isinstance(signal.get("asset_health"), dict) else {}
+        adx_val = float(signal.get("adx") or asset_health.get("adx") or 25.0)
+        ker_val = float(signal.get("ker") or asset_health.get("ker") or 0.40)
         is_regime_ok, regime_msg = RiskManager.check_regime_quarantine(adx_val, ker_val)
         if not is_regime_ok:
             logger.info(f"🛑 [NEXUS AUTO-LIMIT SOP-31] Omitida orden límite para {asset}: {regime_msg}")
-            return
+            return {"placed": False, "status": "BLOCKED_REGIME", "reason": regime_msg, "order_id": None}
 
         # ── SOP-18: TIME-GATING CANONICAL SSoT GUARD ──
         from engine.workers.market_scanner import is_trade_allowed_sop18
         now_utc = datetime.now(timezone.utc)
         if not is_trade_allowed_sop18(asset, now_utc):
-            logger.info(f"⏳ [NEXUS AUTO-LIMIT SOP-18] Omitida orden límite para {asset}: Fuera de ventana institucional operativa ({now_utc.strftime('%A %H:%M')} UTC).")
-            return
+            msg_time = f"Fuera de ventana institucional operativa ({now_utc.strftime('%A %H:%M')} UTC)"
+            logger.info(f"⏳ [NEXUS AUTO-LIMIT SOP-18] Omitida orden límite para {asset}: {msg_time}.")
+            return {"placed": False, "status": "BLOCKED_TIME", "reason": msg_time, "order_id": None}
 
         # ── SOP-84: KER ANTINOISE SSoT GUARD ──
         if ker_val < 0.35:
-            logger.info(f"🛡️ [NEXUS AUTO-LIMIT SOP-84] Omitida orden límite para {asset}: KER={ker_val:.2f} < 0.35 (mercado en rango sucio / chop).")
-            return
+            msg_ker = f"KER={ker_val:.2f} < 0.35 (mercado en rango sucio / chop)"
+            logger.info(f"🛡️ [NEXUS AUTO-LIMIT SOP-84] Omitida orden límite para {asset}: {msg_ker}.")
+            return {"placed": False, "status": "BLOCKED_KER", "reason": msg_ker, "order_id": None}
 
         try:
             # ── SOP-33 & SOP-38 & SOP-63: ALPHA-TIER SIZING CON MODULACIÓN DE RÉGIMEN ──
@@ -1463,7 +1546,7 @@ class NexusNode:
             sizing_mult = RiskManager.calculate_alpha_tier_sizing(asset, confluence_val, hour_utc=hour_now, regime_mult=reg_mult)
             if sizing_mult <= 0.0:
                 logger.debug(f"[NEXUS AUTO-LIMIT SOP-33] Omitido activo descalificado: {asset}")
-                return
+                return {"placed": False, "status": "BLOCKED_TIER", "reason": "Activo descalificado por Alpha-Tier sizing", "order_id": None}
                 
             entry_p = float(signal.get('price', 0))
             sl_p = float(signal.get('stop_loss', 0))
@@ -1478,13 +1561,14 @@ class NexusNode:
                 logger.info(f"🛡️ [NEXUS AUTO-LIMIT SOP-21] {asset} -> {liq_msg}")
                 if not is_safe and cl_ratio < 1.10:
                     logger.warning(f"🛑 [NEXUS AUTO-LIMIT LIQ GUARD] Orden límite rechazada para {asset}: Riesgo inminente de liquidación antes de SL.")
-                    return
+                    return {"placed": False, "status": "BLOCKED_LIQ_GUARD", "reason": liq_msg, "order_id": None}
             else:
                 signal["leverage"] = 10
                 safe_lev = 10
 
             # ── DESPACHO MULTI-CUENTA EN PARALELO (AUTO-LIMIT) ──
             enabled_accounts = self.account_manager.get_all_accounts(enabled_only=True)
+            results = []
             if not enabled_accounts:
                 from engine.execution.account_manager import BitunixAccountConfig
                 fallback_acc = BitunixAccountConfig(
@@ -1495,15 +1579,43 @@ class NexusNode:
                     dry_run=self.dry_run,
                     is_primary=True
                 )
-                await self._place_limit_for_account(self.executor, fallback_acc, signal, safe_lev, entry_p, sl_p)
+                r_single = await self._place_limit_for_account(self.executor, fallback_acc, signal, safe_lev, entry_p, sl_p)
+                results.append(r_single)
             else:
                 tasks = []
                 for acc in enabled_accounts:
+                    # Omitir cuentas secundarias sin credenciales válidas o con balance 0 verificado para evitar timeouts de 15s
+                    if not getattr(acc, "is_primary", False) and getattr(acc, "account_id", "") != "primary":
+                        if getattr(acc, "current_balance_usdt", None) is not None and float(getattr(acc, "current_balance_usdt", 0.0)) <= 0.0:
+                            continue
                     ex = self.account_manager.get_executor(acc.account_id) or self.executor
+                    if not getattr(acc, "is_primary", False) and getattr(acc, "account_id", "") != "primary":
+                        if getattr(ex, "_last_verified_balance", -1.0) == 0.0:
+                            continue
                     tasks.append(self._place_limit_for_account(ex, acc, signal, safe_lev, entry_p, sl_p))
-                await asyncio.gather(*tasks, return_exceptions=True)
+                if tasks:
+                    results = list(await asyncio.gather(*tasks, return_exceptions=True))
+
+            for res_item in results:
+                if isinstance(res_item, dict) and res_item.get("status") == "success":
+                    return {
+                        "placed": True,
+                        "status": "ORDER_PLACED",
+                        "reason": "Orden límite activa en Bitunix",
+                        "order_id": res_item.get("order_id")
+                    }
+            for res_item in results:
+                if isinstance(res_item, dict) and res_item.get("status") in ("buffered", "already_active"):
+                    return {
+                        "placed": False,
+                        "status": res_item.get("status").upper(),
+                        "reason": res_item.get("message", "En cola prioritaria por cupos activos"),
+                        "order_id": None
+                    }
+            return {"placed": False, "status": "REJECTED_EXCHANGE", "reason": "No se pudo colocar en cuentas activas", "order_id": None}
         except Exception as e:
             logger.error(f"❌ [NEXUS AUTO-LIMIT] Error colocando orden en {asset}: {e}")
+            return {"placed": False, "status": "ERROR", "reason": str(e), "order_id": None}
 
     def _get_symbol_lock(self, acc_id: str, asset: str) -> asyncio.Lock:
         key = f"{acc_id}_{asset.upper()}"
@@ -1578,7 +1690,7 @@ class NexusNode:
             score_val = float(acc_signal.get("confluence_score", acc_signal.get("score", 0)))
             if score_val >= 60.0:
                 self.enqueue_high_confluence_opportunity(acc_signal, acc_id)
-            return None
+            return {"status": "buffered", "message": f"Techo físico {len(total_active_symbols)}/{max_concurrent} ({mode_label})"}
 
         # 1.05 🛡️ SOP-99 UNPROTECTED RISK SLOTS GUARD (ELASTICIDAD DINÁMICA)
         unprotected_limit_count = self.get_unprotected_risk_count(account_id=acc_id)
@@ -1590,13 +1702,13 @@ class NexusNode:
             score_val = float(acc_signal.get("confluence_score", acc_signal.get("score", 0)))
             if score_val >= 60.0:
                 self.enqueue_high_confluence_opportunity(acc_signal, acc_id)
-            return None
+            return {"status": "buffered", "message": f"Cupo de riesgo {unprotected_limit_count}/{max_unprotected} ({mode_label})"}
 
         # 2. Verificar si esta cuenta específica ya tiene una posición activa en este activo
         acc_pos_key = f"{acc_id}_{asset}"
         if acc_pos_key in self._active_positions or (acc_id == "primary" and asset in self._active_positions):
             logger.debug(f"[NEXUS AUTO-LIMIT] [{account.label}] Omitiendo orden límite: Posición ya activa para {asset}.")
-            return None
+            return {"status": "already_active", "message": f"Posición ya activa para {asset}"}
 
         # 2.1 🛡️ DEDUP GUARD EN VIVO BITUNIX: Si ya hay una posición abierta en el exchange, no colocar orden límite
         if not executor.dry_run:
@@ -1604,7 +1716,7 @@ class NexusNode:
                 open_pos = await executor.get_pending_positions()
                 if open_pos and any(p.get("symbol") == asset for p in open_pos):
                     logger.debug(f"[NEXUS AUTO-LIMIT] [{account.label}] Omitiendo orden límite: Ya existe una posición abierta en Bitunix para {asset}.")
-                    return None
+                    return {"status": "already_active", "message": f"Posición ya abierta en Bitunix para {asset}"}
             except Exception as chk_err:
                 logger.debug(f"[NEXUS AUTO-LIMIT] [{account.label}] Error al verificar posiciones en Bitunix: {chk_err}")
 
@@ -1614,7 +1726,7 @@ class NexusNode:
             if acc_pending:
                 logger.debug(f"[NEXUS AUTO-LIMIT] [{account.label}] Ya existe orden límite pendiente en Bitunix para {asset}.")
                 self._pending_limit_symbols.add(asset)
-                return None
+                return {"status": "already_active", "message": f"Orden límite ya pendiente en Bitunix para {asset}"}
         except Exception as pe_err:
             logger.debug(f"[NEXUS AUTO-LIMIT] [{account.label}] Error verificando órdenes pendientes: {pe_err}")
 
@@ -1626,6 +1738,8 @@ class NexusNode:
             avail_margin = 82.23
 
         if avail_margin <= 0:
+            if not getattr(account, "is_primary", False) and acc_id != "primary":
+                executor._last_verified_balance = 0.0
             logger.debug(f"[NEXUS AUTO-LIMIT] [{account.label}] Saldo insuficiente o no verificado para {asset}: ${avail_margin:.2f} USDT.")
             return None
 

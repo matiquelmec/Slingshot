@@ -168,6 +168,17 @@ class TelegramDispatcher:
         if ker_val >= 0.35: conf_badges.append(f"⚡ KER {ker_val:.2f} (Limpio)")
         conf_summary = " • ".join(conf_badges) if conf_badges else "Confirmación SMC Institucional"
 
+        exec_st = signal.get("execution_status")
+        if isinstance(exec_st, dict) and exec_st.get("placed"):
+            oid_str = str(exec_st.get("order_id") or "")
+            order_badge = f"🟢 <b>ORDEN LÍMITE ACTIVA EN BITUNIX</b> (ID: <code>{oid_str[:12]}</code>)"
+        elif isinstance(exec_st, dict) and exec_st.get("status") in ("BUFFERED", "ALREADY_ACTIVE"):
+            order_badge = f"🟡 <b>EN COLA PRIORITARIA BUFFER</b> (<i>{exec_st.get('reason')}</i>)"
+        elif timeframe == "1d":
+            order_badge = "⚪ <b>REFERENCIA ESTRUCTURAL 1D</b> (<i>Solo señal manual MT5</i>)"
+        else:
+            order_badge = f"<code>{action}</code> (20x Margen Aislado)"
+
         message = (
             f"🎯 <b>NUEVA OPORTUNIDAD INSTITUCIONAL — SLINGSHOT v25.1</b>\n"
             f"━━━━━━━━━━━━━━━━━━━━━━\n"
@@ -187,7 +198,7 @@ class TelegramDispatcher:
             f"━━━━━━━━━━━━━━━━━━━━━━\n"
             f"📊 <b>GESTIÓN DE RIESGO Y MARGEN:</b>\n"
             f"   • 🏛️ <b>FTMO / MT5 ({account_profile}):</b> <code>{lots:.2f} Lots</code> (Riesgo: ${risk_usd:,.0f} USD)\n"
-            f"   • ⚡ <b>Bitunix Futures:</b> <code>{action}</code> (20x Margen Aislado | Riesgo 5%)\n"
+            f"   • ⚡ <b>Bitunix Futures:</b> {order_badge}\n"
             f"━━━━━━━━━━━━━━━━━━━━━━\n"
             f"📋 <b>TOCA PARA COPIAR PARÁMETROS (1-CLIC):</b>\n"
             f"<code>{one_click_text}</code>"

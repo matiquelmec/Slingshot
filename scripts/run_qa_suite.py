@@ -74,7 +74,12 @@ def main():
     print("🧪 SLINGSHOT v52.0 APEX ADAPTIVE TITANIUM — SUITE OFICIAL DE CERTIFICACIÓN QA")
     print("="*80)
     
-    cmd = [sys.executable, "-m", "pytest"] + MODERN_TEST_FILES + ["-v", "--tb=short"]
+    existing_test_files = [f for f in MODERN_TEST_FILES if os.path.exists(os.path.join(ROOT_DIR, f))]
+    if os.path.exists(os.path.join(ROOT_DIR, "engine/tests/test_limit_execution_and_sync_reconciler.py")):
+        if "engine/tests/test_limit_execution_and_sync_reconciler.py" not in existing_test_files:
+            existing_test_files.append("engine/tests/test_limit_execution_and_sync_reconciler.py")
+
+    cmd = [sys.executable, "-m", "pytest"] + existing_test_files + ["-v", "--tb=short"]
     result = subprocess.run(cmd, cwd=ROOT_DIR)
     
     if result.returncode == 0:

@@ -282,11 +282,11 @@ class MarketScanner:
                 now_utc = datetime.now(timezone.utc)
                 is_time_allowed = self.is_trade_allowed_sop18(symbol, now_utc)
 
-                # Calcular métricas de eficiencia Kaufman (KER) y volumen relativo (RVOL)
+                # Calcular métricas de eficiencia Kaufman (KER de 20 períodos alineado a Confluence) y volumen relativo (RVOL)
                 if len(df) >= 20:
-                    change_10 = abs(float(df["close"].iloc[-1]) - float(df["close"].iloc[-10]))
-                    vol_10 = float(df["close"].diff().abs().iloc[-10:].sum())
-                    ker_val = round(change_10 / (vol_10 + 1e-9), 3)
+                    change_20 = abs(float(df["close"].iloc[-1]) - float(df["close"].iloc[-20]))
+                    vol_20 = float(df["close"].diff().abs().iloc[-20:].sum())
+                    ker_val = round(change_20 / (vol_20 + 1e-9), 3)
 
                     # Para RVOL en vivo se evalúa la última vela cerrada si está disponible
                     vol_sma = float(df["volume"].iloc[-20:].mean())
@@ -585,7 +585,10 @@ class MarketScanner:
         # 🚀 [TELEGRAM APEX SNIPER DISPATCHER & LIVE TRADING GATE] ──
         # Despacho automático y ejecución condicional estricta:
         # Requiere: confluencia >= 60%, sin OTE chasing, sin veto de cluster, ventana SOP-18 activa y KER >= 0.35
+        # Excluye timeframe '1d' (daily) de la auto-colocación de límites intradía
         from engine.router.telegram_dispatcher import telegram_dispatcher
+        is_intraday_operative = store_key in ("scalp", "swing") and interval in ("15m", "1h")
+
         for top_c in sorted_candidates:
             score = top_c.get("confluence_score", 0)
             is_chasing = top_c.get("ote_chasing", False)
@@ -603,15 +606,17 @@ class MarketScanner:
                 dist_sl = abs(float(top_c["price"]) - float(top_c["stop_loss"]))
                 is_long = "LONG" in top_c["direction"].upper()
                 be_val = top_c.get("be_price") or (float(top_c["price"]) + (dist_sl * 1.0) if is_long else float(top_c["price"]) - (dist_sl * 1.0))
+                clean_dir = "LONG" if is_long else "SHORT"
 
                 tele_sig = {
                     "asset": top_c["asset"],
                     "symbol": top_c["asset"],
                     "interval": interval,
                     "timeframe": interval,
-                    "signal_type": top_c["direction"],
-                    "direction": top_c["direction"],
-                    "type": "SMC Sniper",
+                    "signal_type": clean_dir,
+                    "direction": clean_dir,
+                    "type": clean_dir,
+                    "strategy_label": top_c.get("type", "SMC Sniper"),
                     "price": float(top_c["price"]),
                     "stop_loss": float(top_c["stop_loss"]),
                     "be_price": round(be_val, 5),
@@ -622,19 +627,52 @@ class MarketScanner:
                     "confluence_score": score,
                     "score": score,
                     "session": top_c.get("session", "NEW_YORK"),
-                    "asset_health": top_c.get("asset_health", {})
+                    "asset_health": top_c.get("asset_health", {}),
+                    "ker": float((top_c.get("asset_health") or {}).get("ker", 0.40)),
+                    "adx": float((top_c.get("asset_health") or {}).get("adx", 25.0)),
+                    "vwap_dist_pct": float(top_c.get("session_avwap_dist_pct", 0.0))
                 }
+
+                # Secuencia Transaccional SSoT: Primero Bitunix, Luego Telegram
+                exec_result = None
+                if settings.ENABLE_LIVE_TRADING and is_intraday_operative:
+                    from engine.execution.nexus import nexus
+                    try:
+                        exec_result = await nexus.process_limit_setup(tele_sig)
+                        tele_sig["execution_status"] = exec_result
+                    except Exception as exe_err:
+                        logger.error(f"[MARKET_SCANNER] Error en process_limit_setup para {tele_sig['asset']}: {exe_err}")
+
+                # Si el activo fue bloqueado por filtros tácticos de Nexus (cooldown, cluster, etc.), no saturar Telegram
+                if exec_result and not exec_result.get("placed") and str(exec_result.get("status", "")).startswith("BLOCKED_"):
+                    logger.info(f"🛡️ [MARKET_SCANNER] Omitida alerta Telegram para {tele_sig['asset']}: {exec_result.get('reason')}")
+                    continue
+
                 asyncio.create_task(telegram_dispatcher.send_signal_alert(tele_sig))
 
-                # Auto-colocación automática de la orden límite en Bitunix si el Live Trading está habilitado
-                if settings.ENABLE_LIVE_TRADING:
-                    from engine.execution.nexus import nexus
-                    asyncio.create_task(nexus.process_limit_setup(tele_sig))
-
     def _format_opportunity(self, sig: dict, is_active: bool) -> dict:
+        health = sig.get("confluence", {}).get("asset_health", {})
+        ker_val = float(health.get("ker", 0.40))
+        is_ker_clean = ker_val >= 0.35
+        raw_dir = str(sig.get("signal_type") or sig.get("type") or "LONG").upper()
+        clean_dir = "SHORT" if ("SHORT" in raw_dir or "SELL" in raw_dir) else "LONG"
+        sym = sig.get("asset", "UNKNOWN").upper()
+        from datetime import datetime, timezone
+        from engine.risk.cluster_risk_guard import cluster_risk_guard
+        now_utc = datetime.now(timezone.utc)
+        is_time_ok = is_trade_allowed_sop18(sym, now_utc)
+
+        active_positions = getattr(getattr(self.router, "_nexus", None), "_active_positions", {})
+        can_open_cluster, cluster_msg = cluster_risk_guard.can_open_position(
+            new_asset=sym,
+            new_direction=clean_dir,
+            confluence_score=float(sig.get("confluence", {}).get("score", 70)),
+            active_positions=active_positions
+        )
+
         return {
-            "asset":             sig.get("asset", "UNKNOWN"),
-            "direction":         sig.get("signal_type", "LONG"),
+            "asset":             sym,
+            "direction":         clean_dir,
             "type":              sig.get("type", "SMC Sniper"),
             "price":             float(sig.get("price", 0)),
             "stop_loss":         float(sig.get("stop_loss", 0)),
@@ -646,8 +684,12 @@ class MarketScanner:
             "checklist":         sig.get("confluence", {}).get("checklist", []),
             "is_active_trigger": is_active,
             "ote_chasing":       False,
+            "is_cluster_blocked": not can_open_cluster,
+            "cluster_reason":    cluster_msg,
+            "is_time_blocked":   not is_time_ok,
+            "is_ker_blocked":    not is_ker_clean,
             "session":           "LIVE_SIGNAL",
-            "asset_health":      sig.get("confluence", {}).get("asset_health", {}),
+            "asset_health":      health,
         }
 
 
