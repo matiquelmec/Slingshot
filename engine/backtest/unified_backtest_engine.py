@@ -942,7 +942,8 @@ class UnifiedBacktestEngine:
                 regime_mult=reg_mult,
                 playbook=row.get("playbook"),
                 apply_meta_labeling=enable_meta_labeling,
-                interval=str(row.get("interval", "15m"))
+                interval=str(row.get("interval", "15m")),
+                direction=str(row.get("direction", "LONG"))
             )
             # Modulación asimétrica por racha (SOP-94 Words of Rizdom)
             return alpha_sizing * float(row.get("streak_mult", 1.0))

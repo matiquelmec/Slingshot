@@ -13,15 +13,31 @@ from engine.indicators.polars_engine import polars_engine
 from engine.api.config import settings
 from engine.indicators.data_utils import fetch_binance_history, fetch_top_liquid_tickers
 
-def is_trade_allowed_sop18(symbol: str, dt: datetime) -> bool:
+def is_trade_allowed_sop18(
+    symbol: str,
+    dt: datetime,
+    strict_killzones: bool = True,
+    toxic_hours: tuple = (10, 14)
+) -> bool:
     """
-    [SOP-18 TIME-GATING CANONICAL SSoT]
-    Sincronizado 1:1 con unified_backtest_engine.py para filtrar horas de baja liquidez y trampas de mercado.
+    [SOP-18 & SOP-102 TIME-GATING CANONICAL SSoT]
+    Sincronizado 1:1 con unified_backtest_engine.py para filtrar:
+    - Horas tóxicas de barridos de liquidez falsos (10:00 UTC Trampa Londres y 14:00 UTC Apertura NY).
+    - Ventanas institucionales Killzones (07:00-12:00 UTC y 13:00-17:00 UTC).
+    - Reglas específicas de Lunes Pre-NY, Jueves Tarde y transición 13h/18h.
     """
     d = dt.strftime("%A")
     h = dt.hour
 
-    # 1. Reglas Globales de Protección
+    # 0. Quirófano Horario SOP-102 (Paridad 1:1 Backtest: Veto Horas Tóxicas 10h y 14h UTC)
+    if toxic_hours and h in toxic_hours:
+        return False
+
+    # 0.1 Killzones Estrictas SOP-102 (07:00-12:00 UTC Londres y 13:00-17:00 UTC NY)
+    if strict_killzones and not (7 <= h <= 12 or 13 <= h <= 17):
+        return False
+
+    # 1. Reglas Globales de Protección SOP-18
     if d == "Monday" and h <= 13: return False
     if d == "Thursday" and h >= 16: return False
     if h == 18: return False
@@ -329,30 +345,39 @@ class MarketScanner:
                 for direction in ["LONG", "SHORT"]:
                     atr_val = float(df["atr"].iloc[-1]) if "atr" in df.columns else float(current_price * 0.002)
                     
-                    # ── CÁLCULO DE ENTRADA LÍMITE OPTIMA SMC / OTE ──
+                    # ── CÁLCULO DE ENTRADA LÍMITE OPTIMA SMC / OTE (SOP-102 0.35 ATR PARITY) ──
                     smc_map = result.get("smc", {})
-                    optimal_entry = current_price
+                    atr_pullback_entry = current_price - (atr_val * 0.35) if direction == "LONG" else current_price + (atr_val * 0.35)
+                    optimal_entry = round(atr_pullback_entry, 6)
                     
                     if direction == "LONG":
                         bull_obs = smc_map.get("order_blocks", {}).get("bullish", []) if smc_map else []
                         valid_obs = [ob for ob in bull_obs if ob.get("top", 0) < current_price]
                         if valid_obs:
-                            optimal_entry = max(valid_obs, key=lambda ob: ob["top"])["top"]
+                            cand_ob = max(valid_obs, key=lambda ob: ob["top"])["top"]
+                            if (current_price - cand_ob) <= (atr_val * 1.2):
+                                optimal_entry = cand_ob
                         else:
                             bull_fvgs = smc_map.get("fvgs", {}).get("bullish", []) if smc_map else []
                             valid_fvgs = [fvg for fvg in bull_fvgs if fvg.get("top", 0) < current_price]
                             if valid_fvgs:
-                                optimal_entry = max(valid_fvgs, key=lambda fvg: fvg["top"])["top"]
+                                cand_fvg = max(valid_fvgs, key=lambda fvg: fvg["top"])["top"]
+                                if (current_price - cand_fvg) <= (atr_val * 1.2):
+                                    optimal_entry = cand_fvg
                     else:
                         bear_obs = smc_map.get("order_blocks", {}).get("bearish", []) if smc_map else []
                         valid_obs = [ob for ob in bear_obs if ob.get("bottom", 0) > current_price]
                         if valid_obs:
-                            optimal_entry = min(valid_obs, key=lambda ob: ob["bottom"])["bottom"]
+                            cand_ob = min(valid_obs, key=lambda ob: ob["bottom"])["bottom"]
+                            if (cand_ob - current_price) <= (atr_val * 1.2):
+                                optimal_entry = cand_ob
                         else:
                             bear_fvgs = smc_map.get("fvgs", {}).get("bearish", []) if smc_map else []
                             valid_fvgs = [fvg for fvg in bear_fvgs if fvg.get("bottom", 0) > current_price]
                             if valid_fvgs:
-                                optimal_entry = min(valid_fvgs, key=lambda fvg: fvg["bottom"])["bottom"]
+                                cand_fvg = min(valid_fvgs, key=lambda fvg: fvg["bottom"])["bottom"]
+                                if (cand_fvg - current_price) <= (atr_val * 1.2):
+                                    optimal_entry = cand_fvg
 
                     # Consulta HFT Sidecar para inyectar Order Flow Delta
                     hft_tick = await self._get_hft_order_flow(symbol)
@@ -493,7 +518,7 @@ class MarketScanner:
                             "detail": f"✅ KER={ker_val:.2f} >= 0.35 (Estructura direccional limpia)",
                         })
 
-                    # ── EVALUACIÓN CANÓNICA SOP-95: SESSION ANCHORED VWAP (AVWAP) ──
+                    # ── EVALUACIÓN CANÓNICA SOP-95 & SOP-102: SESSION ANCHORED VWAP (AVWAP) ──
                     from engine.indicators.volume import calculate_session_anchored_vwap
                     df_avwap = calculate_session_anchored_vwap(df)
                     cur_avwap = float(df_avwap["session_avwap"].iloc[-1])
@@ -502,6 +527,9 @@ class MarketScanner:
 
                     is_avwap_aligned = (direction == "LONG" and current_price >= cur_avwap * 0.999) or \
                                        (direction == "SHORT" and current_price <= cur_avwap * 1.001)
+                    is_avwap_blocked = (direction == "LONG" and cur_avwap_dist < -0.40) or \
+                                       (direction == "SHORT" and cur_avwap_dist > 0.40)
+                    is_btc_blocked = (btc_aligned is False and symbol not in ("BTCUSDT", "XAUUSDT", "PAXGUSDT"))
 
                     if is_avwap_aligned:
                         base_score = min(100, base_score + 8)
@@ -514,8 +542,8 @@ class MarketScanner:
                         base_score = max(0, base_score - 12)
                         checklist.append({
                             "factor": f"Session AVWAP ({cur_session})",
-                            "status": "ALERTA",
-                            "detail": f"⚠️ CONTRA FLUJO DE SESIÓN {cur_session} (Precio ${current_price:,.2f} vs AVWAP ${cur_avwap:,.2f} | Dist: {cur_avwap_dist:+.2f}%)",
+                            "status": "VETO" if is_avwap_blocked else "ALERTA",
+                            "detail": f"🛑 VETO AVWAP (±0.40%): {cur_avwap_dist:+.2f}%" if is_avwap_blocked else f"⚠️ CONTRA FLUJO DE SESIÓN {cur_session} (Precio ${current_price:,.2f} vs AVWAP ${cur_avwap:,.2f} | Dist: {cur_avwap_dist:+.2f}%)",
                         })
 
                     # ── DETERMINACIÓN DE PLAYBOOK INSTITUCIONAL (TRADEZELLA STYLE — PARIDAD SSoT) ──
@@ -552,6 +580,9 @@ class MarketScanner:
                         "cluster_reason":    cluster_reason,
                         "is_time_blocked":   not is_time_allowed,
                         "is_ker_blocked":    not is_ker_clean,
+                        "btc_aligned":       btc_aligned,
+                        "is_btc_blocked":    is_btc_blocked,
+                        "is_avwap_blocked":  is_avwap_blocked,
                         "session":           session_data.get("current_session", "UNKNOWN"),
                         "session_avwap":     round(cur_avwap, 4),
                         "session_avwap_dist_pct": round(cur_avwap_dist, 2),
@@ -581,7 +612,7 @@ class MarketScanner:
             candidates,
             key=lambda x: (
                 1 if x["is_active_trigger"] else 0,
-                0 if (x.get("ote_chasing") or x.get("is_cluster_blocked") or x.get("is_time_blocked") or x.get("is_ker_blocked")) else 1,
+                0 if (x.get("ote_chasing") or x.get("is_cluster_blocked") or x.get("is_time_blocked") or x.get("is_ker_blocked") or x.get("is_btc_blocked") or x.get("is_avwap_blocked")) else 1,
                 x["confluence_score"],
                 x["rr_ratio_tp3"]
             ),
@@ -592,7 +623,7 @@ class MarketScanner:
         # Generar hipótesis para el Top-3 de oportunidades válidas
         try:
             from engine.api.advisor import generate_scanner_hypotheses_batch
-            eligible_for_ai = [c for c in sorted_candidates if c["confluence_score"] >= 60 and not c.get("ote_chasing") and not c.get("is_cluster_blocked") and not c.get("is_time_blocked") and not c.get("is_ker_blocked")]
+            eligible_for_ai = [c for c in sorted_candidates if c["confluence_score"] >= 60 and not c.get("ote_chasing") and not c.get("is_cluster_blocked") and not c.get("is_time_blocked") and not c.get("is_ker_blocked") and not c.get("is_btc_blocked") and not c.get("is_avwap_blocked")]
             if eligible_for_ai:
                 hypotheses = await generate_scanner_hypotheses_batch(eligible_for_ai[:3])
                 hyp_by_asset = {h.get("asset"): h for h in hypotheses if isinstance(h, dict) and h.get("asset")}
@@ -612,8 +643,8 @@ class MarketScanner:
         # 🚀 [TELEGRAM APEX SNIPER DISPATCHER & LIVE TRADING GATE] ──
         # Despacho automático y ejecución condicional estricta:
         # Requiere: confluencia >= min_score (con SOP-100 Stage 1, SOP-101 1h Swing Gate & SOP-49 Asia Gating), sin OTE chasing,
-        # sin veto de cluster, ventana SOP-18 activa y KER >= 0.35.
-        # Excluye timeframe '1d' (daily) de la auto-colocación de límites intradía
+        # sin veto de cluster, ventana SOP-18/102 activa, KER >= 0.35, btc_aligned y Session AVWAP dentro de ±0.40%.
+        # Excluye timeframe '1d' (daily) y activos podados (RENDERUSDT, AVAXUSDT) de la auto-colocación de límites intradía
         from engine.router.telegram_dispatcher import telegram_dispatcher
         from engine.risk.risk_manager import RiskManager
         is_intraday_operative = store_key in ("scalp", "swing") and interval in ("15m", "1h")
@@ -624,11 +655,16 @@ class MarketScanner:
             is_cluster_blocked = top_c.get("is_cluster_blocked", False)
             is_time_blocked = top_c.get("is_time_blocked", False)
             is_ker_blocked = top_c.get("is_ker_blocked", False)
+            is_btc_blocked = top_c.get("is_btc_blocked", False)
+            is_avwap_blocked = top_c.get("is_avwap_blocked", False)
             is_quarantined = top_c.get("asset_health", {}).get("is_quarantined", False)
             playbook_c = top_c.get("playbook", "OB_DISCOUNT_RETEST")
             ker_c = float((top_c.get("asset_health") or {}).get("ker", 0.40))
             min_score = 65 if is_quarantined else 60
             sym_upper = top_c["asset"].upper()
+
+            if sym_upper in ("RENDERUSDT", "AVAXUSDT"):
+                continue
 
             # [SOP-101 1H SWING SPECIALIZATION GATEKEEPER]
             if interval == "1h":
@@ -649,7 +685,7 @@ class MarketScanner:
             from engine.indicators.news_interceptor import news_interceptor
             is_news_blocked = news_interceptor.is_macro_news_blackout(now_utc_dispatch, top_c["asset"])
 
-            if score >= min_score and not is_chasing and not is_cluster_blocked and not is_time_blocked and not is_ker_blocked and not is_news_blocked:
+            if score >= min_score and not is_chasing and not is_cluster_blocked and not is_time_blocked and not is_ker_blocked and not is_btc_blocked and not is_avwap_blocked and not is_news_blocked:
                 dist_sl = abs(float(top_c["price"]) - float(top_c["stop_loss"]))
                 is_long = "LONG" in top_c["direction"].upper()
                 be_val = top_c.get("be_price") or (float(top_c["price"]) + (dist_sl * 1.0) if is_long else float(top_c["price"]) - (dist_sl * 1.0))
@@ -678,7 +714,9 @@ class MarketScanner:
                     "asset_health": top_c.get("asset_health", {}),
                     "ker": ker_c,
                     "adx": float((top_c.get("asset_health") or {}).get("adx", 25.0)),
-                    "vwap_dist_pct": float(top_c.get("session_avwap_dist_pct", 0.0))
+                    "vwap_dist_pct": float(top_c.get("session_avwap_dist_pct", 0.0)),
+                    "session_avwap_dist_pct": float(top_c.get("session_avwap_dist_pct", 0.0)),
+                    "btc_aligned": top_c.get("btc_aligned")
                 }
 
                 # Secuencia Transaccional SSoT: Primero Bitunix, Luego Telegram

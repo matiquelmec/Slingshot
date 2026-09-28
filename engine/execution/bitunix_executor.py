@@ -391,31 +391,33 @@ class BitunixExecutor:
                 nominal_usd = amount_usd * leverage
                 raw_qty = nominal_usd / entry_price
 
-            # ── PROTOCOLO SOP-42: PRE-FLIGHT RISK HARD-CLAMP (CIRCUIT BREAKER) ──
-            MAX_ABSOLUTE_LOSS_USDT = 5.00
-            MAX_NOTIONAL_USDT = 150.00
+            # ── PROTOCOLO SOP-42 & SOP-102: PRE-FLIGHT DYNAMIC RISK HARD-CLAMP (COMPOUNDING & KELLY AWARE) ──
+            verified_bal = self._last_verified_balance if self._last_verified_balance > 0 else await self.get_available_margin_usdt()
+            if verified_bal <= 0:
+                verified_bal = 100.0 # Fallback conservador
 
-            # 1. Clamp nocional institucional
+            has_meta_kelly = bool(signal.get("playbook") or signal.get("risk_pct_applied"))
+            max_notional_usdt = max(150.0, verified_bal * 5.0)
+            max_loss_pct = 0.0335 if has_meta_kelly else 0.026
+            target_safe_pct = min(0.0325, float(signal.get("risk_pct_applied") or 0.0325)) if has_meta_kelly else 0.025
+
+            # 1. Clamp nocional institucional (5x Equidad Dinámica SOP-41/102)
             if entry_price and float(entry_price) > 0:
                 current_notional = raw_qty * float(entry_price)
-                if current_notional > MAX_NOTIONAL_USDT:
-                    clamped_qty = MAX_NOTIONAL_USDT / float(entry_price)
-                    logger.warning(f"🛑 [SOP-42 NOTIONAL CLAMP] Nocional proyectado (${current_notional:.2f}) excede ${MAX_NOTIONAL_USDT}. Ajustando raw_qty de {raw_qty:.4f} -> {clamped_qty:.4f}")
+                if current_notional > max_notional_usdt:
+                    clamped_qty = max_notional_usdt / float(entry_price)
+                    logger.warning(f"🛑 [SOP-42 NOTIONAL CLAMP] Nocional proyectado (${current_notional:.2f}) excede ${max_notional_usdt:.2f}. Ajustando raw_qty de {raw_qty:.4f} -> {clamped_qty:.4f}")
                     raw_qty = clamped_qty
 
-            # 2. Clamp por Stop Loss
+            # 2. Clamp por Stop Loss (Escalable con Interés Compuesto SOP-102)
             stop_loss = signal.get("stop_loss")
             if stop_loss and float(stop_loss) > 0 and entry_price and float(entry_price) > 0:
                 sl_dist = abs(float(entry_price) - float(stop_loss))
                 if sl_dist > 0:
                     projected_loss = raw_qty * sl_dist
-                    verified_bal = self._last_verified_balance if self._last_verified_balance > 0 else await self.get_available_margin_usdt()
-                    if verified_bal <= 0:
-                        verified_bal = 100.0 # Fallback conservador
-                    
-                    max_loss_allowed = min(MAX_ABSOLUTE_LOSS_USDT, verified_bal * 0.026)
+                    max_loss_allowed = verified_bal * max_loss_pct
                     if projected_loss > max_loss_allowed:
-                        safe_qty = max_loss_allowed / sl_dist
+                        safe_qty = (verified_bal * target_safe_pct) / sl_dist
                         logger.warning(f"🛑 [SOP-42 HARD-CLAMP] Orden sobredimensionada en {symbol}! Pérdida proyectada: ${projected_loss:.2f} USDT > Límite: ${max_loss_allowed:.2f} USDT. Clampando Qty de {raw_qty:.4f} -> {safe_qty:.4f}")
                         raw_qty = safe_qty
 
@@ -609,16 +611,19 @@ class BitunixExecutor:
                 nominal_usd = amount_usd * leverage
                 raw_qty = nominal_usd / entry_price
 
-            # ── PROTOCOLO SOP-42: PRE-FLIGHT RISK HARD-CLAMP (CIRCUIT BREAKER) ──
+            # ── PROTOCOLO SOP-42 & SOP-102: PRE-FLIGHT DYNAMIC RISK HARD-CLAMP (KELLY AWARE) ──
             if stop_loss > 0 and entry_price > 0:
                 sl_dist = abs(entry_price - stop_loss)
                 projected_loss = raw_qty * sl_dist
                 
                 verified_bal = self._last_verified_balance if self._last_verified_balance > 0 else await self.get_available_margin_usdt()
                 if verified_bal > 0:
-                    max_loss_allowed = verified_bal * 0.026 # Tolerancia máxima 2.6% ($2.13 USD en $82 USD)
+                    has_meta_kelly = bool(signal.get("playbook") or signal.get("risk_pct_applied"))
+                    max_loss_pct = 0.0335 if has_meta_kelly else 0.026
+                    target_safe_pct = min(0.0325, float(signal.get("risk_pct_applied") or 0.0325)) if has_meta_kelly else 0.025
+                    max_loss_allowed = verified_bal * max_loss_pct
                     if projected_loss > max_loss_allowed:
-                        safe_qty = (verified_bal * 0.025) / sl_dist
+                        safe_qty = (verified_bal * target_safe_pct) / sl_dist
                         logger.warning(f"🛑 [SOP-42 LIMIT HARD-CLAMP] Orden límite sobredimensionada en {symbol}! Pérdida proyectada: ${projected_loss:.2f} USDT > Límite: ${max_loss_allowed:.2f} USDT. Clampando Qty de {raw_qty:.4f} -> {safe_qty:.4f}")
                         raw_qty = safe_qty
 

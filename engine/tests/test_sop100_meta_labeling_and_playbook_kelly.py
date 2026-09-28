@@ -279,3 +279,156 @@ def test_sop101_market_scanner_swing_1h_assets_specialization():
         assert champ in scanner.core_swing_1h_assets
 
 
+def test_sop102_direction_aware_meta_labeling_asymmetry():
+    """
+    [SOP-102 DIRECTION-AWARE META-LABELING]
+    Verifica que OB_DISCOUNT_RETEST premie la asimetría alcista (LONG x1.05, cap 2.10x) y amortigüe
+    operaciones SHORT contra techos de Order Blocks (x0.96 en 15m y x0.88 en 1h),
+    manteniendo 100% de retrocompatibilidad cuando direction=None.
+    """
+    m_neutral = RiskManager.calculate_meta_labeling_multiplier("NEARUSDT", "OB_DISCOUNT_RETEST", interval="15m")
+    m_long_15m = RiskManager.calculate_meta_labeling_multiplier("NEARUSDT", "OB_DISCOUNT_RETEST", interval="15m", direction="LONG")
+    m_short_15m = RiskManager.calculate_meta_labeling_multiplier("NEARUSDT", "OB_DISCOUNT_RETEST", interval="15m", direction="SHORT")
+    m_short_1h = RiskManager.calculate_meta_labeling_multiplier("NEARUSDT", "OB_DISCOUNT_RETEST", interval="1h", direction="SHORT")
+
+    assert m_long_15m > m_neutral > m_short_15m > m_short_1h
+    assert m_long_15m == pytest.approx(1.18 * 1.12 * 1.05, rel=1e-3)
+    assert m_short_15m == pytest.approx(1.18 * 1.12 * 0.96, rel=1e-3)
+    assert m_short_1h == pytest.approx(1.18 * 1.12 * 0.88, rel=1e-3)
+
+    # En calculate_alpha_tier_sizing, LONG en OB_DISCOUNT_RETEST desbloquea hasta 2.10x
+    bnb_long = RiskManager.calculate_alpha_tier_sizing(
+        "BNBUSDT",
+        confluence_score=85.0,
+        hour_utc=15,
+        apply_trinity_boost=True,
+        playbook="OB_DISCOUNT_RETEST",
+        apply_meta_labeling=True,
+        direction="LONG"
+    )
+    assert bnb_long == 2.10
+
+
+def test_sop102_market_scanner_time_gate_blocks_toxic_hours_10_and_14():
+    """
+    [SOP-102 QUIRÓFANO HORARIO & KILLZONES EN VIVO]
+    Verifica que market_scanner.is_trade_allowed_sop18 bloquee las horas tóxicas 10:00 UTC y 14:00 UTC
+    y las horas fuera de Killzones (ej. 03:00 UTC), permitiendo ventanas limpias (09:00 UTC y 15:00 UTC).
+    """
+    from datetime import datetime, timezone
+    from engine.workers.market_scanner import is_trade_allowed_sop18
+
+    # Martes 2026-09-01
+    assert is_trade_allowed_sop18("BTCUSDT", datetime(2026, 9, 1, 9, 0, tzinfo=timezone.utc)) is True
+    assert is_trade_allowed_sop18("BTCUSDT", datetime(2026, 9, 1, 15, 0, tzinfo=timezone.utc)) is True
+    # Horas tóxicas 10:00 y 14:00 UTC bloqueadas
+    assert is_trade_allowed_sop18("BTCUSDT", datetime(2026, 9, 1, 10, 0, tzinfo=timezone.utc)) is False
+    assert is_trade_allowed_sop18("BTCUSDT", datetime(2026, 9, 1, 14, 0, tzinfo=timezone.utc)) is False
+    # Fuera de Killzones (madrugada 03:00 UTC) bloqueada
+    assert is_trade_allowed_sop18("BTCUSDT", datetime(2026, 9, 1, 3, 0, tzinfo=timezone.utc)) is False
+
+
+@pytest.mark.asyncio
+async def test_sop102_nexus_blocks_btc_misaligned_and_avwap_extended_and_excluded_assets():
+    """
+    [SOP-102 HARD EXECUTION VETOES]
+    Verifica que process_limit_setup bloquee en duro:
+    1. Activos podados (RENDERUSDT / AVAXUSDT -> BLOCKED_EXCLUDED_ASSET).
+    2. Desalineación macro con BTC (btc_aligned=False -> BLOCKED_BTC_MACRO).
+    3. Violación de Session AVWAP ±0.40% (LONG con -0.55% -> BLOCKED_SESSION_AVWAP).
+    """
+    nexus = NexusNode(dry_run=False)
+
+    # 1. Activo podado RENDERUSDT
+    res_excl = await nexus.process_limit_setup({
+        "asset": "RENDERUSDT",
+        "signal_type": "LONG",
+        "price": 5.0,
+        "stop_loss": 4.9
+    })
+    assert res_excl["placed"] is False
+    assert res_excl["status"] == "BLOCKED_EXCLUDED_ASSET"
+
+    # 2. Veto duro Macro BTC (btc_aligned=False en altcoin)
+    res_btc = await nexus.process_limit_setup({
+        "asset": "SOLUSDT",
+        "signal_type": "LONG",
+        "btc_aligned": False,
+        "price": 150.0,
+        "stop_loss": 147.0
+    })
+    assert res_btc["placed"] is False
+    assert res_btc["status"] == "BLOCKED_BTC_MACRO"
+
+    # 3. Veto duro Session AVWAP ±0.40% (LONG con -0.55%)
+    res_avwap = await nexus.process_limit_setup({
+        "asset": "SOLUSDT",
+        "signal_type": "LONG",
+        "btc_aligned": True,
+        "session_avwap_dist_pct": -0.55,
+        "price": 150.0,
+        "stop_loss": 147.0
+    })
+    assert res_avwap["placed"] is False
+    assert res_avwap["status"] == "BLOCKED_SESSION_AVWAP"
+
+
+@pytest.mark.asyncio
+async def test_sop102_bitunix_executor_respects_quarter_kelly_3_25_pct_and_compounds():
+    """
+    [SOP-102 DYNAMIC COMPOUNDING & QUARTER-KELLY CLAMP]
+    Verifica que BitunixExecutor.place_limit_signal y execute_signal:
+    1. Respeten el sizing Quarter-Kelly de 3.25% cuando la señal proviene de un Playbook (sin mutilarlo al 2.50%).
+    2. Escalen con cuentas de $5,000 USD sin el antiguo tope fijo de $5.00 USD.
+    """
+    from engine.execution.bitunix_executor import BitunixExecutor
+    executor = BitunixExecutor(dry_run=False)
+    executor._last_verified_balance = 5000.0
+    executor._last_balance_ts = 9999999999.0
+    executor.get_symbol_precision = AsyncMock(return_value=(1, 2))
+    executor._request = AsyncMock(return_value={"code": 0, "data": {"orderId": "LIM_KELLY_5000"}})
+
+    # Cuenta de $5,000 USD con riesgo Quarter-Kelly de 3.25% ($162.50 USD de riesgo máximo)
+    # Entry = 100.0, SL = 98.0 (dist = $2.00) -> exact_qty = 162.50 / 2.00 = 81.2 unidades
+    sig_kelly = {
+        "asset": "SOLUSDT",
+        "signal_type": "LONG",
+        "playbook": "OB_DISCOUNT_RETEST",
+        "risk_pct_applied": 0.0325,
+        "price": 100.0,
+        "stop_loss": 98.0,
+        "exact_qty": 81.2,
+        "leverage": 10
+    }
+    res = await executor.place_limit_signal(sig_kelly)
+    assert res["status"] == "success"
+    # Verificar el payload enviado a place_order: qty debe ser "81.2" (sin ser mutilado a 62.5 ni a 2.5 unidades)
+    place_calls = [c for c in executor._request.call_args_list if c[0][1] == "/api/v1/futures/trade/place_order"]
+    assert len(place_calls) == 1
+    sent_payload = place_calls[0][1]["json_body"]
+    assert float(sent_payload["qty"]) == pytest.approx(81.2, rel=1e-2)
+
+
+def test_sop102_nexus_reconciler_preserves_matching_setup_tps_and_50_30_20_grid():
+    """
+    [SOP-102 TP RECONCILER 50/30/20 & MATCHING SETUP PRIORITY]
+    Verifica que el código de reconciliación de NexusNode priorice matching_setup sobre existing_sl_in_exchange
+    para conservar TP1 (1.2R), TP2 (2.0R), TP3 (3.5R) y divida las cantidades en 50% / 30% / 20% sin dejar 10% huérfano.
+    """
+    qty = 100.0
+    q_dec = 1
+    f1 = round(qty * 0.50, q_dec)
+    f2 = round(qty * 0.30, q_dec)
+    f3 = max(0.0, round(qty - f1 - f2, q_dec))
+    assert (f1, f2, f3) == (50.0, 30.0, 20.0)
+    assert f1 + f2 + f3 == qty
+
+    # Verificar que en NexusNode el código fuente de reconciliación usa 0.50 / 0.30 y prioriza matching_setup
+    import inspect
+    from engine.execution.nexus import NexusNode
+    src = inspect.getsource(NexusNode._sync_exchange_positions_loop)
+    assert "if matching_setup:" in src
+    assert 'TP1 (50%)' in src
+    assert 'TP2 (30%)' in src
+    assert 'TP3 (20% Runner)' in src
+

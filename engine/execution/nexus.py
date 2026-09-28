@@ -440,32 +440,33 @@ class NexusNode:
                         all_opps = store.get_scanner_opportunities("scalp") + store.get_scanner_opportunities("swing")
                         matching_setup = next((o for o in all_opps if o.get("asset") == symbol and side in str(o.get("direction", "")).upper()), None)
 
-                        if existing_sl_in_exchange:
+                        if matching_setup:
+                            sl_price = existing_sl_in_exchange if existing_sl_in_exchange else float(matching_setup.get("stop_loss", 0))
+                            dist = abs(entry_price - sl_price) if sl_price > 0 else entry_price * 0.015
+                            be_price = float(matching_setup.get("be_price") or (entry_price + (dist * 1.0) if side == "LONG" else entry_price - (dist * 1.0)))
+                            tp1 = float(matching_setup.get("tp1") or (entry_price + (dist * 1.2) if side == "LONG" else entry_price - (dist * 1.2)))
+                            tp2 = float(matching_setup.get("tp2") or (entry_price + (dist * 2.0) if side == "LONG" else entry_price - (dist * 2.0)))
+                            tp3 = float(matching_setup.get("tp3") or (entry_price + (dist * 3.5) if side == "LONG" else entry_price - (dist * 3.5)))
+                            logger.info(f"💎 [NEXUS SYNC SOP-102] [{target_ex.account_label}] Setup institucional SMC emparejado para {symbol}: SL: ${sl_price:.4f} | BE: ${be_price:.4f} | TP1: ${tp1:.4f}")
+                        elif existing_sl_in_exchange:
                             sl_price = existing_sl_in_exchange
                             dist = abs(entry_price - sl_price) if sl_price > 0 else entry_price * 0.015
                             be_price = entry_price + (dist * 1.0) if side == "LONG" else entry_price - (dist * 1.0)
-                            tp1 = entry_price + (dist * 1.5) if side == "LONG" else entry_price - (dist * 1.5)
-                            tp2 = entry_price + (dist * 3.0) if side == "LONG" else entry_price - (dist * 3.0)
-                            tp3 = entry_price + (dist * 5.0) if side == "LONG" else entry_price - (dist * 5.0)
-                            logger.info(f"🛡️ [NEXUS SYNC] [{target_ex.account_label}] Posición {symbol} ya cuenta con Stop Loss activo blindado en ${sl_price:.4f}. BE Target: ${be_price:.4f}")
-                        elif matching_setup:
-                            sl_price = float(matching_setup.get("stop_loss", 0))
-                            be_price = float(matching_setup.get("be_price", 0))
-                            tp1 = float(matching_setup.get("tp1", 0))
-                            tp2 = float(matching_setup.get("tp2", 0))
-                            tp3 = float(matching_setup.get("tp3", 0))
-                            logger.info(f"💎 [NEXUS SYNC] [{target_ex.account_label}] Setup institucional SMC emparejado para {symbol}: SL: ${sl_price} | BE: ${be_price} | TP1: ${tp1}")
+                            tp1 = entry_price + (dist * 1.2) if side == "LONG" else entry_price - (dist * 1.2)
+                            tp2 = entry_price + (dist * 2.0) if side == "LONG" else entry_price - (dist * 2.0)
+                            tp3 = entry_price + (dist * 3.5) if side == "LONG" else entry_price - (dist * 3.5)
+                            logger.info(f"🛡️ [NEXUS SYNC SOP-102] [{target_ex.account_label}] Posición {symbol} ya cuenta con Stop Loss activo blindado en ${sl_price:.4f}. BE Target: ${be_price:.4f}")
                         else:
                             dist = entry_price * 0.018 # Buffer de 1.8% adaptado a volatilidad
                             sl_price = entry_price * 0.982 if side == "LONG" else entry_price * 1.018
                             be_price = entry_price + (dist * 1.0) if side == "LONG" else entry_price - (dist * 1.0)
-                            tp1 = entry_price + (dist * 1.5) if side == "LONG" else entry_price - (dist * 1.5)
-                            tp2 = entry_price + (dist * 2.5) if side == "LONG" else entry_price - (dist * 2.5)
+                            tp1 = entry_price + (dist * 1.2) if side == "LONG" else entry_price - (dist * 1.2)
+                            tp2 = entry_price + (dist * 2.0) if side == "LONG" else entry_price - (dist * 2.0)
                             tp3 = entry_price + (dist * 3.5) if side == "LONG" else entry_price - (dist * 3.5)
 
                         reconstructed_signal = {
                             "asset": symbol,
-                            "interval": "15m",
+                            "interval": (matching_setup or {}).get("interval", "15m"),
                             "signal_type": side,
                             "type": side,
                             "entry_price": entry_price,
@@ -480,8 +481,8 @@ class NexusNode:
                             "position_size": margin,
                             "position_size_usdt": margin,
                             "leverage": leverage,
-                            "confluence_score": 75.0,
-                            "score": 75.0,
+                            "confluence_score": float((matching_setup or {}).get("confluence_score", 75.0)),
+                            "score": float((matching_setup or {}).get("confluence_score", 75.0)),
                             "is_reconstructed": True,
                             "timestamp": datetime.now(timezone.utc).isoformat(),
                             "id": position_id,
@@ -504,7 +505,7 @@ class NexusNode:
                             if tpsl_order_id:
                                 protection_ids.append(tpsl_order_id)
 
-                        # 2. Colocar Take Profits límites fragmentados (60% / 20% / 10%) si no existen previamente
+                        # 2. Colocar Take Profits límites fragmentados canónicos (50% / 30% / 20% SOP-102) si no existen previamente
                         try:
                             existing_orders_res = await target_ex._request("GET", "/api/v1/futures/trade/get_pending_orders", params={"symbol": symbol})
                             existing_orders = existing_orders_res.get("data", {}).get("orderList", []) if existing_orders_res.get("code") == 0 else []
@@ -519,13 +520,13 @@ class NexusNode:
                             min_vol = rules["min_trade_volume"]
                             
                             if q_dec == 0:
-                                f1 = int(round(qty * 0.60))
-                                f2 = int(round(qty * 0.20))
-                                f3 = int(round(qty * 0.10))
+                                f1 = int(round(qty * 0.50))
+                                f2 = int(round(qty * 0.30))
+                                f3 = max(0, int(round(qty)) - f1 - f2)
                             else:
-                                f1 = round(qty * 0.60, q_dec)
-                                f2 = round(qty * 0.20, q_dec)
-                                f3 = round(qty * 0.10, q_dec)
+                                f1 = round(qty * 0.50, q_dec)
+                                f2 = round(qty * 0.30, q_dec)
+                                f3 = max(0.0, round(qty - f1 - f2, q_dec))
 
                             # Si alguna fracción es menor al mínimo volumen exigido por Bitunix, consolidar hacia arriba
                             tps = []
@@ -542,9 +543,9 @@ class NexusNode:
                                     f2 = round(f2 + f3, q_dec if q_dec > 0 else 0)
                                     f3 = 0
 
-                            if f1 > 0: tps.append((tp1, f1, "TP1 (60%)"))
-                            if f2 > 0: tps.append((tp2, f2, "TP2 (20%)"))
-                            if f3 > 0: tps.append((tp3, f3, "TP3 (10% Límite)"))
+                            if f1 > 0: tps.append((tp1, f1, "TP1 (50%)"))
+                            if f2 > 0: tps.append((tp2, f2, "TP2 (30%)"))
+                            if f3 > 0: tps.append((tp3, f3, "TP3 (20% Runner)"))
                             close_side = "SELL" if side == "LONG" else "BUY"
 
                             for tp_val, tp_qty, label in tps:
@@ -637,21 +638,21 @@ class NexusNode:
                             cur_orders = chk_data.get("orderList", []) if isinstance(chk_data, dict) else (chk_data if isinstance(chk_data, list) else [])
                             close_count = sum(1 for o in cur_orders if o.get("tradeSide") == "CLOSE" or o.get("reduceOnly"))
                             
-                            # Si no hay órdenes de cierre y aún no hemos alcanzado TP1, re-colocar la grilla 60/20/20
+                            # Si no hay órdenes de cierre y aún no hemos alcanzado TP1, re-colocar la grilla canónica 50/30/20 (SOP-102)
                             if close_count == 0 and not pos_data.get("smart_trailing", {}).get("be_active"):
-                                logger.warning(f"🩹 [AUTO-HEALING] [{target_ex.account_label}] Posición {symbol} no tiene órdenes límite TP en Bitunix. Auto-reparando salidas escalonadas...")
+                                logger.warning(f"🩹 [AUTO-HEALING] [{target_ex.account_label}] Posición {symbol} no tiene órdenes límite TP en Bitunix. Auto-reparando salidas escalonadas 50/30/20...")
                                 rules = await target_ex.get_symbol_rules(symbol)
                                 q_dec = rules["qty_precision"]
                                 p_dec = rules["price_precision"]
                                 min_vol = rules["min_trade_volume"]
                                 if q_dec == 0:
-                                    f1 = int(round(pos_qty * 0.60))
-                                    f2 = int(round(pos_qty * 0.20))
-                                    f3 = int(round(pos_qty * 0.10))
+                                    f1 = int(round(pos_qty * 0.50))
+                                    f2 = int(round(pos_qty * 0.30))
+                                    f3 = max(0, int(round(pos_qty)) - f1 - f2)
                                 else:
-                                    f1 = round(pos_qty * 0.60, q_dec)
-                                    f2 = round(pos_qty * 0.20, q_dec)
-                                    f3 = round(pos_qty * 0.10, q_dec)
+                                    f1 = round(pos_qty * 0.50, q_dec)
+                                    f2 = round(pos_qty * 0.30, q_dec)
+                                    f3 = max(0.0, round(pos_qty - f1 - f2, q_dec))
 
                                 # Consolidar si queda por debajo de minTradeVolume
                                 tps = []
@@ -668,9 +669,9 @@ class NexusNode:
                                         f2 = round(f2 + f3, q_dec if q_dec > 0 else 0)
                                         f3 = 0
 
-                                if f1 > 0: tps.append((tp1_val, f1, "TP1 (60%)"))
-                                if f2 > 0: tps.append((tp2_val, f2, "TP2 (20%)"))
-                                if f3 > 0: tps.append((tp3_val, f3, "TP3 (10% Límite)"))
+                                if f1 > 0: tps.append((tp1_val, f1, "TP1 (50%)"))
+                                if f2 > 0: tps.append((tp2_val, f2, "TP2 (30%)"))
+                                if f3 > 0: tps.append((tp3_val, f3, "TP3 (20% Runner)"))
                                 close_side = "SELL" if "LONG" in side.upper() else "BUY"
                                 for p_val, q_val, lbl in tps:
                                     if q_val <= 0 or p_val <= 0: continue
@@ -1513,6 +1514,26 @@ class NexusNode:
         if not asset or self.dry_run:
             return {"placed": False, "status": "DRY_RUN_OR_EMPTY", "reason": "Modo Dry Run o activo vacío", "order_id": None}
 
+        # ── SOP-102: PRUNED ASSET EXECUTION GUARD (PARIDAD 1:1 BACKTEST) ──
+        if asset in ("RENDERUSDT", "AVAXUSDT"):
+            msg_excl = f"Activo {asset} podado de ejecución en vivo por expectativa negativa auditada (SOP-102)"
+            logger.info(f"✂️ [NEXUS AUTO-LIMIT SOP-102] Omitida orden límite para {asset}: {msg_excl}.")
+            return {"placed": False, "status": "BLOCKED_EXCLUDED_ASSET", "reason": msg_excl, "order_id": None}
+
+        # ── SOP-102: STRICT BTC MACRO ALIGNMENT VETO (PARIDAD 1:1 BACKTEST) ──
+        if signal.get("btc_aligned") is False and asset not in ("BTCUSDT", "XAUUSDT", "PAXGUSDT"):
+            msg_btc = f"Veto duro Macro BTC (SOP-102): {asset} ({sig_dir}) desalineado contra tendencia EMA200 de BTCUSDT"
+            logger.info(f"🧭 [NEXUS AUTO-LIMIT SOP-102] Omitida orden límite para {asset}: {msg_btc}.")
+            return {"placed": False, "status": "BLOCKED_BTC_MACRO", "reason": msg_btc, "order_id": None}
+
+        # ── SOP-95 & SOP-102: HARD SESSION AVWAP VETO (±0.40% PARIDAD BACKTEST) ──
+        if "session_avwap_dist_pct" in signal and signal.get("session_avwap_dist_pct") is not None:
+            s_avwap_dist = float(signal.get("session_avwap_dist_pct") or 0.0)
+            if (sig_dir == "LONG" and s_avwap_dist < -0.40) or (sig_dir == "SHORT" and s_avwap_dist > 0.40):
+                msg_avwap = f"Veto duro Session AVWAP (SOP-95/102): {sig_dir} con distancia {s_avwap_dist:+.2f}% viola umbral ±0.40%"
+                logger.info(f"🛑 [NEXUS AUTO-LIMIT SOP-102] Omitida orden límite para {asset}: {msg_avwap}.")
+                return {"placed": False, "status": "BLOCKED_SESSION_AVWAP", "reason": msg_avwap, "order_id": None}
+
         # ── SOP-52: COOLDOWN GUARD (ANTI-CASCADE RE-ENTRY) ──
         if self.is_asset_in_cooldown(asset):
             logger.info(f"❄️ [NEXUS AUTO-LIMIT SOP-52] Omitida orden límite para {asset}: Activo en enfriamiento temporal post-stopout.")
@@ -1547,7 +1568,7 @@ class NexusNode:
             logger.info(f"🛑 [NEXUS AUTO-LIMIT SOP-31] Omitida orden límite para {asset}: {regime_msg}")
             return {"placed": False, "status": "BLOCKED_REGIME", "reason": regime_msg, "order_id": None}
 
-        # ── SOP-18: TIME-GATING CANONICAL SSoT GUARD ──
+        # ── SOP-18 & SOP-102: TIME-GATING CANONICAL SSoT GUARD ──
         from engine.workers.market_scanner import is_trade_allowed_sop18
         now_utc = datetime.now(timezone.utc)
         if not is_trade_allowed_sop18(asset, now_utc):
@@ -1578,7 +1599,7 @@ class NexusNode:
                 return {"placed": False, "status": "BLOCKED_SOP100_STAGE1", "reason": msg_s100, "order_id": None}
 
         try:
-            # ── SOP-33 & SOP-38 & SOP-63 & SOP-100/101: ALPHA-TIER SIZING CON MODULACIÓN DE RÉGIMEN ──
+            # ── SOP-33 & SOP-38 & SOP-63 & SOP-100/101/102: ALPHA-TIER SIZING CON MODULACIÓN DE RÉGIMEN ──
             from engine.risk.risk_manager import RiskManager
             from engine.core.vault import vault
             hour_now = datetime.now(timezone.utc).hour
@@ -1591,7 +1612,8 @@ class NexusNode:
                 regime_mult=reg_mult,
                 playbook=signal.get("playbook"),
                 apply_meta_labeling=bool(signal.get("playbook")),
-                interval=sig_interval
+                interval=sig_interval,
+                direction=sig_dir
             )
             if sizing_mult <= 0.0:
                 logger.debug(f"[NEXUS AUTO-LIMIT SOP-33] Omitido activo descalificado: {asset}")
@@ -1809,6 +1831,7 @@ class NexusNode:
             confluence_score = float(acc_signal.get("confluence_score", acc_signal.get("score", 70.0)))
             hour_now = datetime.now(timezone.utc).hour
             sig_interval = str(acc_signal.get("interval") or acc_signal.get("timeframe") or "15m").lower()
+            sig_dir_acc = str(acc_signal.get("direction") or acc_signal.get("signal_type") or acc_signal.get("type") or "").upper() or None
             raw_risk_pct = RiskManager.calculate_quarter_kelly_risk(
                 base_risk_pct=base_acc_risk,
                 symbol=asset,
@@ -1818,7 +1841,8 @@ class NexusNode:
                 apply_trinity_boost=True,
                 apply_golden_hours=True,
                 apply_meta_labeling=True,
-                interval=sig_interval
+                interval=sig_interval,
+                direction=sig_dir_acc
             )
         else:
             raw_risk_pct = base_acc_risk
@@ -1845,12 +1869,14 @@ class NexusNode:
         acc_signal["position_size_usdt"] = req_margin
         acc_signal["exact_qty"] = risk_calc["qty"]
         acc_signal["leverage"] = safe_lev
+        acc_signal["risk_pct_applied"] = acc_risk_base
 
         if getattr(account, "is_primary", False) or getattr(account, "account_id", "") in ("primary", ""):
             signal["position_size"] = req_margin
             signal["position_size_usdt"] = req_margin
             signal["exact_qty"] = risk_calc["qty"]
             signal["leverage"] = safe_lev
+            signal["risk_pct_applied"] = acc_risk_base
 
         # SOP-40 Buffer guardrail
         if not executor.dry_run:
