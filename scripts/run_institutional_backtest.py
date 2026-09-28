@@ -96,7 +96,13 @@ def main():
     parser.add_argument(
         "--enable-trinity-boost",
         action="store_true",
-        help="Activa el multiplicador Kelly 1.20x de convicción en la Trinidad del Alfa: BNB, SOL, FET (SOP-47)"
+        default=True,
+        help="Activa el multiplicador Kelly 1.20x de convicción en la Trinidad del Alfa: BNB, SOL, FET (SOP-47, default: True)"
+    )
+    parser.add_argument(
+        "--no-trinity-boost",
+        action="store_true",
+        help="Desactiva SOP-47 Trinity Boost para pruebas de ablación"
     )
     parser.add_argument(
         "--enable-elastic-runner",
@@ -106,7 +112,18 @@ def main():
     parser.add_argument(
         "--enable-golden-hours",
         action="store_true",
-        help="Activa el multiplicador 1.15x en las ventanas horarias 09:00 y 11:00 UTC (SOP-49)"
+        default=True,
+        help="Activa el multiplicador 1.15x en las ventanas horarias 09:00 y 11:00 UTC (SOP-49, default: True)"
+    )
+    parser.add_argument(
+        "--no-golden-hours",
+        action="store_true",
+        help="Desactiva SOP-49 Golden Hours para pruebas de ablación"
+    )
+    parser.add_argument(
+        "--no-meta-labeling",
+        action="store_true",
+        help="Desactiva SOP-100 Two-Stage Meta-Labeling Kelly para pruebas de ablación"
     )
     parser.add_argument(
         "--enable-regime-agent",
@@ -116,15 +133,16 @@ def main():
     parser.add_argument(
         "--all-advanced",
         action="store_true",
-        help="Activa simultáneamente todas las innovaciones cuantitativas avanzadas (SOP-46 a SOP-49 y SOP-63)"
+        help="Activa simultáneamente todas las innovaciones cuantitativas avanzadas (SOP-46 a SOP-49, SOP-63 y SOP-100)"
     )
 
     args = parser.parse_args()
 
     alpha_cycle = args.enable_alpha_cycle or args.all_advanced
-    trinity_boost = args.enable_trinity_boost or args.all_advanced
+    trinity_boost = (args.enable_trinity_boost or args.all_advanced) and not args.no_trinity_boost
     elastic_runner = args.enable_elastic_runner or args.all_advanced
-    golden_hours = args.enable_golden_hours or args.all_advanced
+    golden_hours = (args.enable_golden_hours or args.all_advanced) and not args.no_golden_hours
+    meta_labeling = not args.no_meta_labeling
     regime_agent = args.enable_regime_agent or args.all_advanced
 
     engine = UnifiedBacktestEngine(min_confluence_score=args.min_score)
@@ -141,7 +159,8 @@ def main():
                 enable_trinity_boost=trinity_boost,
                 enable_elastic_runner=elastic_runner,
                 enable_golden_hours=golden_hours,
-                enable_regime_agent=regime_agent
+                enable_regime_agent=regime_agent,
+                enable_meta_labeling=meta_labeling
             )
         else:
             print("\n🚀 Ejecutando Auditoría Oficial de Cartera Aislada por Activo (Legacy SSoT)...")

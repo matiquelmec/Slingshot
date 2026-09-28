@@ -1,11 +1,12 @@
 # 🏗️ Estructura del Proyecto Slingshot v60.0 APEX QUANTUM FORTRESS
 
 > Guía de referencia técnica oficial de la arquitectura, jerarquía de directorios, módulos y componentes del sistema autónomo Slingshot.
-> **Última actualización**: Septiembre 2026 (v60.0 APEX QUANTUM FORTRESS — Canonización de los protocolos **SOP-94: Progressive Exposure Sizing & Asymmetric Drawdown Protection**, **SOP-95: Session-Anchored VWAP**, **SOP-96: TradeZella Style Playbook Taxonomy**, y Blindaje Dual-Protocol OpenAPI TPSL de Bitunix, SSoT en [SLINGSHOT_BIBLE_V60.md](SLINGSHOT_BIBLE_V60.md)).
+> **Última actualización**: Septiembre 2026 (v60.0 APEX QUANTUM FORTRESS — Canonización de los protocolos **SOP-94: Progressive Exposure Sizing & Asymmetric Drawdown Protection**, **SOP-95: Session-Anchored VWAP**, **SOP-96: TradeZella Style Playbook Taxonomy**, **SOP-99: Dynamic Slot Elasticity**, **SOP-100: Two-Stage Meta-Labeling Gatekeeper & Playbook-Aware Fractional Kelly Engine**, y Blindaje Dual-Protocol OpenAPI TPSL de Bitunix, SSoT en [SLINGSHOT_BIBLE_V60.md](SLINGSHOT_BIBLE_V60.md)).
 
 ---
 
-## 📊 Árbol de Directorios Oficial v55.0
+## 📊 Árbol de Directorios Oficial v60.0
+
 
 ```text
 Slingshot/
@@ -92,8 +93,8 @@ Slingshot/
 │   ├── backtest/                    # ═══ THE TRUTH ENGINE: Motor de Backtest SSoT ═══
 │   │   ├── unified_backtest_engine.py # Motor Unificado con Paridad 1:1 SSoT en Producción
 │   │   ├── data/                    # Datasets históricos binarios en formato .parquet
-│   │   └── reports/                 # Reportes oficiales inmutables JSON (+94.75R Cripto y +76.98% TradFi)
-│   └── tests/                       # ═══ Suite Oficial de Certificación QA (100% Passed) ═══
+│   │   └── reports/                 # Reportes oficiales inmutables JSON (+124.41R Alpha / +103.44R Base, PF 2.10, Sharpe 4.61)
+│   └── tests/                       # ═══ Suite Oficial de Certificación QA (276+ Pruebas — 100% Passed) ═══
 │       ├── test_ftmo_titanium_strategy.py           # 6 Pruebas Tier A, Poda, Cosecha 50/30/20, Cierres Parciales MT5
 │       ├── test_tradfi_scanner_and_risk.py          # 15 Pruebas Scanner TradFi, Provider MT5 y Guardian FTMO
 │       ├── test_multi_account_advanced_security.py  # 38 Pruebas Cifrado AES, Aislamiento, Deduplicación y Kill-Switch
@@ -140,30 +141,31 @@ Slingshot/
 │       ├── test_hmm_regime_and_rolling_train.py     # 4 Pruebas HMM 4 Estados, Markov Transition y Hot-Reload Atómico (SOP-73)
 │       ├── test_post_mortem_and_veto_suite.py       # 3 Pruebas Agente Post-Mortem NVIDIA NIM y Veto Gatekeeper (SOP-74)
 │       ├── test_streak_circuit_breakers.py          # 4 Pruebas Circuit Breakers de Racha SOP-81/82/83 (FTMO & Bitunix)
-│       ├── test_progressive_exposure_and_streak_sizing.py # 6 Pruebas SOP-94 Contracción de Racha (1.0x/0.75x/0.50x) y Quick Restore
+│       ├── test_progressive_exposure_and_streak_sizing.py # 6 Pruebas SOP-94 Contracción de Racha (1.0x/0.85x/0.65x) y Quick Restore
 │       ├── test_session_anchored_vwap.py            # 3 Pruebas SOP-95 Session AVWAP (Asia 00:00, Londres 07:00, NY 13:30 UTC)
 │       ├── test_bitunix_tpsl_modify_and_id_resolution.py # 6 Pruebas Bitunix Dual-Protocol TPSL, Auto-Resolución ID y 1R Risk Cache
 │       ├── test_dynamic_heat_and_slot_allocation.py # 6 Pruebas SOP-97 Dynamic Heat & Slot Allocation y SOP-98 Screener Hardening
-│       ├── test_dynamic_slot_elasticity.py        # 7 Pruebas SOP-99 Dynamic Slot Elasticity & Macro Decoupled Expansion
+│       ├── test_dynamic_slot_elasticity.py          # 7 Pruebas SOP-99 Dynamic Slot Elasticity & Macro Decoupled Expansion
+│       ├── test_sop100_meta_labeling_and_playbook_kelly.py # 6 Pruebas SOP-100 Two-Stage Meta-Labeling & Playbook Kelly Engine
+│       ├── test_limit_execution_and_sync_reconciler.py # 4 Pruebas Reconciliador Bitunix, TTL Límite y Paridad en Vivo
 │       ├── test_chronological_backtest_parity.py    # 4 Pruebas Paridad SSoT 1:1 Unified Backtest vs Live Engine SOP-97/99
 │       └── legacy/                                  # Pruebas históricas preservadas (test_bitunix_multi_pos.py, test_ftmo_swing.py)
 │
 ├── scripts/                         # ═══ HERRAMIENTAS CLI & DE DESPLIEGUE (SSoT) ═══
-│   ├── verificar_sistema.bat        # Script de verificación integral en Windows/VPS (56 tests)
-│   ├── run_qa_suite.py              # Ejecutor automático de suites de pruebas
+│   ├── verificar_sistema.bat        # Script de verificación integral en Windows/VPS
+│   ├── run_qa_suite.py              # Ejecutor automático de las 276+ pruebas de certificación QA
+│   ├── run_institutional_backtest.py # CLI oficial del Motor Cronológico SSoT (SOP-100 activo por defecto)
 │   ├── historical_fetcher.py        # Descargador oficial de Parquets históricos
 │   ├── doctor.py                    # Diagnóstico de puertos, sockets y servicios
 │   ├── watchdog_supervisor.py       # Monitor supervisor de procesos en segundo plano
-│   └── diagnostic/                  # Scripts de telemetría y diagnósticos de conectividad
+│   └── diagnostic/                  # Validador de higiene institucional (check_hygiene.py) y telemetría
 │
 └── docs/                            # ═══ DOCUMENTACIÓN TÉCNICA CANÓNICA (SSoT) ═══
-    ├── README.md                    # Manual general del ecosistema y especificaciones ejecutivas
-    ├── SLINGSHOT_BIBLE_V51.md       # Biblia canónica maestra v51.0 (Especificación completa del sistema)
-    ├── SLINGSHOT_BIBLE_V52.md       # Biblia canónica maestra v52.0 (Tri-Loop Adaptive Calibration, SOP-72 a SOP-74)
-    ├── SLINGSHOT_BIBLE_V55.md       # Biblia canónica maestra v55.0 (Apex Sovereign, Streak Breakers SOP-81 a SOP-83)
-    ├── SLINGSHOT_BIBLE_V60.md       # Biblia canónica maestra v60.0 (Playbooks, AVWAP, SOP-97 Heat, SOP-98 Screener & SOP-99 Elasticity)
+    ├── SLINGSHOT_BIBLE_V60.md       # Biblia canónica maestra v60.0 (Única Especificación SSoT Activa: SOP-01 a SOP-100)
     ├── ESTRUCTURA_PROYECTO.md       # Guía de estructura, archivos y módulos (este archivo)
-    └── MULTI_ACCOUNT_INSTITUTIONAL_SPEC.md # Especificación técnica de la arquitectura multi-cuenta
+    ├── MULTI_ACCOUNT_INSTITUTIONAL_SPEC.md # Especificación técnica de la arquitectura multi-cuenta
+    ├── knowledge/                   # Base de conocimiento cuantitativo y regímenes de mercado
+    └── archive/                     # Archivo histórico inmutable de especificaciones previas (V10 a V59)
 ```
 
 ---

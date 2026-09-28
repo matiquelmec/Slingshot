@@ -53,23 +53,26 @@ scratch/*.txt
 .windsurf/
 .claude/
 
-# 🕒 Runtime States
+# 🕒 Runtime States (Local Only - Never Track Mutations)
 engine/data/session_state_*.json
+engine/data/ai_cache.json
+engine/data/macro_state.json
+engine/data/telegram_sent_state.json
+data/blackbox.json
+data/*.json
+data/backups/
 
-# 🗑️ Slingshot v10.0 Cleanup
-tmp/
+# 🗑️ Slingshot Cleanup & Build Artifacts
 scratch/
 reports/
 *.db
 crash_log*.txt
 .vault_v9_legacy/
 *.c
+tmp_runner.py
 
 # 🦀 Rust Sidecar Build Targets
 slingshot-core-rust/target/
 **/target/
 Cargo.lock
-data/*.json
-data/backups/
-tmp_runner.py
-engine/data/macro_state.json
+

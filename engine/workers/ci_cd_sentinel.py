@@ -95,10 +95,8 @@ class CICDSentinel:
         return True, "Pre-flight checks aprobados"
 
     def execute_atomic_pull(self) -> bool:
-        """Aplica el pull limpio preservando archivos de base de datos local."""
+        """Aplica el pull limpio preservando archivos de estado local en disco."""
         try:
-            # Preservar macro_state.json o archivos temporales locales
-            subprocess.run([self.git_cmd, "checkout", "--", "engine/data/macro_state.json", "data/blackbox.json"], cwd=ROOT_DIR, capture_output=True)
             res = subprocess.run([self.git_cmd, "pull", self.remote, self.branch], cwd=ROOT_DIR, capture_output=True, text=True)
             if res.returncode == 0:
                 self.log_audit(f"✅ Git Pull exitoso: {res.stdout.strip()[:100]}")
@@ -114,16 +112,21 @@ class CICDSentinel:
         """Recarga los servicios en Windows Server."""
         try:
             ps_script = """
+Stop-ScheduledTask -TaskName 'SlingshotBot' -ErrorAction SilentlyContinue
 Stop-ScheduledTask -TaskName 'SlingshotTrading' -ErrorAction SilentlyContinue
-Get-Process python -ErrorAction SilentlyContinue | Where-Object { $_.Id -ne $PID } | Stop-Process -Force -ErrorAction SilentlyContinue
-Start-ScheduledTask -TaskName 'SlingshotTrading'
+Get-CimInstance Win32_Process -Filter "Name = 'python.exe'" | Where-Object { $_.CommandLine -match "engine.api.main" -and $_.ProcessId -ne $PID } | ForEach-Object {
+    Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue
+}
+Start-Sleep -Seconds 2
+Start-ScheduledTask -TaskName 'SlingshotBot' -ErrorAction SilentlyContinue
+Start-ScheduledTask -TaskName 'SlingshotTrading' -ErrorAction SilentlyContinue
 
 Stop-ScheduledTask -TaskName 'SlingshotFrontend' -ErrorAction SilentlyContinue
 Get-Process node -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
-Start-ScheduledTask -TaskName 'SlingshotFrontend'
+Start-ScheduledTask -TaskName 'SlingshotFrontend' -ErrorAction SilentlyContinue
 """
             subprocess.run(["powershell", "-NoProfile", "-Command", ps_script], capture_output=True)
-            self.log_audit("🔄 Servicios SlingshotTrading y SlingshotFrontend recargados exitosamente.")
+            self.log_audit("🔄 Servicios SlingshotBot / SlingshotTrading y SlingshotFrontend recargados exitosamente.")
             return True
         except Exception as e:
             self.log_audit(f"❌ Error recargando servicios: {e}")
