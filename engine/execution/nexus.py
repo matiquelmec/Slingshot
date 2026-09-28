@@ -1248,6 +1248,8 @@ class NexusNode:
             logger.debug(f"[NEXUS STREAK DB] Error inicializando tabla: {db_err}")
 
     def _persist_streak_state(self):
+        if getattr(self, "dry_run", False) and self.DB_PATH == NexusNode.DB_PATH:
+            return
         try:
             self._init_streak_db()
             with sqlite3.connect(self.DB_PATH) as conn:
@@ -1262,6 +1264,8 @@ class NexusNode:
             logger.debug(f"[NEXUS STREAK DB] Error persistiendo rachas: {err}")
 
     def _load_streak_state(self):
+        if getattr(self, "dry_run", False) and self.DB_PATH == NexusNode.DB_PATH:
+            return
         try:
             self._init_streak_db()
             healed_any = False
@@ -1293,6 +1297,8 @@ class NexusNode:
             logger.debug(f"[NEXUS BUFFER DB] Error inicializando tabla: {db_err}")
 
     def _persist_buffer_to_disk(self):
+        if getattr(self, "dry_run", False) and self.DB_PATH == NexusNode.DB_PATH:
+            return
         try:
             self._init_buffer_db()
             with sqlite3.connect(self.DB_PATH) as conn:
@@ -1310,6 +1316,8 @@ class NexusNode:
             logger.debug(f"[NEXUS BUFFER DB] Error persistiendo buffer: {save_err}")
 
     def _load_buffer_from_disk(self):
+        if getattr(self, "dry_run", False) and self.DB_PATH == NexusNode.DB_PATH:
+            return
         try:
             self._init_buffer_db()
             with sqlite3.connect(self.DB_PATH) as conn:
