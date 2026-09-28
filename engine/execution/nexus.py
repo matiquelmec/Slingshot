@@ -1114,18 +1114,23 @@ class NexusNode:
         if sl_val > 0 and entry_val > 0:
             qty_decimals, _ = await executor.get_symbol_precision(asset)
             
-            # SOP-43: Quarter-Kelly Asymmetric Risk Scaling (unless explicitly overridden in signal/account)
+            # SOP-43 & SOP-100: Quarter-Kelly Asymmetric Risk Scaling + Two-Stage Meta-Labeling
             base_acc_risk = getattr(account, "risk_pct", 0.025)
             if "risk_pct" in signal and signal.get("risk_pct") is not None:
                 dyn_risk_pct = float(signal["risk_pct"])
             else:
                 confluence_score = float(signal.get("confluence_score", 70.0))
                 hour_now = datetime.now(timezone.utc).hour
+                pb_sig = signal.get("playbook")
                 dyn_risk_pct = RiskManager.calculate_quarter_kelly_risk(
                     base_risk_pct=base_acc_risk,
                     symbol=asset,
                     confluence_score=confluence_score,
-                    hour_utc=hour_now
+                    hour_utc=hour_now,
+                    playbook=pb_sig,
+                    apply_trinity_boost=bool(pb_sig),
+                    apply_golden_hours=bool(pb_sig),
+                    apply_meta_labeling=bool(pb_sig)
                 )
             
             # SOP-94: Progressive Exposure Multiplier (Words of Rizdom Insight)
@@ -1442,6 +1447,7 @@ class NexusNode:
                 "signal_type": clean_dir,
                 "direction": clean_dir,
                 "type": clean_dir,
+                "playbook": best_opp.get("playbook", "OB_DISCOUNT_RETEST"),
                 "strategy_label": best_opp.get("type", "SMC Sniper"),
                 "price": float(best_opp.get("price", 0)),
                 "stop_loss": float(best_opp.get("stop_loss", 0)),
@@ -1754,7 +1760,7 @@ class NexusNode:
             return None
 
         qty_decimals, _ = await executor.get_symbol_precision(asset)
-        # SOP-94: Progressive Exposure Multiplier (Words of Rizdom Insight)
+        # SOP-94 & SOP-100: Progressive Exposure + Meta-Labeling Quarter-Kelly
         streak_losses = getattr(self, "_consecutive_losses", {}).get(acc_id, 0)
         risk_released = getattr(self, "_risk_released_recently", {}).get(acc_id, False)
         streak_mult = RiskManager.calculate_streak_exposure_multiplier(
@@ -1762,7 +1768,27 @@ class NexusNode:
             risk_released_recently=risk_released,
             mode="balanced"
         )
-        acc_risk_base = getattr(account, "risk_pct", 0.025) * streak_mult
+        base_acc_risk = getattr(account, "risk_pct", 0.025)
+        pb_limit = acc_signal.get("playbook")
+        if "risk_pct" in acc_signal and acc_signal.get("risk_pct") is not None:
+            raw_risk_pct = float(acc_signal["risk_pct"])
+        elif pb_limit:
+            confluence_score = float(acc_signal.get("confluence_score", acc_signal.get("score", 70.0)))
+            hour_now = datetime.now(timezone.utc).hour
+            raw_risk_pct = RiskManager.calculate_quarter_kelly_risk(
+                base_risk_pct=base_acc_risk,
+                symbol=asset,
+                confluence_score=confluence_score,
+                hour_utc=hour_now,
+                playbook=pb_limit,
+                apply_trinity_boost=True,
+                apply_golden_hours=True,
+                apply_meta_labeling=True
+            )
+        else:
+            raw_risk_pct = base_acc_risk
+
+        acc_risk_base = raw_risk_pct * streak_mult
         if streak_mult < 1.0:
             logger.info(f"🛡️ [NEXUS AUTO-LIMIT SOP-94] [{account.label}] Modulando riesgo a {acc_risk_base*100:.2f}% ({streak_mult:.2f}x) por racha de {streak_losses} pérdidas.")
 

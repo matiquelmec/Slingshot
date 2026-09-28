@@ -616,6 +616,7 @@ class MarketScanner:
                     "signal_type": clean_dir,
                     "direction": clean_dir,
                     "type": clean_dir,
+                    "playbook": top_c.get("playbook", "OB_DISCOUNT_RETEST"),
                     "strategy_label": top_c.get("type", "SMC Sniper"),
                     "price": float(top_c["price"]),
                     "stop_loss": float(top_c["stop_loss"]),

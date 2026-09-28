@@ -237,6 +237,7 @@ class UnifiedBacktestEngine:
         df["rvol"] = df["volume"] / (df["vol_sma"] + 1e-9)
         change = (df["close"] - df["close"].shift(10)).abs()
         vol = (df["close"] - df["close"].shift(1)).abs().rolling(10).sum()
+        df["ker_fractal"] = (change / (vol + 1e-9)).fillna(0.5)
         df = calculate_vwap(df)
         from engine.indicators.volume import calculate_session_anchored_vwap
         df = calculate_session_anchored_vwap(df)
@@ -313,7 +314,7 @@ class UnifiedBacktestEngine:
                 continue
 
             # 2. Entrada Límite en Descuento OTE / FVG (SOP-26 Grid 40/40/20 & SOP-48 Elastic Runner)
-            ker_val = float(row.get("ker", 0.0))
+            ker_val = float(row.get("ker", row.get("ker_fractal", 0.5)))
             is_elastic = False
             target_tp3_r = 3.5
             if enable_elastic_runner and ker_val >= 0.50:
@@ -647,10 +648,11 @@ class UnifiedBacktestEngine:
         dynamic_risk_pct: float = 0.025,
         compounding_initial_usd: float = 1_000.0,
         enable_alpha_cycle: bool = False,
-        enable_trinity_boost: bool = False,
+        enable_trinity_boost: bool = True,
         enable_elastic_runner: bool = False,
-        enable_golden_hours: bool = False,
+        enable_golden_hours: bool = True,
         enable_regime_agent: bool = False,
+        enable_meta_labeling: bool = True,
         enable_streak_circuit_breaker: bool = False,
         max_consecutive_losses: int = 3,
         streak_cooldown_trades: int = 1,
@@ -912,7 +914,9 @@ class UnifiedBacktestEngine:
                 apply_alpha_cycle=enable_alpha_cycle,
                 apply_trinity_boost=enable_trinity_boost,
                 apply_golden_hours=enable_golden_hours,
-                regime_mult=reg_mult
+                regime_mult=reg_mult,
+                playbook=row.get("playbook"),
+                apply_meta_labeling=enable_meta_labeling
             )
             # Modulación asimétrica por racha (SOP-94 Words of Rizdom)
             return alpha_sizing * float(row.get("streak_mult", 1.0))
@@ -1037,13 +1041,14 @@ class UnifiedBacktestEngine:
 
         summary_payload = {
             "audit_date": datetime.now().isoformat(),
-            "engine_version": "v60.0 APEX EXPANSION (Event-Driven Timeline SSoT SOP-97 & SOP-99)",
+            "engine_version": "v60.0 APEX EXPANSION (Event-Driven Timeline SSoT SOP-97, SOP-99 & SOP-100)",
             "advanced_protocols": {
                 "alpha_cycle_sop46": enable_alpha_cycle,
                 "trinity_boost_sop47": enable_trinity_boost,
                 "elastic_runner_sop48": enable_elastic_runner,
                 "golden_hours_sop49": enable_golden_hours,
-                "regime_agent_sop63": enable_regime_agent
+                "regime_agent_sop63": enable_regime_agent,
+                "meta_labeling_sop100": enable_meta_labeling
             },
             "telemetry_funnel": {
                 "raw_signals": raw_signal_count,

@@ -66,7 +66,10 @@ MODERN_TEST_FILES = [
     "engine/tests/test_event_driven_portfolio_backtest.py",
     "engine/tests/test_bayesian_confluence_calibration.py",
     "engine/tests/test_hmm_regime_and_rolling_train.py",
-    "engine/tests/test_post_mortem_and_veto_suite.py"
+    "engine/tests/test_post_mortem_and_veto_suite.py",
+    "engine/tests/test_progressive_exposure_and_streak_sizing.py",
+    "engine/tests/test_dynamic_slot_elasticity.py",
+    "engine/tests/test_sop100_meta_labeling_and_playbook_kelly.py"
 ]
 
 def main():

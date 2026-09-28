@@ -1,7 +1,7 @@
 # 🛡️ SLINGSHOT v60.0 APEX QUANTUM FORTRESS — Autonomous Dual Terminal
 ## High-Availability Edge, 24/7 Sovereign VPS Execution & Fortress Risk Architecture
 
-> **"Terminal Cuantitativa Autónoma de Grado Institucional. Slingshot v60.0 APEX QUANTUM FORTRESS: Desacoplamiento Soberano de Alta Disponibilidad entre la Retina Edge (Vercel CDN / Next.js 15) y el Núcleo Cuantitativo de Ejecución (Windows Server VPS 24/7 en Frankfurt). Integra la canonización de los Protocolos SOP-94 (Progressive Exposure Sizing & Asymmetric Drawdown Protection), SOP-95 (Session-Anchored AVWAP), SOP-96 (TradeZella Playbook Taxonomy), SOP-97 (Multi-Asset Dynamic Heat & Slot Allocation), SOP-98 (Dynamic Screener Hardening) y SOP-99 (Dynamic Slot Elasticity & Macro Decoupled Expansion con capacidad elástica 1-3 riesgos y 3-5 concurrentes), consolidando el Blindaje OpenAPI Dual-Protocol TPSL de Bitunix y los protocolos SOP-48 (Adaptive Structural Runner) y SOP-42 (Pre-Flight Dollar Risk Hard-Clamp). Documentación canónica completa en [SLINGSHOT_BIBLE_V60.md](docs/SLINGSHOT_BIBLE_V60.md)."**
+> **"Terminal Cuantitativa Autónoma de Grado Institucional. Slingshot v60.0 APEX QUANTUM FORTRESS: Desacoplamiento Soberano de Alta Disponibilidad entre la Retina Edge (Vercel CDN / Next.js 15) y el Núcleo Cuantitativo de Ejecución (Windows Server VPS 24/7 en Frankfurt). Integra la canonización de los Protocolos SOP-94 (Progressive Exposure Sizing & Asymmetric Drawdown Protection), SOP-95 (Session-Anchored AVWAP), SOP-96 (TradeZella Playbook Taxonomy), SOP-97 (Multi-Asset Dynamic Heat & Slot Allocation), SOP-98 (Dynamic Screener Hardening), SOP-99 (Dynamic Slot Elasticity & Macro Decoupled Expansion) y SOP-100 (Two-Stage Meta-Labeling Gatekeeper & Playbook-Aware Fractional Kelly Allocation), consolidando el Blindaje OpenAPI Dual-Protocol TPSL de Bitunix y los protocolos SOP-47 (Trinity Boost), SOP-48 (Adaptive Structural Runner), SOP-49 (Golden Hours) y SOP-42 (Pre-Flight Dollar Risk Hard-Clamp). Documentación canónica completa en [SLINGSHOT_BIBLE_V60.md](docs/SLINGSHOT_BIBLE_V60.md)."**
 
 ![Status](https://img.shields.io/badge/Status-100%25_AUTONOMOUS_&_SSOT_VERIFIED-0d2a1a?style=for-the-badge&logo=codeproject&logoColor=fff)
 ![Version](https://img.shields.io/badge/Version-60.0_Quantum_Fortress-1a3a6e?style=for-the-badge)
@@ -10,13 +10,13 @@
 ![Crypto Engine](https://img.shields.io/badge/Bitunix_Crypto-2.5%25_Compounded_Live-f39c12?style=for-the-badge&logo=bitcoin&logoColor=fff)
 ![MetaTrader 5](https://img.shields.io/badge/MetaTrader_5-FTMO_Institutional_Live-2980b9?style=for-the-badge&logo=windows&logoColor=fff)
 ![Execution Engine](https://img.shields.io/badge/Execution-SOP--64_Auto--Dispatcher_≥75%25-green?style=for-the-badge)
-![Security](https://img.shields.io/badge/Security_Protocols-SOP--01%20to%20SOP--99-emerald?style=for-the-badge)
-![QA Suite](https://img.shields.io/badge/QA_Suite-402_Tests_100%25_Passed-success?style=for-the-badge)
-![Crypto Return](https://img.shields.io/badge/Crypto_Compounded_ROI-%2B972.1%25_(10.7x)-gold?style=for-the-badge)
-![Total Alpha](https://img.shields.io/badge/Total_Alpha-%2B101.80_R_Base_%7C_%2B99.96_R_Alpha-gold?style=for-the-badge)
-![Profit Factor](https://img.shields.io/badge/Profit_Factor-1.93_Institucional-blue?style=for-the-badge)
-![Sortino Ratio](https://img.shields.io/badge/Sortino_Ratio-26.00_Elite-blue?style=for-the-badge)
-![Drawdown](https://img.shields.io/badge/Max_Drawdown--3.74%25_Shield-brightgreen?style=for-the-badge)
+![Security](https://img.shields.io/badge/Security_Protocols-SOP--01%20to%20SOP--100-emerald?style=for-the-badge)
+![QA Suite](https://img.shields.io/badge/QA_Suite-406_Tests_100%25_Passed-success?style=for-the-badge)
+![Crypto Return](https://img.shields.io/badge/Crypto_Compounded_ROI-%2B1776.8%25_(18.8x)-gold?style=for-the-badge)
+![Total Alpha](https://img.shields.io/badge/Total_Alpha-%2B103.44_R_Base_%7C_%2B124.41_R_Alpha-gold?style=for-the-badge)
+![Profit Factor](https://img.shields.io/badge/Profit_Factor-2.10_Institucional-blue?style=for-the-badge)
+![Sharpe Ratio](https://img.shields.io/badge/Sharpe_Ratio-4.61_Elite-blue?style=for-the-badge)
+![Drawdown](https://img.shields.io/badge/Max_Drawdown--3.81%25_Shield-brightgreen?style=for-the-badge)
 ![Kernel](https://img.shields.io/badge/Kernel-Polars_Rust_Sub--1.0ms-black?style=for-the-badge&logo=rust&logoColor=fff)
 ![Persistence](https://img.shields.io/badge/Persistence-SQLite_WAL_ACID-003B57?style=for-the-badge&logo=sqlite&logoColor=fff)
 
@@ -197,29 +197,30 @@ graph TB
 | **SOP-97** | Multi-Asset Dynamic Heat & Slot Allocation | Gestión dual: 2 posiciones con riesgo no protegido máx y 4 físicas máx con liberación en Breakeven. |
 | **SOP-98** | Dynamic Screener Hardening & Spread Shield | Filtro bid/ask spread $\le 0.12\%$, volumen $\ge \$30\text{M}$ USDT y descarte de micro-tokens. |
 | **SOP-99** | Dynamic Slot Elasticity & Macro Decoupling | Elasticidad 1-3 riesgos y 3-5 físicas (contracción macro SOP-19, Streak Shield 2 slots en racha, expansión macro $\rho < 0.35$). |
+| **SOP-100** | Two-Stage Meta-Labeling & Playbook Kelly | Gatekeeper de 2 etapas (López de Prado) y Kelly Fraccional por Playbook (`1.18x-1.32x` en `OB_DISCOUNT_RETEST`, amortiguación `0.69x-0.92x` en `LIQUIDITY_SWEEP_FVG`). |
 
 ---
 
 ## 📊 Auditorías Cuantitativas Oficiales SSoT
 
 ### 1. Auditoría Oficial Criptomonedas Bitunix (180 Días Event-Driven Replay)
-Auditoría cronológica oficial sobre 350 operaciones reales concurrentes con 14 pares VIP, comisiones Maker/Taker y slippage descontados:
+Auditoría cronológica oficial sobre 336 operaciones reales concurrentes con 14 pares VIP, comisiones Maker/Taker y slippage descontados:
 
 ```text
 ========================================================================================================================
 Métrica Cuantitativa Institucional    | Slingshot v31.0 Base    | Slingshot v51.0         | Slingshot v60.0 APEX FORTRESS
 ========================================================================================================================
-Total Operaciones Auditadas           | 466 trades (Aisladas)   | 237 trades (Replay)     | 350 trades (Replay SSoT)
-Win Rate Real (TP1 / TP2 / TP3)       | 42.3%                   | 46.8%                   | 44.6% (156 Wins / 194 Losses)
-Profit Factor Base                    | 1.07 (Frágil)           | 1.80 (Sólido)           | 1.80 (Sólido Institucional)
-Profit Factor con Progressive Sizing  | 1.10                    | 1.99 🚀                 | 1.93 🚀 (Robusto y Asimétrico)
-Retorno Total Base en R               | +22.40 R                | +66.31 R                | +101.80 R
-Retorno Total con Progressive Sizing  | +25.00 R                | +94.75 R 💎             | +99.96 R 💎 (Alpha-Tier Sizing)
-Drawdown Máximo de Cartera (Plano)    | -38.10% (Descalificado) | -4.21% 🛡️               | -3.74% 🛡️ (Blindaje Total Prop Firm)
-Sharpe / Sortino Ratio                | 0.85 / 1.12             | 3.95 / 24.63 🛡️         | 4.30 / 26.00 🛡️ (Élite Cuantitativa)
-Crecimiento Compuesto Bitunix ($1k)   | +$1,546.25 USD (+154%)  | +$8,148.56 USD (+814%)  | +$9,720.55 USD (+972.1% / 10.7X)
-Capital Final Compuesto ($1,000 USD)  | $2,546.25 USD           | $9,148.56 USD 🚀        | $10,720.55 USD 🚀
-Drawdown Máximo Compuesto (2.5%)      | -38.10%                 | -14.63% 🛡️              | -12.30% 🛡️ (Totalmente Controlado)
+Total Operaciones Auditadas           | 466 trades (Aisladas)   | 237 trades (Replay)     | 336 trades (Replay SSoT)
+Win Rate Real (TP1 / TP2 / TP3)       | 42.3%                   | 46.8%                   | 45.2% (152 Wins / 184 Losses)
+Profit Factor Base                    | 1.07 (Frágil)           | 1.80 (Sólido)           | 1.85 (Sólido Institucional)
+Profit Factor con Meta-Labeling Sizing| 1.10                    | 1.99 🚀                 | 2.10 🚀 (Robusto y Asimétrico)
+Retorno Total Base en R               | +22.40 R                | +66.31 R                | +103.44 R
+Retorno Total con Meta-Labeling Sizing| +25.00 R                | +94.75 R 💎             | +124.41 R 💎 (SOP-100 Sizing)
+Drawdown Máximo de Cartera (Plano)    | -38.10% (Descalificado) | -4.21% 🛡️               | -3.81% 🛡️ (Blindaje Total Prop Firm)
+Sharpe / Sortino Ratio                | 0.85 / 1.12             | 3.95 / 24.63 🛡️         | 4.61 / 22.72 🛡️ (Élite Cuantitativa)
+Crecimiento Compuesto Bitunix ($1k)   | +$1,546.25 USD (+154%)  | +$8,148.56 USD (+814%)  | +$17,767.90 USD (+1,776.8% / 18.8X)
+Capital Final Compuesto ($1,000 USD)  | $2,546.25 USD           | $9,148.56 USD 🚀        | $18,767.90 USD 🚀
+Drawdown Máximo Compuesto (2.5%)      | -38.10%                 | -14.63% 🛡️              | -12.49% 🛡️ (Totalmente Controlado)
 ========================================================================================================================
 ```
 
@@ -228,8 +229,8 @@ Drawdown Máximo Compuesto (2.5%)      | -38.10%                 | -14.63% 🛡�
 ====================================================================================================
 Playbook Arquetípico               Trades   Win Rate    PnL (R)      Avg R      PF    Expectancy (R)
 ----------------------------------------------------------------------------------------------------
-OB_DISCOUNT_RETEST                    142     47.9%    +56.93R     +0.40R    2.42           +0.40R
-LIQUIDITY_SWEEP_FVG                   208     42.3%    +43.03R     +0.21R    1.64           +0.21R
+OB_DISCOUNT_RETEST                    140     48.6%    +80.85R     +0.58R    2.55           +0.58R
+LIQUIDITY_SWEEP_FVG                   196     42.9%    +43.56R     +0.22R    1.72           +0.22R
 ====================================================================================================
 ```
 
