@@ -154,3 +154,49 @@ async def test_nexus_limit_order_applies_sop100_and_sop94_streak_shield():
     res_2 = await nexus._place_limit_for_account(ex, acc, sig_ob_streak, safe_lev=10, entry_p=1.00, sl_p=0.98)
     assert res_2["status"] == "success"
     assert sig_ob_streak["exact_qty"] == pytest.approx(sig_ob["exact_qty"] * 0.65, rel=0.02)
+
+
+@pytest.mark.asyncio
+async def test_sop100_stage1_gatekeeper_blocks_low_ker_sweeps():
+    """
+    [SOP-100 STAGE 1 GATEKEEPER]
+    Verifica que process_limit_setup bloquee señales LIQUIDITY_SWEEP_FVG cuando KER < 0.40
+    y la confluencia sea inferior al umbral institucional del 82.0%.
+    """
+    from unittest.mock import patch
+    nexus = NexusNode(dry_run=False)
+    sig_sweep_noisy = {
+        "asset": "XRPUSDT",
+        "symbol": "XRPUSDT",
+        "signal_type": "LONG",
+        "playbook": "LIQUIDITY_SWEEP_FVG",
+        "confluence_score": 72.0,
+        "ker": 0.36,
+        "adx": 25.0,
+        "price": 0.60,
+        "stop_loss": 0.585,
+        "vwap_dist_pct": 0.0
+    }
+    with patch("engine.workers.market_scanner.is_trade_allowed_sop18", return_value=True):
+        res = await nexus.process_limit_setup(sig_sweep_noisy)
+    assert res["placed"] is False
+    assert res["status"] == "BLOCKED_SOP100_STAGE1"
+
+
+@pytest.mark.asyncio
+async def test_market_scanner_preserves_champions_on_refresh():
+    """
+    Verifica que MarketScanner._refresh_dynamic_assets conserve siempre a los
+    campeones BNBUSDT y SOLUSDT en scalp_assets tras rotaciones dinámicas.
+    """
+    from unittest.mock import patch
+    from engine.workers.market_scanner import MarketScanner
+    scanner = MarketScanner()
+    scanner._dynamic_last_refresh = 0
+    with patch("engine.workers.market_scanner.fetch_top_liquid_tickers", new_callable=AsyncMock) as mock_fetch:
+        mock_fetch.return_value = ["AAVEUSDT", "ONDOUSDT"]
+        await scanner._refresh_dynamic_assets()
+    assert "BNBUSDT" in scanner.scalp_assets
+    assert "SOLUSDT" in scanner.scalp_assets
+    assert "AAVEUSDT" in scanner.scalp_assets
+

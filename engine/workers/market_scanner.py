@@ -94,10 +94,10 @@ class MarketScanner:
             # Tomar los top N candidatos adicionales más líquidos
             selected_dynamic = new_dynamic[:max_dynamic]
             
-            self.scalp_assets = list(set(self.core_scalp_assets + selected_dynamic))
+            self.scalp_assets = list(set(self.core_scalp_assets + ["BNBUSDT", "SOLUSDT"] + selected_dynamic))
             self.assets = list(set(self.scalp_assets + self.swing_1h_assets + self.daily_assets))
             self._dynamic_last_refresh = now
-            logger.info(f"✨ [DYNAMIC SCREENER] Universo actualizado: {len(self.core_scalp_assets)} Core + {len(selected_dynamic)} Dinámicos ({', '.join(selected_dynamic)}). Total: {len(self.assets)} activos.")
+            logger.info(f"✨ [DYNAMIC SCREENER] Universo actualizado: {len(self.core_scalp_assets)} Core + 2 Champions (BNB, SOL) + {len(selected_dynamic)} Dinámicos ({', '.join(selected_dynamic)}). Total: {len(self.assets)} activos.")
         except Exception as e:
             logger.debug(f"[DYNAMIC SCREENER] Error actualizando candidatos dinámicos: {e}")
 
@@ -231,18 +231,25 @@ class MarketScanner:
         async def fetch_and_prep(symbol: str):
             async with semaphore:
                 try:
-                    history = await fetch_binance_history(symbol, interval, limit=100)
+                    history = await fetch_binance_history(symbol, interval, limit=250)
                     if history:
                         df = pd.DataFrame([h["data"] for h in history])
                         df["timestamp"] = pd.to_datetime(df["timestamp"], unit="s")
-                        # 🦀 POLARS ACCELERATION: Cálculo vectorizado de ATR, EMAs y FVGs según el timeframe real
+                        # 🦀 POLARS ACCELERATION + ESTRUCTURA SMC COMPLETA (PARIDAD SSoT CON BACKTEST)
                         df = polars_engine.compute_indicators(df)
+                        try:
+                            from engine.indicators.structure import identify_order_blocks
+                            df = identify_order_blocks(df)
+                            df = self.router._strategy.analyze(df, interval=interval)
+                        except Exception as smc_err:
+                            logger.debug(f"[MARKET_SCANNER] Fallback estructura SMC en {symbol}: {smc_err}")
                         dfs_dict[symbol] = df
                 except Exception as e:
                     logger.debug(f"[MARKET_SCANNER] Error descargando {symbol}: {e}")
 
-        # Pre-descargar datos en paralelo para permitir SMT Divergence entre activos
-        await asyncio.gather(*(fetch_and_prep(sym) for sym in target_assets))
+        # Pre-descargar datos en paralelo incluyendo siempre BTCUSDT y ETHUSDT para SMT Divergence y Alineación Macro BTC
+        fetch_symbols = list(dict.fromkeys(list(target_assets) + ["BTCUSDT", "ETHUSDT"]))
+        await asyncio.gather(*(fetch_and_prep(sym) for sym in fetch_symbols))
 
         async def process_asset(symbol: str):
             try:
@@ -271,11 +278,25 @@ class MarketScanner:
                         "fib_data": fib_data,
                         "session_data": session_data
                     }
+
+                detected_regime = result.get("market_regime") or (result.get("diagnostic") or {}).get("regime_details") or "RANGING"
+                df["market_regime"] = detected_regime
+
+                # [RADAR & LATTICE DYNAMIC HYDRATION — SIEMPRE ACTIVO]
+                await store.update_market_state(symbol, {
+                    "asset": symbol,
+                    "price": current_price,
+                    "current_price": current_price,
+                    "regime": detected_regime,
+                    "bias": "LONG" if detected_regime in ("MARKUP", "ACCUMULATION") else ("SHORT" if detected_regime in ("MARKDOWN", "DISTRIBUTION") else "NEUTRAL"),
+                    "session": session_data.get("current_session", "UNKNOWN"),
+                    "last_updated": datetime.now(timezone.utc).isoformat()
+                })
                 
                 active_signals = result.get("signals", [])
                 if active_signals:
                     for sig in active_signals:
-                        candidates.append(self._format_opportunity(sig, is_active=True))
+                        candidates.append(self._format_opportunity(sig, is_active=True, df=df, session_data=session_data))
                     return
                 
                 # ── PROTOCOLO CANÓNICO SOP-18 & ANTIRUIDO: EVALUACIÓN DE SALUD DE MERCADO ──
@@ -340,6 +361,7 @@ class MarketScanner:
                         "symbol":            symbol,
                         "type":              "Estructura Local",
                         "signal_type":       direction,
+                        "regime":            detected_regime,
                         "price":             optimal_entry,
                         "timestamp":         str(last_timestamp),
                         "atr_value":         atr_val,
@@ -349,7 +371,7 @@ class MarketScanner:
                     risk_data = self.router._risk.calculate_position(
                         current_price=optimal_entry,
                         signal_type=direction,
-                        market_regime=result.get("market_regime", "RANGING"),
+                        market_regime=detected_regime,
                         smc_data=result.get("smc", {}),
                         atr_value=atr_val,
                         asset=symbol,
@@ -494,10 +516,12 @@ class MarketScanner:
                             "detail": f"⚠️ CONTRA FLUJO DE SESIÓN {cur_session} (Precio ${current_price:,.2f} vs AVWAP ${cur_avwap:,.2f} | Dist: {cur_avwap_dist:+.2f}%)",
                         })
 
-                    # ── DETERMINACIÓN DE PLAYBOOK INSTITUCIONAL (TRADEZELLA STYLE) ──
-                    if bool(df.get("recent_sweep_bull", pd.Series([False])).iloc[-1]) or bool(df.get("recent_sweep_bear", pd.Series([False])).iloc[-1]):
+                    # ── DETERMINACIÓN DE PLAYBOOK INSTITUCIONAL (TRADEZELLA STYLE — PARIDAD SSoT) ──
+                    has_dir_sweep = bool(df.get("recent_sweep_bull", pd.Series([False])).iloc[-1]) if direction == "LONG" else bool(df.get("recent_sweep_bear", pd.Series([False])).iloc[-1])
+                    has_dir_ob = bool(df.get("recent_ob_bull", pd.Series([False])).iloc[-1]) if direction == "LONG" else bool(df.get("recent_ob_bear", pd.Series([False])).iloc[-1])
+                    if has_dir_sweep:
                         playbook_name = "LIQUIDITY_SWEEP_FVG"
-                    elif valid_obs:
+                    elif valid_obs or has_dir_ob:
                         playbook_name = "OB_DISCOUNT_RETEST"
                     elif is_trend_aligned and ker_val >= 0.45:
                         playbook_name = "BOS_MOMENTUM_EXPANSION"
@@ -538,7 +562,7 @@ class MarketScanner:
                         "asset": symbol,
                         "price": current_price,
                         "current_price": current_price,
-                        "regime": result.get("market_regime", "RANGING"),
+                        "regime": detected_regime,
                         "bias": direction,
                         "session": session_data.get("current_session", "UNKNOWN"),
                         "last_updated": datetime.now(timezone.utc).isoformat()
@@ -584,9 +608,11 @@ class MarketScanner:
 
         # 🚀 [TELEGRAM APEX SNIPER DISPATCHER & LIVE TRADING GATE] ──
         # Despacho automático y ejecución condicional estricta:
-        # Requiere: confluencia >= 60%, sin OTE chasing, sin veto de cluster, ventana SOP-18 activa y KER >= 0.35
+        # Requiere: confluencia >= min_score (con SOP-100 Stage 1 & SOP-49 Asia Gating), sin OTE chasing,
+        # sin veto de cluster, ventana SOP-18 activa y KER >= 0.35.
         # Excluye timeframe '1d' (daily) de la auto-colocación de límites intradía
         from engine.router.telegram_dispatcher import telegram_dispatcher
+        from engine.risk.risk_manager import RiskManager
         is_intraday_operative = store_key in ("scalp", "swing") and interval in ("15m", "1h")
 
         for top_c in sorted_candidates:
@@ -596,11 +622,24 @@ class MarketScanner:
             is_time_blocked = top_c.get("is_time_blocked", False)
             is_ker_blocked = top_c.get("is_ker_blocked", False)
             is_quarantined = top_c.get("asset_health", {}).get("is_quarantined", False)
+            playbook_c = top_c.get("playbook", "OB_DISCOUNT_RETEST")
+            ker_c = float((top_c.get("asset_health") or {}).get("ker", 0.40))
             min_score = 65 if is_quarantined else 60
+
+            # [SOP-100 STAGE 1 GATEKEEPER: SWEEP + LOW KER DEMANDS 82% CONFLUENCE]
+            if playbook_c == "LIQUIDITY_SWEEP_FVG" and ker_c < 0.40:
+                min_score = max(min_score, 82)
+
+            # [SOP-49 ASIAN SESSION GATING: 00:00 - 06:59 UTC]
+            now_utc_dispatch = datetime.now(timezone.utc)
+            if 0 <= now_utc_dispatch.hour <= 6:
+                sym_upper = top_c["asset"].upper()
+                if not any(sym_upper.startswith(ldr) for ldr in RiskManager.ALPHA_LEADERS):
+                    min_score += 5
 
             # [SOP-92 DYNAMIC HIGH-IMPACT NEWS SENTINEL]
             from engine.indicators.news_interceptor import news_interceptor
-            is_news_blocked = news_interceptor.is_macro_news_blackout(datetime.now(timezone.utc), top_c["asset"])
+            is_news_blocked = news_interceptor.is_macro_news_blackout(now_utc_dispatch, top_c["asset"])
 
             if score >= min_score and not is_chasing and not is_cluster_blocked and not is_time_blocked and not is_ker_blocked and not is_news_blocked:
                 dist_sl = abs(float(top_c["price"]) - float(top_c["stop_loss"]))
@@ -616,7 +655,7 @@ class MarketScanner:
                     "signal_type": clean_dir,
                     "direction": clean_dir,
                     "type": clean_dir,
-                    "playbook": top_c.get("playbook", "OB_DISCOUNT_RETEST"),
+                    "playbook": playbook_c,
                     "strategy_label": top_c.get("type", "SMC Sniper"),
                     "price": float(top_c["price"]),
                     "stop_loss": float(top_c["stop_loss"]),
@@ -629,7 +668,7 @@ class MarketScanner:
                     "score": score,
                     "session": top_c.get("session", "NEW_YORK"),
                     "asset_health": top_c.get("asset_health", {}),
-                    "ker": float((top_c.get("asset_health") or {}).get("ker", 0.40)),
+                    "ker": ker_c,
                     "adx": float((top_c.get("asset_health") or {}).get("adx", 25.0)),
                     "vwap_dist_pct": float(top_c.get("session_avwap_dist_pct", 0.0))
                 }
@@ -651,7 +690,7 @@ class MarketScanner:
 
                 asyncio.create_task(telegram_dispatcher.send_signal_alert(tele_sig))
 
-    def _format_opportunity(self, sig: dict, is_active: bool) -> dict:
+    def _format_opportunity(self, sig: dict, is_active: bool, df: pd.DataFrame = None, session_data: dict = None) -> dict:
         health = sig.get("confluence", {}).get("asset_health", {})
         ker_val = float(health.get("ker", 0.40))
         is_ker_clean = ker_val >= 0.35
@@ -671,10 +710,37 @@ class MarketScanner:
             active_positions=active_positions
         )
 
+        playbook_name = sig.get("playbook")
+        cur_avwap = 0.0
+        cur_avwap_dist = 0.0
+        is_avwap_aligned = True
+        if df is not None and not df.empty:
+            if not playbook_name:
+                has_dir_sweep = bool(df.get("recent_sweep_bull", pd.Series([False])).iloc[-1]) if clean_dir == "LONG" else bool(df.get("recent_sweep_bear", pd.Series([False])).iloc[-1])
+                has_dir_ob = bool(df.get("recent_ob_bull", pd.Series([False])).iloc[-1]) if clean_dir == "LONG" else bool(df.get("recent_ob_bear", pd.Series([False])).iloc[-1])
+                if has_dir_sweep:
+                    playbook_name = "LIQUIDITY_SWEEP_FVG"
+                elif has_dir_ob:
+                    playbook_name = "OB_DISCOUNT_RETEST"
+                elif ker_val >= 0.45:
+                    playbook_name = "BOS_MOMENTUM_EXPANSION"
+                else:
+                    playbook_name = "TREND_CONTINUATION_EMA"
+            try:
+                from engine.indicators.volume import calculate_session_anchored_vwap
+                df_avwap = calculate_session_anchored_vwap(df)
+                cur_avwap = float(df_avwap["session_avwap"].iloc[-1])
+                cur_avwap_dist = float(df_avwap["session_avwap_dist_pct"].iloc[-1])
+                cur_p = float(df["close"].iloc[-1])
+                is_avwap_aligned = (clean_dir == "LONG" and cur_p >= cur_avwap * 0.999) or (clean_dir == "SHORT" and cur_p <= cur_avwap * 1.001)
+            except Exception:
+                pass
+
         return {
             "asset":             sym,
             "direction":         clean_dir,
             "type":              sig.get("type", "SMC Sniper"),
+            "playbook":          playbook_name or "OB_DISCOUNT_RETEST",
             "price":             float(sig.get("price", 0)),
             "stop_loss":         float(sig.get("stop_loss", 0)),
             "tp1":               float(sig.get("tp1", 0)),
@@ -689,7 +755,10 @@ class MarketScanner:
             "cluster_reason":    cluster_msg,
             "is_time_blocked":   not is_time_ok,
             "is_ker_blocked":    not is_ker_clean,
-            "session":           "LIVE_SIGNAL",
+            "session":           (session_data or {}).get("current_session", "LIVE_SIGNAL"),
+            "session_avwap":     round(cur_avwap, 4),
+            "session_avwap_dist_pct": round(cur_avwap_dist, 2),
+            "is_avwap_aligned":  is_avwap_aligned,
             "asset_health":      health,
         }
 

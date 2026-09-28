@@ -357,10 +357,10 @@ class ConfluenceManager:
 
         # 🚀 9.5. NEURAL HEATMAP (Peso Dinámico Bayesiano - Base 20) v5.7 Platinum
         heatmap_weight = bayesian_calibrator.get_weight("heatmap_weight", default=20.0)
-        total_weight += heatmap_weight
         heatmap = kwargs.get('heatmap', {})
         
         if heatmap and heatmap.get('imbalance') is not None:
+            total_weight += heatmap_weight
             imbalance = heatmap.get('imbalance', 0)
             h_bids = heatmap.get('hot_bids', [])
             h_asks = heatmap.get('hot_asks', [])
@@ -416,7 +416,7 @@ class ConfluenceManager:
         # 🚀 9.7. ORDER FLOW DELTA & TRIGGER CANDLE (Peso Dinámico Bayesiano - Base 15) v10.0 Sovereign Apex
         delta_weight = bayesian_calibrator.get_weight("delta_weight", default=15.0)
         total_weight += delta_weight
-        order_flow_delta = float(current.get('order_flow_delta', 0.0))
+        order_flow_delta = float(signal.get('order_flow_delta', current.get('order_flow_delta', 0.0)))
         
         delta_aligned = (is_long and order_flow_delta > 0.1) or (not is_long and order_flow_delta < -0.1)
         delta_opposed = (is_long and order_flow_delta < -0.5) or (not is_long and order_flow_delta > 0.5)

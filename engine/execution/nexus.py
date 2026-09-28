@@ -1559,15 +1559,29 @@ class NexusNode:
             logger.info(f"🛡️ [NEXUS AUTO-LIMIT SOP-84] Omitida orden límite para {asset}: {msg_ker}.")
             return {"placed": False, "status": "BLOCKED_KER", "reason": msg_ker, "order_id": None}
 
+        # ── SOP-100 STAGE 1: META-LABELING GATEKEEPER (SWEEP + LOW KER FILTER) ──
+        pb_name = str(signal.get("playbook", "OB_DISCOUNT_RETEST")).upper()
+        confluence_val = float(signal.get("confluence_score") or (signal.get("confluence") or {}).get("score", 70.0))
+        if pb_name == "LIQUIDITY_SWEEP_FVG" and ker_val < 0.40 and confluence_val < 82.0:
+            msg_s100 = f"SOP-100 Stage 1 Veto: {pb_name} con KER={ker_val:.2f} exige Confluencia >= 82% (Actual: {confluence_val:.0f}%)"
+            logger.info(f"🛡️ [NEXUS AUTO-LIMIT SOP-100] Omitida orden límite para {asset}: {msg_s100}.")
+            return {"placed": False, "status": "BLOCKED_SOP100_STAGE1", "reason": msg_s100, "order_id": None}
+
         try:
-            # ── SOP-33 & SOP-38 & SOP-63: ALPHA-TIER SIZING CON MODULACIÓN DE RÉGIMEN ──
+            # ── SOP-33 & SOP-38 & SOP-63 & SOP-100: ALPHA-TIER SIZING CON MODULACIÓN DE RÉGIMEN ──
             from engine.risk.risk_manager import RiskManager
             from engine.core.vault import vault
-            confluence_val = float(signal.get("confluence_score", 70.0))
             hour_now = datetime.now(timezone.utc).hour
             latest_regime = vault.get_latest_regime_state()
             reg_mult = float(latest_regime.get("risk_multiplier", 1.0)) if latest_regime else 1.0
-            sizing_mult = RiskManager.calculate_alpha_tier_sizing(asset, confluence_val, hour_utc=hour_now, regime_mult=reg_mult)
+            sizing_mult = RiskManager.calculate_alpha_tier_sizing(
+                asset,
+                confluence_val,
+                hour_utc=hour_now,
+                regime_mult=reg_mult,
+                playbook=signal.get("playbook"),
+                apply_meta_labeling=bool(signal.get("playbook"))
+            )
             if sizing_mult <= 0.0:
                 logger.debug(f"[NEXUS AUTO-LIMIT SOP-33] Omitido activo descalificado: {asset}")
                 return {"placed": False, "status": "BLOCKED_TIER", "reason": "Activo descalificado por Alpha-Tier sizing", "order_id": None}
