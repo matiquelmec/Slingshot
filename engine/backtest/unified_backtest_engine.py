@@ -221,6 +221,9 @@ class UnifiedBacktestEngine:
                 raw["timestamp"] = pd.to_datetime(raw["timestamp"], unit=unit)
             df = raw.sort_values("timestamp").reset_index(drop=True)
 
+        if getattr(df["timestamp"].dt, "tz", None) is not None:
+            df["timestamp"] = df["timestamp"].dt.tz_localize(None)
+
         if len(df) < 60:
             return []
 
@@ -656,7 +659,8 @@ class UnifiedBacktestEngine:
         enable_streak_circuit_breaker: bool = False,
         max_consecutive_losses: int = 3,
         streak_cooldown_trades: int = 1,
-        enable_progressive_exposure: bool = True
+        enable_progressive_exposure: bool = True,
+        enable_dual_timeframe_sop101: bool = True
     ) -> Dict[str, Any]:
         """
         [EVENT-DRIVEN TIMELINE REPLAY v60.0 SSoT]
@@ -666,6 +670,7 @@ class UnifiedBacktestEngine:
         - [SOP-97] Separación Estricta: Max Unprotected Risk (2) vs Max Concurrent Physical (4).
         - [SOP-97] Ponderación y Desempate Concurrente por Alpha Trinity (1.25x en ETH, SOL, BNB, INJ).
         - [SOP-99] Dynamic Slot Elasticity & Macro Decoupled Expansion (Oro ρ < 0.35 -> 3/5 slots).
+        - [SOP-101] Dual-Timeframe Specialization (15m Crypto Scalp + 1h Swing Elite & XAUUSDT).
         - Modo Dual: R Base / Alpha-Tier (1% plano) e Interés Compuesto Dinámico (2.5% Bitunix).
         - Embudo de telemetría de señales y tracking de rechazos.
         - Modulación Táctica de Régimen de Mercado SOP-63 (SlingshotRegimeAgent).
@@ -675,7 +680,8 @@ class UnifiedBacktestEngine:
             max_unprotected_positions = max_concurrent_longs
 
         toxic_hours = [10, 14] if toxic_hours is None else toxic_hours
-        excluded_assets = ["RENDERUSDT"] if excluded_assets is None else excluded_assets
+        if excluded_assets is None:
+            excluded_assets = ["RENDERUSDT", "AVAXUSDT"] if enable_dual_timeframe_sop101 else ["RENDERUSDT"]
 
         btc_map = self._load_btc_macro_map()
         all_assets = MEGA_CAPS + HIGH_BETA_ALTS + TRADFI_METALS
@@ -688,6 +694,7 @@ class UnifiedBacktestEngine:
         print(f"⚙️  Riesgo Flotante Base (SOP-97): {max_unprotected_positions} posiciones simultáneas sin BE")
         print(f"🧱  Techo Físico Base   (SOP-97): {max_concurrent_positions} posiciones concurrentes totales")
         print(f"🌊  Elasticidad Dinámica(SOP-99): ACTIVA (Contracción racha >=2 | Expansión desacoplada 3/5)")
+        print(f"⏱️  Sinergia Dual-TF   (SOP-101): {'ACTIVA (15m Crypto Scalp + 1h Swing Elite & XAU)' if enable_dual_timeframe_sop101 else 'DESACTIVADA (Solo 15m)'}")
         print(f"🛡️  Calor Máximo de Cartera     : {max_heat_pct}% (SOP-44 Directional Heat Guardrail)")
         print(f"🧭  Filtro Macro BTC           : {'ACTIVO (btc_aligned dinámico)' if strict_btc_macro else 'DESACTIVADO'}")
         print(f"⏳  Quirófano Horario          : Vetadas horas {toxic_hours} UTC (Trampa Londres & Apertura NY)")
@@ -698,11 +705,13 @@ class UnifiedBacktestEngine:
             print(f"🌟  Protocolos Alpha Avanzados : SOP-46 Cycle: {enable_alpha_cycle} | SOP-47 Trinity: {enable_trinity_boost} | SOP-48 KER: {enable_elastic_runner} | SOP-49 Hours: {enable_golden_hours} | SOP-63 Regime: {enable_regime_agent}")
         print("=" * 88)
 
-        # 1. Extracción de setups brutos
+        # 1. Extracción de setups brutos (15m Scalp + 1h Swing SOP-101)
         for sym in all_assets:
             if sym in seen:
                 continue
             seen.add(sym)
+            if enable_dual_timeframe_sop101 and sym == "XAUUSDT":
+                continue  # XAUUSDT especializado exclusivamente en 1h Swing (SOP-101)
             t_list = self.run_single_asset(
                 sym,
                 interval="15m",
@@ -710,6 +719,22 @@ class UnifiedBacktestEngine:
                 enable_elastic_runner=enable_elastic_runner
             )
             all_results.extend(t_list)
+
+        if enable_dual_timeframe_sop101 and all_results:
+            min_15m_ts = min(pd.to_datetime(t["entry_time"]) for t in all_results)
+            swing_1h_elite = ["XAUUSDT", "NEARUSDT", "ATOMUSDT", "ETHUSDT", "BTCUSDT", "INJUSDT", "LINKUSDT"]
+            for sym_1h in swing_1h_elite:
+                if excluded_assets and sym_1h in excluded_assets:
+                    continue
+                t_1h = self.run_single_asset(
+                    sym_1h,
+                    interval="1h",
+                    btc_map=btc_map,
+                    enable_elastic_runner=enable_elastic_runner
+                )
+                for tr_1h in t_1h:
+                    if pd.to_datetime(tr_1h["entry_time"]) >= min_15m_ts:
+                        all_results.append(tr_1h)
 
         df_all = pd.DataFrame(all_results)
         if df_all.empty:
@@ -916,7 +941,8 @@ class UnifiedBacktestEngine:
                 apply_golden_hours=enable_golden_hours,
                 regime_mult=reg_mult,
                 playbook=row.get("playbook"),
-                apply_meta_labeling=enable_meta_labeling
+                apply_meta_labeling=enable_meta_labeling,
+                interval=str(row.get("interval", "15m"))
             )
             # Modulación asimétrica por racha (SOP-94 Words of Rizdom)
             return alpha_sizing * float(row.get("streak_mult", 1.0))
@@ -1041,14 +1067,15 @@ class UnifiedBacktestEngine:
 
         summary_payload = {
             "audit_date": datetime.now().isoformat(),
-            "engine_version": "v60.0 APEX EXPANSION (Event-Driven Timeline SSoT SOP-97, SOP-99 & SOP-100)",
+            "engine_version": "v60.0 APEX EXPANSION (Event-Driven Timeline SSoT SOP-97, SOP-99, SOP-100 & SOP-101)",
             "advanced_protocols": {
                 "alpha_cycle_sop46": enable_alpha_cycle,
                 "trinity_boost_sop47": enable_trinity_boost,
                 "elastic_runner_sop48": enable_elastic_runner,
                 "golden_hours_sop49": enable_golden_hours,
                 "regime_agent_sop63": enable_regime_agent,
-                "meta_labeling_sop100": enable_meta_labeling
+                "meta_labeling_sop100": enable_meta_labeling,
+                "dual_timeframe_sop101": enable_dual_timeframe_sop101
             },
             "telemetry_funnel": {
                 "raw_signals": raw_signal_count,

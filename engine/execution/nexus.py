@@ -1114,7 +1114,7 @@ class NexusNode:
         if sl_val > 0 and entry_val > 0:
             qty_decimals, _ = await executor.get_symbol_precision(asset)
             
-            # SOP-43 & SOP-100: Quarter-Kelly Asymmetric Risk Scaling + Two-Stage Meta-Labeling
+            # SOP-43, SOP-100 & SOP-101: Quarter-Kelly Asymmetric Risk Scaling + Timeframe-Aware Meta-Labeling
             base_acc_risk = getattr(account, "risk_pct", 0.025)
             if "risk_pct" in signal and signal.get("risk_pct") is not None:
                 dyn_risk_pct = float(signal["risk_pct"])
@@ -1122,6 +1122,7 @@ class NexusNode:
                 confluence_score = float(signal.get("confluence_score", 70.0))
                 hour_now = datetime.now(timezone.utc).hour
                 pb_sig = signal.get("playbook")
+                sig_interval = str(signal.get("interval") or signal.get("timeframe") or "15m").lower()
                 dyn_risk_pct = RiskManager.calculate_quarter_kelly_risk(
                     base_risk_pct=base_acc_risk,
                     symbol=asset,
@@ -1130,7 +1131,8 @@ class NexusNode:
                     playbook=pb_sig,
                     apply_trinity_boost=bool(pb_sig),
                     apply_golden_hours=bool(pb_sig),
-                    apply_meta_labeling=bool(pb_sig)
+                    apply_meta_labeling=bool(pb_sig),
+                    interval=sig_interval
                 )
             
             # SOP-94: Progressive Exposure Multiplier (Words of Rizdom Insight)
@@ -1559,16 +1561,24 @@ class NexusNode:
             logger.info(f"🛡️ [NEXUS AUTO-LIMIT SOP-84] Omitida orden límite para {asset}: {msg_ker}.")
             return {"placed": False, "status": "BLOCKED_KER", "reason": msg_ker, "order_id": None}
 
-        # ── SOP-100 STAGE 1: META-LABELING GATEKEEPER (SWEEP + LOW KER FILTER) ──
+        # ── SOP-100 & SOP-101 STAGE 1: TIMEFRAME-AWARE META-LABELING GATEKEEPER ──
         pb_name = str(signal.get("playbook", "OB_DISCOUNT_RETEST")).upper()
         confluence_val = float(signal.get("confluence_score") or (signal.get("confluence") or {}).get("score", 70.0))
-        if pb_name == "LIQUIDITY_SWEEP_FVG" and ker_val < 0.40 and confluence_val < 82.0:
-            msg_s100 = f"SOP-100 Stage 1 Veto: {pb_name} con KER={ker_val:.2f} exige Confluencia >= 82% (Actual: {confluence_val:.0f}%)"
-            logger.info(f"🛡️ [NEXUS AUTO-LIMIT SOP-100] Omitida orden límite para {asset}: {msg_s100}.")
-            return {"placed": False, "status": "BLOCKED_SOP100_STAGE1", "reason": msg_s100, "order_id": None}
+        sig_interval = str(signal.get("interval") or signal.get("timeframe") or "15m").lower()
+
+        if sig_interval == "1h":
+            if not asset.startswith("XAU") and confluence_val < 75.0:
+                msg_s101 = f"SOP-101 1h Swing Gate: {asset} en 1h exige Confluencia >= 75% (Actual: {confluence_val:.0f}%)"
+                logger.info(f"🛡️ [NEXUS AUTO-LIMIT SOP-101] Omitida orden límite para {asset}: {msg_s101}.")
+                return {"placed": False, "status": "BLOCKED_SOP101_SWING_GATE", "reason": msg_s101, "order_id": None}
+        else:
+            if pb_name == "LIQUIDITY_SWEEP_FVG" and ker_val < 0.40 and confluence_val < 82.0:
+                msg_s100 = f"SOP-100 Stage 1 Veto: {pb_name} con KER={ker_val:.2f} exige Confluencia >= 82% (Actual: {confluence_val:.0f}%)"
+                logger.info(f"🛡️ [NEXUS AUTO-LIMIT SOP-100] Omitida orden límite para {asset}: {msg_s100}.")
+                return {"placed": False, "status": "BLOCKED_SOP100_STAGE1", "reason": msg_s100, "order_id": None}
 
         try:
-            # ── SOP-33 & SOP-38 & SOP-63 & SOP-100: ALPHA-TIER SIZING CON MODULACIÓN DE RÉGIMEN ──
+            # ── SOP-33 & SOP-38 & SOP-63 & SOP-100/101: ALPHA-TIER SIZING CON MODULACIÓN DE RÉGIMEN ──
             from engine.risk.risk_manager import RiskManager
             from engine.core.vault import vault
             hour_now = datetime.now(timezone.utc).hour
@@ -1580,7 +1590,8 @@ class NexusNode:
                 hour_utc=hour_now,
                 regime_mult=reg_mult,
                 playbook=signal.get("playbook"),
-                apply_meta_labeling=bool(signal.get("playbook"))
+                apply_meta_labeling=bool(signal.get("playbook")),
+                interval=sig_interval
             )
             if sizing_mult <= 0.0:
                 logger.debug(f"[NEXUS AUTO-LIMIT SOP-33] Omitido activo descalificado: {asset}")
@@ -1797,6 +1808,7 @@ class NexusNode:
         elif pb_limit:
             confluence_score = float(acc_signal.get("confluence_score", acc_signal.get("score", 70.0)))
             hour_now = datetime.now(timezone.utc).hour
+            sig_interval = str(acc_signal.get("interval") or acc_signal.get("timeframe") or "15m").lower()
             raw_risk_pct = RiskManager.calculate_quarter_kelly_risk(
                 base_risk_pct=base_acc_risk,
                 symbol=asset,
@@ -1805,7 +1817,8 @@ class NexusNode:
                 playbook=pb_limit,
                 apply_trinity_boost=True,
                 apply_golden_hours=True,
-                apply_meta_labeling=True
+                apply_meta_labeling=True,
+                interval=sig_interval
             )
         else:
             raw_risk_pct = base_acc_risk

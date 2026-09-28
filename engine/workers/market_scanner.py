@@ -49,10 +49,12 @@ class MarketScanner:
     """
     def __init__(self):
         self.router = SlingshotRouter()
-        # 🚀 Tier 1: Núcleo Fijo Especializado por Perfil Cuantitativo (SOP-36)
+        # 🚀 Tier 1: Núcleo Fijo Especializado por Perfil Cuantitativo (SOP-36 & SOP-101)
         # 7 Activos Core Inmutables + BNBUSDT y SOLUSDT activos en Scalp 15m
         self.core_scalp_assets = ["RENDERUSDT", "SUIUSDT", "INJUSDT", "NEARUSDT", "FETUSDT", "ATOMUSDT", "TIAUSDT"]
-        self.core_swing_1h_assets = ["BTCUSDT", "ETHUSDT", "SOLUSDT", "AVAXUSDT", "LINKUSDT", "XRPUSDT", "XAUUSDT"]
+        # [SOP-101 DUAL-TIMEFRAME SWING SPECIALIZATION]
+        # Campeón puro 1h (XAUUSDT) + 7 Campeones Duales auditados en 1h (PF >= 1.53)
+        self.core_swing_1h_assets = ["XAUUSDT", "NEARUSDT", "ATOMUSDT", "ETHUSDT", "BTCUSDT", "INJUSDT", "LINKUSDT", "SOLUSDT"]
         self.daily_assets = ["BTCUSDT", "ETHUSDT", "SOLUSDT", "XAUUSDT", "RENDERUSDT", "NEARUSDT"]
         
         # Activos activos en Scalp 15m (Core + Campeones BNB y SOL)
@@ -296,7 +298,7 @@ class MarketScanner:
                 active_signals = result.get("signals", [])
                 if active_signals:
                     for sig in active_signals:
-                        candidates.append(self._format_opportunity(sig, is_active=True, df=df, session_data=session_data))
+                        candidates.append(self._format_opportunity(sig, is_active=True, df=df, session_data=session_data, interval=interval))
                     return
                 
                 # ── PROTOCOLO CANÓNICO SOP-18 & ANTIRUIDO: EVALUACIÓN DE SALUD DE MERCADO ──
@@ -530,6 +532,7 @@ class MarketScanner:
 
                     cand = {
                         "asset":             symbol,
+                        "interval":          interval,
                         "direction":         direction,
                         "type":              "Virtual Setup",
                         "playbook":          playbook_name,
@@ -608,7 +611,7 @@ class MarketScanner:
 
         # 🚀 [TELEGRAM APEX SNIPER DISPATCHER & LIVE TRADING GATE] ──
         # Despacho automático y ejecución condicional estricta:
-        # Requiere: confluencia >= min_score (con SOP-100 Stage 1 & SOP-49 Asia Gating), sin OTE chasing,
+        # Requiere: confluencia >= min_score (con SOP-100 Stage 1, SOP-101 1h Swing Gate & SOP-49 Asia Gating), sin OTE chasing,
         # sin veto de cluster, ventana SOP-18 activa y KER >= 0.35.
         # Excluye timeframe '1d' (daily) de la auto-colocación de límites intradía
         from engine.router.telegram_dispatcher import telegram_dispatcher
@@ -625,15 +628,20 @@ class MarketScanner:
             playbook_c = top_c.get("playbook", "OB_DISCOUNT_RETEST")
             ker_c = float((top_c.get("asset_health") or {}).get("ker", 0.40))
             min_score = 65 if is_quarantined else 60
+            sym_upper = top_c["asset"].upper()
 
-            # [SOP-100 STAGE 1 GATEKEEPER: SWEEP + LOW KER DEMANDS 82% CONFLUENCE]
-            if playbook_c == "LIQUIDITY_SWEEP_FVG" and ker_c < 0.40:
-                min_score = max(min_score, 82)
+            # [SOP-101 1H SWING SPECIALIZATION GATEKEEPER]
+            if interval == "1h":
+                if not sym_upper.startswith("XAU"):
+                    min_score = max(min_score, 75)
+            else:
+                # [SOP-100 STAGE 1 GATEKEEPER: 15m SWEEP + LOW KER DEMANDS 82% CONFLUENCE]
+                if playbook_c == "LIQUIDITY_SWEEP_FVG" and ker_c < 0.40:
+                    min_score = max(min_score, 82)
 
             # [SOP-49 ASIAN SESSION GATING: 00:00 - 06:59 UTC]
             now_utc_dispatch = datetime.now(timezone.utc)
             if 0 <= now_utc_dispatch.hour <= 6:
-                sym_upper = top_c["asset"].upper()
                 if not any(sym_upper.startswith(ldr) for ldr in RiskManager.ALPHA_LEADERS):
                     min_score += 5
 
@@ -690,7 +698,7 @@ class MarketScanner:
 
                 asyncio.create_task(telegram_dispatcher.send_signal_alert(tele_sig))
 
-    def _format_opportunity(self, sig: dict, is_active: bool, df: pd.DataFrame = None, session_data: dict = None) -> dict:
+    def _format_opportunity(self, sig: dict, is_active: bool, df: pd.DataFrame = None, session_data: dict = None, interval: str = "15m") -> dict:
         health = sig.get("confluence", {}).get("asset_health", {})
         ker_val = float(health.get("ker", 0.40))
         is_ker_clean = ker_val >= 0.35
@@ -738,6 +746,7 @@ class MarketScanner:
 
         return {
             "asset":             sym,
+            "interval":          sig.get("interval", interval),
             "direction":         clean_dir,
             "type":              sig.get("type", "SMC Sniper"),
             "playbook":          playbook_name or "OB_DISCOUNT_RETEST",

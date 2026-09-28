@@ -200,3 +200,82 @@ async def test_market_scanner_preserves_champions_on_refresh():
     assert "SOLUSDT" in scanner.scalp_assets
     assert "AAVEUSDT" in scanner.scalp_assets
 
+
+def test_sop101_timeframe_aware_meta_labeling_1h_sweep_boost():
+    """
+    [SOP-101 TIMEFRAME-AWARE META-LABELING]
+    Verifica que LIQUIDITY_SWEEP_FVG en 1h reciba el multiplicador institucional 1.15x
+    (sin penalización de SWEEP_LAGGARDS de 15m) y piso mínimo >= 1.15x en calculate_alpha_tier_sizing.
+    """
+    for sym in ("NEARUSDT", "LINKUSDT", "XAUUSDT", "ATOMUSDT"):
+        m_1h = RiskManager.calculate_meta_labeling_multiplier(sym, "LIQUIDITY_SWEEP_FVG", interval="1h")
+        assert m_1h == pytest.approx(1.15, rel=1e-4)
+
+    # En 15m LINKUSDT sigue amortiguado a 0.69x, pero en 1h sube a >= 1.15x
+    m_15m = RiskManager.calculate_meta_labeling_multiplier("LINKUSDT", "LIQUIDITY_SWEEP_FVG", interval="15m")
+    assert m_15m == pytest.approx(0.69, rel=1e-4)
+
+    xau_1h_sizing = RiskManager.calculate_alpha_tier_sizing(
+        "XAUUSDT",
+        confluence_score=65.0,
+        hour_utc=14,
+        playbook="LIQUIDITY_SWEEP_FVG",
+        apply_meta_labeling=True,
+        interval="1h"
+    )
+    assert xau_1h_sizing >= 1.15
+
+
+@pytest.mark.asyncio
+async def test_sop101_nexus_1h_swing_gatekeeper_and_stage1_bypass():
+    """
+    [SOP-101 1H SWING GATEKEEPER]
+    Verifica que process_limit_setup:
+    1. Bloquee activos Cripto en 1h con confluencia < 75.0% (BLOCKED_SOP101_SWING_GATE).
+    2. Permita XAUUSDT en 1h desde 60.0% y exima a 1h del filtro 15m SOP-100 Stage 1.
+    """
+    from unittest.mock import patch
+    nexus = NexusNode(dry_run=False)
+
+    # 1. Cripto en 1h con Score 70% (< 75%) -> Bloqueado por SOP-101
+    sig_crypto_low = {
+        "asset": "NEARUSDT",
+        "symbol": "NEARUSDT",
+        "interval": "1h",
+        "signal_type": "LONG",
+        "playbook": "LIQUIDITY_SWEEP_FVG",
+        "confluence_score": 70.0,
+        "ker": 0.38,
+        "adx": 25.0,
+        "price": 5.00,
+        "stop_loss": 4.90,
+        "vwap_dist_pct": 0.0
+    }
+    with patch("engine.workers.market_scanner.is_trade_allowed_sop18", return_value=True):
+        res_low = await nexus.process_limit_setup(sig_crypto_low)
+    assert res_low["placed"] is False
+    assert res_low["status"] == "BLOCKED_SOP101_SWING_GATE"
+
+    # 2. Cripto en 1h con Score 78% (>= 75%) y LIQUIDITY_SWEEP_FVG con KER=0.36 -> Pasa Stage 1 (no bloqueado por SOP-100 ni SOP-101)
+    sig_crypto_ok = dict(sig_crypto_low, confluence_score=78.0, ker=0.36)
+    with patch("engine.workers.market_scanner.is_trade_allowed_sop18", return_value=True), \
+         patch.object(nexus, "_place_limit_for_account", new_callable=AsyncMock) as mock_place:
+        mock_place.return_value = {"status": "success", "order_id": "ORD_1H_SWING"}
+        res_ok = await nexus.process_limit_setup(sig_crypto_ok)
+    assert res_ok["placed"] is True
+    assert res_ok["status"] == "ORDER_PLACED"
+
+
+def test_sop101_market_scanner_swing_1h_assets_specialization():
+    """
+    [SOP-101 SWING UNIVERSE SPECIALIZATION]
+    Verifica que MarketScanner excluya al activo tóxico AVAXUSDT de core_swing_1h_assets
+    e incluya a XAUUSDT + los 7 campeones duales auditados.
+    """
+    from engine.workers.market_scanner import MarketScanner
+    scanner = MarketScanner()
+    assert "AVAXUSDT" not in scanner.core_swing_1h_assets
+    for champ in ("XAUUSDT", "NEARUSDT", "ATOMUSDT", "ETHUSDT", "BTCUSDT", "INJUSDT", "LINKUSDT", "SOLUSDT"):
+        assert champ in scanner.core_swing_1h_assets
+
+

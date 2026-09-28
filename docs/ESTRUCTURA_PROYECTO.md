@@ -1,7 +1,7 @@
 # 🏗️ Estructura del Proyecto Slingshot v60.0 APEX QUANTUM FORTRESS
 
 > Guía de referencia técnica oficial de la arquitectura, jerarquía de directorios, módulos y componentes del sistema autónomo Slingshot.
-> **Última actualización**: Septiembre 2026 (v60.0 APEX QUANTUM FORTRESS — Canonización de los protocolos **SOP-94: Progressive Exposure Sizing & Asymmetric Drawdown Protection**, **SOP-95: Session-Anchored VWAP**, **SOP-96: TradeZella Style Playbook Taxonomy**, **SOP-99: Dynamic Slot Elasticity**, **SOP-100: Two-Stage Meta-Labeling Gatekeeper & Playbook-Aware Fractional Kelly Engine**, y Blindaje Dual-Protocol OpenAPI TPSL de Bitunix, SSoT en [SLINGSHOT_BIBLE_V60.md](SLINGSHOT_BIBLE_V60.md)).
+> **Última actualización**: Septiembre 2026 (v60.0 APEX QUANTUM FORTRESS — Canonización de los protocolos **SOP-94: Progressive Exposure Sizing & Asymmetric Drawdown Protection**, **SOP-95: Session-Anchored VWAP**, **SOP-96: TradeZella Style Playbook Taxonomy**, **SOP-99: Dynamic Slot Elasticity**, **SOP-100: Two-Stage Meta-Labeling Gatekeeper & Playbook-Aware Fractional Kelly Engine**, **SOP-101: Dual-Timeframe Specialization & Timeframe-Aware Meta-Labeling (15m Scalp + 1h Swing Synergy)** y Blindaje Dual-Protocol OpenAPI TPSL de Bitunix, SSoT en [SLINGSHOT_BIBLE_V60.md](SLINGSHOT_BIBLE_V60.md)).
 
 ---
 
@@ -71,12 +71,12 @@ Slingshot/
 │   │   ├── regime.py                # Detector de Régimen de Mercado (EMA Trend + ADX Momentum)
 │   │   └── tradfi_provider.py       # Proveedor TradFi MT5 — Descarga de Barras, Spreads y Configuración Tier A
 │   ├── risk/                        # Gestión y Guardianes de Riesgo Institucional
-│   │   ├── risk_manager.py          # RiskManager — SOP-25 (-0.65R), SOP-26 (40/40/20) & SOP-32/33 Kelly
+│   │   ├── risk_manager.py          # RiskManager — SOP-25 (-0.65R), SOP-26 (40/40/20), SOP-32/33/100/101 Kelly
 │   │   ├── ftmo_guardian.py         # FTMO Guardian Shield — Lotes Adaptativos, Midnight Rollover y Kill-Switch (-3.5%)
 │   │   ├── cluster_risk_guard.py    # Cluster Risk Guard — Covarianza rodante en vivo (ρ >= 0.75) y SOP-30 Beta
 │   │   └── hrp_allocator.py         # HierarchicalRiskParityAllocator — Optimizador HRP (Marcos López de Prado)
 │   ├── execution/                   # Ejecución Institucional en Exchanges y MetaTrader
-│   │   ├── nexus.py                 # Nexus Node — Router Multi-Mercado, SOP-39 Dynamic Equity & SOP-40 Buffer
+│   │   ├── nexus.py                 # Nexus Node — Router Multi-Mercado, SOP-39 Dynamic Equity & SOP-100/101 Gates
 │   │   ├── account_manager.py       # AccountManager — Bóveda Multi-Tenant Cifrada AES-256 Fernet (SOP-57)
 │   │   ├── omni_broker_hub.py       # OmniBrokerHub — Orquestador Multi-Broker Prop-Firm (Bitunix + FTMO MT5)
 │   │   ├── bitunix_executor.py      # Conector Bitunix Futures — Dynamic Decimals, HMAC-SHA256 y Post-Only
@@ -86,15 +86,15 @@ Slingshot/
 │   │   └── archive/                 # Conectores históricos preservados
 │   ├── workers/                     # Procesos y Demonios en Segundo Plano
 │   │   ├── orchestrator.py          # SlingshotOrchestrator — Director de orquesta 24/7
-│   │   ├── market_scanner.py        # Escáner Multitemporal Cripto (BNB Scalp 15m / BTC / Alts 24/7)
+│   │   ├── market_scanner.py        # Escáner Multitemporal Cripto (15m Scalp + 1h Swing Elite SOP-101)
 │   │   ├── tradfi_scanner.py        # Escáner Autónomo TradFi (Ciclo 45s, Tier A SOP-67, Gold Shield SOP-68)
 │   │   ├── trade_manager.py         # Centinela de Posiciones Vivas (Early Invalidation, 50/30/20 y Purgas Huérfanas)
 │   │   └── ci_cd_sentinel.py        # Centinela CI/CD Autónomo (Auditoría periódica de salud del sistema)
 │   ├── backtest/                    # ═══ THE TRUTH ENGINE: Motor de Backtest SSoT ═══
-│   │   ├── unified_backtest_engine.py # Motor Unificado con Paridad 1:1 SSoT en Producción
+│   │   ├── unified_backtest_engine.py # Motor Unificado con Paridad 1:1 SSoT en Producción (Dual-TF SOP-101)
 │   │   ├── data/                    # Datasets históricos binarios en formato .parquet
-│   │   └── reports/                 # Reportes oficiales inmutables JSON (+124.41R Alpha / +103.44R Base, PF 2.10, Sharpe 4.61)
-│   └── tests/                       # ═══ Suite Oficial de Certificación QA (276+ Pruebas — 100% Passed) ═══
+│   │   └── reports/                 # Reportes oficiales inmutables JSON (+152.84R Alpha / +128.48R Base, PF 2.00, Sharpe 4.38)
+│   └── tests/                       # ═══ Suite Oficial de Certificación QA (279 Pruebas — 100% Passed) ═══
 │       ├── test_ftmo_titanium_strategy.py           # 6 Pruebas Tier A, Poda, Cosecha 50/30/20, Cierres Parciales MT5
 │       ├── test_tradfi_scanner_and_risk.py          # 15 Pruebas Scanner TradFi, Provider MT5 y Guardian FTMO
 │       ├── test_multi_account_advanced_security.py  # 38 Pruebas Cifrado AES, Aislamiento, Deduplicación y Kill-Switch
@@ -146,22 +146,22 @@ Slingshot/
 │       ├── test_bitunix_tpsl_modify_and_id_resolution.py # 6 Pruebas Bitunix Dual-Protocol TPSL, Auto-Resolución ID y 1R Risk Cache
 │       ├── test_dynamic_heat_and_slot_allocation.py # 6 Pruebas SOP-97 Dynamic Heat & Slot Allocation y SOP-98 Screener Hardening
 │       ├── test_dynamic_slot_elasticity.py          # 7 Pruebas SOP-99 Dynamic Slot Elasticity & Macro Decoupled Expansion
-│       ├── test_sop100_meta_labeling_and_playbook_kelly.py # 6 Pruebas SOP-100 Two-Stage Meta-Labeling & Playbook Kelly Engine
+│       ├── test_sop100_meta_labeling_and_playbook_kelly.py # 9 Pruebas SOP-100 & SOP-101 Meta-Labeling, Playbook Kelly & Dual-TF Synergy
 │       ├── test_limit_execution_and_sync_reconciler.py # 4 Pruebas Reconciliador Bitunix, TTL Límite y Paridad en Vivo
 │       ├── test_chronological_backtest_parity.py    # 4 Pruebas Paridad SSoT 1:1 Unified Backtest vs Live Engine SOP-97/99
 │       └── legacy/                                  # Pruebas históricas preservadas (test_bitunix_multi_pos.py, test_ftmo_swing.py)
 │
 ├── scripts/                         # ═══ HERRAMIENTAS CLI & DE DESPLIEGUE (SSoT) ═══
 │   ├── verificar_sistema.bat        # Script de verificación integral en Windows/VPS
-│   ├── run_qa_suite.py              # Ejecutor automático de las 276+ pruebas de certificación QA
-│   ├── run_institutional_backtest.py # CLI oficial del Motor Cronológico SSoT (SOP-100 activo por defecto)
+│   ├── run_qa_suite.py              # Ejecutor automático de las 279 pruebas de certificación QA
+│   ├── run_institutional_backtest.py # CLI oficial del Motor Cronológico SSoT (SOP-100 y SOP-101 activos por defecto)
 │   ├── historical_fetcher.py        # Descargador oficial de Parquets históricos
 │   ├── doctor.py                    # Diagnóstico de puertos, sockets y servicios
 │   ├── watchdog_supervisor.py       # Monitor supervisor de procesos en segundo plano
 │   └── diagnostic/                  # Validador de higiene institucional (check_hygiene.py) y telemetría
 │
 └── docs/                            # ═══ DOCUMENTACIÓN TÉCNICA CANÓNICA (SSoT) ═══
-    ├── SLINGSHOT_BIBLE_V60.md       # Biblia canónica maestra v60.0 (Única Especificación SSoT Activa: SOP-01 a SOP-100)
+    ├── SLINGSHOT_BIBLE_V60.md       # Biblia canónica maestra v60.0 (Única Especificación SSoT Activa: SOP-01 a SOP-101)
     ├── ESTRUCTURA_PROYECTO.md       # Guía de estructura, archivos y módulos (este archivo)
     ├── MULTI_ACCOUNT_INSTITUTIONAL_SPEC.md # Especificación técnica de la arquitectura multi-cuenta
     ├── knowledge/                   # Base de conocimiento cuantitativo y regímenes de mercado

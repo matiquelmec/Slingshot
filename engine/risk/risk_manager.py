@@ -303,15 +303,21 @@ class RiskManager:
     @staticmethod
     def calculate_meta_labeling_multiplier(
         symbol: str,
-        playbook: Optional[str] = None
+        playbook: Optional[str] = None,
+        interval: str = "15m"
     ) -> float:
         """
-        [SOP-100 TWO-STAGE META-LABELING GATEKEEPER & PLAYBOOK-AWARE FRACTIONAL KELLY]
+        [SOP-100 & SOP-101 TWO-STAGE META-LABELING GATEKEEPER & TIMEFRAME-AWARE FRACTIONAL KELLY]
         Implementa la arquitectura de segunda etapa (Marcos López de Prado) ponderando la
-        esperanza matemática auditada por arquetipo (SOP-96) y el régimen de eficiencia del activo:
-        - OB_DISCOUNT_RETEST (PF=2.19-2.42): Base 1.18x (+1.12x adicional en líderes FET, INJ, BNB, SOL, NEAR -> 1.3216x).
-        - BOS_MOMENTUM_EXPANSION: Base 1.10x.
-        - LIQUIDITY_SWEEP_FVG (PF=1.64): Base 0.92x (amortiguado x0.75 en activos lentos XRP, LINK, AVAX -> 0.69x).
+        esperanza matemática auditada por arquetipo (SOP-96), el régimen de eficiencia del activo
+        y la estructura por temporalidad (SOP-101 15m Scalp vs 1h Swing):
+        - En 15m:
+          • OB_DISCOUNT_RETEST (PF=2.19-2.55): Base 1.18x (+1.12x adicional en líderes FET, INJ, BNB, SOL, NEAR -> 1.3216x).
+          • BOS_MOMENTUM_EXPANSION: Base 1.10x.
+          • LIQUIDITY_SWEEP_FVG (PF=1.64): Base 0.92x (amortiguado x0.75 en activos lentos XRP, LINK, AVAX -> 0.69x).
+        - En 1h (SOP-101 Swing Institucional):
+          • LIQUIDITY_SWEEP_FVG (PF=1.54, +40.51R en LONG y SHORT): Boost 1.15x (barridos estructurales de sesión).
+          • OB_DISCOUNT_RETEST: Base 1.18x (+1.12x en líderes).
         - TREND_CONTINUATION_EMA o None: 1.00x (neutro).
         """
         if not playbook:
@@ -319,6 +325,7 @@ class RiskManager:
 
         sym = (symbol or "").replace("/", "").upper()
         pb = str(playbook).upper()
+        tf = str(interval or "15m").lower()
         mult = 1.00
 
         if pb == "OB_DISCOUNT_RETEST":
@@ -328,9 +335,12 @@ class RiskManager:
         elif pb == "BOS_MOMENTUM_EXPANSION":
             mult = 1.10
         elif pb == "LIQUIDITY_SWEEP_FVG":
-            mult = 0.92
-            if sym in ("XRPUSDT", "LINKUSDT", "AVAXUSDT", "XRP", "LINK", "AVAX"):
-                mult *= 0.75
+            if tf in ("1h", "60m"):
+                mult = 1.15
+            else:
+                mult = 0.92
+                if sym in ("XRPUSDT", "LINKUSDT", "AVAXUSDT", "XRP", "LINK", "AVAX"):
+                    mult *= 0.75
 
         return round(mult, 4)
 
@@ -346,15 +356,16 @@ class RiskManager:
         apply_golden_hours: bool = False,
         regime_mult: float = 1.0,
         playbook: Optional[str] = None,
-        apply_meta_labeling: bool = False
+        apply_meta_labeling: bool = False,
+        interval: str = "15m"
     ) -> float:
         """
-        [SOP-33 & SOP-34 & SOP-38 & SOP-100 ASYMMETRIC SIZING ENGINE]
+        [SOP-33 & SOP-34 & SOP-38 & SOP-100/101 ASYMMETRIC SIZING ENGINE]
         Calcula el multiplicador de asignación de capital combinando el Tier del activo (Kelly Fraccional),
         la confluencia institucional, la ventana horaria (Sniper NY Open vs Asia Defense),
         las extensiones cuantitativas SOP-46 (Weekly Alpha Cycle), SOP-47 (Trinidad del Alfa),
         SOP-49 (Golden Hours Tuning), la modulación de régimen SOP-63 (SlingshotRegimeAgent)
-        y el Gatekeeper de 2 Etapas SOP-100 (Meta-Labeling & Playbook-Aware Fractional Kelly).
+        y el Gatekeeper de 2 Etapas SOP-100/101 (Timeframe & Playbook-Aware Fractional Kelly).
         """
         sym = (symbol or "").replace("/", "").upper()
         base_mult = cls.ALPHA_TIERS.get(sym, 1.0)
@@ -396,11 +407,14 @@ class RiskManager:
         if regime_mult > 0.0:
             base_mult *= regime_mult
 
-        # SOP-100: Two-Stage Meta-Labeling & Playbook-Aware Fractional Kelly
+        # SOP-100 & SOP-101: Two-Stage Meta-Labeling & Timeframe-Aware Playbook Fractional Kelly
         max_cap = 1.85
         if apply_meta_labeling and playbook:
+            tf_norm = str(interval or "15m").lower()
             base_mult = min(1.85, max(0.40, base_mult))
-            base_mult *= cls.calculate_meta_labeling_multiplier(sym, playbook)
+            base_mult *= cls.calculate_meta_labeling_multiplier(sym, playbook, interval=tf_norm)
+            if tf_norm in ("1h", "60m") and str(playbook).upper() == "LIQUIDITY_SWEEP_FVG":
+                base_mult = max(base_mult, 1.15)
             max_cap = 2.00
             
         return round(min(max_cap, max(0.40, base_mult)), 2)
@@ -974,7 +988,7 @@ class RiskManager:
             "reason": f"SOP-41 Aprobado: Qty {safe_qty} con riesgo max ${projected_loss:.2f} USDT ({projected_loss/account_balance*100:.2f}%)"
         }
 
-    # ── PROTOCOLO SOP-43 & SOP-100: ASYMMETRIC QUARTER-KELLY & META-LABELING ENGINE v60.0 ──
+    # ── PROTOCOLO SOP-43 & SOP-100/101: ASYMMETRIC QUARTER-KELLY & META-LABELING ENGINE v60.0 ──
     @classmethod
     def calculate_quarter_kelly_risk(
         cls,
@@ -985,14 +999,16 @@ class RiskManager:
         playbook: Optional[str] = None,
         apply_trinity_boost: bool = False,
         apply_golden_hours: bool = False,
-        apply_meta_labeling: bool = True
+        apply_meta_labeling: bool = True,
+        interval: str = "15m"
     ) -> float:
         """
-        [SOP-43 & SOP-100 ASYMMETRIC QUARTER-KELLY SCALING WITH META-LABELING]
+        [SOP-43 & SOP-100/101 ASYMMETRIC QUARTER-KELLY SCALING WITH META-LABELING]
         Modula el riesgo base (ej. 2.50%) dentro de un rango seguro de [1.25%, 3.25%].
         - Tier S / Confluencia >= 85% + NY Open (13-17 UTC) + OB_DISCOUNT_RETEST: Acelera hasta ~3.25%.
         - Tier Base / Confluencia 70-84%: Mantiene riesgo base (~2.50%).
-        - Sesión Asiática, LIQUIDITY_SWEEP en laggards o Confluencia < 68%: Reduce para preservar capital (~1.25% - 1.50%).
+        - En 1h Swing (SOP-101), premia barridos estructurales LIQUIDITY_SWEEP_FVG (>=1.15x).
+        - Sesión Asiática, LIQUIDITY_SWEEP en laggards 15m o Confluencia < 68%: Reduce para preservar capital (~1.25% - 1.50%).
         """
         mult = cls.calculate_alpha_tier_sizing(
             symbol,
@@ -1001,7 +1017,8 @@ class RiskManager:
             apply_trinity_boost=apply_trinity_boost,
             apply_golden_hours=apply_golden_hours,
             playbook=playbook,
-            apply_meta_labeling=bool(apply_meta_labeling and playbook)
+            apply_meta_labeling=bool(apply_meta_labeling and playbook),
+            interval=interval
         )
         adjusted = base_risk_pct * mult
         # Hard limits institucionales: mínimo 1.25%, máximo 3.25%
