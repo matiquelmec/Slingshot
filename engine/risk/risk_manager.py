@@ -10,6 +10,8 @@ class RiskManager:
     """
     v11.1 APEX SOVEREIGN (Audited).
     """
+    # [SOP-47 & SOP-49 & SOP-100] Líderes cuantitativos de alfa institucional
+    ALPHA_LEADERS = ("FET", "INJ", "BNB", "SOL", "NEAR", "ETH", "BTC")
 
     def __init__(self, account_balance: float = settings.ACCOUNT_BALANCE, base_risk_pct: float = settings.MAX_RISK_PCT, min_rr: float = settings.MIN_RR):
         self.account_balance = account_balance

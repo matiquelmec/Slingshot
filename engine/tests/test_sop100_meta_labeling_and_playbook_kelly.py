@@ -432,3 +432,17 @@ def test_sop102_nexus_reconciler_preserves_matching_setup_tps_and_50_30_20_grid(
     assert 'TP2 (30%)' in src
     assert 'TP3 (20% Runner)' in src
 
+
+def test_sop49_risk_manager_alpha_leaders_defined():
+    """
+    [SOP-49 & SOP-100/102 ASIAN GATING]
+    Verifica que RiskManager.ALPHA_LEADERS esté definido con los líderes institucionales
+    y que el escáner no falle por AttributeError durante la sesión asiática (00:00 - 06:59 UTC).
+    """
+    from engine.risk.risk_manager import RiskManager
+    assert hasattr(RiskManager, "ALPHA_LEADERS")
+    leaders = RiskManager.ALPHA_LEADERS
+    for expected in ("FET", "INJ", "BNB", "SOL", "NEAR", "ETH", "BTC"):
+        assert expected in leaders
+
+
