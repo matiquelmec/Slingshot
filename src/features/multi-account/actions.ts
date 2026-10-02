@@ -70,6 +70,7 @@ export async function fetchAccountsAction(
       const res = await fetch(`${apiHost}/api/v1/accounts`, {
         cache: 'no-store',
         headers: { 'Content-Type': 'application/json' },
+        signal: AbortSignal.timeout(1500),
       });
 
       if (res.ok) {
