@@ -42,6 +42,22 @@ export interface BacktestAuditMetrics {
   asymmetryRatio: number;
   liveParityVerified: boolean;
   phantomProfitCleared: boolean;
+  auditedUniverse: {
+    megaCaps: string[];
+    highBetaAlts: string[];
+    tradFiMetals: string[];
+    prunedAssets: string[];
+  };
+  lifecycleParity: {
+    tp1GridPct: number;
+    tp1TargetR: number;
+    tp2GridPct: number;
+    tp2TargetR: number;
+    tp3GridPct: number;
+    tp3TargetR: number;
+    sop25CutoffR: number;
+    feeAbsorberPct: number;
+  };
   playbooks: PlaybookMetrics[];
   lastAuditTimestamp: string;
 }
@@ -88,6 +104,22 @@ export async function fetchBacktestAuditMetricsAction(
       asymmetryRatio: 2.20,
       liveParityVerified: true,
       phantomProfitCleared: true,
+      auditedUniverse: {
+        megaCaps: ['BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'XRPUSDT', 'LINKUSDT'],
+        highBetaAlts: ['INJUSDT', 'BNBUSDT', 'NEARUSDT', 'FETUSDT', 'SUIUSDT', 'ATOMUSDT', 'TIAUSDT'],
+        tradFiMetals: ['XAUUSDT'],
+        prunedAssets: ['AVAXUSDT', 'RENDERUSDT'],
+      },
+      lifecycleParity: {
+        tp1GridPct: 50,
+        tp1TargetR: 1.2,
+        tp2GridPct: 30,
+        tp2TargetR: 2.0,
+        tp3GridPct: 20,
+        tp3TargetR: 3.5,
+        sop25CutoffR: -0.65,
+        feeAbsorberPct: 0.08,
+      },
       playbooks: [
         {
           name: 'LIQUIDITY_SWEEP_FVG',

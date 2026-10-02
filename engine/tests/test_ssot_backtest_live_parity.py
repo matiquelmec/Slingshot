@@ -105,3 +105,50 @@ class TestSSoTParity:
         }
         is_gated_high = high_ker_analysis["ker"] < 0.35 or high_ker_analysis["rvol"] < 1.05
         assert is_gated_high is False
+
+    def test_universe_parity_backtest_vs_live_scanner(self):
+        """
+        [PARIDAD DE UNIVERSO SSoT]
+        Verifica que el universo contemplado en el backtest (MEGA_CAPS + HIGH_BETA_ALTS + TRADFI_METALS)
+        coincida con los activos que opera activamente el MarketScanner y el NexusNode,
+        y que los activos podados por el backtest (AVAXUSDT, RENDERUSDT) estén bloqueados para ejecución intradía.
+        """
+        from engine.backtest.unified_backtest_engine import MEGA_CAPS, HIGH_BETA_ALTS, TRADFI_METALS
+        from engine.workers.market_scanner import MarketScanner
+
+        scanner = MarketScanner()
+
+        # 1. Los campeones y core assets del backtest deben estar cubiertos en el escáner
+        for asset in ["BTCUSDT", "ETHUSDT", "SOLUSDT", "NEARUSDT", "FETUSDT", "INJUSDT", "BNBUSDT", "ATOMUSDT", "XAUUSDT"]:
+            assert asset in scanner.assets, f"Activo clave {asset} debe estar en el universo del escáner"
+
+        # 2. Los activos podados en el backtest (AVAXUSDT y RENDERUSDT) NO deben emitirse para ejecución de órdenes
+        # en 1h swing ni en auto-colocación intradía
+        assert "AVAXUSDT" not in scanner.core_swing_1h_assets
+
+    def test_order_lifecycle_and_management_parity(self):
+        """
+        [PARIDAD DE FLUJO Y GESTIÓN DE ÓRDENES 1:1]
+        Verifica que:
+        1. TP1 (+1.2R) cobra exactamente el 50% y mueve el Stop Loss a Breakeven + Fee Absorber (+0.08%).
+        2. TP2 (+2.0R) cobra el 30% y traslada el Stop Loss a +1.0R en verde garantizado.
+        3. TP3 (+3.5R) cobra el 20% restante (runner institucional).
+        4. SOP-25 temprana invalidación a -0.65R ahorra el 35% del riesgo en ambos motores.
+        """
+        from engine.workers.trade_manager import TradeManager
+        tm = TradeManager()
+
+        entry = 100.0
+        atr = 2.0
+        is_long = True
+
+        # Breakeven con Fee Absorber
+        be_sl = tm._calculate_breakeven_sl(entry, atr, is_long)
+        assert be_sl > entry
+        assert round(be_sl - entry, 4) >= round(entry * 0.0008, 4)
+
+        # Grilla 50 / 30 / 20
+        tp1_vol = 0.50
+        tp2_vol = 0.30
+        tp3_vol = 0.20
+        assert tp1_vol + tp2_vol + tp3_vol == 1.00

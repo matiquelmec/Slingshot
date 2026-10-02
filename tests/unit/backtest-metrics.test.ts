@@ -58,6 +58,23 @@ describe('Features: Backtest Metrics Audit Slice (FSD & Zero Trust)', () => {
     expect(data.asymmetryRatio).toBe(2.2);
 
     expect(data.playbooks.length).toBe(2);
+
+    // Verificación de Universo Auditado y Paridad de Ciclo de Vida
+    expect(data.auditedUniverse).toBeDefined();
+    expect(data.auditedUniverse.megaCaps).toContain('BTCUSDT');
+    expect(data.auditedUniverse.megaCaps).toContain('SOLUSDT');
+    expect(data.auditedUniverse.highBetaAlts).toContain('INJUSDT');
+    expect(data.auditedUniverse.highBetaAlts).toContain('NEARUSDT');
+    expect(data.auditedUniverse.prunedAssets).toContain('AVAXUSDT');
+    expect(data.auditedUniverse.prunedAssets).toContain('RENDERUSDT');
+
+    expect(data.lifecycleParity).toBeDefined();
+    expect(data.lifecycleParity.tp1GridPct).toBe(50);
+    expect(data.lifecycleParity.tp1TargetR).toBe(1.2);
+    expect(data.lifecycleParity.tp2GridPct).toBe(30);
+    expect(data.lifecycleParity.tp2TargetR).toBe(2.0);
+    expect(data.lifecycleParity.tp3GridPct).toBe(20);
+    expect(data.lifecycleParity.sop25CutoffR).toBe(-0.65);
   });
 
   it('debe filtrar correctamente por playbook específico', async () => {

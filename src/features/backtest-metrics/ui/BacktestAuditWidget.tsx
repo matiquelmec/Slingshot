@@ -184,6 +184,85 @@ export function BacktestAuditWidget() {
             </div>
           </div>
 
+          {/* Universo de Activos Auditados vs Podados */}
+          <div className="flex flex-col gap-3">
+            <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
+              Universo Auditado SSoT (Mega-Caps, High-Beta Alts & Podas Cuantitativas)
+            </span>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="bg-slate-900/60 border border-slate-800 p-4 rounded-xl flex flex-col justify-between">
+                <span className="text-xs font-medium text-cyan-400 uppercase tracking-wider">
+                  🏛️ Mega-Caps (1H OTE Swing)
+                </span>
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  {metrics.auditedUniverse.megaCaps.map((asset) => (
+                    <span key={asset} className="px-2 py-1 rounded bg-cyan-500/10 border border-cyan-500/30 text-cyan-300 text-[11px] font-mono font-bold">
+                      {asset}
+                    </span>
+                  ))}
+                </div>
+                <span className="text-[11px] text-slate-400 mt-2">Buffer SL amplio (2.5x - 2.8x ATR)</span>
+              </div>
+
+              <div className="bg-slate-900/60 border border-slate-800 p-4 rounded-xl flex flex-col justify-between">
+                <span className="text-xs font-medium text-emerald-400 uppercase tracking-wider">
+                  🚀 High-Beta Alts & Metales (15M Scalp)
+                </span>
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  {metrics.auditedUniverse.highBetaAlts.concat(metrics.auditedUniverse.tradFiMetals).map((asset) => (
+                    <span key={asset} className="px-2 py-1 rounded bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-[11px] font-mono font-bold">
+                      {asset}
+                    </span>
+                  ))}
+                </div>
+                <span className="text-[11px] text-slate-400 mt-2">SL Ágil (1.8x - 2.0x ATR) + Multiplicador Alfa</span>
+              </div>
+
+              <div className="bg-slate-900/60 border border-rose-950/60 p-4 rounded-xl flex flex-col justify-between">
+                <span className="text-xs font-medium text-rose-400 uppercase tracking-wider">
+                  🚫 Activos Podados / Veto Intradía
+                </span>
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  {metrics.auditedUniverse.prunedAssets.map((asset) => (
+                    <span key={asset} className="px-2 py-1 rounded bg-rose-500/10 border border-rose-500/30 text-rose-300 text-[11px] font-mono font-bold">
+                      {asset}
+                    </span>
+                  ))}
+                </div>
+                <span className="text-[11px] text-slate-400 mt-2">Excluidos de órdenes automáticas por bajo PF/ruido</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Sincronización Fiel de Ciclo de Vida: Apertura y Gestión */}
+          <div className="bg-slate-900/60 border border-slate-800 p-4 rounded-xl flex flex-col gap-3">
+            <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
+              Sincronización de Gestión de Operaciones (Backtest ↔ Live Engine)
+            </span>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+              <div className="bg-slate-950/60 p-3 rounded-lg border border-slate-800">
+                <span className="text-[11px] text-slate-400 block">TP1 (+{metrics.lifecycleParity.tp1TargetR}R)</span>
+                <span className="text-lg font-black text-white">{metrics.lifecycleParity.tp1GridPct}% Cierre</span>
+                <span className="text-[11px] text-emerald-400 block mt-0.5">+ Fast Breakeven</span>
+              </div>
+              <div className="bg-slate-950/60 p-3 rounded-lg border border-slate-800">
+                <span className="text-[11px] text-slate-400 block">TP2 (+{metrics.lifecycleParity.tp2TargetR}R)</span>
+                <span className="text-lg font-black text-white">{metrics.lifecycleParity.tp2GridPct}% Cierre</span>
+                <span className="text-[11px] text-cyan-400 block mt-0.5">SL sube a +1.0R Verde</span>
+              </div>
+              <div className="bg-slate-950/60 p-3 rounded-lg border border-slate-800">
+                <span className="text-[11px] text-slate-400 block">TP3 Runner (+{metrics.lifecycleParity.tp3TargetR}R)</span>
+                <span className="text-lg font-black text-white">{metrics.lifecycleParity.tp3GridPct}% Cierre</span>
+                <span className="text-[11px] text-purple-400 block mt-0.5">Trailing Ratchet</span>
+              </div>
+              <div className="bg-slate-950/60 p-3 rounded-lg border border-slate-800">
+                <span className="text-[11px] text-slate-400 block">SOP-25 Corte Temprano</span>
+                <span className="text-lg font-black text-rose-400">{metrics.lifecycleParity.sop25CutoffR}R</span>
+                <span className="text-[11px] text-emerald-300 block mt-0.5">Ahorro 35% de Riesgo</span>
+              </div>
+            </div>
+          </div>
+
           {/* Desglose por Playbook */}
           <div className="flex flex-col gap-2">
             <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
