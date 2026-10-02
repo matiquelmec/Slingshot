@@ -4,10 +4,11 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Activity, Bell, Target, TrendingUp, TrendingDown, Clock, Search, ExternalLink, AlertOctagon, Database } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { useTelemetryStore } from '../../store/telemetryStore';
+import { useTelemetryStore, MASTER_WATCHLIST } from '../../store/telemetryStore';
 import { Signal } from '../../types/signal';
 import { fetchSignalsAction } from '@/features';
 import { getApiBaseUrl } from '../../utils/apiUrl';
+import { isPrunedAsset } from '@/entities/signal';
 
 // Local augmentation for Radar metadata
 interface RadarSignal extends Signal {
@@ -104,8 +105,13 @@ export default function RadarFeed() {
             displayMap.set(s.id || `${s.timestamp}-${s.asset}`, normalized);
         });
         
-        // Sort descendente por tiempo (las más nuevas primero)
+        // Sort descendente por tiempo filtrando estrictamente por las monedas de la estrategia (13 Activos SSoT)
         const signals = Array.from(displayMap.values())
+            .filter(s => 
+                s.asset && 
+                MASTER_WATCHLIST.includes(s.asset.toUpperCase()) && 
+                !isPrunedAsset(s.asset.toUpperCase())
+            )
             .sort((a, b) => new Date(b.created_at || b.timestamp).getTime() - new Date(a.created_at || a.timestamp).getTime());
 
         return signals.filter(s =>

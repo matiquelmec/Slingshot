@@ -6,6 +6,7 @@ import { Activity, Zap, TrendingUp, TrendingDown, Minus } from 'lucide-react';
 import { formatCurrency } from '../../utils/formatters';
 import { useTelemetryStore, Timeframe, MASTER_WATCHLIST } from '../../store/telemetryStore';
 import { getApiBaseUrl } from '../../utils/apiUrl';
+import { isPrunedAsset } from '@/entities/signal';
 
 interface MarketState {
     asset: string;
@@ -81,28 +82,58 @@ export default function ActiveAssetsMonitor() {
     // 3. Fusión Híbrida Inteligente (Memoizado con Precios en Vivo)
     const states = React.useMemo(() => {
         const displayMap = new Map();
-        globalStates.forEach(s => displayMap.set(s.asset.toUpperCase(), s));
         
-        // Transmisión de estado vivo (Zustand radar_update + latestPrices)
-        Object.values(marketSummary).forEach((s: any) => {
-            if(s.asset) {
-                const assetKey = s.asset.toUpperCase();
-                const liveP = (assetKey === activeSymbol?.toUpperCase() ? latestPrice : (latestPrices[s.asset] || latestPrices[assetKey])) || s.price || s.current_price;
-                displayMap.set(assetKey, {
-                   ...(displayMap.get(assetKey) || {}),
-                   ...s,
-                   price: liveP,
-                   last_updated: new Date().toISOString()
+        // 🛡️ SSoT STRATEGY ANCHOR: Garantizar que los 13 activos canónicos existan siempre en el Radar
+        MASTER_WATCHLIST.forEach(sym => {
+            if (!isPrunedAsset(sym)) {
+                const liveP = (sym === activeSymbol?.toUpperCase() ? latestPrice : latestPrices[sym]) || 0;
+                displayMap.set(sym, {
+                    asset: sym,
+                    price: liveP,
+                    regime: 'ACTIVE',
+                    bias: 'NEUTRAL',
+                    session: 'LONDON/NY',
+                    last_updated: new Date().toISOString()
                 });
             }
         });
 
-        // 4. Aplicar el filtro de la watchlist del usuario + Master Watchlist (Elite Assets)
-        return Array.from(displayMap.values()).filter((s: any) => 
-            (watchlist && watchlist.includes(s.asset.toUpperCase())) || 
-            (MASTER_WATCHLIST && MASTER_WATCHLIST.includes(s.asset.toUpperCase()))
-        );
-    }, [globalStates, marketSummary, latestPrices, latestPrice, activeSymbol, watchlist]);
+        globalStates.forEach(s => {
+            const sym = s.asset?.toUpperCase();
+            if (sym && MASTER_WATCHLIST.includes(sym) && !isPrunedAsset(sym)) {
+                displayMap.set(sym, { ...displayMap.get(sym), ...s });
+            }
+        });
+        
+        // Transmisión de estado vivo (Zustand radar_update + latestPrices)
+        Object.values(marketSummary).forEach((s: any) => {
+            if (s.asset) {
+                const assetKey = s.asset.toUpperCase();
+                if (MASTER_WATCHLIST.includes(assetKey) && !isPrunedAsset(assetKey)) {
+                    const liveP = (assetKey === activeSymbol?.toUpperCase() ? latestPrice : (latestPrices[s.asset] || latestPrices[assetKey])) || s.price || s.current_price;
+                    displayMap.set(assetKey, {
+                       ...(displayMap.get(assetKey) || {}),
+                       ...s,
+                       price: liveP,
+                       last_updated: new Date().toISOString()
+                    });
+                }
+            }
+        });
+
+        // 4. Aplicar el filtro estricto SSoT: Exclusivamente las 13 monedas de nuestra estrategia
+        return Array.from(displayMap.values())
+            .filter((s: any) => 
+                s.asset && 
+                MASTER_WATCHLIST.includes(s.asset.toUpperCase()) && 
+                !isPrunedAsset(s.asset.toUpperCase())
+            )
+            .sort((a: any, b: any) => {
+                const idxA = MASTER_WATCHLIST.indexOf(a.asset.toUpperCase());
+                const idxB = MASTER_WATCHLIST.indexOf(b.asset.toUpperCase());
+                return idxA - idxB;
+            });
+    }, [globalStates, marketSummary, latestPrices, latestPrice, activeSymbol]);
 
     const getBiasIcon = (bias?: string) => {
         switch (bias) {

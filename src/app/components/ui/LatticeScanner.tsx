@@ -5,6 +5,7 @@ import { motion } from 'framer-motion';
 import { Activity, Zap, ShieldCheck, Search } from 'lucide-react';
 import { useTelemetryStore, MASTER_WATCHLIST } from '../../store/telemetryStore';
 import { formatCurrency } from '../../utils/formatters';
+import { isPrunedAsset } from '@/entities/signal';
 
 const ROW_HEIGHT = 44;
 const VISIBLE_ROWS = 12;
@@ -20,45 +21,33 @@ export default function LatticeScanner() {
     const [scrollTop, setScrollTop] = useState(0);
     const containerRef = useRef<HTMLDivElement>(null);
 
-    // Construir lista de pares reales combinando marketSummary y el flujo en vivo de latestPrices
+    // 🛡️ SSoT STRATEGY ALIGNMENT: Exclusivamente las monedas auditadas de nuestra estrategia (MASTER_WATCHLIST)
     const pairs = useMemo(() => {
         const entries = marketSummary ? { ...marketSummary } : {};
         
-        // 🛡️ OMEGA STABILITY: Asegurar que los Master siempre existan en el mapa visual
-        MASTER_WATCHLIST.forEach(symbol => {
-            const currentLivePrice = (symbol === activeSymbol ? latestPrice : latestPrices[symbol]) || 0;
-            if (!entries[symbol]) {
-                entries[symbol] = { 
-                    asset: symbol, 
-                    price: currentLivePrice, 
-                    regime: 'ACTIVE', 
-                    strategy: 'SMC INSTITUTIONAL', 
-                    bias: 'NEUTRAL', 
-                    trend: 0 
-                };
-            }
-        });
-
-        return Object.values(entries)
-            .filter(p => p.asset && p.asset.endsWith('USDT'))
-            .map(p => {
-                const liveP = (p.asset === activeSymbol ? latestPrice : (latestPrices[p.asset] || p.price)) || 0;
+        return MASTER_WATCHLIST
+            .filter(sym => !isPrunedAsset(sym))
+            .map(symbol => {
+                const existing = (entries[symbol] as any) || {};
+                const liveP = (symbol === activeSymbol ? latestPrice : (latestPrices[symbol] || existing.price)) || 0;
                 return {
-                    ...p,
-                    price: liveP
+                    asset: symbol,
+                    regime: existing.regime || 'ACTIVE',
+                    strategy: existing.strategy || 'SMC INSTITUTIONAL',
+                    bias: existing.bias || 'NEUTRAL',
+                    trend: existing.trend ?? 0,
+                    funding: existing.funding ?? 0,
+                    oi: existing.oi ?? 0,
+                    change_24h: existing.change_24h ?? 0,
+                    volume_24h: existing.volume_24h ?? 0,
+                    ...existing,
+                    price: liveP,
                 };
             })
             .sort((a, b) => {
-                // Prioridad 1: Master Watchlist al principio (Orden Estricto según MASTER_WATCHLIST)
                 const indexA = MASTER_WATCHLIST.indexOf(a.asset);
                 const indexB = MASTER_WATCHLIST.indexOf(b.asset);
-                
-                if (indexA !== -1 && indexB !== -1) return indexA - indexB;
-                if (indexA !== -1) return -1;
-                if (indexB !== -1) return 1;
-                
-                // Prioridad 2: Orden por precio para el resto
-                return (b.price || 0) - (a.price || 0);
+                return indexA - indexB;
             });
     }, [marketSummary, latestPrices, latestPrice, activeSymbol]);
 
@@ -88,8 +77,8 @@ export default function LatticeScanner() {
                 <div className="flex items-center gap-2">
                     <Activity size={14} className="text-neon-cyan animate-pulse" />
                     <h2 className="text-[10px] font-black tracking-[0.15em] text-white">LATTICE SCANNER</h2>
-                    <span className="text-[8px] font-bold text-white/20 bg-white/5 px-1.5 py-0.5 rounded">
-                        {pairs.length} PARES
+                    <span className="text-[8px] font-bold text-cyan-400/60 bg-cyan-500/10 border border-cyan-500/20 px-2 py-0.5 rounded">
+                        {pairs.length} PARES ESTRATEGIA
                     </span>
                 </div>
                 <div className="flex items-center gap-2">

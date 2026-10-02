@@ -239,9 +239,16 @@ export default function LatticeStatus() {
                                     <option value="BTCUSDT">BTCUSDT</option>
                                     <option value="ETHUSDT">ETHUSDT</option>
                                     <option value="SOLUSDT">SOLUSDT</option>
+                                    <option value="BNBUSDT">BNBUSDT</option>
+                                    <option value="LINKUSDT">LINKUSDT</option>
                                     <option value="XRPUSDT">XRPUSDT</option>
                                     <option value="PAXGUSDT">PAXGUSDT</option>
-                                    <option value="XAGUSDT">XAGUSDT</option>
+                                    <option value="SUIUSDT">SUIUSDT</option>
+                                    <option value="INJUSDT">INJUSDT</option>
+                                    <option value="NEARUSDT">NEARUSDT</option>
+                                    <option value="FETUSDT">FETUSDT</option>
+                                    <option value="ATOMUSDT">ATOMUSDT</option>
+                                    <option value="TIAUSDT">TIAUSDT</option>
                                 </select>
                             </div>
 

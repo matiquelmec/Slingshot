@@ -101,9 +101,14 @@ class MemoryStore:
             return list(history) if history is not None else []
 
     async def get_market_states(self) -> List[Dict[str, Any]]:
-        """Retorna el estado de todos los activos para el Radar."""
+        """Retorna el estado de los activos canónicos de la estrategia para el Radar."""
+        from engine.api.config import settings
+        valid_assets = set(settings.MASTER_WATCHLIST)
         async with self._lock:
-            return list(self._market_states.values())
+            return [
+                v for k, v in self._market_states.items() 
+                if k in valid_assets and k not in ("AVAXUSDT", "RENDERUSDT")
+            ]
 
     async def save_signal(self, signal_data: Dict[str, Any]):
         """
