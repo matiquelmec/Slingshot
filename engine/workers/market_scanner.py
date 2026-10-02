@@ -65,16 +65,16 @@ class MarketScanner:
     """
     def __init__(self):
         self.router = SlingshotRouter()
-        # 🚀 Tier 1: Núcleo Fijo Especializado por Perfil Cuantitativo (SOP-36 & SOP-101)
-        # 7 Activos Core Inmutables + BNBUSDT y SOLUSDT activos en Scalp 15m
-        self.core_scalp_assets = ["RENDERUSDT", "SUIUSDT", "INJUSDT", "NEARUSDT", "FETUSDT", "ATOMUSDT", "TIAUSDT"]
+        # 🚀 Tier 1: Núcleo Fijo Especializado por Perfil Cuantitativo SSoT (SOP-36, SOP-101 & SOP-102)
+        # 6 Activos High-Beta Canónicos Inmutables (sin activos podados AVAX/RENDER)
+        self.core_scalp_assets = ["SUIUSDT", "INJUSDT", "NEARUSDT", "FETUSDT", "ATOMUSDT", "TIAUSDT"]
         # [SOP-101 DUAL-TIMEFRAME SWING SPECIALIZATION]
         # Campeón puro 1h (XAUUSDT) + 7 Campeones Duales auditados en 1h (PF >= 1.53)
         self.core_swing_1h_assets = ["XAUUSDT", "NEARUSDT", "ATOMUSDT", "ETHUSDT", "BTCUSDT", "INJUSDT", "LINKUSDT", "SOLUSDT"]
-        self.daily_assets = ["BTCUSDT", "ETHUSDT", "SOLUSDT", "XAUUSDT", "RENDERUSDT", "NEARUSDT"]
+        self.daily_assets = ["BTCUSDT", "ETHUSDT", "SOLUSDT", "XAUUSDT", "BNBUSDT", "NEARUSDT"]
         
-        # Activos activos en Scalp 15m (Core + Campeones BNB y SOL)
-        self.scalp_assets = list(set(self.core_scalp_assets + ["BNBUSDT", "SOLUSDT"]))
+        # Activos activos en Scalp 15m (Core + Campeones BNB, SOL y XRP)
+        self.scalp_assets = list(set(self.core_scalp_assets + ["BNBUSDT", "SOLUSDT", "XRPUSDT"]))
         self.swing_1h_assets = list(self.core_swing_1h_assets)
         self.assets = list(set(self.scalp_assets + self.swing_1h_assets + self.daily_assets))
         

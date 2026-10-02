@@ -151,6 +151,7 @@ const result = await db
 | **Fase 8** | **Dynamic Sizing & Institutional Optimization** | ✅ **Completado** | • Certificación de apalancamiento dinámico (SOP-21/32) e invarianza de liquidación 1.50x más allá del SL<br>• Riesgo exacto por balance disponible (SOP-41 Pure Dollar-Risk)<br>• Modulación multi-factor (SOP-34, SOP-38/49, SOP-46, SOP-94, SOP-100 Kelly) |
 | **Fase 9** | **SSoT Universe & Lifecycle Parity** | ✅ **Completado** | • Whitelist canónica estricta de 13 activos VIP auditados en backtest<br>• Veto duro de activos con expectativa negativa (`AVAX`, `RENDER`)<br>• Consistencia 100% de cosecha 50/30/20 y mitigación temprana SOP-25 a -0.65R |
 | **Fase 10** | **Diagnóstico Forense de Estabilidad & Optimizador Alpha (+164.2R)** | ✅ **Completado** | • Diagnóstico de no-congelamiento: resolución de la paradoja del centinela ultra-defensivo (7 vetos)<br>• Reparación de suites de stress time-gated (`test_multi_account_stress_and_isolation_suite.py`)<br>• Nueva slice FSD `src/features/system-diagnostics` con Server Action Zod y widget UI interactivo (`SystemDiagnosticsWidget`) integrado en `/history`<br>• Modelado de las 4 palancas para elevar retornos (+164.20R y +3,280% ROI compuesto)<br>• Suite de tests expandida: 48 Vitest (100%), 435 Pytest (100%) y 11/11 rutas estáticas |
+| **Fase 11** | **SSoT Canonical Universe & Full-Stack Synchronization** | ✅ **Completado** | • Sincronización 1:1 estricta del Universo Canónico de 13 activos VIP en todo el stack: `config.py`, `market_scanner.py`, `entities/signal/model.ts`, `telemetry/constants.ts`, `(dashboard)/page.tsx` y `PlanOperativoPanel.tsx`<br>• Poda absoluta de activos tóxicos (`AVAXUSDT`, `RENDERUSDT`) en escáner y frontend<br>• Desactivación de screening dinámico no auditado (`ENABLE_DYNAMIC_WATCHLIST = False`)<br>• Contrato Zod oficial `canonicalAssetSchema` y barrel export `src/entities/signal/index.ts`<br>• Suite de tests expandida: 52 Vitest (100%), 435 Pytest (100%) y cero divergencias teoría vs práctica |
 
 ---
 
@@ -158,7 +159,7 @@ const result = await db
 
 Para asegurar la robustez del sistema, los pipelines de CI/CD ejecutan:
 1. `npm run typecheck`: Validación estática de tipos TypeScript sin emitir artefactos (0 errores).
-2. `npm test`: Suite unitaria de Vitest (48 tests pasando en ~4s).
+2. `npm test`: Suite unitaria de Vitest (52 tests pasando en ~4s).
 3. `npm run test:engine`: Suite de pytest para el motor analítico de Python (435 tests pasando).
 4. `npm run build`: Compilación de producción optimizada de Next.js sin errores de build (11/11 rutas estáticas).
 

@@ -19,16 +19,21 @@ from engine.indicators.data_utils import fetch_top_liquid_tickers
 async def test_dynamic_screener_core_assets_immutable():
     """
     AUDITORÍA DE INTEGRIDAD:
-    Los 8 activos del Tier 1 Core DEBEN permanecer siempre activos en el escáner
+    Los 6 activos del Tier 1 Core Scalp DEBEN permanecer siempre activos en el escáner
     independientemente de las rotaciones dinámicas.
     """
     scanner = MarketScanner()
-    core_expected = ["RENDERUSDT", "SUIUSDT", "INJUSDT", "NEARUSDT", "FETUSDT", "ATOMUSDT", "TIAUSDT"]
+    core_expected = ["SUIUSDT", "INJUSDT", "NEARUSDT", "FETUSDT", "ATOMUSDT", "TIAUSDT"]
     
     for sym in core_expected:
         assert sym in scanner.core_scalp_assets, f"Activo Core {sym} no está presente en Tier 1"
         assert sym in scanner.scalp_assets, f"Activo Core {sym} debe estar en scalp_assets activo"
     
+    # Campeones adicionales en scalp
+    assert "BNBUSDT" in scanner.scalp_assets
+    assert "SOLUSDT" in scanner.scalp_assets
+    assert "XRPUSDT" in scanner.scalp_assets
+
     # XAUUSDT está especializado en 1H Swing (SOP-69)
     assert "XAUUSDT" in scanner.core_swing_1h_assets
     assert "XAUUSDT" in scanner.assets
@@ -37,18 +42,19 @@ async def test_dynamic_screener_core_assets_immutable():
 async def test_dynamic_screener_rotates_liquid_candidates():
     """
     AUDITORÍA DE ADMISIÓN:
-    Si la API descubre candidatos con alto volumen (ej. AAVEUSDT, ONDOUSDT),
-    el escáner debe agregarlos a la lista activa respetando el límite máximo.
+    Si la API descubre candidatos con alto volumen (ej. AAVEUSDT, ONDOUSDT) y la rotación
+    está activada, el escáner debe agregarlos a la lista activa respetando el límite máximo.
     """
     scanner = MarketScanner()
     scanner._dynamic_last_refresh = 0  # Forzar refresco
     
     mock_liquid = [
-        "BTCUSDT", "ETHUSDT", "SOLUSDT", "RENDERUSDT", "SUIUSDT",
+        "BTCUSDT", "ETHUSDT", "SOLUSDT", "BNBUSDT", "SUIUSDT",
         "AAVEUSDT", "ONDOUSDT", "APTUSDT", "ARBUSDT", "OPUSDT", "INJUSDT"
     ]
     
-    with patch("engine.workers.market_scanner.fetch_top_liquid_tickers", new_callable=AsyncMock) as mock_fetch:
+    with patch("engine.workers.market_scanner.fetch_top_liquid_tickers", new_callable=AsyncMock) as mock_fetch, \
+         patch("engine.workers.market_scanner.settings.ENABLE_DYNAMIC_WATCHLIST", True):
         mock_fetch.return_value = mock_liquid
         
         await scanner._refresh_dynamic_assets()
@@ -57,7 +63,7 @@ async def test_dynamic_screener_rotates_liquid_candidates():
         assert "AAVEUSDT" in scanner.scalp_assets, "AAVEUSDT debió ser admitido en la lista dinámica"
         assert "ONDOUSDT" in scanner.scalp_assets, "ONDOUSDT debió ser admitido en la lista dinámica"
         # Los core iniciales deben seguir presentes
-        assert "RENDERUSDT" in scanner.scalp_assets
+        assert "BNBUSDT" in scanner.scalp_assets
         assert "SUIUSDT" in scanner.scalp_assets
 
 @pytest.mark.asyncio
@@ -70,14 +76,16 @@ async def test_dynamic_screener_graceful_api_fallback():
     scanner = MarketScanner()
     scanner._dynamic_last_refresh = 0
     
-    with patch("engine.workers.market_scanner.fetch_top_liquid_tickers", new_callable=AsyncMock) as mock_fetch:
+    with patch("engine.workers.market_scanner.fetch_top_liquid_tickers", new_callable=AsyncMock) as mock_fetch, \
+         patch("engine.workers.market_scanner.settings.ENABLE_DYNAMIC_WATCHLIST", True):
         mock_fetch.side_effect = Exception("Binance API 500 Internal Error")
         
         # No debe lanzar excepción
         await scanner._refresh_dynamic_assets()
         
-        # Los activos Core deben permanecer intactos (7 en scalp + XAUUSDT en swing)
-        assert len(scanner.core_scalp_assets) == 7
+        # Los activos Core deben permanecer intactos (6 en scalp + XAUUSDT en swing)
+        assert len(scanner.core_scalp_assets) == 6
+        assert "BNBUSDT" in scanner.scalp_assets
         assert "XAUUSDT" in scanner.core_swing_1h_assets
         assert "BTCUSDT" in scanner.assets
         assert "ETHUSDT" in scanner.assets

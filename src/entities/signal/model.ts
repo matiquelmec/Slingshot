@@ -22,3 +22,40 @@ export const quantitativeSignalSchema = z.object({
 });
 
 export type QuantitativeSignal = z.infer<typeof quantitativeSignalSchema>;
+
+/**
+ * Universo Canónico Auditado en Backtest SSoT (13 Activos de Grado Institucional)
+ * Cumple paridad estricta 1:1 con CANONICAL_AUDITED_UNIVERSE en engine/execution/nexus.py.
+ */
+export const CANONICAL_AUDITED_UNIVERSE = [
+  'BTCUSDT',
+  'ETHUSDT',
+  'SOLUSDT',
+  'BNBUSDT',
+  'LINKUSDT',
+  'XRPUSDT',
+  'XAUUSDT',
+  'SUIUSDT',
+  'INJUSDT',
+  'NEARUSDT',
+  'FETUSDT',
+  'ATOMUSDT',
+  'TIAUSDT',
+] as const;
+
+/**
+ * Activos podados de ejecución por expectativa matemática negativa auditada (SOP-102).
+ */
+export const PRUNED_EXCLUDED_ASSETS = ['AVAXUSDT', 'RENDERUSDT'] as const;
+
+export const canonicalAssetSchema = z.enum(CANONICAL_AUDITED_UNIVERSE);
+export type CanonicalAsset = z.infer<typeof canonicalAssetSchema>;
+
+export function isCanonicalAuditedAsset(asset: string): asset is CanonicalAsset {
+  return (CANONICAL_AUDITED_UNIVERSE as readonly string[]).includes(asset.toUpperCase());
+}
+
+export function isPrunedAsset(asset: string): boolean {
+  return (PRUNED_EXCLUDED_ASSETS as readonly string[]).includes(asset.toUpperCase());
+}
+

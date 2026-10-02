@@ -201,7 +201,7 @@ graph TB
 | **SOP-99** | Dynamic Slot Elasticity & Macro Decoupling | Elasticidad 1-3 riesgos y 3-5 físicas (contracción macro SOP-19, Streak Shield 2 slots en racha, expansión macro $\rho < 0.35$). |
 | **SOP-100** | Two-Stage Meta-Labeling & Playbook Kelly | Gatekeeper de 2 etapas (López de Prado) y Kelly Fraccional por Playbook (`1.18x-1.32x` en `OB_DISCOUNT_RETEST`, amortiguación `0.69x-0.92x` en `LIQUIDITY_SWEEP_FVG` 15m). |
 | **SOP-101** | Dual-Timeframe Synergy & 1h Sweep Boost | Especialización Dual-TF (`15m` Crypto Scalp + `1h` Swing en `XAUUSDT` y 7 Campeones Duales con `Score >= 75%`, poda de `AVAXUSDT`, y Boost `1.15x` para `LIQUIDITY_SWEEP_FVG` en `1h`). |
-| **SOP-102** | Absolute 1:1 Live-to-Backtest Parity & Dir Kelly | Reconciliador TP 50/30/20 (1.2R/2.0R/3.5R), Killzones estrictas (veto 10h/14h UTC), Veto Duro BTC Macro & AVWAP $\pm 0.40\%$, OTE $0.35\times\text{ATR}$, Clamps Compuestos y Kelly Direccional (`OB_DISCOUNT_RETEST` LONG vs SHORT). |
+| **SOP-102** | Absolute 1:1 Live-to-Backtest Parity & Dir Kelly | Reconciliador TP 50/30/20 (1.2R/2.0R/3.5R), Killzones estrictas (veto 10h/14h UTC), Veto Duro BTC Macro & AVWAP $\pm 0.40\%$, OTE $0.35\times\text{ATR}$, Clamps Compuestos, Kelly Direccional y fijación estricta del Universo Canónico SSoT (13 activos VIP, exclusión/poda total de `AVAXUSDT` y `RENDERUSDT` a nivel de escáner, contratos Zod y UI). |
 
 ---
 

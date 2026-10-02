@@ -193,7 +193,8 @@ async def test_market_scanner_preserves_champions_on_refresh():
     from engine.workers.market_scanner import MarketScanner
     scanner = MarketScanner()
     scanner._dynamic_last_refresh = 0
-    with patch("engine.workers.market_scanner.fetch_top_liquid_tickers", new_callable=AsyncMock) as mock_fetch:
+    with patch("engine.workers.market_scanner.fetch_top_liquid_tickers", new_callable=AsyncMock) as mock_fetch, \
+         patch("engine.workers.market_scanner.settings.ENABLE_DYNAMIC_WATCHLIST", True):
         mock_fetch.return_value = ["AAVEUSDT", "ONDOUSDT"]
         await scanner._refresh_dynamic_assets()
     assert "BNBUSDT" in scanner.scalp_assets

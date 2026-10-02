@@ -84,6 +84,10 @@ Toda interfaz gráfica debe construirse bajo estándares de ingeniería ergonóm
    * El ciclo de vida de persistencia del bot en Python debe ser no bloqueante y asíncrono (`turso_sync.dispatch_trade_async`), protegiendo el hilo de ejecución HFT de latencias externas.
 7. **Inmunidad a Dependencias Temporales en Tests (Time-Gated Testing Isolation):**
    * Toda prueba unitaria o de integración de componentes que ejecuten lógica de despacho o pre-flight de órdenes (`NexusNode.process_limit_setup`) debe aislar explícitamente los filtros de ventana horaria (`is_trade_allowed_sop18`), asegurando que la suite de pruebas sea 100% determinista e inmune a la hora o día de ejecución de CI/CD.
+8. **Universo Canónico y Sincronización Estricta 1:1 de Activos (SSoT Universe Alignment):**
+   * Queda terminantemente prohibido escanear, procesar o presentar en frontend activos que no formen parte del Universo Canónico Auditado en Backtest (`CANONICAL_AUDITED_UNIVERSE`: 13 activos exactos).
+   * Todo activo con expectativa matemática negativa auditada (`AVAXUSDT`, `RENDERUSDT`) debe permanecer vetado y podado a través de todo el stack (`nexus.py`, `market_scanner.py`, `config.py`, `entities/signal`, `telemetry/constants.ts`, paneles de UI).
+   * Las rotaciones dinámicas no auditadas deben permanecer desactivadas en producción (`ENABLE_DYNAMIC_WATCHLIST = False`), concentrando el 100% del rendimiento en el universo estadísticamente probado.
 
 ---
 
