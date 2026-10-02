@@ -693,33 +693,36 @@ async def _bitunix_telemetry_background_updater():
         await asyncio.sleep(3.0)
 
 @app.get("/api/v1/bitunix/telemetry")
-async def get_bitunix_telemetry():
+async def get_bitunix_telemetry(account_id: str = "primary"):
     """
-    Retorna la telemetría viva de la cuenta Principal de Bitunix (Futuros) en tiempo real (<1ms) desde caché en memoria.
-    Cero latencia de red en el endpoint HTTP, cero bloqueos y máxima estabilidad anti-flicker.
+    Retorna la telemetría viva de Bitunix (Futuros) para la cuenta solicitada o principal en tiempo real (<1ms).
+    Soporta multi-cuentas mediante el parámetro ?account_id=.
     """
     global _last_bitunix_telemetry_cache, _last_bitunix_telemetry_time
     now = time.time()
 
-    if _last_bitunix_telemetry_cache:
+    target_acc_id = account_id.strip() if account_id else "primary"
+
+    if target_acc_id == "primary" and _last_bitunix_telemetry_cache:
         return _last_bitunix_telemetry_cache
 
     from engine.execution.nexus import nexus
     executor = None
     if hasattr(nexus, "account_manager"):
-        executor = nexus.account_manager.get_executor("primary")
-    if executor is None:
+        executor = nexus.account_manager.get_executor(target_acc_id)
+    if executor is None and target_acc_id == "primary":
         executor = getattr(nexus, "executor", None)
 
     if executor:
         try:
             data = await asyncio.wait_for(executor.get_account_telemetry_summary(), timeout=5.0)
             if data and data.get("connected"):
-                _last_bitunix_telemetry_cache = data
-                _last_bitunix_telemetry_time = now
+                if target_acc_id == "primary":
+                    _last_bitunix_telemetry_cache = data
+                    _last_bitunix_telemetry_time = now
                 return data
         except Exception as e:
-            logger.debug(f"[BITUNIX TELEMETRY] Calentando telemetría inicial: {e}")
+            logger.debug(f"[BITUNIX TELEMETRY] Calentando telemetría para {target_acc_id}: {e}")
 
     # Fallback canónico si es durante los primeros instantes del arranque en frío
     return {

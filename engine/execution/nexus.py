@@ -1944,5 +1944,7 @@ class NexusNode:
 # Instancia global (Singleton)
 # Live trading must be explicitly enabled from .env.
 nexus = NexusNode(dry_run=not settings.ENABLE_LIVE_TRADING)
+Nexus = NexusNode
+
 
 

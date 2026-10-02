@@ -198,4 +198,24 @@ Tras corregir la acreditación a `1.2 * 0.50` y `2.0 * 0.30` exacta:
 * **TradeManager & SOP-25:** Al perforar -0.65R adverso, liquida a mercado (`SOP25_FLASH_MARKET_EXIT`), evitando pérdidas completas de -1.0R (el 100% de las operaciones perdedoras históricas fueron mitigadas por SOP-25 a -0.65R).
 * **Reciclaje Dinámico de Slots:** Al tocar Fast BE (+1.2R Megas / +1.0R Alts), `TradeManager` dispara `nexus.on_risk_released()`, liberando el cupo flotante de forma sincronizada con el backtest.
 
+---
+
+## 9. Auditoría y Hardening Multi-Cuenta Bitunix (Fase 7 — Parallel Dispatch & SSoT Isolation)
+
+### 9.1 Diagnóstico de Estado y Hallazgos Críticos
+1. **Estado Inicial de Conexión:**
+   * En el backend (`engine/execution/account_manager.py` y `engine/data/bitunix_accounts.json`), únicamente existía registrada la cuenta primaria configurada en el archivo de entorno `.env` (`BITUNIX_API_KEY` / `BITUNIX_SECRET_KEY`).
+   * El archivo de cuentas secundarias contenía `{"accounts": []}`. Si el usuario esperaba ver dos cuentas operando, la 2da cuenta aún debía ser ingresada y registrada en el sistema.
+2. **Despacho Concurrente en Nexus (`process_limit_setup`):**
+   * El orquestador ejecuta `asyncio.gather(*tasks)` iterando sobre todas las cuentas habilitadas retornadas por `AccountManager.get_all_accounts(enabled_only=True)`.
+   * El dimensionamiento de riesgo en dólares es 100% independiente por cuenta mediante `RiskManager.calculate_dollar_risk_position` (SOP-41), calculando contratos exactos según el balance libre real de cada cuenta (ej: cuenta con $1,000 arriesga $25; cuenta con $10,000 arriesga $250).
+3. **Corrección de Aislamiento en Trailing Stop (`TradeManager._apply_sl_update`):**
+   * Se identificó un riesgo de colisión de `positionId`: si una señal no especificaba `account_id` ni mapa de IDs, las cuentas secundarias podían heredar el `positionId` numérico de la cuenta primaria, provocando fallos en la llamada a `modify_position_tpsl` en Bitunix.
+   * **Solución Implementada:** Aislamiento estricto de entidades. Cuentas secundarias sin mapeo previo realizan una resolución en caliente (`ex.get_pending_positions()`) para obtener su `positionId` nativo y cachearlo en `signal["account_position_ids"][acc_id]`.
+4. **Slice FSD Frontend (`src/features/multi-account`):**
+   * **Server Actions (`actions.ts`):** `fetchAccountsAction`, `registerAccountAction`, `toggleAccountAction`, `deleteAccountAction` con autenticación `requireUserSession` (Zero-Trust) y validación Zod de contratos.
+   * **Componente Reactivo (`MultiAccountDashboardCard.tsx`):** Vista de cuentas conectadas, balance individual y consolidado, switches de activación instantánea, modal para conectar una segunda cuenta con validación de credenciales y feedback visual conforme a la retícula Base 8 y WCAG 2.2 AA.
+   * **Cifrado en Reposo:** Credenciales secundarias protegidas mediante cifrado simétrico AES-256 Fernet (`enc:v1:`).
+
+
 

@@ -841,15 +841,32 @@ class TradeManager:
 
                 try:
 
-                    # [SSoT ENTITY ISOLATION] Priorizar ID específico de cuenta; si la señal pertenece a una cuenta específica, solo esa cuenta usa el ID global
+                    # [SSoT ENTITY ISOLATION] Priorizar ID específico de cuenta
                     if acc_id in pos_map:
                         local_pos_id = pos_map[acc_id]
+                    elif pos_map:
+                        # Si ya existe mapa de IDs por cuenta pero esta cuenta no está mapeada, resolver en caliente
+                        local_pos_id = None
                     elif signal.get("account_id"):
                         local_pos_id = global_pos_id if signal.get("account_id") == acc_id else None
                     else:
                         local_pos_id = global_pos_id
 
                     pos_id_arg = str(local_pos_id) if local_pos_id is not None else None
+
+                    # Resiliencia Multi-Cuenta: Si no tenemos el positionId para esta cuenta específica, resolverlo en caliente
+                    if not pos_id_arg and not getattr(ex, "dry_run", True):
+                        try:
+                            acc_open = await ex.get_pending_positions()
+                            if isinstance(acc_open, list):
+                                for p in acc_open:
+                                    if isinstance(p, dict) and p.get("symbol") == asset and p.get("positionId"):
+                                        pos_id_arg = str(p["positionId"])
+                                        signal.setdefault("account_position_ids", {})[acc_id] = pos_id_arg
+                                        break
+                        except Exception:
+                            pass
+
                     success = await ex.modify_position_tpsl(
                         symbol=asset,
                         position_id=pos_id_arg,

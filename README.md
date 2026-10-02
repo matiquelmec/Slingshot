@@ -287,13 +287,16 @@ pytest engine\tests\test_progressive_exposure_and_streak_sizing.py engine\tests\
 # Certificación Bitunix Dual-Protocol TPSL & 1R Cache Invariance [12 Tests]
 pytest engine\tests\test_bitunix_tpsl_modify_and_id_resolution.py engine\tests\test_live_trade_management.py -v
 
+# Certificación Multi-Cuenta Bitunix Parallel Dispatch & Trailing Isolation [4 Tests]
+pytest engine\tests\test_multi_account_execution_audit.py -v
+
 # Certificación TradFi / FTMO Titanium (21 Tests)
 pytest engine\tests\test_ftmo_titanium_strategy.py engine\tests\test_tradfi_scanner_and_risk.py -v
 
 # Certificación Suite Completa (402 Tests)
 pytest engine\tests -q
 ```
-*(Resultado global certificado: **426 pytest + 33 vitest = 459 tests — 100% PASSED**).*
+*(Resultado global certificado: **430 pytest + 42 vitest = 472 tests — 100% PASSED**).*
 
 ---
 
@@ -302,6 +305,7 @@ pytest engine\tests -q
 A partir de la versión 10.0.0, la plataforma adopta **Feature-Sliced Design (FSD)** en `src/` con aislamiento multi-tenant estricto y gobernanza "Doc-as-Code":
 
 * **Jerarquía Unidireccional:** `src/app` ➔ `src/features` ➔ `src/entities` ➔ `src/shared`.
+* **Gestor Multi-Cuenta Bitunix:** Slice FSD `src/features/multi-account` con despacho paralelo (`asyncio.gather`), aislamiento estricto de `positionId` en trailing stop, dimensionamiento dinámico de riesgo en dólares por cuenta (SOP-41) y cifrado simétrico AES-256 Fernet (`enc:v1:`) en reposo.
 * **Aislamiento Multi-Tenant (Anti-IDOR):** Todo Server Action y consulta a base de datos implementa validación Zod, verificación obligatoria de sesión de usuario y aislamiento por `and(eq(id, targetId), eq(userId, sessionUserId))`.
 * **Estándares UI/UX Ergonómicos:** Retícula Base 8 (espaciados múltiplos de 8px), contraste perceptual WCAG 2.2 AA ($\ge 4.5:1$), touch targets mínimos de $44 \times 44\text{px}$ y optimización Thumb Zone en móvil.
 * **Gobernanza Doc-as-Code:** Sincronización en cascada entre código, [`AGENTS.md`](AGENTS.md) y [`docs/architecture/BLUEPRINT_2026.md`](docs/architecture/BLUEPRINT_2026.md).
