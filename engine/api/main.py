@@ -670,6 +670,24 @@ async def _bitunix_telemetry_background_updater():
                             data["is_stabilizing"] = True
                     _last_bitunix_telemetry_cache = data
                     _last_bitunix_telemetry_time = time.time()
+
+                    # 🗄️ Sincronización continua de posiciones abiertas en Turso Cloud (Dual-Engine)
+                    if data.get("positions"):
+                        try:
+                            from engine.execution.turso_sync import turso_sync
+                            for pos in data["positions"]:
+                                turso_sync.dispatch_trade_async({
+                                    "id": pos.get("position_id") or f"bitunix_{pos.get('symbol')}",
+                                    "symbol": pos.get("symbol"),
+                                    "side": pos.get("side", "BUY"),
+                                    "entry_price": float(pos.get("entry_price", 0)),
+                                    "quantity": float(pos.get("qty", 0)),
+                                    "pnl": float(pos.get("unrealized_pnl", 0)),
+                                    "pnl_percent": float(pos.get("unrealized_pnl_pct", 0)),
+                                    "status": "OPEN"
+                                })
+                        except Exception as t_sync_err:
+                            logger.debug(f"[TURSO TELEMETRY SYNC] Excepción no bloqueante: {t_sync_err}")
         except Exception as err:
             logger.debug(f"[TELEMETRY BG] Latencia temporal en refresco: {err}")
         await asyncio.sleep(3.0)

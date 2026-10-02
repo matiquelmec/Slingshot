@@ -143,9 +143,9 @@ const result = await db
 | :---: | :--- | :---: | :--- |
 | **Fase 1** | **Fundación Arquitectónica FSD & Gobernanza** | ✅ **Completado** | • Estructura FSD en `src/` (`app`, `features`, `entities`, `shared`)<br>• `AGENTS.md` con reglas innegociables<br>• `BLUEPRINT_2026.md`<br>• Scripts `typecheck` y `test` en `package.json`<br>• Vitest 5 configurado y 13 tests pasando |
 | **Fase 2** | **Auditoría Exhaustiva, Higiene y Promoción FSD** | ✅ **Completado** | • Limpieza de 60 MB de logs obsoletos y caches en raíz<br>• Promoción de `formatters` y `apiUrl` a `src/shared/lib/`<br>• Promoción de contratos de dominio a `src/entities/signal/types.ts`<br>• Corrección ergonómica UI/UX: touch targets ≥44px y contraste WCAG 2.2 AA (≥4.5:1)<br>• Guardián arquitectónico automatizado en `tests/unit/fsd-architecture.test.ts`<br>• Suite de Vitest ampliada a 23 tests unitarios (100% pasando) |
-| **Fase 3** | **Migración Gradual de Slices (Strangler Fig)** | 🟡 *En progreso* | • Migrar componentes de `src/app/components/*` a slices en `src/features/*`<br>• Estandarizar formularios con Server Actions Zod |
+| **Fase 3** | **Slices UI & Server Actions Zod (FSD)** | ✅ **Completado** | • Slices `src/features/signals-feed` y `src/features/positions-tracker` creadas y exportadas vía barrel index<br>• Server Actions con validación Zod y protección anti-IDOR (`fetchSignalsAction`, `recordSignalAction`, `fetchTradesAction`, `recordTradeAction`)<br>• Integración reactiva en componentes Radar y History con persistencia Turso y fallback |
 | **Fase 4** | **Persistencia Serverless & RLS Multi-Tenant (Turso + Drizzle)** | ✅ **Completado** | • Cliente Drizzle ORM + LibSQL configurado en `src/shared/db/index.ts`<br>• Esquema multi-tenant (`tenants`, `users`, `signals`, `trades`, `risk_configs`, `accounts`) sincronizado en Turso Cloud<br>• Drizzle Kit integrado (`npm run db:push`, `db:studio`)<br>• Tests unitarios de anti-IDOR y DB client pasando al 100% |
-| **Fase 5** | **Integración Dual-Engine & Telemetría Segura** | ⚪ *Pendiente* | • Puente de autenticación entre Next.js y FastAPI con JWT/mTLS<br>• Despacho de órdenes segregado por tenant hacia Bitunix y MT5<br>• Tests end-to-end (E2E) con Playwright |
+| **Fase 5** | **Integración Dual-Engine & Telemetría Segura** | ✅ **Completado** | • Sincronización HTTP Pipeline v2 en segundo plano (`engine/execution/turso_sync.py`) sin latencia en hot-path<br>• Hooking continuo de posiciones y órdenes en `bitunix_executor.py`, `mt5_bridge.py` y `main.py`<br>• Pruebas de regresión dual completadas (100% en verde) |
 
 ---
 
@@ -153,8 +153,8 @@ const result = await db
 
 Para asegurar la robustez del sistema, los pipelines de CI/CD ejecutan:
 1. `npm run typecheck`: Validación estática de tipos TypeScript sin emitir artefactos (0 errores).
-2. `npm test`: Suite unitaria de Vitest (28 tests pasando en ~800ms).
-3. `npm run test:engine`: Suite de pytest para el motor analítico de Python (402 tests pasando).
+2. `npm test`: Suite unitaria de Vitest (33 tests pasando en ~800ms).
+3. `npm run test:engine`: Suite de pytest para el motor analítico de Python (426 tests pasando).
 4. `npm run build`: Compilación de producción optimizada de Next.js sin errores de build.
 
 ---

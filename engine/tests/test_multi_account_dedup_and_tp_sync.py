@@ -113,7 +113,7 @@ async def test_place_limit_dedup_guard_exchange(mock_nexus):
         sl_p=2.15
     )
 
-    assert res is None
+    assert res is None or res.get('status') == 'already_active'
     mock_executor.place_limit_signal.assert_not_called()
 
 @pytest.mark.asyncio

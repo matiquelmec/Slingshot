@@ -13,7 +13,7 @@ async def test_sqlite_buffer_persistence_and_recovery(tmp_path):
     
     # Mockear DB_PATH a nivel de clase para que __init__ cargue la DB temporal limpia
     with patch.object(NexusNode, "DB_PATH", test_db):
-        node1 = NexusNode(dry_run=True)
+        node1 = NexusNode(dry_run=False)
         node1._high_confluence_buffer = {}
         
         sig = {
@@ -30,7 +30,7 @@ async def test_sqlite_buffer_persistence_and_recovery(tmp_path):
         assert len(node1._high_confluence_buffer["primary"]) == 1
         
         # Simular reinicio creando una nueva instancia apuntando a la misma DB temporal
-        node2 = NexusNode(dry_run=True)
+        node2 = NexusNode(dry_run=False)
         assert "primary" in node2._high_confluence_buffer
         assert len(node2._high_confluence_buffer["primary"]) == 1
         restored = node2._high_confluence_buffer["primary"][0]

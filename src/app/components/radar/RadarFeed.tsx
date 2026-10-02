@@ -2,20 +2,22 @@
 
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Activity, Bell, Target, TrendingUp, TrendingDown, Clock, Search, ExternalLink, AlertOctagon } from 'lucide-react';
+import { Activity, Bell, Target, TrendingUp, TrendingDown, Clock, Search, ExternalLink, AlertOctagon, Database } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useTelemetryStore } from '../../store/telemetryStore';
 import { Signal } from '../../types/signal';
+import { fetchSignalsAction } from '@/features';
+import { getApiBaseUrl } from '../../utils/apiUrl';
+
 // Local augmentation for Radar metadata
 interface RadarSignal extends Signal {
     entry_price: number; 
 }
 
-import { getApiBaseUrl } from '../../utils/apiUrl';
-
 export default function RadarFeed() {
     const [globalSignals, setGlobalSignals] = useState<RadarSignal[]>([]);
     const [loading, setLoading] = useState(true);
+    const [isTursoSynced, setIsTursoSynced] = useState(false);
     const [filter, setFilter] = useState('');
     const router = useRouter();
     
@@ -25,6 +27,37 @@ export default function RadarFeed() {
         const BASE_URL = getApiBaseUrl();
         const fetchInitialHydration = async () => {
             try {
+                // 1. Intentar Server Action conectada directamente a Turso Cloud (FSD Slice)
+                const tursoRes = await fetchSignalsAction({ status: 'ALL', limit: 30 });
+                if (tursoRes.success && tursoRes.data && tursoRes.data.length > 0) {
+                    const mapped = tursoRes.data.map(s => ({
+                        id: s.id,
+                        asset: s.asset,
+                        interval: s.timeframe || '15m',
+                        type: s.direction,
+                        signal_type: s.direction,
+                        entry_price: s.entryPrice,
+                        price: s.entryPrice,
+                        stop_loss: s.stopLoss,
+                        tp1: s.takeProfit1,
+                        tp2: s.takeProfit2,
+                        tp3: s.takeProfit3,
+                        take_profit_3r: s.takeProfit3 || s.entryPrice * 1.05,
+                        score: s.confluenceScore,
+                        ker: s.kerValue,
+                        status: s.status,
+                        regime: 'TURSO_CLOUD',
+                        strategy: 'QUANT_SMC',
+                        timestamp: s.createdAt || new Date().toISOString(),
+                        created_at: s.createdAt
+                    } as unknown as RadarSignal));
+                    setGlobalSignals(mapped);
+                    setIsTursoSynced(true);
+                    setLoading(false);
+                    return;
+                }
+
+                // 2. Fallback a endpoint REST de FastAPI en caso de inicialización en frío
                 const res = await fetch(`${BASE_URL}/api/v1/signals?status=ALL`);
                 if (res.ok) {
                     const data = await res.json();
@@ -96,17 +129,22 @@ export default function RadarFeed() {
                 <div className="flex items-center gap-3">
                     <Activity size={16} className="text-neon-cyan" />
                     <h3 className="text-xs font-bold text-white/90 tracking-[0.2em] uppercase">MALLA DE EVENTOS GLOBAL</h3>
+                    {isTursoSynced && (
+                        <span className="px-2 py-1 rounded-md border border-emerald-500/30 bg-emerald-500/10 text-emerald-400 text-[9px] font-bold tracking-widest flex items-center gap-1">
+                            <Database size={10} /> TURSO CLOUD
+                        </span>
+                    )}
                 </div>
 
                 <div className="flex items-center gap-4">
                     <div className="relative">
-                        <Search size={12} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/30" />
+                        <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/30" />
                         <input
                             type="text"
                             placeholder="FILTRAR RADAR..."
                             value={filter}
                             onChange={(e) => setFilter(e.target.value)}
-                            className="bg-black/40 border border-white/10 rounded-lg py-1.5 pl-8 pr-3 text-[10px] text-white focus:outline-none focus:border-neon-cyan/50 transition-all w-48"
+                            className="min-h-[44px] bg-black/40 border border-white/10 rounded-lg py-2 pl-9 pr-3 text-xs text-white focus:outline-none focus:border-neon-cyan/50 transition-all w-48"
                         />
                     </div>
                 </div>

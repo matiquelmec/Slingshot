@@ -245,6 +245,21 @@ class MT5Bridge:
                     logger.error(f"❌ [MT5_BRIDGE] Fallo al enviar orden [{t_label}] a MT5: {retcode} - {comment}")
 
             if placed_orders:
+                # 🗄️ TURSO DUAL-ENGINE CLOUD SYNC
+                try:
+                    from engine.execution.turso_sync import turso_sync
+                    first_ord = placed_orders[0]
+                    turso_sync.dispatch_trade_async({
+                        "id": f"mt5_{first_ord.get('order_id')}",
+                        "symbol": sym_mt5,
+                        "side": "BUY" if is_long else "SELL",
+                        "entry_price": float(entry_price),
+                        "quantity": float(total_lots),
+                        "status": "OPEN",
+                    })
+                except Exception as t_err:
+                    logger.debug(f"[TURSO MT5 SYNC] Excepcion no bloqueante: {t_err}")
+
                 return {
                     "success": True,
                     "symbol": sym_mt5,

@@ -557,6 +557,20 @@ class BitunixExecutor:
                         else:
                             logger.error(f"❌ [BITUNIX] Error al colocar {label} a ${formatted_tp_price}: {tp_res.get('msg')}")
                 
+                # 🗄️ TURSO DUAL-ENGINE CLOUD SYNC
+                try:
+                    from engine.execution.turso_sync import turso_sync
+                    turso_sync.dispatch_trade_async({
+                        "id": str(real_position_id or order_id),
+                        "symbol": symbol,
+                        "side": side,
+                        "entry_price": float(entry_price),
+                        "quantity": float(qty_float),
+                        "status": "OPEN",
+                    })
+                except Exception as t_err:
+                    logger.debug(f"[TURSO BITUNIX SYNC] Excepción no bloqueante: {t_err}")
+
                 return {
                     "status": "success",
                     "exchange": "bitunix_futures",

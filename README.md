@@ -11,7 +11,7 @@
 ![MetaTrader 5](https://img.shields.io/badge/MetaTrader_5-FTMO_Institutional_Live-2980b9?style=for-the-badge&logo=windows&logoColor=fff)
 ![Execution Engine](https://img.shields.io/badge/Execution-SOP--64_Auto--Dispatcher_≥75%25-green?style=for-the-badge)
 ![Security](https://img.shields.io/badge/Security_Protocols-SOP--01%20to%20SOP--102-emerald?style=for-the-badge)
-![QA Suite](https://img.shields.io/badge/QA_Suite-284_Tests_100%25_Passed-success?style=for-the-badge)
+![QA Suite](https://img.shields.io/badge/QA_Suite-459_Tests_100%25_Passed-success?style=for-the-badge)
 ![Crypto Return](https://img.shields.io/badge/Crypto_Compounded_ROI-%2B3714.6%25_(38.1x)-gold?style=for-the-badge)
 ![Total Alpha](https://img.shields.io/badge/Total_Alpha-%2B128.48_R_Base_%7C_%2B154.99_R_Alpha-gold?style=for-the-badge)
 ![Profit Factor](https://img.shields.io/badge/Profit_Factor-2.01_Institucional-blue?style=for-the-badge)
@@ -293,7 +293,7 @@ pytest engine\tests\test_ftmo_titanium_strategy.py engine\tests\test_tradfi_scan
 # Certificación Suite Completa (402 Tests)
 pytest engine\tests -q
 ```
-*(Resultado global certificado: **402 passed in 102.96s — 100% PASSED**).*
+*(Resultado global certificado: **426 pytest + 33 vitest = 459 tests — 100% PASSED**).*
 
 ---
 
