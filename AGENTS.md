@@ -78,6 +78,10 @@ Toda interfaz gráfica debe construirse bajo estándares de ingeniería ergonóm
 3. **Pruebas de Regresión Cuantitativa (Dual-Engine):** Si el cambio involucra la lógica algorítmica compartida o la API de telemetría con Python, debe ejecutarse también `npm run test:engine` (`pytest engine/tests/`) o `npm run test:all`.
 4. **Paridad Cuantitativa Estricta y Cero Ganancia Fantasma (Zero Phantom Profit):** Queda terminantemente prohibido calcular precios de órdenes límite (ej: 1.2R, 2.0R) y acreditar valores de R superiores (ej: 1.3R, 2.5R) en backtest o simulaciones. Toda acreditación de retorno en R debe corresponder con exactitud matemática al nivel de precio donde se llena la orden en el exchange (`outcome_r = target_r * volume_pct * total_multiplier`). La lógica de mitigación anticipada (SOP-25 @ -0.65R) y protección a Breakeven/+1.0R debe ser 100% simétrica entre simulación y ejecución en vivo (`TradeManager` / `BitunixExecutor`).
 5. **Aislamiento Estricto y Cifrado Multi-Cuenta (SOP-57 / SOP-58):** Toda cuenta secundaria agregada al sistema debe almacenar sus credenciales cifradas con AES-256 Fernet (`enc:v1:`). Durante la gestión de órdenes en vivo (`Nexus` y `TradeManager`), cada cuenta debe mantener aislamiento total en sus `positionId` y memoria local (`mem_key = f"{acc_id}_{asset}"`), impidiendo la propagación cruzada de IDs o balances entre cuentas.
+6. **Eficiencia y Gobernanza de Base de Datos (Turso LibSQL SSoT):**
+   * Toda consulta multi-tenant en Drizzle debe apoyarse en índices compuestos explícitos (`idx_trades_tenant_created`, `idx_signals_tenant_created`, `idx_accounts_tenant_user`), quedando terminantemente prohibidos escaneos de tabla completa (`FULL TABLE SCAN`).
+   * Toda auditoría de almacenamiento o comprobación agregada debe ejecutarse mediante pipelines o batches unificados (`client.batch`), limitando roundtrips de red a $<300\text{ms}$.
+   * El ciclo de vida de persistencia del bot en Python debe ser no bloqueante y asíncrono (`turso_sync.dispatch_trade_async`), protegiendo el hilo de ejecución HFT de latencias externas.
 
 ---
 

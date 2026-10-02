@@ -1,5 +1,5 @@
 import { relations } from 'drizzle-orm';
-import { sqliteTable, text, integer, real } from 'drizzle-orm/sqlite-core';
+import { sqliteTable, text, integer, real, index } from 'drizzle-orm/sqlite-core';
 
 // ============================================================================
 // 1. TENANTS TABLE (Multi-Tenant Core)
@@ -51,118 +51,145 @@ export const users = sqliteTable('users', {
 // ============================================================================
 // 3. SIGNALS TABLE (Quantitative Signals & Telemetry)
 // ============================================================================
-export const signals = sqliteTable('signals', {
-  id: text('id')
-    .primaryKey()
-    .$defaultFn(() => crypto.randomUUID()),
-  tenantId: text('tenant_id')
-    .notNull()
-    .references(() => tenants.id, { onDelete: 'cascade' }),
-  userId: text('user_id')
-    .notNull()
-    .references(() => users.id, { onDelete: 'cascade' }),
-  asset: text('asset').notNull(),
-  direction: text('direction', { enum: ['LONG', 'SHORT'] }).notNull(),
-  timeframe: text('timeframe').notNull().default('15m'),
-  entryPrice: real('entry_price').notNull(),
-  stopLoss: real('stop_loss').notNull(),
-  takeProfit1: real('take_profit_1'),
-  takeProfit2: real('take_profit_2'),
-  takeProfit3: real('take_profit_3'),
-  confluenceScore: real('confluence_score').notNull().default(0),
-  kerValue: real('ker_value').notNull().default(0),
-  status: text('status', {
-    enum: ['PENDING', 'TRIGGERED', 'FILLED', 'CANCELLED', 'EXPIRED'],
-  })
-    .notNull()
-    .default('PENDING'),
-  createdAt: integer('created_at', { mode: 'timestamp' })
-    .notNull()
-    .$defaultFn(() => new Date()),
-});
+export const signals = sqliteTable(
+  'signals',
+  {
+    id: text('id')
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    tenantId: text('tenant_id')
+      .notNull()
+      .references(() => tenants.id, { onDelete: 'cascade' }),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    asset: text('asset').notNull(),
+    direction: text('direction', { enum: ['LONG', 'SHORT'] }).notNull(),
+    timeframe: text('timeframe').notNull().default('15m'),
+    entryPrice: real('entry_price').notNull(),
+    stopLoss: real('stop_loss').notNull(),
+    takeProfit1: real('take_profit_1'),
+    takeProfit2: real('take_profit_2'),
+    takeProfit3: real('take_profit_3'),
+    confluenceScore: real('confluence_score').notNull().default(0),
+    kerValue: real('ker_value').notNull().default(0),
+    status: text('status', {
+      enum: ['PENDING', 'TRIGGERED', 'FILLED', 'CANCELLED', 'EXPIRED'],
+    })
+      .notNull()
+      .default('PENDING'),
+    createdAt: integer('created_at', { mode: 'timestamp' })
+      .notNull()
+      .$defaultFn(() => new Date()),
+  },
+  (table) => [
+    index('idx_signals_tenant_created').on(table.tenantId, table.createdAt),
+    index('idx_signals_asset_status').on(table.asset, table.status),
+  ]
+);
 
 // ============================================================================
 // 4. TRADES TABLE (Executed Positions & PnL History)
 // ============================================================================
-export const trades = sqliteTable('trades', {
-  id: text('id')
-    .primaryKey()
-    .$defaultFn(() => crypto.randomUUID()),
-  tenantId: text('tenant_id')
-    .notNull()
-    .references(() => tenants.id, { onDelete: 'cascade' }),
-  userId: text('user_id')
-    .notNull()
-    .references(() => users.id, { onDelete: 'cascade' }),
-  signalId: text('signal_id').references(() => signals.id, {
-    onDelete: 'set null',
-  }),
-  symbol: text('symbol').notNull(),
-  side: text('side', { enum: ['BUY', 'SELL'] }).notNull(),
-  entryPrice: real('entry_price').notNull(),
-  exitPrice: real('exit_price'),
-  quantity: real('quantity').notNull().default(0),
-  pnl: real('pnl').default(0),
-  pnlPercent: real('pnl_percent').default(0),
-  status: text('status', { enum: ['OPEN', 'CLOSED', 'CANCELLED'] })
-    .notNull()
-    .default('OPEN'),
-  createdAt: integer('created_at', { mode: 'timestamp' })
-    .notNull()
-    .$defaultFn(() => new Date()),
-  closedAt: integer('closed_at', { mode: 'timestamp' }),
-});
+export const trades = sqliteTable(
+  'trades',
+  {
+    id: text('id')
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    tenantId: text('tenant_id')
+      .notNull()
+      .references(() => tenants.id, { onDelete: 'cascade' }),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    signalId: text('signal_id').references(() => signals.id, {
+      onDelete: 'set null',
+    }),
+    symbol: text('symbol').notNull(),
+    side: text('side', { enum: ['BUY', 'SELL'] }).notNull(),
+    entryPrice: real('entry_price').notNull(),
+    exitPrice: real('exit_price'),
+    quantity: real('quantity').notNull().default(0),
+    pnl: real('pnl').default(0),
+    pnlPercent: real('pnl_percent').default(0),
+    status: text('status', { enum: ['OPEN', 'CLOSED', 'CANCELLED'] })
+      .notNull()
+      .default('OPEN'),
+    createdAt: integer('created_at', { mode: 'timestamp' })
+      .notNull()
+      .$defaultFn(() => new Date()),
+    closedAt: integer('closed_at', { mode: 'timestamp' }),
+  },
+  (table) => [
+    index('idx_trades_tenant_created').on(table.tenantId, table.createdAt),
+    index('idx_trades_symbol').on(table.symbol),
+    index('idx_trades_status').on(table.status),
+  ]
+);
 
 // ============================================================================
 // 5. RISK CONFIGS TABLE (Per-Tenant / User Circuit Breaker Rules)
 // ============================================================================
-export const riskConfigs = sqliteTable('risk_configs', {
-  id: text('id')
-    .primaryKey()
-    .$defaultFn(() => crypto.randomUUID()),
-  tenantId: text('tenant_id')
-    .notNull()
-    .references(() => tenants.id, { onDelete: 'cascade' }),
-  userId: text('user_id')
-    .notNull()
-    .references(() => users.id, { onDelete: 'cascade' }),
-  maxDrawdownDaily: real('max_drawdown_daily').notNull().default(0.05),
-  maxRiskPerTradePct: real('max_risk_per_trade_pct').notNull().default(0.01),
-  minRr: real('min_rr').notNull().default(2.5),
-  isCircuitBreakerActive: integer('is_circuit_breaker_active', {
-    mode: 'boolean',
-  })
-    .notNull()
-    .default(false),
-  updatedAt: integer('updated_at', { mode: 'timestamp' })
-    .notNull()
-    .$defaultFn(() => new Date()),
-});
+export const riskConfigs = sqliteTable(
+  'risk_configs',
+  {
+    id: text('id')
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    tenantId: text('tenant_id')
+      .notNull()
+      .references(() => tenants.id, { onDelete: 'cascade' }),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    maxDrawdownDaily: real('max_drawdown_daily').notNull().default(0.05),
+    maxRiskPerTradePct: real('max_risk_per_trade_pct').notNull().default(0.01),
+    minRr: real('min_rr').notNull().default(2.5),
+    isCircuitBreakerActive: integer('is_circuit_breaker_active', {
+      mode: 'boolean',
+    })
+      .notNull()
+      .default(false),
+    updatedAt: integer('updated_at', { mode: 'timestamp' })
+      .notNull()
+      .$defaultFn(() => new Date()),
+  },
+  (table) => [
+    index('idx_risk_configs_tenant').on(table.tenantId, table.userId),
+  ]
+);
 
 // ============================================================================
 // 6. ACCOUNTS TABLE (Exchange Credentials & Balance Segregation)
 // ============================================================================
-export const accounts = sqliteTable('accounts', {
-  id: text('id')
-    .primaryKey()
-    .$defaultFn(() => crypto.randomUUID()),
-  tenantId: text('tenant_id')
-    .notNull()
-    .references(() => tenants.id, { onDelete: 'cascade' }),
-  userId: text('user_id')
-    .notNull()
-    .references(() => users.id, { onDelete: 'cascade' }),
-  exchange: text('exchange').notNull().default('bitunix'),
-  apiKeyEncrypted: text('api_key_encrypted'),
-  secretEncrypted: text('secret_encrypted'),
-  currentBalance: real('current_balance').notNull().default(0),
-  createdAt: integer('created_at', { mode: 'timestamp' })
-    .notNull()
-    .$defaultFn(() => new Date()),
-  updatedAt: integer('updated_at', { mode: 'timestamp' })
-    .notNull()
-    .$defaultFn(() => new Date()),
-});
+export const accounts = sqliteTable(
+  'accounts',
+  {
+    id: text('id')
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    tenantId: text('tenant_id')
+      .notNull()
+      .references(() => tenants.id, { onDelete: 'cascade' }),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    exchange: text('exchange').notNull().default('bitunix'),
+    apiKeyEncrypted: text('api_key_encrypted'),
+    secretEncrypted: text('secret_encrypted'),
+    currentBalance: real('current_balance').notNull().default(0),
+    createdAt: integer('created_at', { mode: 'timestamp' })
+      .notNull()
+      .$defaultFn(() => new Date()),
+    updatedAt: integer('updated_at', { mode: 'timestamp' })
+      .notNull()
+      .$defaultFn(() => new Date()),
+  },
+  (table) => [
+    index('idx_accounts_tenant_user').on(table.tenantId, table.userId),
+  ]
+);
 
 // ============================================================================
 // 7. RELATIONS DEFINITIONS (Drizzle ORM Relational Queries)

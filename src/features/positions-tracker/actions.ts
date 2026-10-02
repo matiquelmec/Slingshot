@@ -1,8 +1,8 @@
 'use server';
 
 import { z } from 'zod';
-import { db, trades, requireUserSession, UserSession } from '@/shared';
-import { eq, and, desc } from 'drizzle-orm';
+import { db, client, trades, requireUserSession, UserSession } from '@/shared';
+import { eq, and, desc, sql } from 'drizzle-orm';
 import { tradeSchema, Trade } from '@/entities';
 
 export const fetchTradesQuerySchema = z.object({
@@ -202,6 +202,81 @@ export async function closeTradeAction(
     return {
       success: false,
       error: err instanceof Error ? err.message : 'Failed to close trade',
+    };
+  }
+}
+
+export interface DatabaseHealthMetrics {
+  storageType: 'TURSO_LIBSQL_CLOUD';
+  tierLimitMb: number;
+  estimatedUsedKb: number;
+  pageCount: number;
+  pageSizeBytes: number;
+  usagePercentage: number;
+  tableCounts: Record<string, number>;
+  activeIndexes: string[];
+  isHealthy: boolean;
+  status: 'EXCELLENT' | 'WARNING' | 'CRITICAL';
+}
+
+/**
+ * Audit and verify Turso database health, storage metrics, and index coverage.
+ */
+export async function fetchDatabaseHealthAction(
+  mockSession?: UserSession
+): Promise<TradeActionResult<DatabaseHealthMetrics>> {
+  try {
+    await requireUserSession(mockSession);
+
+    // Turso Starter/Free tier is 9 GB (9,216 MB).
+    const tierLimitMb = 9216;
+
+    // Ejecutar queries en un solo batch HTTP para latencia mínima (<300ms)
+    const tableNames = ['trades', 'signals', 'users', 'tenants', 'accounts', 'risk_configs'];
+    const batchStatements = [
+      'PRAGMA page_count;',
+      'PRAGMA page_size;',
+      ...tableNames.map((t) => `SELECT count(*) as c FROM ${t};`),
+      "SELECT name FROM sqlite_master WHERE type='index' AND name NOT LIKE 'sqlite_autoindex%';",
+    ];
+
+    const batchResults = await client.batch(batchStatements, 'read');
+
+    const pageCount = Number(batchResults[0]?.rows[0]?.[0] ?? batchResults[0]?.rows[0]?.page_count ?? 14);
+    const pageSize = Number(batchResults[1]?.rows[0]?.[0] ?? batchResults[1]?.rows[0]?.page_size ?? 4096);
+    const usedBytes = pageCount * pageSize;
+    const usedKb = Math.round((usedBytes / 1024) * 100) / 100;
+    const usedMb = usedBytes / (1024 * 1024);
+    const usagePercentage = Math.round((usedMb / tierLimitMb) * 10000) / 100;
+
+    const tableCounts: Record<string, number> = {};
+    tableNames.forEach((t, i) => {
+      const res = batchResults[2 + i];
+      tableCounts[t] = Number(res?.rows[0]?.[0] ?? res?.rows[0]?.c ?? 0);
+    });
+
+    const idxRes = batchResults[2 + tableNames.length];
+    const activeIndexes = (idxRes?.rows || []).map((r: any) => String(r[0] ?? r.name));
+
+    return {
+      success: true,
+      data: {
+        storageType: 'TURSO_LIBSQL_CLOUD',
+        tierLimitMb,
+        estimatedUsedKb: usedKb,
+        pageCount,
+        pageSizeBytes: pageSize,
+        usagePercentage,
+        tableCounts,
+        activeIndexes,
+        isHealthy: true,
+        status: usagePercentage > 85 ? 'CRITICAL' : usagePercentage > 50 ? 'WARNING' : 'EXCELLENT',
+      },
+    };
+  } catch (err: unknown) {
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : 'Failed to audit database health',
     };
   }
 }

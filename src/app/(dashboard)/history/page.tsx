@@ -18,7 +18,7 @@ import {
 } from 'lucide-react';
 import { formatCurrency } from '../../utils/formatters';
 import { getApiBaseUrl } from '../../utils/apiUrl';
-import { fetchSignalsAction, fetchTradesAction, BacktestAuditWidget } from '@/features';
+import { fetchSignalsAction, fetchTradesAction, BacktestAuditWidget, DatabaseHealthWidget } from '@/features';
 import { Trade } from '@/entities';
 
 interface SignalEvent {
@@ -37,7 +37,7 @@ interface SignalEvent {
 }
 
 export default function HistoryPage() {
-  const [activeTab, setActiveTab] = useState<'signals' | 'trades' | 'audit'>('signals');
+  const [activeTab, setActiveTab] = useState<'signals' | 'trades' | 'audit' | 'database'>('signals');
   const [signals, setSignals] = useState<SignalEvent[]>([]);
   const [trades, setTrades] = useState<Trade[]>([]);
   const [loading, setLoading] = useState(true);
@@ -241,6 +241,18 @@ export default function HistoryPage() {
             <ShieldCheck size={16} />
             <span>AUDITORÍA QUANT (PARIDAD SSoT)</span>
           </button>
+
+          <button
+            onClick={() => setActiveTab('database')}
+            className={`min-h-[44px] px-4 py-2 rounded-xl text-xs font-bold tracking-wider transition-all flex items-center gap-2 ${
+              activeTab === 'database'
+                ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 shadow-lg shadow-emerald-500/10'
+                : 'bg-white/5 text-slate-300 hover:text-white border border-white/10'
+            }`}
+          >
+            <Database size={16} />
+            <span>CAPACIDAD & SALUD DB</span>
+          </button>
         </div>
 
         {/* Filter Controls (Touch targets >= 44px) */}
@@ -282,7 +294,11 @@ export default function HistoryPage() {
 
       {/* Main Content Area */}
       <div className="flex-1 overflow-hidden border border-white/10 rounded-2xl bg-black/40 backdrop-blur-xl flex flex-col">
-        {activeTab === 'audit' ? (
+        {activeTab === 'database' ? (
+          <div className="flex-1 overflow-y-auto custom-scrollbar p-4">
+            <DatabaseHealthWidget />
+          </div>
+        ) : activeTab === 'audit' ? (
           <div className="flex-1 overflow-y-auto custom-scrollbar p-4">
             <BacktestAuditWidget />
           </div>

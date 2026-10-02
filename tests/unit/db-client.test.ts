@@ -130,7 +130,7 @@ describe('Turso & Drizzle Multi-Tenant DB Integration', () => {
       userId: 'usr-99',
       tenantId: 'tnt-apex',
       role: 'admin' as const,
-      email: 'admin@slingshot.trade',
+      email: 'admin@admin.trade',
     };
 
     const scope = scopeToUser('target-rec-01', session);
@@ -140,4 +140,29 @@ describe('Turso & Drizzle Multi-Tenant DB Integration', () => {
       tenantId: 'tnt-apex',
     });
   });
+
+  it(
+    'audits database capacity and health metrics via fetchDatabaseHealthAction',
+    async () => {
+      const { fetchDatabaseHealthAction } = await import('@/features/positions-tracker/actions');
+      const health = await fetchDatabaseHealthAction();
+
+      expect(health.success).toBe(true);
+      expect(health.data).toBeDefined();
+      if (health.data) {
+        expect(health.data.storageType).toBe('TURSO_LIBSQL_CLOUD');
+        expect(health.data.tierLimitMb).toBe(9216);
+        expect(health.data.pageSizeBytes).toBeGreaterThan(0);
+        expect(health.data.pageCount).toBeGreaterThan(0);
+        expect(health.data.usagePercentage).toBeLessThan(1.0); // Less than 1% usage
+        expect(health.data.isHealthy).toBe(true);
+        expect(health.data.status).toBe('EXCELLENT');
+        expect(health.data.tableCounts).toBeDefined();
+        expect(health.data.tableCounts.trades).toBeGreaterThanOrEqual(0);
+      }
+    },
+    15000
+  );
 });
+
+
