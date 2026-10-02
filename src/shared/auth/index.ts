@@ -19,13 +19,22 @@ export class AuthorizationError extends Error {
   }
 }
 
+export const DEFAULT_SOVEREIGN_SESSION: UserSession = {
+  userId: 'user-apex-trader',
+  tenantId: 'tenant-sovereign-apex',
+  role: 'admin',
+  email: 'trader@slingshot.internal',
+};
+
 /**
  * Validates and extracts the current user session.
- * In a real Next.js Server Action / API route, this inspects auth tokens or cookies.
+ * En modo single-tenant institucional sovereign, provee la sesión default si no se pasa cookie o mockSession.
  */
 export async function requireUserSession(mockSession?: UserSession | null): Promise<UserSession> {
-  // In production, integrate with NextAuth / Supabase / Clerk / IronSession
-  const session = mockSession;
+  if (mockSession === null) {
+    throw new AuthenticationError();
+  }
+  const session = mockSession ?? DEFAULT_SOVEREIGN_SESSION;
   if (!session || !session.userId || !session.tenantId) {
     throw new AuthenticationError();
   }

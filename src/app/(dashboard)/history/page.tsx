@@ -72,12 +72,16 @@ export default function HistoryPage() {
         setSignals(formatted);
         setIsTursoSynced(true);
       } else {
-        // Fallback a FastAPI si Turso aún no tiene señales cargadas
-        const BASE_URL = getApiBaseUrl();
-        const res = await fetch(`${BASE_URL}/api/v1/signals`);
-        if (res.ok) {
-          const data = await res.json();
-          setSignals(data as SignalEvent[]);
+        // Fallback a FastAPI si Turso aún no tiene señales cargadas (con timeout seguro en Vercel)
+        try {
+          const BASE_URL = getApiBaseUrl();
+          const res = await fetch(`${BASE_URL}/api/v1/signals`, { signal: AbortSignal.timeout(2000) });
+          if (res.ok) {
+            const data = await res.json();
+            setSignals(data as SignalEvent[]);
+          }
+        } catch {
+          // Ignorado en Vercel si FastAPI corre en VPS/localhost
         }
       }
 
@@ -89,6 +93,9 @@ export default function HistoryPage() {
 
       if (tursoTradesRes.success && tursoTradesRes.data) {
         setTrades(tursoTradesRes.data);
+        if (tursoTradesRes.data.length > 0) {
+          setIsTursoSynced(true);
+        }
       }
     } catch (e) {
       console.error('Error fetching history data:', e);
