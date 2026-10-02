@@ -386,3 +386,33 @@ Para expandir los retornos de $+97.98\text{R}$ (Base) / $+122.13\text{R}$ (Alpha
   * Pestañas ergonómicas para alternar entre "7 Centinelas de Veto & Salud" y "Plan de Retornos Máximos (+164.2R)".
   * Construido estrictamente bajo la Retícula Base 8 (`p-4`, `p-6`, `gap-4`), contraste WCAG 2.2 AA ($\ge 4.5:1$), touch targets ergonómicos $\ge 44 \times 44\text{px}$ y optimización Thumb Zone para móviles.
   * Integrado como 5ta pestaña en el centro de comando `/history`.
+
+---
+
+## 15. Sincronización Estricta 1:1 de 4 Capas y Universo Canónico de 13 Activos (Fase 11)
+
+### 15.1 Alineación Teórico-Práctica del Universo Canónico SSoT
+Para garantizar la convergencia exacta entre la teoría auditada en backtest (Slingshot v60.0 SOP-102: $+154.99\text{R}$ / $+3,714.6\%$ ROI) y la ejecución en vivo en el VPS y frontend:
+1. **Universo Canónico Auditado (`CANONICAL_AUDITED_UNIVERSE`: 13 Activos Exactos):**
+   * **Mega-Caps (5):** `BTCUSDT`, `ETHUSDT`, `SOLUSDT`, `XRPUSDT`, `LINKUSDT`.
+   * **High-Beta Alts & Champions (7):** `INJUSDT`, `BNBUSDT`, `NEARUSDT`, `FETUSDT`, `SUIUSDT`, `ATOMUSDT`, `TIAUSDT`.
+   * **TradFi Metals (1):** `XAUUSDT` (o `PAXGUSDT` según disponibilidad del broker).
+2. **Podado de Activos con Varianza Tóxica:**
+   * `AVAXUSDT` y `RENDERUSDT` arrojaron expectativa matemática neta negativa en las auditorías cronológicas continuas de 180 días. Han sido vetados y purgados irrevocablemente de todo el stack (`nexus.py`, `market_scanner.py`, `config.py`, `store.py`, `signal/model.ts`, `telemetry/constants.ts`).
+   * Rotaciones dinámicas desactivadas en producción (`ENABLE_DYNAMIC_WATCHLIST = False`) para evitar derivas de selección de activos.
+
+### 15.2 Sincronización en Cascada en Lattice Scanner y Radar Center
+1. **Lattice Scanner (`src/app/components/ui/LatticeScanner.tsx`):**
+   * Purgada la lista residual de 20+ pares USDT heredados de pruebas preliminares.
+   * `pairs` mapea estrictamente `MASTER_WATCHLIST.filter(a => !isPrunedAsset(a))`.
+   * Incorpora badge visual de gobernanza `13 PARES ESTRATEGIA` y monitoreo reactivo de volatilidad, RSI, ATR y estado SMC solo para los 13 activos de la estrategia.
+2. **Radar Center (`ActiveAssetsMonitor.tsx` & `RadarFeed.tsx`):**
+   * Anclados y filtrados estrictamente los 13 activos canónicos en el monitor de activos en vivo y en la cola de señales.
+   * Cero contaminación visual de tokens fuera de estrategia o de activos podados.
+3. **Lattice Status (`LatticeStatus.tsx`):**
+   * Selector del sandbox de señales sincronizado con los 13 activos oficiales (eliminando `XAGUSDT`).
+4. **Backend Store (`engine/core/store.py`):**
+   * `get_market_states()` blindado para responder única y exclusivamente sobre los 13 activos canónicos de `settings.MASTER_WATCHLIST`.
+5. **Infraestructura VPS y Auto-Deploy Seguro (`engine/api/main.py`):**
+   * Incorporado el endpoint institucional seguro `POST /api/v1/system/deploy-update` con autenticación por clave de despliegue (`SLINGSHOT_INTERNAL_V6`) y el script `scripts/deploy/actualizar_vps.bat` para despliegues desatendidos sin fricción de RDP manual.
+
