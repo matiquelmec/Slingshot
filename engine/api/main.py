@@ -864,6 +864,41 @@ async def inject_test_signal(
     return {"success": True, "message": f"Test signal for {symbol.upper()} ({direction.upper()}) injected safely (No trade executed)"}
 
 
+@app.post("/api/v1/system/deploy-update")
+async def trigger_remote_deploy_update(api_key: str = Query(...)):
+    """
+    Despliegue Remoto Seguro Institucional:
+    Descarga los últimos commits de origin/main y actualiza el código en disco.
+    """
+    if api_key != settings.SECURITY_API_KEY:
+        raise HTTPException(status_code=401, detail="API Key de seguridad inválida")
+
+    import subprocess
+    try:
+        cmd_fetch = ["git", "fetch", "origin", "main"]
+        res_fetch = subprocess.run(cmd_fetch, capture_output=True, text=True, timeout=30)
+
+        cmd_reset = ["git", "reset", "--hard", "origin/main"]
+        res_reset = subprocess.run(cmd_reset, capture_output=True, text=True, timeout=30)
+
+        res_head = subprocess.run(["git", "rev-parse", "--short", "HEAD"], capture_output=True, text=True)
+        head_commit = res_head.stdout.strip()
+
+        return {
+            "status": "success",
+            "message": "Repositorio actualizado a origin/main con éxito",
+            "current_commit": head_commit,
+            "git_fetch": res_fetch.stdout or res_fetch.stderr,
+            "git_reset": res_reset.stdout or res_reset.stderr,
+            "restart_required": True,
+            "instruction": "Código sincronizado. Para recargar en memoria RAM se reinicia el worker."
+        }
+    except Exception as e:
+        logger.error(f"Error en auto-deploy remoto: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+
 
 # ── REST One-Shot Analysis ────────────────────────────────────────────────────
 
