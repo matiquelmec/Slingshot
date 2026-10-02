@@ -220,7 +220,13 @@ export default function OverviewPage() {
                         >
                             <div className="flex justify-between items-center mb-6">
                                 <h3 className="text-sm font-black text-white tracking-widest">INJECTAR SCANNER ACTIVO</h3>
-                                <button onClick={() => setAddingSymbol(false)} className="text-white/40 hover:text-white"><X size={20} /></button>
+                                <button
+                                    onClick={() => setAddingSymbol(false)}
+                                    aria-label="Cerrar modal"
+                                    className="min-h-[44px] min-w-[44px] inline-flex items-center justify-center text-slate-300 hover:text-white transition-colors rounded-lg focus:outline-none focus:ring-2 focus:ring-neon-cyan/40"
+                                >
+                                    <X size={20} />
+                                </button>
                             </div>
                             
                             <div className="relative mb-6">
@@ -398,17 +404,17 @@ export default function OverviewPage() {
 
                     <div className="bg-[#050B14]/60 backdrop-blur-xl border border-white/5 rounded-2xl shadow-[0_10px_40px_rgba(0,0,0,0.5)] flex-1 flex flex-col overflow-hidden min-h-[450px]">
                         {/* Header Controls (Global for Side Panel) - Clean Non-overlapping layout */}
-                        <div className="p-3 border-b border-white/5 flex flex-wrap items-center justify-between gap-2 bg-black/40">
-                            <span className="text-[9px] font-black text-white/50 tracking-widest uppercase">PANEL MULTI-SENSOR</span>
-                            <div className="flex items-center gap-1 bg-black/50 p-1 rounded-xl border border-white/10 overflow-x-auto no-scrollbar max-w-full">
+                        <div className="p-4 border-b border-white/5 flex flex-wrap items-center justify-between gap-2 bg-black/40">
+                            <span className="text-[10px] font-black text-slate-300 tracking-widest uppercase">PANEL MULTI-SENSOR</span>
+                            <div className="flex items-center gap-2 bg-black/50 p-2 rounded-xl border border-white/10 overflow-x-auto no-scrollbar max-w-full">
                                 {(['LOGS', 'NEWS', 'PLAN', 'LIQS', 'CAL', 'OMEGA'] as const).map(mode => (
                                     <button
                                         key={mode}
                                         onClick={() => setSidePanelMode(mode)}
-                                        className={`px-2.5 py-1 rounded-lg text-[9px] font-black tracking-widest transition-all ${
+                                        className={`min-h-[44px] px-3.5 py-2 rounded-lg text-xs font-black tracking-widest transition-all inline-flex items-center justify-center select-none ${
                                             sidePanelMode === mode 
-                                                ? 'bg-neon-cyan/20 text-neon-cyan border border-neon-cyan/30 shadow-[0_0_8px_rgba(0,229,255,0.2)]' 
-                                                : 'text-white/30 hover:text-white/60'
+                                                ? 'bg-neon-cyan/20 text-neon-cyan border border-neon-cyan/40 shadow-[0_0_8px_rgba(0,229,255,0.2)]' 
+                                                : 'text-slate-300 hover:text-white hover:bg-white/5'
                                         }`}
                                     >
                                         {mode}

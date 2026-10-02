@@ -293,3 +293,28 @@ pytest engine\tests\test_ftmo_titanium_strategy.py engine\tests\test_tradfi_scan
 pytest engine\tests -q
 ```
 *(Resultado global certificado: **402 passed in 102.96s — 100% PASSED**).*
+
+---
+
+## 🏛️ Arquitectura Feature-Sliced Design (FSD) y Gobernanza Multi-Tenant
+
+A partir de la versión 10.0.0, la plataforma adopta **Feature-Sliced Design (FSD)** en `src/` con aislamiento multi-tenant estricto y gobernanza "Doc-as-Code":
+
+* **Jerarquía Unidireccional:** `src/app` ➔ `src/features` ➔ `src/entities` ➔ `src/shared`.
+* **Aislamiento Multi-Tenant (Anti-IDOR):** Todo Server Action y consulta a base de datos implementa validación Zod, verificación obligatoria de sesión de usuario y aislamiento por `and(eq(id, targetId), eq(userId, sessionUserId))`.
+* **Estándares UI/UX Ergonómicos:** Retícula Base 8 (espaciados múltiplos de 8px), contraste perceptual WCAG 2.2 AA ($\ge 4.5:1$), touch targets mínimos de $44 \times 44\text{px}$ y optimización Thumb Zone en móvil.
+* **Gobernanza Doc-as-Code:** Sincronización en cascada entre código, [`AGENTS.md`](AGENTS.md) y [`docs/architecture/BLUEPRINT_2026.md`](docs/architecture/BLUEPRINT_2026.md).
+
+### Verificación del Entorno Base:
+
+```bash
+# 1. Verificación estricta de tipos TypeScript (0 errores)
+npm run typecheck
+
+# 2. Suite de pruebas unitarias Vitest (100% pasando)
+npm test
+
+# 3. Verificación integral Dual-Engine (Vitest + Pytest)
+npm run test:all
+```
+
