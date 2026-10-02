@@ -8,7 +8,6 @@ import {
 } from 'lucide-react';
 import { formatCurrency } from '../../utils/formatters';
 import { getApiBaseUrl } from '../../utils/apiUrl';
-import { MultiAccountDashboardCard } from '@/features';
 
 interface ActiveStopLoss {
     price: number | null;
@@ -79,7 +78,6 @@ export default function BitunixDashboardPage() {
     const [data, setData] = useState<BitunixTelemetryData | null>(null);
     const [loading, setLoading] = useState(true);
     const [mounted, setMounted] = useState(false);
-    const [selectedAccountId, setSelectedAccountId] = useState<string>('primary');
     const [zeroPositionsPulses, setZeroPositionsPulses] = useState<number>(0);
     const [simEntry, setSimEntry] = useState<number>(0);
     const [simSl, setSimSl] = useState<number>(0);
@@ -88,10 +86,10 @@ export default function BitunixDashboardPage() {
         setMounted(true);
     }, []);
 
-    const fetchBitunixData = async (targetId: string = selectedAccountId) => {
+    const fetchBitunixData = async () => {
         try {
             const apiHost = getApiBaseUrl();
-            const res = await fetch(`${apiHost}/api/v1/bitunix/telemetry?account_id=${targetId}`);
+            const res = await fetch(`${apiHost}/api/v1/bitunix/telemetry`);
             if (res.ok) {
                 const json = await res.json();
                 if (json && (json.connected || json.equity > 0 || json.positions_count > 0)) {
@@ -245,17 +243,6 @@ export default function BitunixDashboardPage() {
                         {data?.pending_orders_count ?? 0} Órdenes Límite / TPs en exchange
                     </span>
                 </div>
-            </div>
-
-            {/* Módulo Multi-Cuenta: Gestión y Despacho Paralelo Bitunix */}
-            <div className="mb-6">
-                <MultiAccountDashboardCard
-                    selectedAccountId={selectedAccountId}
-                    onAccountSelect={(accId) => {
-                        setSelectedAccountId(accId);
-                        fetchBitunixData(accId);
-                    }}
-                />
             </div>
 
             {/* Módulo 1: Posiciones Abiertas Vivas en Bitunix */}
