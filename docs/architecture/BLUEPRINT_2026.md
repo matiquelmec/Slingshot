@@ -262,6 +262,37 @@ Se implementaron y sincronizaron en nube y esquema Drizzle siete índices compue
 6. `idx_accounts_tenant_user`: Consulta de balances y configuraciones de intercambio por usuario.
 7. `idx_risk_configs_tenant`: Evaluación de Circuit Breakers en $<5\text{ms}$.
 
-### 11.3 Arquitectura de Persistencia Desacoplada (Non-Blocking Zero Latency)
-* **Principio de Aislamiento HFT:** El bucle de ejecución crítico en Python opera en memoria RAM sub-milisegundo.
-* **Persistencia Asíncrona:** La escritura hacia Turso Cloud se canaliza mediante `turso_sync.dispatch_trade_async()`, desacoplada en hilos asíncronos (`asyncio.to_thread`). Si la red externa experimentara una pausa, el bot continúa ejecutando stops y salidas sin ninguna pérdida de microsegundos.
+
+---
+
+## 12. Auditoría Forense de Apalancamiento, Riesgo Dinámico y Paridad con Backtest (Fase 8 — Dynamic Sizing & Institutional Optimization)
+
+### 12.1 Resumen Ejecutivo del Diagnóstico
+Se auditó la totalidad de los módulos de riesgo (`engine/risk/risk_manager.py`), orquestación de órdenes (`engine/execution/nexus.py`) y el motor de simulación histórico (`engine/backtest/unified_backtest_engine.py`).
+
+**Conclusiones Clave:**
+1. **¿El apalancamiento es dinámico? Sí, al 100% (SOP-21 y SOP-32).**
+   * El apalancamiento nunca es estático ni arbitrario. Se calcula matemáticamente de forma inversamente proporcional a la volatilidad del activo y a la distancia del Stop Loss:
+     $$\text{Target Clearance Dist} = (SL_{\text{dist}} \times 1.50) + MMR, \quad \text{Apalancamiento Nominal} = \min\left(\left\lfloor \frac{0.20}{SL_{\text{dist\_pct}}} \right\rfloor, 18\right)$$
+   * **Invarianza de Liquidación:** Garantiza que el precio de liquidación esté siempre al menos a un **140% - 150% de distancia más allá del Stop Loss**. Es matemáticamente imposible ser liquidado antes de que salte el Stop Loss.
+   * En activos estables con SL ajustado (BTC/ETH), el apalancamiento nominal alcanza 15x–18x; en altcoins volátiles (NEAR, FET, INJ) con SL amplio, se comprime automáticamente a 5x–8x.
+
+2. **¿El riesgo depende del tamaño de la cuenta? Sí, matemáticamente exacto (SOP-41 Pure Dollar-Risk).**
+   * El tamaño de la posición en monedas ($Lots$) se deriva del balance líquido disponible en tiempo real:
+     $$\text{Posición Nominal (USDT)} = \frac{\text{Balance Disponible} \times \text{Riesgo \%}}{SL_{\text{dist\_pct}}}, \quad Qty = \left\lfloor \frac{\text{Posición Nominal}}{\text{Precio Entrada}} \times 10^{\text{dec}} \right\rfloor \Big/ 10^{\text{dec}}$$
+   * La pérdida al tocar el Stop Loss está matemáticamente acotada:
+     $$\text{Pérdida Máxima} \le \text{Balance} \times \text{Riesgo \%}$$
+     * Cuenta Primaria ($608.38 USDT @ 2.50%): Arriesga exactamente **$15.21 USD**.
+     * Cuenta Secundaria ($100.38 USDT @ 2.50%): Arriesga exactamente **$2.51 USD**.
+
+3. **¿Depende de la probabilidad de la operación y el momentum? Sí, con modulación multi-factor.**
+   * **Meta-Labeling & Playbook Kelly (SOP-100 / SOP-101 / SOP-102):** Modula el riesgo entre **1.25% y 3.25%** según la esperanza matemática del arquetipo (`OB_DISCOUNT_RETEST` recibe boost de hasta 1.32x en líderes; `LIQUIDITY_SWEEP` en 1h recibe 1.15x; dirección LONG vs SHORT ponderada).
+   * **Sesgo Confluencia & Convicción (SOP-34):** Setup élite ($\ge 82$ pts) aumenta +15% el tamaño; setup limítrofe ($<68$ pts) reduce -20%.
+   * **Ventana Horaria & Sesión (SOP-38 / SOP-49):** Aceleración institucional en NY Open (13-17 UTC, +10%) y Golden Hours (09:00 y 11:00 UTC, +15%); preservación defensiva en sesión asiática (-30%).
+   * **Ciclo Semanal de Liquidez (SOP-46):** Martes/Miércoles (expansión semanal, +20%); Jueves/Viernes (toma de ganancias, -20%).
+   * **Mitigador de Rachas Negativas (SOP-94):** Tras 2 pérdidas consecutivas, la exposición se reduce automáticamente al 50% hasta que se libera riesgo o se rompe la racha.
+
+4. **Alineación con el Backtest y Máximos Retornos:**
+   * **Cero Ganancia Fantasma (Zero Phantom Profit):** La ejecución en vivo y el backtest acreditan el retorno en R con exactitud matemática al nivel de precio de llenado ($0.50 \times 1.2R + 0.30 \times 2.0R + 0.20 \times 3.5R$).
+   * **Mitigación Temprana SOP-25 (-0.65R):** Si el precio retrocede a -0.65R con pérdida de momentum y desequilibrio de flujo de órdenes, se ejecuta salida preventiva ahorrando un 35% de la pérdida máxima.
+   * **Blindaje a Breakeven a +1.0R:** En cuanto la operación alcanza +1.0R neto, el Stop Loss se traslada al precio de entrada más comisiones, liberando inmediatamente el slot de riesgo de la cartera para nuevas oportunidades.
