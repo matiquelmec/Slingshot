@@ -416,3 +416,37 @@ Para garantizar la convergencia exacta entre la teoría auditada en backtest (Sl
 5. **Infraestructura VPS y Auto-Deploy Seguro (`engine/api/main.py`):**
    * Incorporado el endpoint institucional seguro `POST /api/v1/system/deploy-update` con autenticación por clave de despliegue (`SLINGSHOT_INTERNAL_V6`) y el script `scripts/deploy/actualizar_vps.bat` para despliegues desatendidos sin fricción de RDP manual.
 
+---
+
+## 16. Análisis Cuantitativo de Selección de Monedas y Expansión de Alpha (Fase 12)
+
+### 16.1 Fundamento Científico: ¿Por qué tradeamos exactamente estos 13 activos?
+La selección de la cesta no es discrecional ni casual; responde a una triple criba cuantitativa validada mediante **Walk-Forward Event-Driven Replay de 180 días**:
+1. **Filtro de Microestructura Institucional (SOP-98):**
+   * Spread bid/ask $\le 0.12\%$ y profundidad de libro $\ge \$30\text{M}$ USDT diario. Evita deslizamiento adverso (*slippage*) en ejecución de órdenes de alta frecuencia.
+2. **Reactividad a Zonas de Liquidez y SMC (SOP-96):**
+   * Alta fidelidad a Order Blocks y Fair Value Gaps sin mechas de liquidación aleatorias generadas por manipulación de baja liquidez.
+3. **Expectativa Matemática Auditada Neta ($PF \ge 1.25$):**
+   * Todo activo debe superar las comisiones Maker/Taker y deslizamiento real en Bitunix. Activos con expectativa negativa auditada (`AVAXUSDT`: $-1.10\text{R}$, $PF=0.24$; `RENDERUSDT`: $-0.73\text{R}$, $PF=0.53$) fueron eliminados.
+
+### 16.2 Jerarquía de Retornos y Contribución Histórica de los 13 Activos
+| Categoría / Tier | Activos | PF Auditado | Contribución Neta | Rol Estratégico y Ponderación Kelly |
+| :--- | :--- | :---: | :---: | :--- |
+| **Tier S: Alpha Champions** | `FETUSDT` | **2.75** | **+16.60 R** | Multiplicador Kelly **1.40x**. Máxima reactividad a OBs en 15m. |
+| **Tier A: Trinidad & High-Beta** | `BNBUSDT`, `SOLUSDT`, `INJUSDT`, `NEARUSDT` | **1.64 - 2.82** | **+74.59 R** (60% del alfa) | Multiplicador Kelly **1.20x - 1.25x**. Motores de volumen y consistencia. |
+| **Tier B: Core Alts & Momentum** | `SUIUSDT`, `ATOMUSDT`, `TIAUSDT` | **1.38 - 1.56** | **+17.23 R** | Multiplicador **1.00x**. Momentum expansivo independiente de BTC. |
+| **Tier C: Pilares Macro Sistémicos** | `BTCUSDT`, `ETHUSDT`, `LINKUSDT`, `XRPUSDT` | **1.25 - 1.82** | **+33.10 R** | Multiplicador defensivo **0.75x**. Menor beta, mayor capacidad nocional ($18\text{X}$). |
+| **TradFi Metals (Descorrelación)** | `XAUUSDT` / `PAXGUSDT` | **1.97** | **+11.30 R** | Especializado en **1h Swing**. Descorrelación $\rho < 0.35$ que libera slots elásticos SOP-99. |
+
+### 16.3 Estrategias Cuantitativas para Maximizar y Expandir Retornos
+Para elevar los retornos de $+128.48\text{R}$ (Base) / $+154.99\text{R}$ (Alpha-Tier) hacia **$+200.0\text{R}+$**:
+1. **Estrategia 1 — Cesta Rotativa Dinámica Trimestral basada en Sharpe Ratio (Quarterly Asset Rebalancing):**
+   * Evaluar trimestralmente el universo de las 50 principales monedas en Bitunix por Sharpe Ratio rodante (60 días). Los activos con $PF > 1.80$ y volumen $\ge \$50\text{M}$ ingresan a una lista de incubación; los activos con $PF < 1.10$ son podados automáticamente.
+2. **Estrategia 2 — Asimetría de Asignación a la "Trinidad del Alfa" (Kelly Asimétrico 1.50x en BNB/SOL/FET):**
+   * Debido a que `BNB`, `SOL` y `FET` aportan más de la mitad del beneficio con $PF > 2.7$, concentrar capital elevando su tope Kelly a **1.50x** en Killzones Londres/NY cuando no existan rachas de pérdidas.
+3. **Estrategia 3 — Dual-Timeframe Swing Especializado en 1h para Oro y Metales:**
+   * El oro genera $PF = 1.97$ en 1h pero solo $0.26\text{R}$ en 15m. Restringir XAU a 1h swing captura recorridos de +4R sin secuestrar slots intradiarios.
+4. **Estrategia 4 — Dynamic Runner Post-TP3 (Trailing Chandelier):**
+   * Mantener el 20% runner con trailing estructural sin target fijo en expansiones institucionales masivas.
+
+

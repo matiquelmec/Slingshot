@@ -24,7 +24,7 @@ import {
 
 export function SystemDiagnosticsWidget() {
   const [report, setReport] = useState<SystemDiagnosticsReport | null>(null);
-  const [activeTab, setActiveTab] = useState<'diagnostics' | 'alpha'>('diagnostics');
+  const [activeTab, setActiveTab] = useState<'diagnostics' | 'alpha' | 'assets'>('diagnostics');
   const [isPending, startTransition] = useTransition();
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
@@ -105,31 +105,44 @@ export function SystemDiagnosticsWidget() {
       </div>
 
       {/* ── PESTAÑAS DE NAVEGACIÓN ERGONÓMICAS (TOUCH TARGET >= 44PX) ── */}
-      <div className="flex items-center gap-2 p-1 bg-black/40 rounded-xl border border-white/5">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 p-1 bg-black/40 rounded-xl border border-white/5">
         <button
           onClick={() => setActiveTab('diagnostics')}
           aria-label="Ver centinelas de veto y estado del sistema"
-          className={`flex-1 min-h-[44px] flex items-center justify-center gap-2 rounded-lg text-xs font-bold transition-all ${
+          className={`min-h-[44px] flex items-center justify-center gap-2 rounded-lg text-xs font-bold transition-all px-3 ${
             activeTab === 'diagnostics'
               ? 'bg-gradient-to-r from-cyan-600/30 to-blue-600/30 border border-cyan-500/40 text-cyan-300 shadow-lg'
               : 'text-slate-300 hover:text-white hover:bg-white/5'
           }`}
         >
           <ShieldCheck className="w-4 h-4 text-cyan-400" />
-          <span>7 Centinelas de Veto & Salud</span>
+          <span>7 Centinelas & Salud</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('assets')}
+          aria-label="Ver desglose analítico de los 13 activos y su razón de ser"
+          className={`min-h-[44px] flex items-center justify-center gap-2 rounded-lg text-xs font-bold transition-all px-3 ${
+            activeTab === 'assets'
+              ? 'bg-gradient-to-r from-blue-600/30 to-purple-600/30 border border-blue-500/40 text-blue-300 shadow-lg'
+              : 'text-slate-300 hover:text-white hover:bg-white/5'
+          }`}
+        >
+          <Layers className="w-4 h-4 text-blue-400" />
+          <span>13 Monedas SSoT & Retornos</span>
         </button>
 
         <button
           onClick={() => setActiveTab('alpha')}
           aria-label="Ver plan para aumentar retornos y alpha"
-          className={`flex-1 min-h-[44px] flex items-center justify-center gap-2 rounded-lg text-xs font-bold transition-all ${
+          className={`min-h-[44px] flex items-center justify-center gap-2 rounded-lg text-xs font-bold transition-all px-3 ${
             activeTab === 'alpha'
               ? 'bg-gradient-to-r from-emerald-600/30 to-cyan-600/30 border border-emerald-500/40 text-emerald-300 shadow-lg'
               : 'text-slate-300 hover:text-white hover:bg-white/5'
           }`}
         >
           <Sparkles className="w-4 h-4 text-emerald-400" />
-          <span>Plan de Retornos Máximos (+164.2R)</span>
+          <span>Plan Retornos (+164.2R)</span>
         </button>
       </div>
 
@@ -237,7 +250,7 @@ export function SystemDiagnosticsWidget() {
               </div>
             </div>
           </motion.div>
-        ) : (
+        ) : activeTab === 'alpha' ? (
           <motion.div
             key="alpha"
             initial={{ opacity: 0, y: 8 }}
@@ -331,6 +344,69 @@ export function SystemDiagnosticsWidget() {
                   </div>
                 ))}
               </div>
+            </div>
+          </motion.div>
+        ) : (
+          <motion.div
+            key="assets"
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            className="space-y-4"
+          >
+            {/* Resumen Estratégico de Activos */}
+            <div className="p-4 rounded-xl bg-blue-950/20 border border-blue-500/20 space-y-2">
+              <div className="flex items-center gap-2">
+                <Layers className="w-5 h-5 text-blue-400" />
+                <h3 className="text-sm font-bold text-white uppercase tracking-wider">
+                  ¿Por qué tradeamos exactamente estos 13 activos?
+                </h3>
+              </div>
+              <p className="text-xs text-slate-300 leading-relaxed">
+                Cada activo fue seleccionado y validado mediante <strong className="text-white">Walk-Forward Event-Driven Replay de 180 días</strong>. Se exige: volumen diario mayor o igual a 30M USDT, spread menor o igual a 0.12%, reactividad a Order Blocks y expectativa matemática auditada positiva (PF mayor o igual a 1.25). Los activos sin ventaja probabilística (<span className="text-rose-400 font-mono">AVAX</span>, <span className="text-rose-400 font-mono">RENDER</span>) fueron estrictamente podados.
+              </p>
+            </div>
+
+            {/* Grid de Activos Canónicos */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {(report?.assetProfiles || []).map((prof) => (
+                <div
+                  key={prof.asset}
+                  className="p-3.5 rounded-xl bg-white/[0.02] hover:bg-white/[0.04] border border-white/10 space-y-2 transition-all"
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-black font-mono text-cyan-400">
+                        {prof.asset}
+                      </span>
+                      <span className="text-[10px] px-2 py-0.5 rounded font-mono font-bold bg-white/5 border border-white/10 text-slate-300">
+                        {prof.timeframeRole}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-mono font-black text-emerald-400">
+                        +{prof.netContributionR.toFixed(1)} R
+                      </span>
+                      <span className="text-[10px] px-1.5 py-0.5 rounded font-mono font-bold bg-emerald-500/10 text-emerald-300 border border-emerald-500/20">
+                        PF {prof.historicalProfitFactor.toFixed(2)}
+                      </span>
+                    </div>
+                  </div>
+
+                  <p className="text-xs text-slate-300 leading-snug">
+                    {prof.reasonWhyTraded}
+                  </p>
+
+                  <div className="pt-2 border-t border-white/5 flex items-center justify-between text-[11px] text-slate-400">
+                    <span className="font-mono text-slate-300">
+                      Tier: <strong className="text-cyan-300">{prof.tier}</strong>
+                    </span>
+                    <span className="font-mono text-slate-300">
+                      Kelly Multiplier: <strong className="text-emerald-400">{prof.alphaKellyMultiplier}x</strong>
+                    </span>
+                  </div>
+                </div>
+              ))}
             </div>
           </motion.div>
         )}

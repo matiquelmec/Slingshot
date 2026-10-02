@@ -2,6 +2,7 @@
 
 import { z } from 'zod';
 import { requireUserSession, UserSession, client } from '@/shared';
+import { CANONICAL_ASSET_PROFILES, AssetQuantitativeProfile } from '@/entities/signal';
 
 export const systemDiagnosticsQuerySchema = z.object({
   includeDatabaseCheck: z.boolean().default(true),
@@ -56,6 +57,7 @@ export interface SystemDiagnosticsReport {
     projectedCompoundReturnPct: number;
     pillars: AlphaReturnPillar[];
   };
+  assetProfiles: import('@/entities/signal').AssetQuantitativeProfile[];
   strategicRecommendations: string[];
 }
 
@@ -203,12 +205,16 @@ export async function fetchSystemDiagnosticsAction(
           },
         ],
       },
+      assetProfiles: (Object.values(CANONICAL_ASSET_PROFILES) as AssetQuantitativeProfile[]).sort(
+        (a, b) => b.netContributionR - a.netContributionR
+      ),
       strategicRecommendations: [
         '1. ACTIVACIÓN DE PROCESOS: Iniciar siempre con ./start.ps1 para asegurar Backend (8000), Frontend (3000) y Sidecar HFT (8080) concurrentes.',
         '2. VISIBILIDAD DE ESPERA: Exponer en la UI el estado de los 7 centinelas de veto para erradicar la percepción de "congelamiento" durante sesiones sin trades.',
-        '3. TRAILING RAT CHET EN RUNNERS: Implementar el corredor dinámico post-TP3 para capturar el 20% con cola gruesa (Fat Tail) en rallies de 15m/1h.',
-        '4. PARIDAD SCREENER-WHITELIST: Restringir el escáner dinámico a los 13 activos SSoT para ahorrar ancho de banda y erradicar advertencias en logs.',
-        '5. EJECUCIÓN MULTI-CUENTA: Mantener habilitadas las dos cuentas en paralelo; el dispatcher ya procesa en <250ms con aislamiento total.',
+        '3. ENFOQUE EN TRINIDAD Y TIERS LÍDERES: BNB, SOL y FET generan el 53.5% del alfa en 15m; priorizar siempre sus desempates en buffer.',
+        '4. TRAILING RATCHET EN RUNNERS: Implementar el corredor dinámico post-TP3 para capturar el 20% con cola gruesa (Fat Tail) en rallies de 15m/1h.',
+        '5. PARIDAD SCREENER-WHITELIST: Restringir el escáner dinámico a los 13 activos SSoT para ahorrar ancho de banda y erradicar advertencias en logs.',
+        '6. DESCORRELACIÓN ORO (XAUUSDT): Explotar los slots elásticos SOP-99 en 1h cuando cripto se encuentre en compresión o veto macro.',
       ],
     };
 

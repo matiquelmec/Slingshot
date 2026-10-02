@@ -60,4 +60,21 @@ describe('SSoT Canonical Audited Universe Contract (Paridad 1:1 Backtest vs Live
       expect(isPrunedAsset(sym)).toBe(false);
     }
   });
+
+  it('validates quantitative profiles for all 13 canonical assets', async () => {
+    const { CANONICAL_ASSET_PROFILES } = await import('@/entities/signal');
+    const profiledAssets = Object.keys(CANONICAL_ASSET_PROFILES);
+    expect(profiledAssets).toHaveLength(13);
+
+    for (const asset of CANONICAL_AUDITED_UNIVERSE) {
+      const profile = CANONICAL_ASSET_PROFILES[asset];
+      expect(profile).toBeDefined();
+      expect(profile.asset).toBe(asset);
+      expect(profile.alphaKellyMultiplier).toBeGreaterThanOrEqual(0.75);
+      expect(profile.historicalProfitFactor).toBeGreaterThanOrEqual(1.20);
+      expect(profile.netContributionR).toBeGreaterThan(0);
+      expect(profile.reasonWhyTraded.length).toBeGreaterThan(15);
+    }
+  });
 });
+

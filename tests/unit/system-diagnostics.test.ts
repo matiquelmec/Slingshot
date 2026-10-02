@@ -110,5 +110,20 @@ describe('Features: System Diagnostics & Alpha Optimizer Slice (FSD & Zero Trust
     expect(data.vps.endpoint).toBe('http://80.65.211.99:8000');
     expect(data.vps.syncDeploymentAction).toContain('git pull origin main');
   });
+
+  it('debe exponer el desglose cuantitativo de los 13 activos y recomendaciones estratégicas', async () => {
+    const result = await fetchSystemDiagnosticsAction({}, mockSession);
+    expect(result.success).toBe(true);
+    expect(result.data?.assetProfiles).toBeDefined();
+    expect(result.data?.assetProfiles.length).toBe(13);
+
+    const bnbProfile = result.data?.assetProfiles.find((p) => p.asset === 'BNBUSDT');
+    expect(bnbProfile).toBeDefined();
+    expect(bnbProfile?.netContributionR).toBeGreaterThan(20);
+    expect(bnbProfile?.historicalProfitFactor).toBeGreaterThan(2.5);
+
+    expect(result.data?.strategicRecommendations.length).toBeGreaterThanOrEqual(5);
+  });
 });
+
 
