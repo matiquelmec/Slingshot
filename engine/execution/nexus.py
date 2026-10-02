@@ -1520,6 +1520,18 @@ class NexusNode:
             logger.info(f"✂️ [NEXUS AUTO-LIMIT SOP-102] Omitida orden límite para {asset}: {msg_excl}.")
             return {"placed": False, "status": "BLOCKED_EXCLUDED_ASSET", "reason": msg_excl, "order_id": None}
 
+        # ── SSoT CANONICAL AUDITED UNIVERSE GUARD ──
+        # Solo ejecutar órdenes en activos matemáticamente auditados en el backtest unificado
+        CANONICAL_AUDITED_UNIVERSE = {
+            "BTCUSDT", "ETHUSDT", "SOLUSDT", "XRPUSDT", "LINKUSDT",
+            "INJUSDT", "BNBUSDT", "NEARUSDT", "FETUSDT", "SUIUSDT", "ATOMUSDT", "TIAUSDT",
+            "XAUUSDT", "PAXGUSDT"
+        }
+        if asset not in CANONICAL_AUDITED_UNIVERSE:
+            msg_unverified = f"Activo {asset} no pertenece al universo canónico auditado en el backtest unificado"
+            logger.warning(f"🛡️ [NEXUS AUTO-LIMIT SSoT] Omitida orden límite para {asset}: {msg_unverified}.")
+            return {"placed": False, "status": "BLOCKED_UNVERIFIED_ASSET", "reason": msg_unverified, "order_id": None}
+
         # ── SOP-102: STRICT BTC MACRO ALIGNMENT VETO (PARIDAD 1:1 BACKTEST) ──
         if signal.get("btc_aligned") is False and asset not in ("BTCUSDT", "XAUUSDT", "PAXGUSDT"):
             msg_btc = f"Veto duro Macro BTC (SOP-102): {asset} ({sig_dir}) desalineado contra tendencia EMA200 de BTCUSDT"

@@ -360,17 +360,16 @@ async def test_sop102_nexus_blocks_btc_misaligned_and_avwap_extended_and_exclude
     assert res_btc["placed"] is False
     assert res_btc["status"] == "BLOCKED_BTC_MACRO"
 
-    # 3. Veto duro Session AVWAP ±0.40% (LONG con -0.55%)
-    res_avwap = await nexus.process_limit_setup({
-        "asset": "SOLUSDT",
+    # 4. Activo no verificado / no contemplado en backtest (ej. MOVRUSDT)
+    res_unverified = await nexus.process_limit_setup({
+        "asset": "MOVRUSDT",
         "signal_type": "LONG",
         "btc_aligned": True,
-        "session_avwap_dist_pct": -0.55,
-        "price": 150.0,
-        "stop_loss": 147.0
+        "price": 2.19,
+        "stop_loss": 1.95
     })
-    assert res_avwap["placed"] is False
-    assert res_avwap["status"] == "BLOCKED_SESSION_AVWAP"
+    assert res_unverified["placed"] is False
+    assert res_unverified["status"] == "BLOCKED_UNVERIFIED_ASSET"
 
 
 @pytest.mark.asyncio
