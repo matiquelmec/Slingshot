@@ -82,6 +82,8 @@ Toda interfaz gráfica debe construirse bajo estándares de ingeniería ergonóm
    * Toda consulta multi-tenant en Drizzle debe apoyarse en índices compuestos explícitos (`idx_trades_tenant_created`, `idx_signals_tenant_created`, `idx_accounts_tenant_user`), quedando terminantemente prohibidos escaneos de tabla completa (`FULL TABLE SCAN`).
    * Toda auditoría de almacenamiento o comprobación agregada debe ejecutarse mediante pipelines o batches unificados (`client.batch`), limitando roundtrips de red a $<300\text{ms}$.
    * El ciclo de vida de persistencia del bot en Python debe ser no bloqueante y asíncrono (`turso_sync.dispatch_trade_async`), protegiendo el hilo de ejecución HFT de latencias externas.
+7. **Inmunidad a Dependencias Temporales en Tests (Time-Gated Testing Isolation):**
+   * Toda prueba unitaria o de integración de componentes que ejecuten lógica de despacho o pre-flight de órdenes (`NexusNode.process_limit_setup`) debe aislar explícitamente los filtros de ventana horaria (`is_trade_allowed_sop18`), asegurando que la suite de pruebas sea 100% determinista e inmune a la hora o día de ejecución de CI/CD.
 
 ---
 

@@ -15,10 +15,11 @@ import {
   Info,
   DollarSign,
   ShieldCheck,
+  Cpu,
 } from 'lucide-react';
 import { formatCurrency } from '../../utils/formatters';
 import { getApiBaseUrl } from '../../utils/apiUrl';
-import { fetchSignalsAction, fetchTradesAction, BacktestAuditWidget, DatabaseHealthWidget } from '@/features';
+import { fetchSignalsAction, fetchTradesAction, BacktestAuditWidget, DatabaseHealthWidget, SystemDiagnosticsWidget } from '@/features';
 import { Trade } from '@/entities';
 
 interface SignalEvent {
@@ -37,7 +38,7 @@ interface SignalEvent {
 }
 
 export default function HistoryPage() {
-  const [activeTab, setActiveTab] = useState<'signals' | 'trades' | 'audit' | 'database'>('signals');
+  const [activeTab, setActiveTab] = useState<'signals' | 'trades' | 'audit' | 'database' | 'diagnostics'>('signals');
   const [signals, setSignals] = useState<SignalEvent[]>([]);
   const [trades, setTrades] = useState<Trade[]>([]);
   const [loading, setLoading] = useState(true);
@@ -253,6 +254,18 @@ export default function HistoryPage() {
             <Database size={16} />
             <span>CAPACIDAD & SALUD DB</span>
           </button>
+
+          <button
+            onClick={() => setActiveTab('diagnostics')}
+            className={`min-h-[44px] px-4 py-2 rounded-xl text-xs font-bold tracking-wider transition-all flex items-center gap-2 ${
+              activeTab === 'diagnostics'
+                ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 shadow-lg shadow-cyan-500/10'
+                : 'bg-white/5 text-slate-300 hover:text-white border border-white/10'
+            }`}
+          >
+            <Cpu size={16} />
+            <span>DIAGNÓSTICO & ALPHA (+164R)</span>
+          </button>
         </div>
 
         {/* Filter Controls (Touch targets >= 44px) */}
@@ -294,7 +307,11 @@ export default function HistoryPage() {
 
       {/* Main Content Area */}
       <div className="flex-1 overflow-hidden border border-white/10 rounded-2xl bg-black/40 backdrop-blur-xl flex flex-col">
-        {activeTab === 'database' ? (
+        {activeTab === 'diagnostics' ? (
+          <div className="flex-1 overflow-y-auto custom-scrollbar p-4">
+            <SystemDiagnosticsWidget />
+          </div>
+        ) : activeTab === 'database' ? (
           <div className="flex-1 overflow-y-auto custom-scrollbar p-4">
             <DatabaseHealthWidget />
           </div>

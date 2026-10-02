@@ -11,7 +11,7 @@
 ![MetaTrader 5](https://img.shields.io/badge/MetaTrader_5-FTMO_Institutional_Live-2980b9?style=for-the-badge&logo=windows&logoColor=fff)
 ![Execution Engine](https://img.shields.io/badge/Execution-SOP--64_Auto--Dispatcher_≥75%25-green?style=for-the-badge)
 ![Security](https://img.shields.io/badge/Security_Protocols-SOP--01%20to%20SOP--102-emerald?style=for-the-badge)
-![QA Suite](https://img.shields.io/badge/QA_Suite-466_Tests_100%25_Passed-success?style=for-the-badge)
+![QA Suite](https://img.shields.io/badge/QA_Suite-483_Tests_100%25_Passed-success?style=for-the-badge)
 ![Crypto Return](https://img.shields.io/badge/Crypto_Compounded_ROI-%2B1644.5%25_(17.4x)-gold?style=for-the-badge)
 ![Total Alpha](https://img.shields.io/badge/Total_Alpha-%2B97.98_R_Base_%7C_%2B122.13_R_Alpha-gold?style=for-the-badge)
 ![Profit Factor](https://img.shields.io/badge/Profit_Factor-1.79_Alpha--Tier-blue?style=for-the-badge)
@@ -36,6 +36,7 @@ Slingshot es una **Terminal de Inteligencia y Ejecución Cuantitativa Institucio
    * **Convicción "Trinidad del Alfa" (SOP-47):** Bono Kelly de **1.20x** para `BNBUSDT`, `SOLUSDT` y `FETUSDT` (PF > 2.7).
    * **Modulación Cíclica Semanal (SOP-46):** **1.20x en Martes y Miércoles** (expansión institucional) y **0.80x en Jueves y Viernes** (defensa de capital).
    * **Bóveda Criptográfica Multi-Cuenta (SOP-57 / SOP-58):** Despacho concurrente aislado para múltiples cuentas de inversores con cifrado AES-256 Fernet (`enc:v1:`) en reposo, enmascaramiento estricto de secretos y centinela de intervención manual de clientes (**SOP-59**).
+   * **Diagnóstico Forense de Salud & Optimizador Alpha (+164.2R):** Panel interactivo FSD en tiempo real (`SystemDiagnosticsWidget`) que audita el stack de 7 centinelas de riesgo (SOP-18, SOP-52, SOP-94, SOP-95, SOP-100, SSoT Whitelist y Macro BTC) y proyecta la expansión geométrica de retornos (+164.20R y +3,280% ROI) mediante runners dinámicos y free-roll scale-in.
 
 2. **MetaTrader 5 / FTMO (TradFi — Modo Guardián de Cuentas de Fondeo):**
    * **Riesgo Institucional Protegido:** Calibrado al **0.75% por trade** en Fase 1, **0.50%** en Fase 2 y **0.35%** en cuenta financiada.
