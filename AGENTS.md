@@ -76,6 +76,7 @@ Toda interfaz gráfica debe construirse bajo estándares de ingeniería ergonóm
 1. **`npm run typecheck` en Verde:** Cero errores de compilación TypeScript (`tsc --noEmit`).
 2. **`npm test` en Verde:** 100% de los tests unitarios y de integración de Vitest pasando exitosamente.
 3. **Pruebas de Regresión Cuantitativa (Dual-Engine):** Si el cambio involucra la lógica algorítmica compartida o la API de telemetría con Python, debe ejecutarse también `npm run test:engine` (`pytest engine/tests/`) o `npm run test:all`.
+4. **Paridad Cuantitativa Estricta y Cero Ganancia Fantasma (Zero Phantom Profit):** Queda terminantemente prohibido calcular precios de órdenes límite (ej: 1.2R, 2.0R) y acreditar valores de R superiores (ej: 1.3R, 2.5R) en backtest o simulaciones. Toda acreditación de retorno en R debe corresponder con exactitud matemática al nivel de precio donde se llena la orden en el exchange (`outcome_r = target_r * volume_pct * total_multiplier`). La lógica de mitigación anticipada (SOP-25 @ -0.65R) y protección a Breakeven/+1.0R debe ser 100% simétrica entre simulación y ejecución en vivo (`TradeManager` / `BitunixExecutor`).
 
 ---
 

@@ -18,7 +18,7 @@ import {
 } from 'lucide-react';
 import { formatCurrency } from '../../utils/formatters';
 import { getApiBaseUrl } from '../../utils/apiUrl';
-import { fetchSignalsAction, fetchTradesAction } from '@/features';
+import { fetchSignalsAction, fetchTradesAction, BacktestAuditWidget } from '@/features';
 import { Trade } from '@/entities';
 
 interface SignalEvent {
@@ -37,7 +37,7 @@ interface SignalEvent {
 }
 
 export default function HistoryPage() {
-  const [activeTab, setActiveTab] = useState<'signals' | 'trades'>('signals');
+  const [activeTab, setActiveTab] = useState<'signals' | 'trades' | 'audit'>('signals');
   const [signals, setSignals] = useState<SignalEvent[]>([]);
   const [trades, setTrades] = useState<Trade[]>([]);
   const [loading, setLoading] = useState(true);
@@ -222,6 +222,18 @@ export default function HistoryPage() {
             <DollarSign size={16} />
             <span>TRADES EJECUTADOS ({trades.length})</span>
           </button>
+
+          <button
+            onClick={() => setActiveTab('audit')}
+            className={`min-h-[44px] px-4 py-2 rounded-xl text-xs font-bold tracking-wider transition-all flex items-center gap-2 ${
+              activeTab === 'audit'
+                ? 'bg-purple-500/20 text-purple-300 border border-purple-500/40 shadow-lg shadow-purple-500/10'
+                : 'bg-white/5 text-slate-300 hover:text-white border border-white/10'
+            }`}
+          >
+            <ShieldCheck size={16} />
+            <span>AUDITORÍA QUANT (PARIDAD SSoT)</span>
+          </button>
         </div>
 
         {/* Filter Controls (Touch targets >= 44px) */}
@@ -261,9 +273,13 @@ export default function HistoryPage() {
         </div>
       </div>
 
-      {/* Main Content Table */}
+      {/* Main Content Area */}
       <div className="flex-1 overflow-hidden border border-white/10 rounded-2xl bg-black/40 backdrop-blur-xl flex flex-col">
-        {activeTab === 'signals' ? (
+        {activeTab === 'audit' ? (
+          <div className="flex-1 overflow-y-auto custom-scrollbar p-4">
+            <BacktestAuditWidget />
+          </div>
+        ) : activeTab === 'signals' ? (
           <>
             <div className="grid grid-cols-12 gap-4 px-4 py-3 border-b border-white/10 bg-white/[0.02] text-[10px] font-bold text-slate-300 tracking-widest">
               <div className="col-span-2">TIMESTAMP</div>
