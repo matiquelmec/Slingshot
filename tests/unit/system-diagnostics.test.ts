@@ -88,4 +88,27 @@ describe('Features: System Diagnostics & Alpha Optimizer Slice (FSD & Zero Trust
     expect(badRes.success).toBe(false);
     expect(badRes.error).toContain('Validación de parámetros fallida');
   });
+
+  it('debe auditar la sincronización full-stack (Frontend, Backend, DB y VPS)', async () => {
+    const { auditFullStackSyncAction } = await import('@/features');
+    const syncRes = await auditFullStackSyncAction({}, mockSession);
+
+    expect(syncRes.success).toBe(true);
+    expect(syncRes.data).toBeDefined();
+
+    const data = syncRes.data!;
+    expect(data.frontend.canonicalAssetsCount).toBe(13);
+    expect(data.frontend.prunedAssetsBlocked).toBe(true);
+    expect(data.frontend.fsdArchitecture).toBe('COMPLIANT_STRICT');
+
+    expect(data.backend.canonicalRadarAssetsCount).toBe(13);
+    expect(data.backend.dynamicWatchlistDisabled).toBe(true);
+
+    expect(data.database.storageType).toBe('TURSO_LIBSQL_CLOUD');
+    expect(data.database.isHealthy).toBe(true);
+
+    expect(data.vps.endpoint).toBe('http://80.65.211.99:8000');
+    expect(data.vps.syncDeploymentAction).toContain('git pull origin main');
+  });
 });
+

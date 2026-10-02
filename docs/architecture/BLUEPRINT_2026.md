@@ -159,7 +159,7 @@ const result = await db
 
 Para asegurar la robustez del sistema, los pipelines de CI/CD ejecutan:
 1. `npm run typecheck`: Validación estática de tipos TypeScript sin emitir artefactos (0 errores).
-2. `npm test`: Suite unitaria de Vitest (52 tests pasando en ~4s).
+2. `npm test`: Suite unitaria de Vitest (53 tests pasando en ~6s).
 3. `npm run test:engine`: Suite de pytest para el motor analítico de Python (435 tests pasando).
 4. `npm run build`: Compilación de producción optimizada de Next.js sin errores de build (11/11 rutas estáticas).
 
