@@ -18,9 +18,15 @@
     "test:watch": "vitest",
     "test:engine": "python -m pytest engine/tests/",
     "test:all": "vitest run && python -m pytest engine/tests/",
-    "doctor": "python scripts/doctor.py"
+    "doctor": "python scripts/doctor.py",
+    "db:push": "drizzle-kit push",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate",
+    "db:studio": "drizzle-kit studio"
   },
   "dependencies": {
+    "@libsql/client": "^0.18.0",
+    "drizzle-orm": "^0.45.3",
     "framer-motion": "^12.34.3",
     "lightweight-charts": "^5.1.0",
     "lucide-react": "^0.575.0",
@@ -38,6 +44,8 @@
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.1.1",
     "autoprefixer": "^10.4.24",
+    "dotenv": "^18.0.5",
+    "drizzle-kit": "^0.31.11",
     "eslint": "^9.39.3",
     "eslint-config-next": "16.1.6",
     "postcss": "^8.5.6",

@@ -19,6 +19,7 @@
 ![Drawdown](https://img.shields.io/badge/Max_Drawdown--4.16%25_Shield-brightgreen?style=for-the-badge)
 ![Kernel](https://img.shields.io/badge/Kernel-Polars_Rust_Sub--1.0ms-black?style=for-the-badge&logo=rust&logoColor=fff)
 ![Persistence](https://img.shields.io/badge/Persistence-SQLite_WAL_ACID-003B57?style=for-the-badge&logo=sqlite&logoColor=fff)
+![Database](https://img.shields.io/badge/Database-Turso_LibSQL_%26_Drizzle-00e699?style=for-the-badge&logo=turso&logoColor=000)
 
 ---
 
@@ -316,5 +317,10 @@ npm test
 
 # 3. Verificación integral Dual-Engine (Vitest + Pytest)
 npm run test:all
+
+# 4. Gestión de Base de Datos Serverless (Turso & Drizzle ORM)
+npm run db:push     # Sincroniza el esquema relacional multi-tenant con Turso Cloud
+npm run db:studio   # Abre Drizzle Studio para inspección visual de datos
+npm run db:generate # Genera artefactos de migración formal en drizzle/migrations
 ```
 
