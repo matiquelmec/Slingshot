@@ -217,6 +217,42 @@ describe('Features: System Diagnostics & Alpha Optimizer Slice (FSD & Zero Trust
     expect(mc.equityCones.p95[lastIdx]).toBeGreaterThan(mc.equityCones.p50[lastIdx]);
     expect(mc.equityCones.p50[lastIdx]).toBeGreaterThan(mc.equityCones.p5[lastIdx]);
   });
+
+  it('debe auditar las 3 mejoras de élite institucional: L2 (SOP-108), Funding (SOP-109) y Failover (SOP-110)', async () => {
+    const {
+      fetchL2MicrostructureAction,
+      fetchFundingRateShieldAction,
+      fetchClusterFailoverAction,
+    } = await import('@/features');
+
+    // 1. L2 Microstructure Sentinel (SOP-108)
+    const l2Res = await fetchL2MicrostructureAction(mockSession);
+    expect(l2Res.success).toBe(true);
+    expect(l2Res.data).toBeDefined();
+    expect(l2Res.data!.length).toBeGreaterThanOrEqual(4);
+    const btcL2 = l2Res.data!.find((d) => d.asset === 'BTCUSDT');
+    expect(btcL2).toBeDefined();
+    expect(btcL2?.isApproved).toBe(true);
+    expect(btcL2?.effectiveSpreadBps).toBeLessThan(8.0);
+
+    // 2. Funding Rate Drag Shield (SOP-109)
+    const fundingRes = await fetchFundingRateShieldAction(mockSession);
+    expect(fundingRes.success).toBe(true);
+    expect(fundingRes.data).toBeDefined();
+    const solFunding = fundingRes.data!.find((d) => d.asset === 'SOLUSDT');
+    expect(solFunding).toBeDefined();
+    expect(solFunding?.status).toBe('NORMAL');
+    expect(solFunding?.recommendedChandelierMultiplier).toBe(1.5);
+
+    // 3. Multi-Region Cluster Failover (SOP-110)
+    const clusterRes = await fetchClusterFailoverAction(mockSession);
+    expect(clusterRes.success).toBe(true);
+    expect(clusterRes.data).toBeDefined();
+    expect(clusterRes.data?.clusterStatus).toBe('HEALTHY_SYNCED');
+    expect(clusterRes.data?.activeLeaderId).toBe('node_frankfurt_vps');
+    expect(clusterRes.data?.isFailoverReady).toBe(true);
+    expect(clusterRes.data?.nodes.length).toBe(2);
+  });
 });
 
 

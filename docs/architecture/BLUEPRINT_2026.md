@@ -584,3 +584,34 @@ La evaluación de una estrategia cuantitativa sobre una única serie temporal hi
 1. **Drawdown Mediano Esperado:** $-5.95\text{R}$. Representa la oscilación normal entre rachas de mitigación SOP-25 y TP1.
 2. **Drawdown Percentil 95 (P95):** $-10.65\text{R}$. Escenario adverso absorbido íntegramente por el colchón de capital sin peligro de margin call.
 3. **Mecanismo de Mitigación SOP-94:** Tras 2 pérdidas consecutivas, el dimensionamiento de riesgo se reduce automáticamente al 50% ($1.25\%$), conteniendo la cola izquierda y eliminando el riesgo de ruina.
+---
+
+## 21. Fase 17: Centinela de Microestructura y Libro de Órdenes L2 (SOP-108)
+
+### 21.1 Justificación Institucional
+En altcoins de alta volatilidad (`FET`, `NEAR`, `INJ`, `SUI`), los algoritmos de creación de mercado colocan órdenes pasivas ficticias (*spoofing*) o retiran liquidez en descensos bruscos. Mediante `OrderBookMicrostructureSentinel` (`engine/analytics/order_book_microstructure_sentinel.py`), Slingshot audita los 20 mejores niveles de profundidad antes del despacho de órdenes.
+
+### 21.2 Algoritmo y Filtros
+* **Order Book Imbalance (OBI):** $OBI = \frac{\sum Q_{bid} - \sum Q_{ask}}{\sum Q_{bid} + \sum Q_{ask}} \in [-1.0, +1.0]$.
+* **Regla de Veto LONG:** Exige $OBI \ge -0.25$. Si $OBI < -0.35$ (presión vendedora dominante), se veta la orden.
+* **Filtro de Spread Máximo:** Máximo $8.0\text{ bps}$ ($0.08\%$).
+
+---
+
+## 22. Fase 18: Escudo de Funding Rates y Carry Drag en Perpetuos (SOP-109)
+
+### 22.1 Justificación Institucional
+En runners de semanas (SOP-104), el recalentamiento de tasas de financiamiento en mercados alcistas puede erosionar hasta $-4.20\%$ sobre el nocional ($-1.5\text{R}$ a $-3.0\text{R}$ netos).
+* **Módulo:** `FundingRateDragSentinel` (`engine/analytics/funding_rate_drag_sentinel.py`).
+* **Regla WARNING_TIGHTEN:** Si $APR > 50.0\%$ o $\text{Drag} \ge 0.50\text{R}$, el trailing se aprieta a $1.0 \times \text{ATR}$.
+* **Regla CRITICAL_HARVEST:** Si $APR > 75.0\%$, fuerza toma de ganancias en $+8.0\text{R}$ para prevenir la degradación de beneficio.
+
+---
+
+## 23. Fase 19: Alta Disponibilidad Activo-Pasiva y Failover Multi-Región (SOP-110)
+
+### 23.1 Justificación Institucional
+Erradicación del punto único de falla (*Single Point of Failure*) del servidor VPS en Frankfurt (`80.65.211.99`) mediante topología Active-Leader / Standby-Sentinel sincronizada con Turso LibSQL Cloud.
+* **Módulo:** `MultiRegionFailoverCoordinator` (`engine/resilience/multi_region_failover_coordinator.py`).
+* **Latido y Lease Atómico:** Heartbeat cada 5 segundos con Lease TTL de 15 segundos.
+* **Promoción Automática CAS:** Si el líder no renueva en 15s, el centinela en Londres asume el liderazgo en sub-2 segundos sin riesgo de Split-Brain (SOP-50 Dedup).

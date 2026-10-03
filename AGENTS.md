@@ -104,6 +104,15 @@ Toda interfaz gráfica debe construirse bajo estándares de ingeniería ergonóm
    * Ninguna versión de la estrategia puede desplegarse en producción si la probabilidad estocástica de ganancia en 100 trades desciende del 90.0%, si el $VaR_{99\%}$ es inferior a $+10.0\text{R}$, o si el riesgo de ruina de capital inicial supera el $2.5\%$.
    * Toda auditoría de curva de capital debe certificar la calificación de grado institucional `TIER_1_AAA`.
 
+14. **Gobernanza de Microestructura L2 y Desbalance de Libro (SOP-108):**
+   * Ninguna orden límite puede dispararse en el exchange sin la auditoría previa del libro L2 (`OrderBookMicrostructureSentinel`).
+   * Queda terminantemente prohibido ejecutar compras si el Order Book Imbalance (OBI) es inferior a $-0.35$ o si el spread relativo excede los $8.0\text{ bps}$.
+15. **Protección de Carry Drag y Funding Rates (SOP-109):**
+   * Todo runner en fase `RUNNER_EXPANSION` debe auditar el coste acumulado de funding. Si el APR anualizado de la tasa de financiamiento supera el $50.0\%$ o si el arrastre en R devengado alcanza $0.50\text{R}$, el trailing ratchet debe apretarse obligatoriamente de $1.5\times\text{ATR}$ a $1.0\times\text{ATR}$ para impedir la erosión del alfa.
+16. **Inviolabilidad de Alta Disponibilidad y Anti-Split-Brain (SOP-110):**
+   * Toda transición de liderazgo entre nodos regionales debe apoyarse en la base de datos Turso LibSQL Cloud mediante leases atómicos (TTL 15s) y Compare-And-Swap (CAS).
+   * Ningún nodo puede despachar órdenes sin verificar el lease activo y el `client_order_id` determinista (SOP-50), imposibilitando envíos duplicados ante latencias de red.
+
 ---
 
 ## 5. Gobernanza "Doc-as-Code" en Cascada
