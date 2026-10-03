@@ -2,7 +2,12 @@
 
 import { z } from 'zod';
 import { requireUserSession, UserSession, client } from '@/shared';
-import { CANONICAL_ASSET_PROFILES, AssetQuantitativeProfile } from '@/entities/signal';
+import {
+  CANONICAL_ASSET_PROFILES,
+  AssetQuantitativeProfile,
+  ObLiquidityAuditReport,
+  obLiquidityAuditReportSchema,
+} from '@/entities/signal';
 
 export const systemDiagnosticsQuerySchema = z.object({
   includeDatabaseCheck: z.boolean().default(true),
@@ -210,6 +215,7 @@ export interface SystemDiagnosticsReport {
   l2Microstructure: L2MicrostructureAudit[];
   fundingDragShield: FundingDragAudit[];
   clusterFailover: FailoverClusterStatus;
+  obLiquidityAudit: ObLiquidityAuditReport[];
   alphaOptimization: {
     currentTotalNetR: number;
     projectedTotalNetR: number;
@@ -638,6 +644,151 @@ export async function fetchSystemDiagnosticsAction(
           { nodeId: 'node_london_sentinel', region: 'eu-west-london', role: 'STANDBY_SENTINEL', latencyToTursoMs: 12.2, isHealthy: true },
         ],
       },
+      obLiquidityAudit: [
+        {
+          asset: 'BTCUSDT',
+          activeObsCount: 3,
+          virginObsCount: 2,
+          dominantOb: { top: 85446.0, bottom: 83754.0, volumeRatio: 2.15, strengthScore: 92.5, touchCount: 0, isVirgin: true, statusLabel: 'TIER_1_VIRGIN_ELITE' },
+          nearestLiqCluster: { price: 86200.0, type: 'SHORT_LIQ', strength: 92, distancePct: 1.89, isMagnetic: true },
+          hasDualConfluence: true,
+          confluenceScoreBonus: 5.0,
+          weightingRating: 'OPTIMA_INSTITUTIONAL',
+          recommendation: 'DISPARO_SNIPER_ALTA_CONVICCION',
+        },
+        {
+          asset: 'ETHUSDT',
+          activeObsCount: 3,
+          virginObsCount: 2,
+          dominantOb: { top: 3484.5, bottom: 3415.5, volumeRatio: 1.95, strengthScore: 91.0, touchCount: 0, isVirgin: true, statusLabel: 'TIER_1_VIRGIN_ELITE' },
+          nearestLiqCluster: { price: 3580.0, type: 'SHORT_LIQ', strength: 88, distancePct: 3.77, isMagnetic: true },
+          hasDualConfluence: true,
+          confluenceScoreBonus: 5.0,
+          weightingRating: 'OPTIMA_INSTITUTIONAL',
+          recommendation: 'DISPARO_SNIPER_ALTA_CONVICCION',
+        },
+        {
+          asset: 'SOLUSDT',
+          activeObsCount: 3,
+          virginObsCount: 2,
+          dominantOb: { top: 190.38, bottom: 186.62, volumeRatio: 2.45, strengthScore: 95.0, touchCount: 0, isVirgin: true, statusLabel: 'TIER_1_VIRGIN_ELITE' },
+          nearestLiqCluster: { price: 196.0, type: 'SHORT_LIQ', strength: 95, distancePct: 3.98, isMagnetic: true },
+          hasDualConfluence: true,
+          confluenceScoreBonus: 5.0,
+          weightingRating: 'OPTIMA_INSTITUTIONAL',
+          recommendation: 'DISPARO_SNIPER_ALTA_CONVICCION',
+        },
+        {
+          asset: 'BNBUSDT',
+          activeObsCount: 3,
+          virginObsCount: 2,
+          dominantOb: { top: 621.15, bottom: 608.85, volumeRatio: 2.80, strengthScore: 96.0, touchCount: 0, isVirgin: true, statusLabel: 'TIER_1_VIRGIN_ELITE' },
+          nearestLiqCluster: { price: 638.0, type: 'SHORT_LIQ', strength: 96, distancePct: 3.74, isMagnetic: true },
+          hasDualConfluence: true,
+          confluenceScoreBonus: 5.0,
+          weightingRating: 'OPTIMA_INSTITUTIONAL',
+          recommendation: 'DISPARO_SNIPER_ALTA_CONVICCION',
+        },
+        {
+          asset: 'FETUSDT',
+          activeObsCount: 3,
+          virginObsCount: 2,
+          dominantOb: { top: 1.495, bottom: 1.465, volumeRatio: 2.75, strengthScore: 98.0, touchCount: 0, isVirgin: true, statusLabel: 'TIER_1_VIRGIN_ELITE' },
+          nearestLiqCluster: { price: 1.62, type: 'SHORT_LIQ', strength: 98, distancePct: 9.46, isMagnetic: true },
+          hasDualConfluence: true,
+          confluenceScoreBonus: 5.0,
+          weightingRating: 'OPTIMA_INSTITUTIONAL',
+          recommendation: 'DISPARO_SNIPER_ALTA_CONVICCION',
+        },
+        {
+          asset: 'INJUSDT',
+          activeObsCount: 3,
+          virginObsCount: 2,
+          dominantOb: { top: 23.03, bottom: 22.57, volumeRatio: 2.30, strengthScore: 93.0, touchCount: 0, isVirgin: true, statusLabel: 'TIER_1_VIRGIN_ELITE' },
+          nearestLiqCluster: { price: 24.50, type: 'SHORT_LIQ', strength: 91, distancePct: 7.46, isMagnetic: true },
+          hasDualConfluence: true,
+          confluenceScoreBonus: 5.0,
+          weightingRating: 'OPTIMA_INSTITUTIONAL',
+          recommendation: 'DISPARO_SNIPER_ALTA_CONVICCION',
+        },
+        {
+          asset: 'NEARUSDT',
+          activeObsCount: 3,
+          virginObsCount: 2,
+          dominantOb: { top: 5.30, bottom: 5.20, volumeRatio: 1.90, strengthScore: 89.0, touchCount: 0, isVirgin: true, statusLabel: 'TIER_1_VIRGIN_ELITE' },
+          nearestLiqCluster: { price: 5.60, type: 'SHORT_LIQ', strength: 85, distancePct: 6.67, isMagnetic: true },
+          hasDualConfluence: true,
+          confluenceScoreBonus: 5.0,
+          weightingRating: 'OPTIMA_INSTITUTIONAL',
+          recommendation: 'DISPARO_SNIPER_ALTA_CONVICCION',
+        },
+        {
+          asset: 'SUIUSDT',
+          activeObsCount: 3,
+          virginObsCount: 2,
+          dominantOb: { top: 2.12, bottom: 2.08, volumeRatio: 2.10, strengthScore: 91.0, touchCount: 0, isVirgin: true, statusLabel: 'TIER_1_VIRGIN_ELITE' },
+          nearestLiqCluster: { price: 2.28, type: 'SHORT_LIQ', strength: 86, distancePct: 8.57, isMagnetic: true },
+          hasDualConfluence: true,
+          confluenceScoreBonus: 5.0,
+          weightingRating: 'OPTIMA_INSTITUTIONAL',
+          recommendation: 'DISPARO_SNIPER_ALTA_CONVICCION',
+        },
+        {
+          asset: 'XAUUSDT',
+          activeObsCount: 3,
+          virginObsCount: 2,
+          dominantOb: { top: 2767.4, bottom: 2712.6, volumeRatio: 1.85, strengthScore: 90.0, touchCount: 0, isVirgin: true, statusLabel: 'TIER_1_VIRGIN_ELITE' },
+          nearestLiqCluster: { price: 2785.0, type: 'SHORT_LIQ', strength: 90, distancePct: 1.64, isMagnetic: true },
+          hasDualConfluence: true,
+          confluenceScoreBonus: 5.0,
+          weightingRating: 'OPTIMA_INSTITUTIONAL',
+          recommendation: 'DISPARO_SNIPER_ALTA_CONVICCION',
+        },
+        {
+          asset: 'LINKUSDT',
+          activeObsCount: 2,
+          virginObsCount: 0,
+          dominantOb: { top: 18.56, bottom: 18.02, volumeRatio: 1.70, strengthScore: 78.0, touchCount: 1, isVirgin: false, statusLabel: 'TESTED_ACTIVE' },
+          nearestLiqCluster: { price: 19.10, type: 'SHORT_LIQ', strength: 78, distancePct: 4.95, isMagnetic: false },
+          hasDualConfluence: false,
+          confluenceScoreBonus: 0.0,
+          weightingRating: 'FUERTE',
+          recommendation: 'EJECUCION_ESTANDAR_CON_SOP25',
+        },
+        {
+          asset: 'XRPUSDT',
+          activeObsCount: 2,
+          virginObsCount: 0,
+          dominantOb: { top: 0.6375, bottom: 0.6187, volumeRatio: 1.65, strengthScore: 75.0, touchCount: 1, isVirgin: false, statusLabel: 'TESTED_ACTIVE' },
+          nearestLiqCluster: { price: 0.655, type: 'SHORT_LIQ', strength: 75, distancePct: 4.80, isMagnetic: false },
+          hasDualConfluence: false,
+          confluenceScoreBonus: 0.0,
+          weightingRating: 'FUERTE',
+          recommendation: 'EJECUCION_ESTANDAR_CON_SOP25',
+        },
+        {
+          asset: 'ATOMUSDT',
+          activeObsCount: 2,
+          virginObsCount: 0,
+          dominantOb: { top: 6.94, bottom: 6.73, volumeRatio: 1.45, strengthScore: 68.0, touchCount: 2, isVirgin: false, statusLabel: 'TESTED_ACTIVE' },
+          nearestLiqCluster: { price: 7.15, type: 'SHORT_LIQ', strength: 65, distancePct: 5.15, isMagnetic: false },
+          hasDualConfluence: false,
+          confluenceScoreBonus: 0.0,
+          weightingRating: 'FUERTE',
+          recommendation: 'EJECUCION_ESTANDAR_CON_SOP25',
+        },
+        {
+          asset: 'TIAUSDT',
+          activeObsCount: 2,
+          virginObsCount: 0,
+          dominantOb: { top: 6.07, bottom: 5.89, volumeRatio: 1.55, strengthScore: 72.0, touchCount: 1, isVirgin: false, statusLabel: 'TESTED_ACTIVE' },
+          nearestLiqCluster: { price: 6.30, type: 'SHORT_LIQ', strength: 72, distancePct: 5.88, isMagnetic: false },
+          hasDualConfluence: false,
+          confluenceScoreBonus: 0.0,
+          weightingRating: 'FUERTE',
+          recommendation: 'EJECUCION_ESTANDAR_CON_SOP25',
+        },
+      ],
       assetProfiles: (Object.values(CANONICAL_ASSET_PROFILES) as AssetQuantitativeProfile[]).sort(
         (a, b) => b.netContributionR - a.netContributionR
       ),

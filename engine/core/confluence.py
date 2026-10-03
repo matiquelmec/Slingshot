@@ -86,7 +86,11 @@ class ConfluenceManager:
         active_obs = smc_map.get("order_blocks", {}).get("bullish" if is_long else "bearish", [])
         active_fvgs = smc_map.get("fvgs", {}).get("bullish" if is_long else "bearish", [])
         
-        mitigating_ob = any(ob['bottom'] <= price <= ob['top'] for ob in active_obs)
+        # Encontrar el OB mitigado específico si existe
+        matching_obs = [ob for ob in active_obs if ob['bottom'] <= price <= ob['top']]
+        mitigating_ob = len(matching_obs) > 0
+        best_ob = matching_obs[0] if matching_obs else None
+        
         mitigating_fvg = any(fvg['bottom'] <= price <= fvg['top'] for fvg in active_fvgs)
         
         # [SIGMA v9.0] Si es creación fresca (lo que dispara el Sniper), damos mitad de poi_weight por cada uno.
@@ -98,8 +102,21 @@ class ConfluenceManager:
         
         poi_pts = 0
         half_poi = poi_weight / 2.0
-        if has_ob: poi_pts += half_poi
-        if mitigating_fvg or has_fvg_creation: poi_pts += half_poi
+        
+        # [SOP-112] Ponderación Inteligente por Calidad de Order Block:
+        # Re-test de bloque virgen con alto volumen recibe bonificación de convicción
+        ob_pts = 0.0
+        if has_ob:
+            ob_pts = half_poi
+            if best_ob and best_ob.get('is_virgin', True) and best_ob.get('volume_ratio', 1.0) >= 1.8:
+                ob_pts += 5.0 # Bono por bloque virgen de alta energía institucional
+            elif best_ob and best_ob.get('touch_count', 0) >= 3:
+                ob_pts -= 5.0 # Penalización por fatiga de bloque sobre-testeado
+            ob_pts = max(0.0, ob_pts)
+        poi_pts += ob_pts
+        
+        if mitigating_fvg or has_fvg_creation:
+            poi_pts += half_poi
         
         score += poi_pts
         if poi_pts >= (poi_weight * 0.95):
@@ -322,16 +339,16 @@ class ConfluenceManager:
             score += econ_weight
             checklist.append({"factor": "Macro", "status": "NEUTRAL", "detail": "Sin eventos macro activos"})
 
-        # 7. CLUSTERS DE LIQUIDACIÓN (Peso 10) v4.0 (Enhanced Volume Filtering)
+        # 7. CLUSTERS DE LIQUIDACIÓN Y GRAVEDAD MAGNÉTICA (Peso 10 + Bono SOP-112)
         liq_cluster_weight = 10
         if liq_clusters:
             total_weight += liq_cluster_weight
             price = float(current.get('close', 0))
             cluster_hit = False
             hit_strength = 0
+            has_ob_liq_confluence = False
             
             for cluster in liq_clusters:
-                # Si el precio está cerca de un cluster masivo de liquidación en la dirección del trade
                 c_price = float(cluster.get('price', 0))
                 c_strength = int(cluster.get('strength', 0))
                 dist = abs(price - c_price) / price
@@ -341,11 +358,21 @@ class ConfluenceManager:
                     if (is_long and c_price > price) or (not is_long and c_price < price):
                         cluster_hit = True
                         hit_strength = c_strength
+                        
+                        # [SOP-112] Confluencia Magnética Dual: ¿Coincide el cluster con un Order Block activo?
+                        for ob in active_obs:
+                            if ob['bottom'] <= c_price <= ob['top']:
+                                has_ob_liq_confluence = True
+                                break
                         break
             
             if cluster_hit:
                 score += liq_cluster_weight
-                checklist.append({"factor": "Liq Clusters", "status": "CONFIRMADO", "detail": f"Imán de liquidez masiva detectado ({hit_strength}%)"})
+                if has_ob_liq_confluence and hit_strength >= 80:
+                    score += 5.0 # Bono por Confluencia Magnética Dual (OB + Liquidación Masiva)
+                    checklist.append({"factor": "Liq Clusters", "status": "ELITE", "detail": f"Confluencia Magnética Dual OB+Liq ({hit_strength}%)"})
+                else:
+                    checklist.append({"factor": "Liq Clusters", "status": "CONFIRMADO", "detail": f"Imán de liquidez masiva detectado ({hit_strength}%)"})
             else:
                 checklist.append({"factor": "Liq Clusters", "status": "NEUTRAL", "detail": "Sin clusters institucionales cercanos"})
         else:

@@ -192,4 +192,41 @@ export const CANONICAL_ASSET_PROFILES: Record<CanonicalAsset, AssetQuantitativeP
   },
 };
 
+/**
+ * Esquema Zod de Graduación de Order Blocks y Gravedad de Liquidación (SOP-112).
+ */
+export const orderBlockDetailSchema = z.object({
+  top: z.number().positive(),
+  bottom: z.number().positive(),
+  volumeRatio: z.number().nonnegative(),
+  strengthScore: z.number().min(0).max(100),
+  touchCount: z.number().int().nonnegative(),
+  isVirgin: z.boolean(),
+  statusLabel: z.enum(['TIER_1_VIRGIN_ELITE', 'TESTED_ACTIVE', 'EXHAUSTED_WARNING']),
+});
+
+export const nearestLiquidityClusterSchema = z.object({
+  price: z.number().positive(),
+  type: z.enum(['LONG_LIQ', 'SHORT_LIQ']),
+  strength: z.number().min(0).max(100),
+  distancePct: z.number().nonnegative(),
+  isMagnetic: z.boolean(),
+});
+
+export const obLiquidityAuditReportSchema = z.object({
+  asset: z.string().min(2).max(20),
+  activeObsCount: z.number().int().nonnegative(),
+  virginObsCount: z.number().int().nonnegative(),
+  dominantOb: orderBlockDetailSchema.nullable(),
+  nearestLiqCluster: nearestLiquidityClusterSchema.nullable(),
+  hasDualConfluence: z.boolean(),
+  confluenceScoreBonus: z.number().nonnegative(),
+  weightingRating: z.enum(['OPTIMA_INSTITUTIONAL', 'FUERTE', 'CAUTELA_EXHAUSTION']),
+  recommendation: z.string(),
+});
+
+export type OrderBlockDetail = z.infer<typeof orderBlockDetailSchema>;
+export type NearestLiquidityCluster = z.infer<typeof nearestLiquidityClusterSchema>;
+export type ObLiquidityAuditReport = z.infer<typeof obLiquidityAuditReportSchema>;
+
 

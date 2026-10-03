@@ -117,6 +117,11 @@ Toda interfaz gráfica debe construirse bajo estándares de ingeniería ergonóm
    * Toda orden límite colocada exitosamente en el exchange (`execution_status.placed == True`) debe despacharse obligatoriamente a Telegram con su badge de confirmación e ID de orden. Queda prohibido que el filtro de órdenes pendientes de memoria (`_pending_limit_symbols`) suprima la alerta de colocación inicial del activo (prevención de auto-supresión destructiva).
    * Todo hito del ciclo de vida de una posición (adopción externa por reconciliador, avance a Breakeven/TP1 y cierre definitivo con PnL neto) debe emitir eventos asíncronos desacoplados a través de `telegram_dispatcher`.
 
+18. **Gobernanza de OrderBlocks Graduados y Gravedad de Liquidación (SOP-112):**
+   * Todo Order Block generado en structure.py debe portar sus metricas de calidad (olume_ratio, strength_score, 	ouch_count, is_virgin).
+   * Queda terminantemente prohibido disparar entradas de alta convicción en Order Blocks degradados (con 3 o más testeos previos sin re-expansión estructural).
+   * Cuando un cluster de liquidación masiva (>80% de fuerza) coincida geográficamente con un Order Block activo, el motor de confluencia debe aplicar la bonificación por Confluencia Magnética Dual (+5.0 pts).
+
 ---
 
 ## 5. Gobernanza "Doc-as-Code" en Cascada

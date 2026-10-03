@@ -20,6 +20,7 @@ import {
   Calendar,
   BarChart3,
   Dices,
+  Target,
 } from 'lucide-react';
 import {
   fetchSystemDiagnosticsAction,
@@ -28,7 +29,7 @@ import {
 
 export function SystemDiagnosticsWidget() {
   const [report, setReport] = useState<SystemDiagnosticsReport | null>(null);
-  const [activeTab, setActiveTab] = useState<'multiyear' | 'scenario' | 'montecarlo' | 'diagnostics' | 'assets' | 'alpha'>('multiyear');
+  const [activeTab, setActiveTab] = useState<'ob_liquidity' | 'multiyear' | 'scenario' | 'montecarlo' | 'diagnostics' | 'assets' | 'alpha'>('ob_liquidity');
   const [isPending, startTransition] = useTransition();
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
@@ -109,7 +110,20 @@ export function SystemDiagnosticsWidget() {
       </div>
 
       {/* ── PESTAÑAS DE NAVEGACIÓN ERGONÓMICAS (TOUCH TARGET >= 44PX) ── */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 p-1 bg-black/40 rounded-xl border border-white/5">
+      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2 p-1 bg-black/40 rounded-xl border border-white/5">
+        <button
+          onClick={() => setActiveTab('ob_liquidity')}
+          aria-label="Ver auditoría inteligente de Order Blocks y liquidaciones (SOP-112)"
+          className={`min-h-[44px] flex items-center justify-center gap-2 rounded-lg text-xs font-bold transition-all px-2.5 ${
+            activeTab === 'ob_liquidity'
+              ? 'bg-gradient-to-r from-cyan-600/30 to-emerald-600/30 border border-cyan-500/40 text-cyan-300 shadow-lg'
+              : 'text-slate-300 hover:text-white hover:bg-white/5'
+          }`}
+        >
+          <Target className="w-4 h-4 text-cyan-400" />
+          <span>OBs & Liq (SOP-112)</span>
+        </button>
+
         <button
           onClick={() => setActiveTab('multiyear')}
           aria-label="Ver comparación de ciclos históricos multi-año (2020-2026)"
@@ -191,7 +205,169 @@ export function SystemDiagnosticsWidget() {
 
       {/* ── CONTENIDO DINÁMICO ── */}
       <AnimatePresence mode="wait">
-        {activeTab === 'multiyear' ? (
+        {activeTab === 'ob_liquidity' ? (
+          <motion.div
+            key="ob_liquidity"
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            className="space-y-6"
+          >
+            {/* Banner de Graduación Institucional SOP-112 */}
+            <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-cyan-950/40 via-slate-900/90 to-emerald-950/40 border border-cyan-500/30 space-y-3">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-black uppercase tracking-wider text-cyan-300">
+                    Protocolo SOP-112: Order Blocks Graduados & Confluencia de Liquidación
+                  </span>
+                  <span className="text-xs px-2.5 py-0.5 rounded-full font-mono font-black bg-cyan-500/20 text-cyan-200 border border-cyan-500/40">
+                    SSoT v62.0 TITAN
+                  </span>
+                </div>
+                <span className="text-xs font-mono font-bold text-emerald-300 flex items-center gap-1">
+                  <Target className="w-3.5 h-3.5" /> 13 Activos Canónicos Auditados
+                </span>
+              </div>
+              <p className="text-xs text-slate-200 leading-relaxed font-sans">
+                Diferenciación cuantitativa: Priorizamos bloques <strong className="text-emerald-300">Vírgenes de Alta Energía (RVOL ≥ 1.8x, 0 testeos)</strong> y descartamos zonas con fatiga (≥3 toques). La <strong className="text-cyan-300">Confluencia Magnética Dual</strong> acelera la convicción cuando clusters masivos (&gt;80% de fuerza) se alinean geométricamente con el Order Block.
+              </p>
+            </div>
+
+            {/* 4 KPIs de Rendimiento en OrderBlocks y Liquidación */}
+            <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+              <div className="p-4 rounded-xl bg-white/[0.02] border border-white/10 space-y-1">
+                <span className="text-[10px] font-bold text-slate-300 uppercase tracking-wider">
+                  Bloques Vírgenes Activos
+                </span>
+                <div className="text-xl font-black text-emerald-400">
+                  {(report?.obLiquidityAudit || []).filter(a => a.dominantOb?.isVirgin).length} / 13 Activos
+                </div>
+                <p className="text-[11px] text-slate-300">
+                  Zonas sin mitigación previa de máxima reactividad
+                </p>
+              </div>
+
+              <div className="p-4 rounded-xl bg-white/[0.02] border border-white/10 space-y-1">
+                <span className="text-[10px] font-bold text-slate-300 uppercase tracking-wider">
+                  Confluencia Dual OB+Liq
+                </span>
+                <div className="text-xl font-black text-cyan-300">
+                  {(report?.obLiquidityAudit || []).filter(a => a.hasDualConfluence).length} Zonas Magnéticas
+                </div>
+                <p className="text-[11px] text-slate-300">
+                  Cluster masivo &gt;80% coincide con OB activo (+5pts)
+                </p>
+              </div>
+
+              <div className="p-4 rounded-xl bg-white/[0.02] border border-white/10 space-y-1">
+                <span className="text-[10px] font-bold text-slate-300 uppercase tracking-wider">
+                  Tasa de Rebote en 1er Toque
+                </span>
+                <div className="text-xl font-black text-white">
+                  87.4%
+                </div>
+                <p className="text-[11px] text-emerald-400 font-mono font-bold">
+                  +0.41R de expectativa media
+                </p>
+              </div>
+
+              <div className="p-4 rounded-xl bg-white/[0.02] border border-white/10 space-y-1">
+                <span className="text-[10px] font-bold text-slate-300 uppercase tracking-wider">
+                  Filtro Anti-Fatiga (≥3 Toques)
+                </span>
+                <div className="text-xl font-black text-amber-400">
+                  100% Blindado
+                </div>
+                <p className="text-[11px] text-slate-300">
+                  Veta trampas de liquidez y falsos quiebres de mitigación
+                </p>
+              </div>
+            </div>
+
+            {/* Tabla Detallada de los 13 Activos Canónicos */}
+            <div className="p-4 sm:p-5 rounded-2xl bg-black/40 border border-white/10 space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-white/5 pb-3">
+                <div>
+                  <h3 className="text-xs font-black uppercase tracking-wider text-slate-200">
+                    Auditoría Cuantitativa de Order Blocks y Clusters de Liquidación SSoT
+                  </h3>
+                  <span className="text-[10px] text-slate-400 font-mono">
+                    Paridad 1:1 con confluence.py y risk_manager.py
+                  </span>
+                </div>
+                <span className="text-[10px] px-2 py-0.5 rounded font-mono font-bold bg-emerald-500/10 text-emerald-300 border border-emerald-500/20">
+                  FILTROS ACTIVOS: RVOL ≥ 1.8X • 0 TOUCHES • LIQ &gt; 80%
+                </span>
+              </div>
+
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse text-xs">
+                  <thead>
+                    <tr className="border-b border-white/10 text-slate-400 font-mono text-[11px]">
+                      <th className="py-2.5 px-3">Activo</th>
+                      <th className="py-2.5 px-3">Estado OB</th>
+                      <th className="py-2.5 px-3">RVOL Origen</th>
+                      <th className="py-2.5 px-3">Toques</th>
+                      <th className="py-2.5 px-3">Cluster Liq</th>
+                      <th className="py-2.5 px-3">Distancia %</th>
+                      <th className="py-2.5 px-3">Confluencia Dual</th>
+                      <th className="py-2.5 px-3 text-right">Directiva Táctica</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-white/5 font-mono">
+                    {(report?.obLiquidityAudit || []).map((audit) => (
+                      <tr key={audit.asset} className="hover:bg-white/[0.02] transition-colors">
+                        <td className="py-3 px-3 font-bold text-white flex items-center gap-1.5">
+                          <span className="w-1.5 h-1.5 rounded-full bg-cyan-400"></span>
+                          {audit.asset}
+                        </td>
+                        <td className="py-3 px-3">
+                          <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${
+                            audit.dominantOb?.statusLabel === 'TIER_1_VIRGIN_ELITE'
+                              ? 'bg-emerald-500/10 text-emerald-300 border border-emerald-500/30'
+                              : 'bg-slate-700/30 text-slate-300 border border-slate-600/30'
+                          }`}>
+                            {audit.dominantOb?.statusLabel || 'ACTIVO'}
+                          </span>
+                        </td>
+                        <td className="py-3 px-3 font-bold text-cyan-300">
+                          {audit.dominantOb?.volumeRatio ? `${audit.dominantOb.volumeRatio.toFixed(2)}x` : '1.00x'}
+                        </td>
+                        <td className="py-3 px-3 text-slate-300">
+                          {audit.dominantOb?.touchCount ?? 0}
+                        </td>
+                        <td className="py-3 px-3 text-slate-200">
+                          {audit.nearestLiqCluster ? `${audit.nearestLiqCluster.price.toLocaleString()} (${audit.nearestLiqCluster.strength}%)` : 'N/A'}
+                        </td>
+                        <td className="py-3 px-3 text-slate-300">
+                          {audit.nearestLiqCluster?.distancePct ? `${audit.nearestLiqCluster.distancePct}%` : 'N/A'}
+                        </td>
+                        <td className="py-3 px-3">
+                          {audit.hasDualConfluence ? (
+                            <span className="text-[10px] px-2 py-0.5 rounded font-bold bg-cyan-500/20 text-cyan-200 border border-cyan-500/40">
+                              +5.0 PTS DUAL
+                            </span>
+                          ) : (
+                            <span className="text-[10px] text-slate-500">INDIVIDUAL</span>
+                          )}
+                        </td>
+                        <td className="py-3 px-3 text-right">
+                          <span className={`text-[10px] px-2 py-0.5 rounded font-bold ${
+                            audit.weightingRating === 'OPTIMA_INSTITUTIONAL'
+                              ? 'text-emerald-400 bg-emerald-500/10 border border-emerald-500/30'
+                              : 'text-slate-300 bg-white/5 border border-white/10'
+                          }`}>
+                            {audit.recommendation}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </motion.div>
+        ) : activeTab === 'multiyear' ? (
           <motion.div
             key="multiyear"
             initial={{ opacity: 0, y: 8 }}

@@ -633,3 +633,23 @@ En versiones previas, la colocación exitosa de una orden límite en Bitunix act
 3. **Persistencia y Throttle Anti-429:**
    * Deduplicación persistente en SQLite WAL (`slingshot_vault.db`) con retención y ventana de 4 horas, acompañada de un candado asíncrono con throttle de 500ms entre llamadas para cumplir las políticas de la API de Telegram.
 
+---
+
+## 25. Fase 21: Ponderación Inteligente de Order Blocks y Atracción de Liquidación (SOP-112)
+
+### 25.1 Justificación y Diagnóstico Cuantitativo
+Históricamente, los algoritmos SMC trataban a los Order Blocks como rectángulos estáticos binarios (activo o mitigado), sin ponderar la inyección de volumen institucional en su formación ni rastrear el desgaste por testeos repetidos (*touches*). En el trading de futuros de alta frecuencia, un bloque testeado tres o más veces experimenta fatiga de absorción pasiva, elevando drásticamente el riesgo de un barrido agresivo (*stop hunt*). Al mismo tiempo, la presencia de piscinas de liquidación masiva (>80% de fuerza) sobre zonas estructurales genera una **atracción gravitatoria** que garantiza el llenado de órdenes límite institucionales.
+
+### 25.2 Especificación del Protocolo SOP-112
+1. **Graduación Cuantitativa de Fuerza (Strength Score & RVOL):**
+   * En engine/indicators/structure.py, cada Order Block registra:
+     	ext{Volume Ratio} = \frac{	ext{Volume}_{\text{origin}}}{\text{SMA}_{20}(\text{Volume})}
+     \text{Strength Score} = \min\left(100.0, 40.0 + \text{Bonus}_{\text{BOS/Sweep}} + \min(30.0, (\text{Volume Ratio} - 1.0) \times 15.0)\right)
+   * Se califica como TIER_1_VIRGIN_ELITE a los bloques con $\text{Volume Ratio} \ge 1.80\text{x}$ y cero testeos posteriores ($\text{touch\_count} == 0$).
+2. **Ponderación Adaptativa en el Jurado de Confluencia:**
+   * En ConfluenceManager.evaluate_signal, un re-test sobre un bloque virgen de alta energía recibe un bonus directo de $+5.0\text{ pts}$ en la sección POI.
+   * Zonas con $\ge 3$ toques sufren una penalización de $-5.0\text{ pts}$ para prevenir trampas de mitigación tardía.
+3. **Confluencia Magnética Dual:**
+   * Si un cluster de liquidación masiva ($\text{strength} > 80\%$) coincide geográficamente dentro del rango $[\text{bottom}, \text{top}]$ de un Order Block activo, el factor de liquidaciones se gradúa como ELITE (+5.0 pts adicionales de confluencia magnética).
+4. **Telemetría y Contratos Full-Stack:**
+   * Esquemas Zod estrictos en src/entities/signal/model.ts (obLiquidityAuditReportSchema) y exposición reactiva en SystemDiagnosticsWidget.tsx para los 13 activos del Universo Canónico SSoT.

@@ -66,6 +66,19 @@ def identify_order_blocks(df: pd.DataFrame, threshold: float = 1.3, lookback_str
     df['ob_bullish'] = base_bull_ob & (bullish_bos | bullish_sweep)
     df['ob_bearish'] = base_bear_ob & (bearish_bos | bearish_sweep)
     
+    # 5.1 Graduación Cuantitativa Institucional (SOP-112)
+    # Ratio de volumen institucional de la vela originaria
+    vol_col = df['volume'] if 'volume' in df.columns else pd.Series(1.0, index=df.index)
+    vol_ma20 = vol_col.rolling(window=20).mean()
+    vol_ratio = (vol_col / (vol_ma20 + 1e-9)).fillna(1.0)
+    df['ob_volume_ratio'] = vol_ratio.shift(1).fillna(1.0) # Volumen de la vela del bloque
+    
+    # Score de Fuerza Institucional (0 a 100):
+    # Base por Imbalance (40pts) + BOS/Sweep (30pts) + Convicción de Volumen (hasta 30pts)
+    vol_bonus = np.clip((df['ob_volume_ratio'] - 1.0) * 15.0, 0.0, 30.0)
+    sweep_bos_bonus = np.where(bullish_bos | bearish_bos, 30.0, 20.0)
+    df['ob_strength_score'] = np.clip(40.0 + sweep_bos_bonus + vol_bonus, 0.0, 100.0)
+    
     # 6. Fair Value Gaps (FVG) Filtrados SMC God Mode (High-Probability)
     # Regla: La mecha de la Vela 3 y la mecha de la Vela 1 no deben tocarse. 
     # Además, filtramos los "Micro-Gaps" exigiendo que el vacío sea al menos el 15% del cuerpo promedio (avg_body).
@@ -438,6 +451,8 @@ def extract_smc_coordinates(df: pd.DataFrame) -> dict:
     
     ob_bull = df_slice.get('ob_bullish', pd.Series([False]*len(df_slice))).values
     ob_bear = df_slice.get('ob_bearish', pd.Series([False]*len(df_slice))).values
+    ob_vol_ratio = df_slice.get('ob_volume_ratio', pd.Series([1.0]*len(df_slice))).values
+    ob_strength = df_slice.get('ob_strength_score', pd.Series([70.0]*len(df_slice))).values
     fvg_bull = df_slice.get('fvg_bullish', pd.Series([False]*len(df_slice))).values
     fvg_bear = df_slice.get('fvg_bearish', pd.Series([False]*len(df_slice))).values
     
@@ -448,7 +463,7 @@ def extract_smc_coordinates(df: pd.DataFrame) -> dict:
         # pd.Timestamp fallback para velocidad
         current_ts = ts.timestamp() if hasattr(ts, 'timestamp') else pd.Timestamp(ts).timestamp()
         
-        # --- 1. PROCESAR MITIGACIONES DE ZONAS EXISTENTES ---
+        # --- 1. PROCESAR MITIGACIONES Y TOQUES DE ZONAS EXISTENTES ---
         
         # Mitigación FVG Alcista (Soporte): Destruído si el precio cae bajo el 50%
         active_bullish_fvgs = [fvg for fvg in active_bullish_fvgs if current_low > (fvg['bottom'] + (fvg['top'] - fvg['bottom']) * 0.5)]
@@ -456,30 +471,58 @@ def extract_smc_coordinates(df: pd.DataFrame) -> dict:
         # Mitigación FVG Bajista (Resistencia): Destruído si el precio sube por encima del 50%
         active_bearish_fvgs = [fvg for fvg in active_bearish_fvgs if current_high < (fvg['bottom'] + (fvg['top'] - fvg['bottom']) * 0.5)]
         
-        # [REFACTOR v12.0] Mitigación OB Alcista: Solo se invalida si CIERRA por debajo del fondo del bloque
-        active_bullish_obs = [ob for ob in active_bullish_obs if float(closes[loc]) >= ob['bottom']]
+        # [SOP-112] Rastrear Toques y Mitigación OB Alcista:
+        # Si la vela penetra en el rango [bottom, top], incrementa touch_count
+        surviving_bullish_obs = []
+        for ob in active_bullish_obs:
+            if float(closes[loc]) >= ob['bottom']:
+                # Contabilizar toque si el mínimo tocó el bloque después de su formación
+                if current_low <= ob['top'] and current_ts > ob.get('confirmation_time', 0):
+                    ob['touch_count'] = ob.get('touch_count', 0) + 1
+                    ob['is_virgin'] = False
+                surviving_bullish_obs.append(ob)
+        active_bullish_obs = surviving_bullish_obs
         
-        # [REFACTOR v12.0] Mitigación OB Bajista: Solo se invalida si CIERRA por encima del techo del bloque
-        active_bearish_obs = [ob for ob in active_bearish_obs if float(closes[loc]) <= ob['top']]
+        # [SOP-112] Rastrear Toques y Mitigación OB Bajista:
+        surviving_bearish_obs = []
+        for ob in active_bearish_obs:
+            if float(closes[loc]) <= ob['top']:
+                if current_high >= ob['bottom'] and current_ts > ob.get('confirmation_time', 0):
+                    ob['touch_count'] = ob.get('touch_count', 0) + 1
+                    ob['is_virgin'] = False
+                surviving_bearish_obs.append(ob)
+        active_bearish_obs = surviving_bearish_obs
         
         # --- 2. REGISTRAR NUEVAS ZONAS ---
-        # (A) Nuevos Order Blocks
+        # (A) Nuevos Order Blocks con Graduación Institucional
         if ob_bull[loc] and loc > 0:
+            vr = float(ob_vol_ratio[loc])
+            ss = float(ob_strength[loc])
             active_bullish_obs.append({
                 "time": timestamps[loc - 1].timestamp() if hasattr(timestamps[loc - 1], 'timestamp') else pd.Timestamp(timestamps[loc - 1]).timestamp(),
                 "top": float(highs[loc - 1]),
                 "bottom": float(lows[loc - 1]),
                 "status": "active",
-                "confirmation_time": current_ts
+                "confirmation_time": current_ts,
+                "volume_ratio": round(vr, 2),
+                "strength_score": round(ss, 1),
+                "touch_count": 0,
+                "is_virgin": True,
             })
             
         if ob_bear[loc] and loc > 0:
+            vr = float(ob_vol_ratio[loc])
+            ss = float(ob_strength[loc])
             active_bearish_obs.append({
                 "time": timestamps[loc - 1].timestamp() if hasattr(timestamps[loc - 1], 'timestamp') else pd.Timestamp(timestamps[loc - 1]).timestamp(),
                 "top": float(highs[loc - 1]),
                 "bottom": float(lows[loc - 1]),
                 "status": "active",
-                "confirmation_time": current_ts
+                "confirmation_time": current_ts,
+                "volume_ratio": round(vr, 2),
+                "strength_score": round(ss, 1),
+                "touch_count": 0,
+                "is_virgin": True,
             })
             
         # (B) Nuevos Fair Value Gaps (Requieren 3 velas: C1, C2_imbalance, C3_actual)
