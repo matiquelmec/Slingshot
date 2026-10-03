@@ -76,18 +76,23 @@ class TelegramDispatcher:
 
         # ── 1. DEDUPLICACIÓN DE CICLO DE VIDA (Life-Cycle Driven Multi-Reinicio) ──
         dedup_key = f"{asset}_{direction}_{timeframe}"
+        exec_status = signal.get("execution_status")
+        is_fresh_execution = isinstance(exec_status, dict) and bool(exec_status.get("placed"))
 
         if not is_test:
             # Comprobar si ya existe posición o límite activo en Nexus para este activo
-            try:
-                from engine.execution.nexus import nexus
-                active_syms = {p.get("signal", {}).get("asset", "").upper() for p in nexus._active_positions.values()}
-                pending_limits = {s.upper() for s in getattr(nexus, "_pending_limit_symbols", set())}
-                if asset.upper() in active_syms or asset.upper() in pending_limits:
-                    logger.debug(f"[TELEGRAM] 🛡️ Alerta {asset} {direction} suprimida: El trade ya se encuentra activo/pendiente en ejecución.")
-                    return False
-            except Exception as nexus_chk_err:
-                logger.debug(f"[TELEGRAM] Fallback comprobación Nexus: {nexus_chk_err}")
+            # NOTA INSTITUCIONAL: Si la orden acaba de ser colocada con éxito en este ciclo (is_fresh_execution),
+            # NO auto-suprimirla, ya que debe despacharse a Telegram con su badge de confirmación Bitunix.
+            if not is_fresh_execution:
+                try:
+                    from engine.execution.nexus import nexus
+                    active_syms = {p.get("signal", {}).get("asset", "").upper() for p in nexus._active_positions.values()}
+                    pending_limits = {s.upper() for s in getattr(nexus, "_pending_limit_symbols", set())}
+                    if asset.upper() in active_syms or asset.upper() in pending_limits:
+                        logger.debug(f"[TELEGRAM] 🛡️ Alerta {asset} {direction} suprimida: El trade ya se encuentra activo/pendiente en ejecución previa.")
+                        return False
+                except Exception as nexus_chk_err:
+                    logger.debug(f"[TELEGRAM] Fallback comprobación Nexus: {nexus_chk_err}")
 
             # Cooldown persistente en SQLite: Si el setup está en la misma estructura (drift < 3.0%), no repetir
             # Se extiende el cooldown a 4 horas (14400s) para evitar ráfagas repetidas cada 30 min mientras se consolida
@@ -248,9 +253,47 @@ class TelegramDispatcher:
             return False
 
     async def send_heartbeat_report(self, stats: Dict[str, Any]) -> bool:
-        return True
+        """Despacha reporte de signos vitales (Heartbeat) de la infraestructura institucional."""
+        if not self.enabled:
+            return False
+        uptime = stats.get("uptime_hours", 0.0)
+        lat = stats.get("latency_ms", 0.0)
+        ftmo_dd = stats.get("ftmo_drawdown_pct", 0.0)
+        margin = stats.get("free_margin_usdt", 0.0)
+        positions = stats.get("positions", [])
+        
+        pos_lines = []
+        for p in positions:
+            pos_lines.append(f"   • <b>{p.get('symbol')}</b> ({p.get('side')}): PnL ${p.get('pnl', 0):.2f} | SL: {p.get('sl')}")
+        pos_text = "\n".join(pos_lines) if pos_lines else "   • <i>Sin posiciones abiertas actualmente.</i>"
+        
+        msg = (
+            f"💓 <b>SLINGSHOT APEX — PULSO INSTITUCIONAL (HEARTBEAT)</b>\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"⏱️ <b>Uptime:</b> <code>{uptime:.1f}h</code> | ⚡ <b>Latencia:</b> <code>{lat:.1f}ms</code>\n"
+            f"💰 <b>Margen Libre:</b> <code>${margin:,.2f} USDT</code>\n"
+            f"🏛️ <b>FTMO Drawdown:</b> <code>{ftmo_dd:.2f}%</code>\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"📊 <b>POSICIONES ACTIVAS:</b>\n"
+            f"{pos_text}\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"🟢 <i>Todos los centinelas y salvaguardas operacionales activos.</i>"
+        )
+        return await self.send_raw_message(msg)
+
     async def send_system_alert(self, title: str, details: str, severity: str = "WARNING", cooldown_seconds: int = 300) -> bool:
-        return True
+        """Despacha alertas críticas de sistema (SOP-25, mitigaciones, errores de red)."""
+        if not self.enabled:
+            return False
+        icon = "🚨" if severity.upper() == "CRITICAL" else ("⚠️" if severity.upper() == "WARNING" else "ℹ️")
+        msg = (
+            f"{icon} <b>ALERTA DE SISTEMA: {title}</b>\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"<b>Severidad:</b> <code>{severity.upper()}</code>\n"
+            f"<b>Detalles:</b>\n{details}\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━"
+        )
+        return await self.send_raw_message(msg)
     async def send_raw_message(self, text: str, parse_mode: str = "HTML") -> bool:
         """Envía un mensaje de texto directo a todos los destinatarios configurados."""
         if not self.enabled:

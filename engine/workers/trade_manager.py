@@ -1311,6 +1311,19 @@ class TradeManager:
 
                                 asyncio.create_task(nexus.on_risk_released(acc_id, reason=f"FAST_BE_ACTIVADO_{sym}"))
 
+                                try:
+                                    from engine.router.telegram_dispatcher import telegram_dispatcher
+                                    pnl_est = r_profit * 19.58
+                                    asyncio.create_task(telegram_dispatcher.send_tp_hit_alert(
+                                        symbol=sym,
+                                        tp_label=status_msg,
+                                        exit_price=cur_price,
+                                        pnl_usd=pnl_est,
+                                        is_be=True
+                                    ))
+                                except Exception:
+                                    pass
+
                         else:
 
                             action_taken = f"ERROR_ACTUALIZANDO_SL (${target_sl})"
@@ -1489,6 +1502,19 @@ class TradeManager:
                                 pnl_usd=real_pnl_usd,
                                 exit_reason=exit_label
                             )
+
+                            # 📡 [TELEGRAM TRADE CLOSED ALERT]
+                            try:
+                                from engine.router.telegram_dispatcher import telegram_dispatcher
+                                asyncio.create_task(telegram_dispatcher.send_trade_closed_alert(
+                                    symbol=csym,
+                                    reason=exit_label,
+                                    exit_price=float(filled_order.get("avgPrice") or filled_order.get("price") or 0.0),
+                                    pnl_usd=real_pnl_usd,
+                                    pnl_r=est_r
+                                ))
+                            except Exception:
+                                pass
 
                             # SOP-76: Gatillar análisis causal con NVIDIA NIM si fue pérdida
                             if est_r < 0 or real_pnl_usd < 0:

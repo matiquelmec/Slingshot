@@ -43,6 +43,7 @@ Slingshot es una **Terminal de Inteligencia y Ejecución Cuantitativa Institucio
     * **Centinela de Microestructura L2 (SOP-108):** Ingesta y auditoría en tiempo real de los 20 niveles de libro de órdenes con cálculo de Order Book Imbalance (OBI) y spread relativo, vetando entradas institucionales ante muros de manipulación o desbalances bajistas (OBI < -0.35).
     * **Escudo Dinámico de Funding Rates (SOP-109):** Monitoreo continuo del carry drag en perpetuos para posiciones runners (SOP-104), modulando el trailing ratchet a 1.0x ATR si el funding anualizado supera 50.0% APR para blindar el beneficio neto devengado.
     * **Alta Disponibilidad Activo-Pasiva Multi-Región (SOP-110):** Topología Active-Leader (Frankfurt) / Standby-Sentinel (Londres) con conmutación atómica en sub-2s mediante leases en Turso LibSQL Cloud e inmunidad Anti-Split-Brain garantizada por SOP-50.
+    * **Despacho Asíncrono de Ciclo de Vida en Telegram (SOP-111):** Desacoplamiento de eventos sin auto-supresión destructiva en órdenes colocadas (`execution_status.placed`), badge de confirmación Bitunix en vivo y notificaciones asíncronas de adopción externa, avances a Breakeven y cierres con PnL neto.
 
 2. **MetaTrader 5 / FTMO (TradFi — Modo Guardián de Cuentas de Fondeo):**
    * **Riesgo Institucional Protegido:** Calibrado al **0.75% por trade** en Fase 1, **0.50%** en Fase 2 y **0.35%** en cuenta financiada.

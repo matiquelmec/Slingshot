@@ -57,3 +57,48 @@ async def test_telegram_lifecycle_milestone_methods():
         res_close = await dispatcher.send_trade_closed_alert("NEARUSDT", "TP3_HIT", 2.670, 12.40, pnl_r=5.0)
         assert res_close is True
         assert "TRADE CERRADO" in mock_raw.call_args[0][0]
+
+@pytest.mark.asyncio
+async def test_fresh_execution_dispatches_with_badge_without_self_suppression():
+    """
+    TEST CRÍTICO: Valida que si la orden fue recién colocada en Bitunix
+    (execution_status={'placed': True, 'order_id': 'bitunix_12345'}),
+    Telegram NO la auto-suprima aunque el símbolo ya esté en _pending_limit_symbols.
+    """
+    dispatcher = TelegramDispatcher()
+    dispatcher.enabled = True
+    dispatcher.bot_token = "mock_token"
+    dispatcher.chat_ids = ["123456"]
+
+    signal = {
+        "asset": "BTCUSDT",
+        "symbol": "BTCUSDT",
+        "signal_type": "LONG",
+        "price": 65000.0,
+        "stop_loss": 64000.0,
+        "confluence_score": 85,
+        "is_test": False,
+        "execution_status": {
+            "placed": True,
+            "order_id": "999888777",
+            "status": "ORDER_PLACED"
+        }
+    }
+
+    from unittest.mock import MagicMock
+    mock_resp = MagicMock()
+    mock_resp.status_code = 200
+
+    # Simular que Nexus ya tiene a BTCUSDT en pending limits
+    with patch("engine.execution.nexus.nexus._pending_limit_symbols", {"BTCUSDT"}), \
+         patch("httpx.AsyncClient.post", new_callable=AsyncMock) as mock_post, \
+         patch.object(dispatcher._vault, "is_signal_in_cooldown", return_value=(False, 0, 0.0)):
+        
+        mock_post.return_value = mock_resp
+        sent = await dispatcher.send_signal_alert(signal)
+        assert sent is True
+        assert mock_post.called
+        # Verificar que el mensaje enviado incluye la confirmación de Bitunix
+        called_payload = mock_post.call_args[1]["json"]
+        assert "ORDEN LÍMITE ACTIVA EN BITUNIX" in called_payload["text"]
+        assert "999888777" in called_payload["text"]

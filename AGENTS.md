@@ -113,6 +113,10 @@ Toda interfaz gráfica debe construirse bajo estándares de ingeniería ergonóm
    * Toda transición de liderazgo entre nodos regionales debe apoyarse en la base de datos Turso LibSQL Cloud mediante leases atómicos (TTL 15s) y Compare-And-Swap (CAS).
    * Ningún nodo puede despachar órdenes sin verificar el lease activo y el `client_order_id` determinista (SOP-50), imposibilitando envíos duplicados ante latencias de red.
 
+17. **Gobernanza de Despacho de Eventos en Telegram y Ciclo de Vida (SOP-111):**
+   * Toda orden límite colocada exitosamente en el exchange (`execution_status.placed == True`) debe despacharse obligatoriamente a Telegram con su badge de confirmación e ID de orden. Queda prohibido que el filtro de órdenes pendientes de memoria (`_pending_limit_symbols`) suprima la alerta de colocación inicial del activo (prevención de auto-supresión destructiva).
+   * Todo hito del ciclo de vida de una posición (adopción externa por reconciliador, avance a Breakeven/TP1 y cierre definitivo con PnL neto) debe emitir eventos asíncronos desacoplados a través de `telegram_dispatcher`.
+
 ---
 
 ## 5. Gobernanza "Doc-as-Code" en Cascada

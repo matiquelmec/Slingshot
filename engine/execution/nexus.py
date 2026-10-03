@@ -597,6 +597,19 @@ class NexusNode:
                         from engine.api.registry import registry
                         await registry.broadcast_global({"type": "signal_auditor_update", "data": reconstructed_signal})
 
+                        # 📡 [TELEGRAM EXTERNAL POSITION ADOPTION DISPATCH]
+                        try:
+                            from engine.router.telegram_dispatcher import telegram_dispatcher
+                            asyncio.create_task(telegram_dispatcher.send_trade_fill_alert(
+                                symbol=symbol,
+                                side=side,
+                                price=entry_price,
+                                qty=qty,
+                                account_label=target_ex.account_label
+                            ))
+                        except Exception as tele_sync_err:
+                            logger.debug(f"[NEXUS SYNC] Error notificando adopción a Telegram: {tele_sync_err}")
+
                 # 4. 🛡️ [AUTO-HEALING RECONCILIATOR]
                 # Auditar posiciones activas existentes para auto-reparar cualquier SL o TP faltante en la cuenta correspondiente
                 for key, pos_data in list(self._active_positions.items()):

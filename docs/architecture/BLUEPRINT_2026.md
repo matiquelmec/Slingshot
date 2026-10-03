@@ -615,3 +615,21 @@ Erradicación del punto único de falla (*Single Point of Failure*) del servidor
 * **Módulo:** `MultiRegionFailoverCoordinator` (`engine/resilience/multi_region_failover_coordinator.py`).
 * **Latido y Lease Atómico:** Heartbeat cada 5 segundos con Lease TTL de 15 segundos.
 * **Promoción Automática CAS:** Si el líder no renueva en 15s, el centinela en Londres asume el liderazgo en sub-2 segundos sin riesgo de Split-Brain (SOP-50 Dedup).
+
+---
+
+## 24. Fase 20: Arquitectura de Ciclo de Vida y Despacho Asíncrono en Telegram (SOP-111)
+
+### 24.1 Justificación y Diagnóstico Forense
+En versiones previas, la colocación exitosa de una orden límite en Bitunix activaba de inmediato el registro en `_pending_limit_symbols`, provocando que el despachador de Telegram evaluara erróneamente la orden como un duplicado en ejecución y suprimiera la alerta inicial (auto-supresión destructiva). Asimismo, posiciones sincronizadas por el reconciliador externo no contaban con notificación al canal institucional.
+
+### 24.2 Especificación del Protocolo SOP-111
+1. **Deduplicación Consciente de Colocación Inmediata:**
+   * Si la señal contiene `execution_status.placed == True`, `TelegramDispatcher` bypasses la supresión de `pending_limits`, despachando el mensaje con el badge institucional de confirmación Bitunix (`🟢 ORDEN LÍMITE ACTIVA EN BITUNIX (ID: {order_id})`).
+2. **Event-Driven Lifecycle Hooks:**
+   * **Adopción de Posición Externa:** Cuando el reconciliador de `Nexus` adopta una posición viva en Bitunix, emite `send_trade_fill_alert` a Telegram.
+   * **Avance a Breakeven / Protección:** Cuando `TradeManager` sube el SL a Breakeven (+1.0R) o activa SOP-25 / mitigadores, emite `send_tp_hit_alert` con el PnL asegurado.
+   * **Cierre Definitivo con PnL:** Al liquidarse la posición (TP3 o Stopout), se despacha `send_trade_closed_alert` con el resultado en R y USD.
+3. **Persistencia y Throttle Anti-429:**
+   * Deduplicación persistente en SQLite WAL (`slingshot_vault.db`) con retención y ventana de 4 horas, acompañada de un candado asíncrono con throttle de 500ms entre llamadas para cumplir las políticas de la API de Telegram.
+
