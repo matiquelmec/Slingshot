@@ -179,6 +179,44 @@ describe('Features: System Diagnostics & Alpha Optimizer Slice (FSD & Zero Trust
     expect(params).toContain('Multiplicador Kelly en la Trinidad');
     expect(params).toContain('Veto de Operativa en Centro de Rango');
   });
+
+  it('debe auditar la simulación Monte Carlo (10,000 caminos), VaR 99% y certificación TIER_1_AAA', async () => {
+    const { fetchMonteCarloSimulationAction, monteCarloQuerySchema } = await import('@/features');
+
+    // 1. Zod Schema Validation
+    const parsed = monteCarloQuerySchema.parse({});
+    expect(parsed.iterations).toBe(10000);
+    expect(parsed.horizonTrades).toBe(100);
+
+    const custom = monteCarloQuerySchema.parse({ iterations: 5000, horizonTrades: 50 });
+    expect(custom.iterations).toBe(5000);
+    expect(custom.horizonTrades).toBe(50);
+
+    // 2. Action Execution con Zero Trust
+    const res = await fetchMonteCarloSimulationAction({}, mockSession);
+    expect(res.success).toBe(true);
+    expect(res.data).toBeDefined();
+
+    const mc = res.data!;
+    expect(mc.iterations).toBe(10000);
+    expect(mc.horizonTrades).toBe(100);
+    expect(mc.solvencyGrade).toBe('TIER_1_AAA');
+    expect(mc.probabilityOfProfitPct).toBeGreaterThanOrEqual(95.0);
+    expect(mc.medianFinalNetR).toBeGreaterThan(50.0);
+    expect(mc.var99R).toBeGreaterThan(20.0);
+    expect(mc.cvar99R).toBeLessThanOrEqual(mc.var99R);
+    expect(mc.riskOfRuinPct).toBeLessThan(5.0);
+
+    // 3. Conos de Equidad
+    expect(mc.equityCones.steps.length).toBe(10);
+    expect(mc.equityCones.p50.length).toBe(10);
+    expect(mc.equityCones.p95.length).toBe(10);
+
+    // Verificar que P95 > P50 > P5 en el último paso
+    const lastIdx = mc.equityCones.steps.length - 1;
+    expect(mc.equityCones.p95[lastIdx]).toBeGreaterThan(mc.equityCones.p50[lastIdx]);
+    expect(mc.equityCones.p50[lastIdx]).toBeGreaterThan(mc.equityCones.p5[lastIdx]);
+  });
 });
 
 

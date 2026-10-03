@@ -99,6 +99,11 @@ Toda interfaz gráfica debe construirse bajo estándares de ingeniería ergonóm
    * Se prohíbe introducir compras o ventas a mercado en fases de consolidación de rango alto: los ciclos 2020, 2022 y 2024 demuestran que las entradas a mercado en zonas de compresión sufren un 68% de pérdidas por mechas de barrido previo. Toda entrada debe situarse en descuentos OTE (61.8% - 78.6%) u Order Blocks no mitigados con confluencia institucional.
    * Todo ajuste a parámetros de trailing o sizing debe preservar la inviolabilidad del capital: SL mínimo blindado en TP2 tras alcanzar TP3 (SOP-104) y desescalada inmediata de Mega-Kelly ante la primera pérdida (`streak_losses > 0`).
 
+13. **Gobernanza de Resiliencia Estocástica y Value-at-Risk (SOP-107):**
+   * Toda modificación cuantitativa en reglas de entrada, filtros de confluencia o mallas de salida debe someterse a la simulación Monte Carlo de 10,000 caminos (`MonteCarloResilienceEngine`).
+   * Ninguna versión de la estrategia puede desplegarse en producción si la probabilidad estocástica de ganancia en 100 trades desciende del 90.0%, si el $VaR_{99\%}$ es inferior a $+10.0\text{R}$, o si el riesgo de ruina de capital inicial supera el $2.5\%$.
+   * Toda auditoría de curva de capital debe certificar la calificación de grado institucional `TIER_1_AAA`.
+
 ---
 
 ## 5. Gobernanza "Doc-as-Code" en Cascada
