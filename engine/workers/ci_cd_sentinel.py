@@ -31,7 +31,7 @@ ROOT_DIR = Path(__file__).resolve().parent.parent.parent
 LOG_FILE = ROOT_DIR / "deploy_audit.log"
 
 class CICDSentinel:
-    def __init__(self, branch: str = "cleanup-v1", remote: str = "origin"):
+    def __init__(self, branch: str = "main", remote: str = "origin"):
         self.branch = branch
         self.remote = remote
         self.git_cmd = self._find_git()

@@ -14,7 +14,7 @@ import asyncio
 import time
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Query, HTTPException
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Query, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 
 from engine.api.config import settings
@@ -232,6 +232,27 @@ async def health_check():
         "version": settings.VERSION,
         "ollama_active": await check_ollama_status()
     }
+
+@app.post("/api/v1/system/deploy-update")
+async def trigger_deploy_update(request: Request):
+    """
+    [SOP-88 & BLUEPRINT-2026] Endpoint seguro para auto-despliegue del VPS.
+    Ejecuta git fetch/pull atómico de origin/main y recarga de servicios mediante CICDSentinel.
+    """
+    import os
+    deploy_key = request.headers.get("X-Deploy-Key")
+    expected_key = os.getenv("DEPLOY_SECRET_KEY", "SLINGSHOT_INTERNAL_V6")
+    if not deploy_key or deploy_key != expected_key:
+        raise HTTPException(status_code=403, detail="Forbidden: Invalid deployment key")
+
+    try:
+        from engine.workers.ci_cd_sentinel import CICDSentinel
+        sentinel = CICDSentinel(branch="main", remote="origin")
+        res = sentinel.check_and_deploy()
+        return {"status": "success", "result": res}
+    except Exception as e:
+        logger.error(f"[SYSTEM DEPLOY] Error en auto-despliegue: {e}")
+        return {"status": "error", "message": str(e)}
 
 @app.get("/api/v1/metrics")
 async def get_metrics():
