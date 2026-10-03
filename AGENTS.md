@@ -88,6 +88,10 @@ Toda interfaz gráfica debe construirse bajo estándares de ingeniería ergonóm
    * Queda terminantemente prohibido escanear, procesar o presentar en frontend activos que no formen parte del Universo Canónico Auditado en Backtest (`CANONICAL_AUDITED_UNIVERSE`: 13 activos exactos).
    * Todo activo con expectativa matemática negativa auditada (`AVAXUSDT`, `RENDERUSDT`) debe permanecer vetado y podado a través de todo el stack (`nexus.py`, `market_scanner.py`, `config.py`, `entities/signal`, `telemetry/constants.ts`, paneles de UI).
    * Las rotaciones dinámicas no auditadas deben permanecer desactivadas en producción (`ENABLE_DYNAMIC_WATCHLIST = False`), concentrando el 100% del rendimiento en el universo estadísticamente probado.
+9. **Cosecha Asimétrica de Fat Tails y Ratchet en Runners Post-TP3 (SOP-104):**
+   * En la porción residual (10-20%) tras tocar TP3, la fase `RUNNER_EXPANSION` debe blindar irrevocablemente el SL en TP2 como piso mínimo absoluto. A medida que el precio avance a $+4.0\text{R}$, $+6.0\text{R}$, $+8.0\text{R}$ y $+10.0\text{R}$, el ratchet escalonado elevará los pisos a $\text{TP3}$, $+4.5\text{R}$, $+6.5\text{R}$ y $+8.5\text{R}$ respectivamente, combinándose con el Chandelier Exit ($1.5 \times \text{ATR}$) sin permitir retroceso alguno del SL.
+10. **Aceleración Mega-Kelly en la Trinidad y Gobernanza de Incubación (SOP-103 & SOP-105):**
+   * La Trinidad (`BNB`, `SOL`, `FET`) podrá acelerar su asignación a $1.35\text{x}$ base y hasta $1.50\text{x}$ (riesgo máx. $3.50\%$) únicamente cuando no existan rachas de pérdidas activas (`streak_losses == 0`). Toda rotación o reemplazo de activos del Universo Canónico debe pasar por la auditoría rodante de 60 días de `AssetIncubator` con umbrales estrictos ($\text{Sharpe} \ge 1.80$, Expectativa $\ge 0.20\text{R}$, $\text{PF} \ge 1.30$).
 
 ---
 

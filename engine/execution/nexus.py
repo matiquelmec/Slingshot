@@ -1124,6 +1124,7 @@ class NexusNode:
                 hour_now = datetime.now(timezone.utc).hour
                 pb_sig = signal.get("playbook")
                 sig_interval = str(signal.get("interval") or signal.get("timeframe") or "15m").lower()
+                apply_mega = bool(signal.get("apply_mega_kelly", getattr(self, "enable_mega_kelly", False)))
                 dyn_risk_pct = RiskManager.calculate_quarter_kelly_risk(
                     base_risk_pct=base_acc_risk,
                     symbol=asset,
@@ -1133,7 +1134,8 @@ class NexusNode:
                     apply_trinity_boost=bool(pb_sig),
                     apply_golden_hours=bool(pb_sig),
                     apply_meta_labeling=bool(pb_sig),
-                    interval=sig_interval
+                    interval=sig_interval,
+                    apply_mega_kelly=apply_mega
                 )
             
             # SOP-94: Progressive Exposure Multiplier (Words of Rizdom Insight)
@@ -1854,7 +1856,8 @@ class NexusNode:
                 apply_golden_hours=True,
                 apply_meta_labeling=True,
                 interval=sig_interval,
-                direction=sig_dir_acc
+                direction=sig_dir_acc,
+                apply_mega_kelly=bool(acc_signal.get("apply_mega_kelly", getattr(self, "enable_mega_kelly", False)))
             )
         else:
             raw_risk_pct = base_acc_risk

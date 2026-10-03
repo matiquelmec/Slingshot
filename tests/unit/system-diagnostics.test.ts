@@ -62,22 +62,22 @@ describe('Features: System Diagnostics & Alpha Optimizer Slice (FSD & Zero Trust
     }
   });
 
-  it('debe certificar las 4 palancas cuantitativas para maximizar retornos (+164.2R)', async () => {
+  it('debe certificar las 4 palancas cuantitativas para maximizar retornos (+221.4R)', async () => {
     const result = await fetchSystemDiagnosticsAction({}, mockSession);
     expect(result.success).toBe(true);
 
     const alpha = result.data!.alphaOptimization;
     expect(alpha.currentTotalNetR).toBe(97.98);
-    expect(alpha.projectedTotalNetR).toBe(164.20);
-    expect(alpha.projectedProfitFactor).toBeGreaterThan(alpha.currentProfitFactor);
-    expect(alpha.projectedCompoundReturnPct).toBeGreaterThan(alpha.currentCompoundReturnPct);
+    expect(alpha.projectedTotalNetR).toBe(221.38);
+    expect(alpha.projectedProfitFactor).toBe(2.35);
+    expect(alpha.projectedCompoundReturnPct).toBe(4820.0);
 
     expect(alpha.pillars.length).toBe(4);
     const pillarIds = alpha.pillars.map((p) => p.id);
     expect(pillarIds).toContain('dynamic-tp3-runners');
+    expect(pillarIds).toContain('trinity-mega-kelly');
+    expect(pillarIds).toContain('asset-incubator-rotation');
     expect(pillarIds).toContain('sop16-freeroll-scalein');
-    expect(pillarIds).toContain('kelly-a-plus-boost');
-    expect(pillarIds).toContain('proportional-macro-smoothing');
   });
 
   it('debe rechazar parámetros malformados respetando el esquema de validación', async () => {

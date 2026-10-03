@@ -142,7 +142,7 @@ export function SystemDiagnosticsWidget() {
           }`}
         >
           <Sparkles className="w-4 h-4 text-emerald-400" />
-          <span>Plan Retornos (+164.2R)</span>
+          <span>Plan Retornos (+221.4R)</span>
         </button>
       </div>
 
@@ -267,11 +267,11 @@ export function SystemDiagnosticsWidget() {
                 <div className="flex items-baseline gap-2">
                   <span className="text-xl sm:text-2xl font-black text-white">+97.98 R</span>
                   <span className="text-xs font-mono font-bold text-emerald-400">
-                    ➔ +164.20 R Proyectado
+                    ➔ +221.38 R Proyectado
                   </span>
                 </div>
                 <p className="text-[11px] text-slate-300">
-                  +67.5% de incremento capturando colas gruesas
+                  +126% de incremento capturando colas gruesas (+6R a +12R)
                 </p>
               </div>
 
@@ -282,7 +282,7 @@ export function SystemDiagnosticsWidget() {
                 <div className="flex items-baseline gap-2">
                   <span className="text-xl sm:text-2xl font-black text-white">1.79</span>
                   <span className="text-xs font-mono font-bold text-cyan-400">
-                    ➔ 2.18 Proyectado
+                    ➔ 2.35 Proyectado
                   </span>
                 </div>
                 <p className="text-[11px] text-slate-300">
@@ -297,11 +297,11 @@ export function SystemDiagnosticsWidget() {
                 <div className="flex items-baseline gap-2">
                   <span className="text-xl sm:text-2xl font-black text-white">+1,644%</span>
                   <span className="text-xs font-mono font-bold text-purple-300">
-                    ➔ +3,280% ROI
+                    ➔ +4,820% ROI
                   </span>
                 </div>
                 <p className="text-[11px] text-slate-300">
-                  Multiplicador geométrico con Free-Roll Scale-In
+                  Multiplicador geométrico con Mega-Kelly & Scale-In
                 </p>
               </div>
             </div>

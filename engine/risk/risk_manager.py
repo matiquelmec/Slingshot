@@ -368,15 +368,16 @@ class RiskManager:
         playbook: Optional[str] = None,
         apply_meta_labeling: bool = False,
         interval: str = "15m",
-        direction: Optional[str] = None
+        direction: Optional[str] = None,
+        apply_mega_kelly: bool = False
     ) -> float:
         """
-        [SOP-33 & SOP-34 & SOP-38 & SOP-100/101/102 ASYMMETRIC SIZING ENGINE]
+        [SOP-33 & SOP-34 & SOP-38 & SOP-100/101/102/103 ASYMMETRIC SIZING & MEGA-KELLY ENGINE]
         Calcula el multiplicador de asignación de capital combinando el Tier del activo (Kelly Fraccional),
         la confluencia institucional, la ventana horaria (Sniper NY Open vs Asia Defense),
         las extensiones cuantitativas SOP-46 (Weekly Alpha Cycle), SOP-47 (Trinidad del Alfa),
-        SOP-49 (Golden Hours Tuning), la modulación de régimen SOP-63 (SlingshotRegimeAgent)
-        y el Gatekeeper de 2 Etapas SOP-100/101/102 (Timeframe, Playbook & Direction-Aware Fractional Kelly).
+        SOP-49 (Golden Hours Tuning), la modulación de régimen SOP-63 (SlingshotRegimeAgent),
+        el Gatekeeper de 2 Etapas SOP-100/101/102 y el Mega-Kelly Asimétrico SOP-103 (1.35x-1.50x en Trinidad).
         """
         sym = (symbol or "").replace("/", "").upper()
         base_mult = cls.ALPHA_TIERS.get(sym, 1.0)
@@ -406,9 +407,16 @@ class RiskManager:
             elif dow in ["Saturday", "Sunday", "Sábado", "Sabado", "Domingo"]:
                 base_mult *= 0.70 # Preservación en fines de semana de bajo volumen
 
-        # SOP-47: Asignación de Convicción Cuantitativa Trinidad del Alfa (BNB, SOL, FET)
-        if apply_trinity_boost and sym in ["BNBUSDT", "SOLUSDT", "FETUSDT", "BNB", "SOL", "FET"]:
-            base_mult *= 1.20
+        # SOP-47 & SOP-103: Asignación Cuantitativa Trinidad del Alfa (BNB, SOL, FET) / Mega-Kelly
+        if sym in ["BNBUSDT", "SOLUSDT", "FETUSDT", "BNB", "SOL", "FET"]:
+            if apply_mega_kelly:
+                # Mega-Kelly Asimétrico: 1.35x base en la Trinidad, escalable a 1.50x en setups élite en Killzone
+                if confluence_score >= 85.0 and hour_utc is not None and 7 <= hour_utc <= 17:
+                    base_mult *= 1.50
+                else:
+                    base_mult *= 1.35
+            elif apply_trinity_boost:
+                base_mult *= 1.20
 
         # SOP-49: Sintonización de Golden Hours Intradía (09:00 UTC y 11:00 UTC)
         if apply_golden_hours and hour_utc in [9, 11]:
@@ -419,15 +427,16 @@ class RiskManager:
             base_mult *= regime_mult
 
         # SOP-100 & SOP-101 & SOP-102: Two-Stage Meta-Labeling & Timeframe/Direction-Aware Playbook Fractional Kelly
-        max_cap = 1.85
+        max_cap = 2.35 if apply_mega_kelly else 1.85
         if apply_meta_labeling and playbook:
             tf_norm = str(interval or "15m").lower()
             dir_norm = str(direction).upper() if direction else ""
-            base_mult = min(1.85, max(0.40, base_mult))
+            base_mult = min(max_cap, max(0.40, base_mult))
             base_mult *= cls.calculate_meta_labeling_multiplier(sym, playbook, interval=tf_norm, direction=direction)
             if tf_norm in ("1h", "60m") and str(playbook).upper() == "LIQUIDITY_SWEEP_FVG":
                 base_mult = max(base_mult, 1.15)
-            max_cap = 2.10 if (str(playbook).upper() == "OB_DISCOUNT_RETEST" and dir_norm in ("LONG", "BUY")) else 2.00
+            if not apply_mega_kelly:
+                max_cap = 2.10 if (str(playbook).upper() == "OB_DISCOUNT_RETEST" and dir_norm in ("LONG", "BUY")) else 2.00
             
         return round(min(max_cap, max(0.40, base_mult)), 2)
 
@@ -1000,7 +1009,7 @@ class RiskManager:
             "reason": f"SOP-41 Aprobado: Qty {safe_qty} con riesgo max ${projected_loss:.2f} USDT ({projected_loss/account_balance*100:.2f}%)"
         }
 
-    # ── PROTOCOLO SOP-43 & SOP-100/101/102: ASYMMETRIC QUARTER-KELLY & META-LABELING ENGINE v60.0 ──
+    # ── PROTOCOLO SOP-43 & SOP-100/101/102/103: ASYMMETRIC QUARTER-KELLY & META-LABELING ENGINE v60.0 ──
     @classmethod
     def calculate_quarter_kelly_risk(
         cls,
@@ -1013,12 +1022,14 @@ class RiskManager:
         apply_golden_hours: bool = False,
         apply_meta_labeling: bool = True,
         interval: str = "15m",
-        direction: Optional[str] = None
+        direction: Optional[str] = None,
+        apply_mega_kelly: bool = False
     ) -> float:
         """
-        [SOP-43 & SOP-100/101/102 ASYMMETRIC QUARTER-KELLY SCALING WITH META-LABELING]
-        Modula el riesgo base (ej. 2.50%) dentro de un rango seguro de [1.25%, 3.25%].
+        [SOP-43 & SOP-100/101/102/103 ASYMMETRIC QUARTER-KELLY SCALING WITH META-LABELING & MEGA-KELLY]
+        Modula el riesgo base (ej. 2.50%) dentro de un rango seguro de [1.25%, 3.25%] (o hasta 3.50% bajo Mega-Kelly).
         - Tier S / Confluencia >= 85% + NY Open (13-17 UTC) + OB_DISCOUNT_RETEST: Acelera hasta ~3.25%.
+        - Mega-Kelly (Trinidad BNB, SOL, FET): Acelera hasta ~3.50% en confluencias institucionales élite.
         - Tier Base / Confluencia 70-84%: Mantiene riesgo base (~2.50%).
         - En 1h Swing (SOP-101), premia barridos estructurales LIQUIDITY_SWEEP_FVG (>=1.15x).
         - En OB_DISCOUNT_RETEST (SOP-102), modula asimétricamente LONG vs SHORT.
@@ -1033,11 +1044,13 @@ class RiskManager:
             playbook=playbook,
             apply_meta_labeling=bool(apply_meta_labeling and playbook),
             interval=interval,
-            direction=direction
+            direction=direction,
+            apply_mega_kelly=apply_mega_kelly
         )
         adjusted = base_risk_pct * mult
-        # Hard limits institucionales: mínimo 1.25%, máximo 3.25%
-        return round(min(0.0325, max(0.0125, adjusted)), 4)
+        upper_limit = 0.0350 if apply_mega_kelly else 0.0325
+        # Hard limits institucionales: mínimo 1.25%, máximo 3.25% (3.50% con Mega-Kelly)
+        return round(min(upper_limit, max(0.0125, adjusted)), 4)
 
     # ── PROTOCOLO SOP-44: DIRECTIONAL PORTFOLIO HEAT GUARD v43.0 ─────────────
     @staticmethod

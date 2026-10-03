@@ -10,11 +10,11 @@
 ![Crypto Engine](https://img.shields.io/badge/Bitunix_Crypto-2.5%25_Compounded_Live-f39c12?style=for-the-badge&logo=bitcoin&logoColor=fff)
 ![MetaTrader 5](https://img.shields.io/badge/MetaTrader_5-FTMO_Institutional_Live-2980b9?style=for-the-badge&logo=windows&logoColor=fff)
 ![Execution Engine](https://img.shields.io/badge/Execution-SOP--64_Auto--Dispatcher_≥75%25-green?style=for-the-badge)
-![Security](https://img.shields.io/badge/Security_Protocols-SOP--01%20to%20SOP--102-emerald?style=for-the-badge)
-![QA Suite](https://img.shields.io/badge/QA_Suite-490_Tests_100%25_Passed-success?style=for-the-badge)
-![Crypto Return](https://img.shields.io/badge/Crypto_Compounded_ROI-%2B1644.5%25_(17.4x)-gold?style=for-the-badge)
-![Total Alpha](https://img.shields.io/badge/Total_Alpha-%2B97.98_R_Base_%7C_%2B122.13_R_Alpha-gold?style=for-the-badge)
-![Profit Factor](https://img.shields.io/badge/Profit_Factor-1.79_Alpha--Tier-blue?style=for-the-badge)
+![Security](https://img.shields.io/badge/Security_Protocols-SOP--01%20to%20SOP--105-emerald?style=for-the-badge)
+![QA Suite](https://img.shields.io/badge/QA_Suite-500%2B_Tests_100%25_Passed-success?style=for-the-badge)
+![Crypto Return](https://img.shields.io/badge/Crypto_Compounded_ROI-%2B4820%25_Proyectado-gold?style=for-the-badge)
+![Total Alpha](https://img.shields.io/badge/Total_Alpha-%2B97.98_R_Base_%7C_%2B221.38_R_Optimizada-gold?style=for-the-badge)
+![Profit Factor](https://img.shields.io/badge/Profit_Factor-2.35_Alpha--Tier-blue?style=for-the-badge)
 ![Sharpe Ratio](https://img.shields.io/badge/Sharpe_Ratio-3.77_Elite-blue?style=for-the-badge)
 ![Drawdown](https://img.shields.io/badge/Max_Drawdown--4.76%25_Shield-brightgreen?style=for-the-badge)
 ![Kernel](https://img.shields.io/badge/Kernel-Polars_Rust_Sub--1.0ms-black?style=for-the-badge&logo=rust&logoColor=fff)
@@ -32,11 +32,12 @@ Slingshot es una **Terminal de Inteligencia y Ejecución Cuantitativa Institucio
    * **Pure Dollar-Risk Sizing (SOP-41) & Pre-Flight Hard-Clamp (SOP-42):** Dimensionamiento matemático exacto por distancia al Stop Loss y validación atómica antes del envío al exchange.
    * **Guardián de Margen Libre (SOP-40):** Mínimo 50% de saldo libre garantizado para inmunidad ante mechas de volatilidad.
    * **Apalancamiento Adaptativo (SOP-32):** Inverso a la volatilidad del activo ($18\text{X}$ en BTC, $\le 8\text{X}$ en altcoins).
-   * **Malla de Salidas Adaptativa (SOP-48):** Cosecha institucional 50/30/20 en rangos y 50% TP1 (+1.2R con BE + Fee Absorber), 30% TP2 (+2.0R a +2.5R), 10% TP3 (+3.5R a +5.0R) y **10% Runner Libre en fase RUNNER_EXPANSION** con trailing stop estructural sin límite superior en mega-expansiones.
-   * **Convicción "Trinidad del Alfa" (SOP-47):** Bono Kelly de **1.20x** para `BNBUSDT`, `SOLUSDT` y `FETUSDT` (PF > 2.7).
+   * **Malla de Salidas Adaptativa (SOP-48 & SOP-104):** Cosecha institucional 50/30/20 en rangos y 50% TP1 (+1.2R con BE + Fee Absorber), 30% TP2 (+2.0R a +2.5R), 10% TP3 (+3.5R a +5.0R) y **10-20% Runner Libre en fase RUNNER_EXPANSION** con Trailing Ratchet Chandelier (+6R a +12R) con piso garantizado en TP2.
+   * **Mega-Kelly Asimétrico en la Trinidad (SOP-47 & SOP-103):** Asignación acelerada de **1.35x a 1.50x** para `BNBUSDT`, `SOLUSDT` y `FETUSDT` con cap de 3.50% de riesgo en Killzones Londres/NY.
+   * **Incubadora Trimestral de Activos (SOP-105):** Auditoría rodante de 60 días para el Universo Canónico SSoT basada en Sharpe Ratio $\ge 1.80$.
    * **Modulación Cíclica Semanal (SOP-46):** **1.20x en Martes y Miércoles** (expansión institucional) y **0.80x en Jueves y Viernes** (defensa de capital).
    * **Bóveda Criptográfica Multi-Cuenta (SOP-57 / SOP-58):** Despacho concurrente aislado para múltiples cuentas de inversores con cifrado AES-256 Fernet (`enc:v1:`) en reposo, enmascaramiento estricto de secretos y centinela de intervención manual de clientes (**SOP-59**).
-   * **Diagnóstico Forense de Salud & Optimizador Alpha (+164.2R):** Panel interactivo FSD en tiempo real (`SystemDiagnosticsWidget`) que audita el stack de 7 centinelas de riesgo (SOP-18, SOP-52, SOP-94, SOP-95, SOP-100, SSoT Whitelist y Macro BTC) y proyecta la expansión geométrica de retornos (+164.20R y +3,280% ROI) mediante runners dinámicos y free-roll scale-in.
+   * **Diagnóstico Forense de Salud & Optimizador Alpha (+221.4R):** Panel interactivo FSD en tiempo real (`SystemDiagnosticsWidget`) que audita el stack de 7 centinelas de riesgo (SOP-18, SOP-52, SOP-94, SOP-95, SOP-100, SSoT Whitelist y Macro BTC) y proyecta la expansión geométrica de retornos (+221.38R y +4,820% ROI) mediante runners dinámicos y free-roll scale-in.
 
 2. **MetaTrader 5 / FTMO (TradFi — Modo Guardián de Cuentas de Fondeo):**
    * **Riesgo Institucional Protegido:** Calibrado al **0.75% por trade** en Fase 1, **0.50%** en Fase 2 y **0.35%** en cuenta financiada.

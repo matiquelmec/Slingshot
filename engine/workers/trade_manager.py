@@ -523,13 +523,19 @@ class TradeManager:
                     logger.info(f"[TRADE_MANAGER] {asset} -> CERRADO en TP3")
                     return
 
-            # Actualizar trailing: buscar nuevo swing estructural más favorable (aplica para TRAILING y RUNNER_EXPANSION)
-            structural_sl = self._find_structural_sl(df, current_price, is_long, atr_val)
-            if structural_sl and self._sl_improved(current_sl, structural_sl, is_long):
-                tag = "RUNNER_EXPANSION" if phase == "RUNNER_EXPANSION" else "TRAILING"
-                await self._apply_sl_update(signal, structural_sl, tag,
-                    f"Trailing actualizado a nuevo soporte estructural = {structural_sl:.6f} ({tag})")
-                logger.info(f"[TRADE_MANAGER] {asset} -> {tag} update: SL = {structural_sl:.6f}")
+            # Actualizar trailing: post-TP3 aplica SOP-104 Runner Ratchet, pre-TP3 aplica swing estructural
+            if phase == "RUNNER_EXPANSION":
+                runner_sl = self._calculate_runner_ratchet_sl(signal, current_price, is_long, atr_val, df)
+                if runner_sl and self._sl_improved(current_sl, runner_sl, is_long):
+                    await self._apply_sl_update(signal, runner_sl, "RUNNER_EXPANSION",
+                        f"🚀 [SOP-104 RUNNER RATCHET] SL perseguidor elevado a {runner_sl:.6f} (Chandelier Ratchet)")
+                    logger.info(f"🚀 [TRADE_MANAGER] {asset} -> RUNNER_EXPANSION ratchet: SL = {runner_sl:.6f}")
+            else:
+                structural_sl = self._find_structural_sl(df, current_price, is_long, atr_val)
+                if structural_sl and self._sl_improved(current_sl, structural_sl, is_long):
+                    await self._apply_sl_update(signal, structural_sl, "TRAILING",
+                        f"Trailing actualizado a nuevo soporte estructural = {structural_sl:.6f} (TRAILING)")
+                    logger.info(f"[TRADE_MANAGER] {asset} -> TRAILING update: SL = {structural_sl:.6f}")
 
 
 
@@ -645,7 +651,89 @@ class TradeManager:
 
             return new_sl < old_sl   # Para SHORT: el SL debe bajar
 
+    def _calculate_runner_ratchet_sl(
+        self,
+        signal: dict,
+        current_price: float,
+        is_long: bool,
+        atr_val: float,
+        df: Optional[pd.DataFrame] = None
+    ) -> Optional[float]:
+        """
+        [SOP-104 POST-TP3 CHANDELIER & R-RATCHET RUNNER ENGINE]
+        Calcula el Stop Loss dinámico para la porción de Runner libre (post-TP3),
+        garantizando:
+        1. Piso mínimo garantizado inviolable en TP2.
+        2. Ratchet escalonado por R acumulado (>=4R -> TP3, >=6R -> 4.5R, >=8R -> 6.5R, >=10R -> 8.5R).
+        3. Chandelier Trailing Exit (1.5x ATR).
+        4. Swing estructural más favorable.
+        5. Unidireccional estricto (el SL nunca retrocede).
+        """
+        try:
+            entry = float(signal.get("entry_price") or 0.0)
+            initial_sl = float(signal.get("stop_loss") or 0.0)
+            if entry <= 0 or initial_sl <= 0 or current_price <= 0:
+                return None
 
+            r_dist = abs(entry - initial_sl)
+            if r_dist <= 0:
+                return None
+
+            tp2 = float(signal.get("tp2") or 0.0)
+            tp3 = float(signal.get("tp3") or 0.0)
+
+            current_r = (current_price - entry) / r_dist if is_long else (entry - current_price) / r_dist
+
+            # 1. Determinar el piso garantizado de R
+            if is_long:
+                ratchet_floor = tp2 if tp2 > entry else entry + (2.0 * r_dist)
+                if current_r >= 10.0:
+                    ratchet_floor = max(ratchet_floor, entry + (8.5 * r_dist))
+                elif current_r >= 8.0:
+                    ratchet_floor = max(ratchet_floor, entry + (6.5 * r_dist))
+                elif current_r >= 6.0:
+                    ratchet_floor = max(ratchet_floor, entry + (4.5 * r_dist))
+                elif current_r >= 4.0:
+                    ratchet_floor = max(ratchet_floor, tp3 if tp3 > 0 else entry + (3.0 * r_dist))
+            else:
+                ratchet_floor = tp2 if 0 < tp2 < entry else entry - (2.0 * r_dist)
+                if current_r >= 10.0:
+                    ratchet_floor = min(ratchet_floor, entry - (8.5 * r_dist))
+                elif current_r >= 8.0:
+                    ratchet_floor = min(ratchet_floor, entry - (6.5 * r_dist))
+                elif current_r >= 6.0:
+                    ratchet_floor = min(ratchet_floor, entry - (4.5 * r_dist))
+                elif current_r >= 4.0:
+                    ratchet_floor = min(ratchet_floor, tp3 if tp3 > 0 else entry - (3.0 * r_dist))
+
+            # 2. Chandelier Exit (1.5x ATR)
+            chandelier_sl = round(current_price - (atr_val * 1.5), 8) if is_long else round(current_price + (atr_val * 1.5), 8)
+
+            # 3. Swing estructural opcional
+            structural_sl = None
+            if df is not None and not df.empty:
+                structural_sl = self._find_structural_sl(df, current_price, is_long, atr_val)
+
+            # 4. Consolidar el mejor candidato asegurando no sobrepasar el precio actual
+            if is_long:
+                candidates = [ratchet_floor, chandelier_sl]
+                if structural_sl is not None and structural_sl < current_price:
+                    candidates.append(structural_sl)
+                best_sl = max(candidates)
+                if best_sl >= current_price:
+                    best_sl = current_price - (r_dist * 0.20)
+            else:
+                candidates = [ratchet_floor, chandelier_sl]
+                if structural_sl is not None and structural_sl > current_price:
+                    candidates.append(structural_sl)
+                best_sl = min(candidates)
+                if best_sl <= current_price:
+                    best_sl = current_price + (r_dist * 0.20)
+
+            return round(best_sl, 8)
+        except Exception as e:
+            logger.warning(f"[TRADE_MANAGER] Error calculando Runner Ratchet SL: {e}")
+            return None
 
     def _is_move_confirmed(self, df: pd.DataFrame, level: float, is_long: bool) -> tuple:
 

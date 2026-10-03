@@ -34,17 +34,17 @@ def isolate_primary_account():
         yield
 
 
-# ── TEST 1: CONTRATO DEL RADAR CENTER (14 ACTIVOS VIP) ─────────────────────
+# ── TEST 1: CONTRATO DEL RADAR CENTER (13 ACTIVOS SSoT CANÓNICOS) ──────────
 
-def test_radar_14_vip_assets_universe_integrity():
+def test_radar_13_canonical_assets_universe_integrity():
     """
-    Certifica que la configuración oficial de Slingshot incluya los 14 activos VIP
+    Certifica que la configuración oficial de Slingshot incluya los 13 activos canónicos SSoT
     y que ninguno quede en null o ausente.
     """
     vip_assets = [s.strip().upper().replace("USDT", "") for s in settings.RADAR_ASSETS.split(",") if s.strip()]
-    expected_vip = ["BTC", "ETH", "SOL", "AVAX", "LINK", "XRP", "RENDER", "SUI", "INJ", "NEAR", "FET", "ATOM", "TIA", "XAU"]
+    expected_vip = ["BTC", "ETH", "SOL", "BNB", "LINK", "XRP", "SUI", "INJ", "NEAR", "FET", "ATOM", "TIA", "XAU"]
     
-    assert len(vip_assets) == 14, f"Se esperaban 14 activos VIP en RADAR_ASSETS, encontrados {len(vip_assets)}"
+    assert len(vip_assets) == 13, f"Se esperaban 13 activos SSoT en RADAR_ASSETS, encontrados {len(vip_assets)}"
     for asset in expected_vip:
         assert asset in vip_assets, f"Activo VIP {asset} ausente en RADAR_ASSETS"
 
@@ -52,10 +52,10 @@ def test_radar_14_vip_assets_universe_integrity():
 @pytest.mark.asyncio
 async def test_market_states_live_payload_conformance():
     """
-    Certifica que el store retorne estructuras válidas para los 14 activos del Radar,
+    Certifica que el store retorne estructuras válidas para los 13 activos del Radar,
     con precios numéricos, bias y sin valores NaN o null.
     """
-    vip_assets = ["BTCUSDT", "ETHUSDT", "SOLUSDT", "AVAXUSDT", "LINKUSDT", "XRPUSDT", "RENDERUSDT", "SUIUSDT", "INJUSDT", "NEARUSDT", "FETUSDT", "ATOMUSDT", "TIAUSDT", "XAUUSDT"]
+    vip_assets = ["BTCUSDT", "ETHUSDT", "SOLUSDT", "BNBUSDT", "LINKUSDT", "XRPUSDT", "SUIUSDT", "INJUSDT", "NEARUSDT", "FETUSDT", "ATOMUSDT", "TIAUSDT", "XAUUSDT"]
     
     # Hidratar estados de prueba
     for sym in vip_assets:

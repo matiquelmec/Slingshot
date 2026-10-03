@@ -398,8 +398,8 @@ class BitunixExecutor:
 
             has_meta_kelly = bool(signal.get("playbook") or signal.get("risk_pct_applied"))
             max_notional_usdt = max(150.0, verified_bal * 5.0)
-            max_loss_pct = 0.0335 if has_meta_kelly else 0.026
-            target_safe_pct = min(0.0325, float(signal.get("risk_pct_applied") or 0.0325)) if has_meta_kelly else 0.025
+            max_loss_pct = 0.0360 if has_meta_kelly else 0.026
+            target_safe_pct = min(0.0350, float(signal.get("risk_pct_applied") or 0.0325)) if has_meta_kelly else 0.025
 
             # 1. Clamp nocional institucional (5x Equidad Dinámica SOP-41/102)
             if entry_price and float(entry_price) > 0:
@@ -633,8 +633,8 @@ class BitunixExecutor:
                 verified_bal = self._last_verified_balance if self._last_verified_balance > 0 else await self.get_available_margin_usdt()
                 if verified_bal > 0:
                     has_meta_kelly = bool(signal.get("playbook") or signal.get("risk_pct_applied"))
-                    max_loss_pct = 0.0335 if has_meta_kelly else 0.026
-                    target_safe_pct = min(0.0325, float(signal.get("risk_pct_applied") or 0.0325)) if has_meta_kelly else 0.025
+                    max_loss_pct = 0.0360 if has_meta_kelly else 0.026
+                    target_safe_pct = min(0.0350, float(signal.get("risk_pct_applied") or 0.0325)) if has_meta_kelly else 0.025
                     max_loss_allowed = verified_bal * max_loss_pct
                     if projected_loss > max_loss_allowed:
                         safe_qty = (verified_bal * target_safe_pct) / sl_dist

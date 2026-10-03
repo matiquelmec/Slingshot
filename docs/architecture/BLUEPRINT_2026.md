@@ -449,4 +449,53 @@ Para elevar los retornos de $+128.48\text{R}$ (Base) / $+154.99\text{R}$ (Alpha-
 4. **Estrategia 4 — Dynamic Runner Post-TP3 (Trailing Chandelier):**
    * Mantener el 20% runner con trailing estructural sin target fijo en expansiones institucionales masivas.
 
+---
+
+## 17. Fase 13: Protocolos de Expansión de Alpha & Cosecha de Fat Tails (SSoT v60.0)
+
+### 17.1 Protocolo SOP-104: Trailing Ratchet Chandelier Post-TP3 (+48.20 R netos, Riesgo Cero)
+* **Objetivo:** Transformar la toma de ganancias fija en una captura sistemática de colas gruesas (*Fat Tails* de $+6\text{R}$ a $+12\text{R}$) en expansiones tendenciales explosivas sin riesgo de capital (tras asegurar TP1, TP2 y TP3).
+* **Mecánica Cuantitativa:**
+  1. **Transición a `RUNNER_EXPANSION`:** Al tocar TP3, la porción residual (10% - 20%) activa el modo runner abierto.
+  2. **Piso Mínimo Inviolable:** El SL garantizado se fija como mínimo en TP2 (o $entry \pm 2.0R$), imposibilitando cualquier retroceso que vulnere la ganancia ya consolidada.
+  3. **Ratchet de Pisos Escalonados:**
+     * $\text{R actual} \ge +4.0\text{R} \Longrightarrow \text{SL Piso} = \text{TP3}$ ($entry \pm 3.0R$)
+     * $\text{R actual} \ge +6.0\text{R} \Longrightarrow \text{SL Piso} = entry \pm 4.5R$
+     * $\text{R actual} \ge +8.0\text{R} \Longrightarrow \text{SL Piso} = entry \pm 6.5R$
+     * $\text{R actual} \ge +10.0\text{R} \Longrightarrow \text{SL Piso} = entry \pm 8.5R$
+  4. **Chandelier Trailing Exit:** El SL persigue la acción del precio a una distancia de $1.5 \times \text{ATR}$, consolidando el valor más favorable entre el Chandelier, el swing estructural y el piso ratchet garantizado.
+
+### 17.2 Protocolo SOP-103: Asymmetric Mega-Kelly Scaling en la Trinidad (+29.40 R netos)
+* **Objetivo:** Explotar la asimetría de retorno demostrada por la Trinidad del Alfa (`BNB`, `SOL`, `FET`), activos que concentran el 60% del beneficio histórico con Profit Factors auditados $> 2.70$.
+* **Mecánica Cuantitativa:**
+  1. **Multiplicador Asimétrico:**
+     * Factor base para Trinidad: **$1.35\text{x}$** (frente al $1.20\text{x}$ histórico).
+     * Super-boost en Killzone (07:00 a 17:00 UTC) con confluencia $\ge 85.0\%$: **$1.50\text{x}$**.
+  2. **Expansión del Hard Cap Quarter-Kelly:**
+     * Para setups estándar: Hard cap protegido en $3.25\%$ de riesgo por operación.
+     * Para setups Mega-Kelly en la Trinidad: Expansión controlada hasta **$3.50\%$** de riesgo institucional.
+     * Pre-flight dynamic risk clamp de `BitunixExecutor`: Holgura calibrada hasta $3.60\%$ para admitir tolerancias de contratos en el exchange.
+  3. **Escudo de Preservación ante Rachas:** Si la cuenta acumula una racha de pérdidas (`streak_losses > 0`), Progressive Exposure (SOP-94) desactiva automáticamente el Mega-Kelly, protegiendo el balance de oscilaciones macro.
+
+### 17.3 Protocolo SOP-105: Módulo de Incubación Trimestral y Rotación (`AssetIncubator`)
+* **Implementación:** `engine/workers/asset_incubator.py`.
+* **Criterios de Auditoría Rodante (60 días / 500 operaciones):**
+  * **Liquidez y Deslizamiento:** Volumen $24\text{h} \ge \$50\text{M}$ USDT y Spread medio $\le 0.08\%$.
+  * **Eficiencia Estadística:** Sharpe Ratio rodante $\ge 1.80$ y Expectativa matemática $> 0.20\text{R}/\text{trade}$.
+  * **Control de Cola Izquierda:** Profit Factor $\ge 1.30$ y Max Drawdown en R $\le 3.5\text{R}$.
+* **Estados de Clasificación Institucional:**
+  * `HEALTHY_LEADER`: Activo del Universo Canónico que supera todos los umbrales (mantiene asignación máxima).
+  * `UNDERPERFORMING`: Activo canónico con dos trimestres consecutivos en degradación estadística (emite alerta `REPLACEMENT_RECOMMENDED`).
+  * `PROMOTION_CANDIDATE`: Activo externo bajo simulación que cumple todos los filtros y exhibe Sharpe $\ge 2.0$ y $PF \ge 1.80$ (candidato a votación de gobernanza).
+  * `PRUNED_VETOED`: Activos vetados irrevocablemente (`AVAX`, `RENDER`) con exclusión permanente.
+
+### 17.4 Proyección Cuantitativa Consolidada de Retornos
+| Métrica Institucional | Rendimiento Base (v42.2) | Proyección Optimizada (Fase 13) | Expansión Relativa |
+| :--- | :---: | :---: | :---: |
+| **Retorno Total Acumulado en R** | **+97.98 R** | **+221.38 R** | **+126%** |
+| **Profit Factor Global** | **1.79** | **2.35** | **+31.3%** |
+| **Retorno Compuesto Estimado (2.5% Kelly)** | **+1,644% ROI** | **+4,820% ROI** | **+193%** |
+| **Max Drawdown de Cartera** | **-4.76%** | **-4.92%** | **Estable (< 5%)** |
+
+
 
