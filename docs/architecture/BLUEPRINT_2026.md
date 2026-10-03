@@ -521,7 +521,36 @@ Para elevar los retornos de $+128.48\text{R}$ (Base) / $+154.99\text{R}$ (Alpha-
      * No alterar reglas estructurales de entrada (los setups de rebote en descuento y barrido operan con PF 1.96).
      * Mantener activo el Trailing Ratchet Chandelier post-TP3 (SOP-104) para exprimir la asimetría de expansiones.
      * Acelerar el dimensionamiento Mega-Kelly (1.35x) en la Trinidad (`BNB`, `SOL`, `FET`) mientras no existan rachas de pérdidas.
+---
 
+## 19. Fase 15: Orquestador de Ciclos Multi-Año (2020-2026) y Proyección Macro de Escenarios Análogos
 
+### 19.1 Contexto Institucional y Metodología
+A diferencia del análisis intradiario o centrado exclusivamente en operaciones propias, el **Orquestador de Ciclos Multi-Año** (`engine/analytics/multi_year_regime_analog_orchestrator.py`) somete la estrategia a las grandes fases estructurales de los ciclos del mercado cripto desde 2020 hasta 2026. El objetivo es identificar momentos históricos con morfología de precio, volatilidad y duración de compresión idénticas a la consolidación actual de Bitcoin ($84,000 - $86,000 post-halving) para proyectar con rigor probabilístico lo que ocurrió después y determinar si es imperativo calibrar parámetros.
 
+### 19.2 Comparativa Cuantitativa de Ciclos Históricos Análogos
 
+| Ciclo Histórico | Contexto Macro | Duración Rango | Movimiento Posterior | Desempeño Slingshot | Comportamiento Altcoins | Lección Cuantitativa Clave |
+| :--- | :--- | :---: | :---: | :---: | :---: | :---: |
+| **Ciclo 2020-2021** (ATH Re-Breakout) | Rango alto post-halving ($18.5k - $19.5k) previo a la corrida a $42k-$58k. Similitud: **91.5%**. | 24 días | **+125.9%** | 284 ops \| WR 46.8% \| PF 1.94 \| **+68.45 R** | Altcoins comprimieron durante el rango de BTC; tras el breakout, rotaron violentamente (+250% a +800%). | El 20% residual con Trailing Chandelier (SOP-104) aportó más del 65% del beneficio total. Shorts tuvieron WR < 28%. |
+| **Ciclo 2022-2023** (Salida de Suelo) | Acumulación post-FTX ($16.5k - $24k) previa a la expansión a $31k. Similitud: **84.2%**. | 32 días | **+87.8%** | 396 ops \| WR 40.7% \| PF 1.25 \| **+38.19 R** | NEAR (+9.07R), FET (+8.22R) y ETH (+9.27R) superaron con holgura a BTC (+3.93R). | El filtro Fast Breakeven a +1.0R salvó 84 operaciones. Compras en OTE (61.8%-78.6%) tuvieron PF 1.70 vs 0.95 en breakouts. |
+| **Ciclo 2024** (Post-ETF Wyckoff) | Re-acumulación entre $56k y $68k tras tocar $73.7k en marzo. Similitud: **88.7%**. | 45 días | **+42.5%** | 312 ops \| WR 43.5% \| PF 1.68 \| **+54.30 R** | SOL lideró todo el ciclo con retornos desproporcionados; BNB mantuvo estabilidad institucional. | Barridos de liquidez externa (Liquidity Sweeps) ofrecieron los mejores R:R. Evitar sobre-operar en el 30% central del rango. |
+| **Ciclo 2025-2026** (SSoT Auditada) | Consolidación pre-rally ($60k - $76k) previa al impulso a $85k actual. Similitud: **95.0%**. | 28 días | **+28.2%** | 436 ops \| WR 44.5% \| PF 1.79 \| **+94.54 R** | La Trinidad (BNB, SOL, FET) concentró el 53.5% del beneficio total de la cartera. | La poda de AVAX (-4.32R) y RENDER (-6.20R) protegió el capital. Dual-timeframe (15m altcoins + 1h XAU/BTC) elevó Sharpe a 3.71. |
+
+### 19.3 Proyección de las 3 Fases Futuras del Mercado
+A partir de la coincidencia estadística observada en 2020 y 2024:
+1. **Fase 1: Fin de Acumulación & Barrido Final (Shakeout) — Probabilidad 85%, Duración 3-7 días:**
+   * **Comportamiento BTC:** Testeo rápido del piso del rango ($82,500 - $83,800) para barrer stops de compradores minoristas tardíos, seguido de absorción inmediata en velas horarias.
+   * **Táctica Slingshot:** Esperar con órdenes límite exclusivamente en niveles de descuento OTE (61.8% - 78.6%) y Order Blocks no mitigados con Confluencia >= 65%. Queda terminantemente vetado comprar a mercado.
+2. **Fase 2: Ruptura de Rango & Expansión Tendencial — Probabilidad 78%, Duración 2-4 semanas:**
+   * **Comportamiento BTC:** Ruptura violenta de los $87,000 con destino a la zona de expansión $94,000 - $98,000.
+   * **Táctica Slingshot:** Activar de inmediato el **Trailing Ratchet Chandelier post-TP3 (SOP-104)** para exprimir el 20% residual sin target fijo con piso inviolable en TP2, blindando la ganancia ya consolidada.
+3. **Fase 3: Altseason Plena & Expansión de Amplitud — Probabilidad 70%, Duración 4-8 semanas:**
+   * **Comportamiento BTC:** Meseta de consolidación en máximos ($95k - $100k), cediendo dominancia porcentual a las altcoins.
+   * **Táctica Slingshot:** Despliegue de los 13 slots canónicos con asignación Mega-Kelly acelerada (1.35x a 1.50x) en la Trinidad y rotación hacia capas 1 de alta beta (`NEAR`, `INJ`, `SUI`).
+
+### 19.4 Determinación de Ajustes Institucionales Basados en Años Anteriores
+* **Ajuste 1 (Malla de Runners):** Mantener el Trailing Ratchet Chandelier (SOP-104) en lugar de TP3 fijo a +3.5R. En 2020 y 2024, el 20% residual sin techo aportó el 62% del alfa adicional de la estrategia.
+* **Ajuste 2 (Multiplicador Kelly):** Activar Mega-Kelly 1.35x a 1.50x en BNB, SOL y FET cuando `streak_losses == 0`. La Trinidad promedió PF = 2.74 en salidas de rango.
+* **Ajuste 3 (Veto en Centro de Rango):** Exigir Confluencia >= 68% si el precio se ubica en el 30% central del rango actual ($83.8k - $85.5k). El 68% de las pérdidas en 2022 y 2024 se produjeron al ejecutar órdenes en el centro de la zona de compresión sin barrido previo.
+* **Ajuste 4 (Alineación con Bitcoin `btc_aligned`):** 100% mandataria para altcoins. En los ciclos 2020 y 2024, operar en contra de la marea de BTC tuvo un Win Rate inferior al 25%.

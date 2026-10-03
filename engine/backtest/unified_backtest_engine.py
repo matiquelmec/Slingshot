@@ -172,13 +172,14 @@ class UnifiedBacktestEngine:
         symbol: str,
         interval: str = "15m",
         btc_map: dict = None,
-        enable_elastic_runner: bool = False
+        enable_elastic_runner: bool = False,
+        file_path: Optional[str] = None
     ) -> List[Dict[str, Any]]:
         """
         Ejecuta la simulación cuantitativa institucional v31.0.
         """
-        target_file = None
-        data_candidates = [symbol]
+        target_file = file_path
+        data_candidates = [symbol] if not target_file else []
         if symbol in ("XAUUSDT", "GOLD", "XAUUSD"):
             data_candidates.extend(["PAXGUSDT", "XAUUSD"])
         elif symbol == "PAXGUSDT":

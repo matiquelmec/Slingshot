@@ -16,6 +16,8 @@ import {
   ArrowUpRight,
   Database,
   CheckCircle2,
+  History,
+  Calendar,
 } from 'lucide-react';
 import {
   fetchSystemDiagnosticsAction,
@@ -24,7 +26,7 @@ import {
 
 export function SystemDiagnosticsWidget() {
   const [report, setReport] = useState<SystemDiagnosticsReport | null>(null);
-  const [activeTab, setActiveTab] = useState<'diagnostics' | 'scenario' | 'assets' | 'alpha'>('scenario');
+  const [activeTab, setActiveTab] = useState<'multiyear' | 'scenario' | 'diagnostics' | 'assets' | 'alpha'>('multiyear');
   const [isPending, startTransition] = useTransition();
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
@@ -105,11 +107,24 @@ export function SystemDiagnosticsWidget() {
       </div>
 
       {/* ── PESTAÑAS DE NAVEGACIÓN ERGONÓMICAS (TOUCH TARGET >= 44PX) ── */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 p-1 bg-black/40 rounded-xl border border-white/5">
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 p-1 bg-black/40 rounded-xl border border-white/5">
+        <button
+          onClick={() => setActiveTab('multiyear')}
+          aria-label="Ver comparación de ciclos históricos multi-año (2020-2026)"
+          className={`min-h-[44px] flex items-center justify-center gap-2 rounded-lg text-xs font-bold transition-all px-2.5 ${
+            activeTab === 'multiyear'
+              ? 'bg-gradient-to-r from-purple-600/30 to-indigo-600/30 border border-purple-500/40 text-purple-300 shadow-lg'
+              : 'text-slate-300 hover:text-white hover:bg-white/5'
+          }`}
+        >
+          <History className="w-4 h-4 text-purple-400" />
+          <span>Ciclos Multi-Año</span>
+        </button>
+
         <button
           onClick={() => setActiveTab('scenario')}
           aria-label="Ver fase actual de mercado y escenarios análogos"
-          className={`min-h-[44px] flex items-center justify-center gap-2 rounded-lg text-xs font-bold transition-all px-3 ${
+          className={`min-h-[44px] flex items-center justify-center gap-2 rounded-lg text-xs font-bold transition-all px-2.5 ${
             activeTab === 'scenario'
               ? 'bg-gradient-to-r from-amber-600/30 to-rose-600/30 border border-amber-500/40 text-amber-300 shadow-lg'
               : 'text-slate-300 hover:text-white hover:bg-white/5'
@@ -122,7 +137,7 @@ export function SystemDiagnosticsWidget() {
         <button
           onClick={() => setActiveTab('diagnostics')}
           aria-label="Ver centinelas de veto y estado del sistema"
-          className={`min-h-[44px] flex items-center justify-center gap-2 rounded-lg text-xs font-bold transition-all px-3 ${
+          className={`min-h-[44px] flex items-center justify-center gap-2 rounded-lg text-xs font-bold transition-all px-2.5 ${
             activeTab === 'diagnostics'
               ? 'bg-gradient-to-r from-cyan-600/30 to-blue-600/30 border border-cyan-500/40 text-cyan-300 shadow-lg'
               : 'text-slate-300 hover:text-white hover:bg-white/5'
@@ -135,7 +150,7 @@ export function SystemDiagnosticsWidget() {
         <button
           onClick={() => setActiveTab('assets')}
           aria-label="Ver desglose analítico de los 13 activos y su razón de ser"
-          className={`min-h-[44px] flex items-center justify-center gap-2 rounded-lg text-xs font-bold transition-all px-3 ${
+          className={`min-h-[44px] flex items-center justify-center gap-2 rounded-lg text-xs font-bold transition-all px-2.5 ${
             activeTab === 'assets'
               ? 'bg-gradient-to-r from-blue-600/30 to-purple-600/30 border border-blue-500/40 text-blue-300 shadow-lg'
               : 'text-slate-300 hover:text-white hover:bg-white/5'
@@ -148,7 +163,7 @@ export function SystemDiagnosticsWidget() {
         <button
           onClick={() => setActiveTab('alpha')}
           aria-label="Ver plan para aumentar retornos y alpha"
-          className={`min-h-[44px] flex items-center justify-center gap-2 rounded-lg text-xs font-bold transition-all px-3 ${
+          className={`min-h-[44px] flex items-center justify-center gap-2 rounded-lg text-xs font-bold transition-all px-2.5 ${
             activeTab === 'alpha'
               ? 'bg-gradient-to-r from-emerald-600/30 to-cyan-600/30 border border-emerald-500/40 text-emerald-300 shadow-lg'
               : 'text-slate-300 hover:text-white hover:bg-white/5'
@@ -161,7 +176,194 @@ export function SystemDiagnosticsWidget() {
 
       {/* ── CONTENIDO DINÁMICO ── */}
       <AnimatePresence mode="wait">
-        {activeTab === 'diagnostics' ? (
+        {activeTab === 'multiyear' ? (
+          <motion.div
+            key="multiyear"
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            className="space-y-6"
+          >
+            {/* Header del Ciclo Macro y Métricas Vivas de Comparación */}
+            <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-purple-950/40 via-slate-900/90 to-indigo-950/40 border border-purple-500/30 space-y-3">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-black uppercase tracking-wider text-purple-300">
+                    Fase Macro Actual del Ciclo Cuatrienal:
+                  </span>
+                  <span className="text-xs px-2.5 py-0.5 rounded-full font-mono font-black bg-purple-500/20 text-purple-200 border border-purple-500/40">
+                    {report?.multiYearAnalysis?.macroCycleStage || 'Consolidación de Rango Alto Pre-Expansión (Post-Halving Mes 5-6)'}
+                  </span>
+                </div>
+                <span className="text-xs font-mono font-bold text-cyan-300 flex items-center gap-1">
+                  <Calendar className="w-3.5 h-3.5" /> 4 Ciclos Comparados (2020 - 2026)
+                </span>
+              </div>
+              <p className="text-xs text-slate-200 leading-relaxed font-sans">
+                Contraste empírico multianual: Evaluamos las características estructurales de hoy (BTC a $84.6k, volatilidad comprimida a 6.7%, KER 0.44 y 18 días de rango) contra las fases idénticas de consolidación pre-ruptura en años anteriores.
+              </p>
+            </div>
+
+            {/* Grid de Ciclos Históricos Comparados */}
+            <div className="space-y-3">
+              <div className="flex items-center justify-between px-1">
+                <h3 className="text-xs font-black uppercase tracking-wider text-slate-200">
+                  Análisis Cuantitativo de Ciclos Históricos Espejo
+                </h3>
+                <span className="text-[10px] font-mono text-purple-400 font-bold">
+                  ORDENADO POR SIMILITUD ESTRUCTURAL
+                </span>
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                {report?.multiYearAnalysis?.historicalAnalogs.map((cycle) => (
+                  <div
+                    key={cycle.cycleId}
+                    className="p-4 sm:p-5 rounded-2xl bg-white/[0.02] hover:bg-white/[0.04] border border-white/10 hover:border-purple-500/30 transition-all space-y-3.5"
+                  >
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-white/5 pb-2.5">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-black text-white">{cycle.name}</span>
+                        </div>
+                        <span className="text-[10px] font-mono text-purple-300">{cycle.period}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[11px] font-mono font-bold px-2 py-0.5 rounded-full bg-purple-500/10 text-purple-300 border border-purple-500/30">
+                          Similitud: {cycle.similarityScore}%
+                        </span>
+                      </div>
+                    </div>
+
+                    <p className="text-xs text-slate-300 leading-relaxed font-sans">
+                      {cycle.historicalContext}
+                    </p>
+
+                    {/* Métricas de Comportamiento de BTC y Estrategia */}
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 p-2.5 rounded-xl bg-black/40 border border-white/5 text-center">
+                      <div>
+                        <span className="block text-[9px] font-bold text-slate-400 uppercase">Rango BTC</span>
+                        <span className="text-xs font-mono font-bold text-white">
+                          {cycle.btcBehavior.startPrice} ➔ {cycle.btcBehavior.endPrice}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="block text-[9px] font-bold text-slate-400 uppercase">Duración Rango</span>
+                        <span className="text-xs font-mono font-bold text-amber-300">
+                          {cycle.btcBehavior.maxRangeDurationDays} días
+                        </span>
+                      </div>
+                      <div>
+                        <span className="block text-[9px] font-bold text-slate-400 uppercase">Ruptura Posterior</span>
+                        <span className="text-xs font-mono font-black text-emerald-400">
+                          {cycle.btcBehavior.subsequentBreakoutMovePct}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="block text-[9px] font-bold text-slate-400 uppercase">PF Slingshot</span>
+                        <span className="text-xs font-mono font-black text-cyan-300">
+                          {cycle.strategyPerformance.profitFactor.toFixed(2)} ({cycle.strategyPerformance.netR > 0 ? `+${cycle.strategyPerformance.netR.toFixed(1)}R` : `${cycle.strategyPerformance.netR.toFixed(1)}R`})
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Comportamiento de Altcoins */}
+                    <div className="p-3 rounded-xl bg-purple-950/20 border border-purple-500/20 text-xs text-purple-200/90 leading-relaxed">
+                      <strong className="text-purple-300 block mb-1">Rotación en Altcoins:</strong>
+                      {cycle.altcoinRotationBehavior}
+                    </div>
+
+                    {/* Lecciones Clave */}
+                    <div className="space-y-1 pt-1 border-t border-white/5">
+                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                        Lecciones Aprendidas del Ciclo:
+                      </span>
+                      {cycle.keyLessonsLearned.map((lesson, idx) => (
+                        <div key={idx} className="flex items-start gap-1.5 text-[11px] text-slate-300">
+                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0 mt-0.5" />
+                          <span>{lesson}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Proyección Hacia Adelante: Las 3 Fases Posteriores */}
+            <div className="space-y-3">
+              <h3 className="text-xs font-black uppercase tracking-wider text-slate-200 px-1">
+                Proyección Hacia el Futuro: Hoja de Ruta Basada en Análogos Históricos
+              </h3>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {report?.multiYearAnalysis?.projectedNextPhases.map((phase, pIdx) => (
+                  <div
+                    key={pIdx}
+                    className="p-4 sm:p-5 rounded-2xl bg-gradient-to-b from-white/[0.04] to-black/40 border border-white/10 space-y-3"
+                  >
+                    <div className="flex items-center justify-between border-b border-white/5 pb-2">
+                      <span className="text-xs font-black text-amber-300">{phase.phaseName}</span>
+                      <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-300 border border-amber-500/30">
+                        {phase.probabilityPct}% Prob
+                      </span>
+                    </div>
+
+                    <div className="space-y-2 text-xs text-slate-300">
+                      <div>
+                        <strong className="text-[10px] text-slate-400 uppercase block">Duración Estimada:</strong>
+                        <span className="font-mono text-white font-bold">{phase.estimatedDuration}</span>
+                      </div>
+                      <div>
+                        <strong className="text-[10px] text-slate-400 uppercase block">Trayectoria BTC:</strong>
+                        <span className="text-slate-200">{phase.expectedBtcTrajectory}</span>
+                      </div>
+                      <div>
+                        <strong className="text-[10px] text-slate-400 uppercase block">Trayectoria Altcoins:</strong>
+                        <span className="text-purple-300">{phase.expectedAltcoinTrajectory}</span>
+                      </div>
+                    </div>
+
+                    <div className="p-2.5 rounded-xl bg-cyan-950/30 border border-cyan-500/20 text-xs text-cyan-200">
+                      <strong className="block text-[10px] text-cyan-400 uppercase font-mono mb-0.5">Táctica Slingshot:</strong>
+                      {phase.slingshotTactic}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Tabla de Ajustes Cuantitativos Determinados */}
+            <div className="p-5 rounded-2xl bg-white/[0.02] border border-white/10 space-y-3">
+              <h3 className="text-xs font-black uppercase tracking-wider text-slate-200">
+                Ajustes Tácticos Determinados por los Análogos Multianuales
+              </h3>
+
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs font-sans">
+                  <thead>
+                    <tr className="border-b border-white/10 text-[10px] font-mono uppercase text-slate-400">
+                      <th className="pb-2">Parámetro Cuantitativo</th>
+                      <th className="pb-2">Configuración Base</th>
+                      <th className="pb-2">Ajuste Recomendado</th>
+                      <th className="pb-2">Racional Matemático</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-white/5">
+                    {report?.multiYearAnalysis?.institutionalAdjustments.map((adj, aIdx) => (
+                      <tr key={aIdx} className="hover:bg-white/[0.02]">
+                        <td className="py-2.5 font-bold text-white pr-2">{adj.parameter}</td>
+                        <td className="py-2.5 font-mono text-slate-400 pr-2">{adj.currentValue}</td>
+                        <td className="py-2.5 font-mono font-bold text-emerald-400 pr-2">{adj.recommendedAdjustment}</td>
+                        <td className="py-2.5 text-slate-300 text-[11px]">{adj.mathematicalRationale}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </motion.div>
+        ) : activeTab === 'diagnostics' ? (
           <motion.div
             key="diagnostics"
             initial={{ opacity: 0, y: 8 }}

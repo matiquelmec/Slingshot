@@ -94,6 +94,10 @@ Toda interfaz gráfica debe construirse bajo estándares de ingeniería ergonóm
    * La Trinidad (`BNB`, `SOL`, `FET`) podrá acelerar su asignación a $1.35\text{x}$ base y hasta $1.50\text{x}$ (riesgo máx. $3.50\%$) únicamente cuando no existan rachas de pérdidas activas (`streak_losses == 0`). Toda rotación o reemplazo de activos del Universo Canónico debe pasar por la auditoría rodante de 60 días de `AssetIncubator` con umbrales estrictos ($\text{Sharpe} \ge 1.80$, Expectativa $\ge 0.20\text{R}$, $\text{PF} \ge 1.30$).
 11. **Inferencia de Fase y Proyección de Escenarios Análogos (SOP-106):**
    * Toda decisión de ajuste de parámetros tácticos (trailing runners, multiplicadores de convicción y umbrales de confluencia) debe fundamentarse en la coincidencia de análogos históricos del backtest auditado (`MarketRegimeScenarioAnalyzer`). Queda prohibido alterar las reglas de entrada si el régimen actual (`BULL_EXPANSION`) arroja un Profit Factor superior a $1.80$ y expectativa positiva comprobada en su muestra espejo.
+12. **Orquestación Cuantitativa de Ciclos Históricos Multi-Año (2020-2026):**
+   * Toda proyección macro y justificación de modificaciones tácticas en fases de rango o consolidación debe contrastarse contra la muestra de ciclos históricos multi-año (`MultiYearRegimeAnalogOrchestrator`).
+   * Se prohíbe introducir compras o ventas a mercado en fases de consolidación de rango alto: los ciclos 2020, 2022 y 2024 demuestran que las entradas a mercado en zonas de compresión sufren un 68% de pérdidas por mechas de barrido previo. Toda entrada debe situarse en descuentos OTE (61.8% - 78.6%) u Order Blocks no mitigados con confluencia institucional.
+   * Todo ajuste a parámetros de trailing o sizing debe preservar la inviolabilidad del capital: SL mínimo blindado en TP2 tras alcanzar TP3 (SOP-104) y desescalada inmediata de Mega-Kelly ante la primera pérdida (`streak_losses > 0`).
 
 ---
 

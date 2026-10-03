@@ -139,6 +139,46 @@ describe('Features: System Diagnostics & Alpha Optimizer Slice (FSD & Zero Trust
     expect(scenario.isAdjustmentRequired).toBe(true);
     expect(scenario.actionableGuidelines.length).toBeGreaterThanOrEqual(3);
   });
+
+  it('debe auditar el orquestador de ciclos multi-año (2020-2026), proyecciones y ajustes requeridos', async () => {
+    const { fetchMultiYearCycleAnalysisAction, multiYearCycleQuerySchema } = await import('@/features');
+    
+    // 1. Schema validation
+    const parsed = multiYearCycleQuerySchema.parse({});
+    expect(parsed.targetBtcPrice).toBe(84600.0);
+    expect(parsed.includeDetailedPhases).toBe(true);
+
+    // 2. Action execution with Zero Trust session
+    const res = await fetchMultiYearCycleAnalysisAction({}, mockSession);
+    expect(res.success).toBe(true);
+    expect(res.data).toBeDefined();
+
+    const data = res.data!;
+    expect(data.macroCycleStage).toContain('Consolidación de Rango Alto');
+    expect(data.historicalAnalogs.length).toBe(4);
+
+    const cycleIds = data.historicalAnalogs.map((c) => c.cycleId);
+    expect(cycleIds).toContain('cycle_2020_2021_post_halving_ath');
+    expect(cycleIds).toContain('cycle_2022_2023_bear_to_bull_recovery');
+    expect(cycleIds).toContain('cycle_2024_etf_reaccumulation');
+    expect(cycleIds).toContain('cycle_2025_2026_pre_expansion');
+
+    // 3. Verificar métricas del ciclo 2020 (similitud alta con consolidación actual)
+    const cycle2020 = data.historicalAnalogs.find((c) => c.cycleId === 'cycle_2020_2021_post_halving_ath');
+    expect(cycle2020).toBeDefined();
+    expect(cycle2020?.strategyPerformance.profitFactor).toBeGreaterThan(1.80);
+    expect(cycle2020?.strategyPerformance.netR).toBeGreaterThan(50);
+    expect(cycle2020?.similarityScore).toBeGreaterThan(90);
+
+    // 4. Proyecciones futuras y ajustes tácticos
+    expect(data.projectedNextPhases.length).toBe(3);
+    expect(data.institutionalAdjustments.length).toBe(4);
+
+    const params = data.institutionalAdjustments.map((a) => a.parameter);
+    expect(params).toContain('Malla de Salidas en Runners (Post-TP3)');
+    expect(params).toContain('Multiplicador Kelly en la Trinidad');
+    expect(params).toContain('Veto de Operativa en Centro de Rango');
+  });
 });
 
 

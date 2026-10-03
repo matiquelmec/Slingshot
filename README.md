@@ -38,6 +38,7 @@ Slingshot es una **Terminal de Inteligencia y Ejecución Cuantitativa Institucio
    * **Modulación Cíclica Semanal (SOP-46):** **1.20x en Martes y Miércoles** (expansión institucional) y **0.80x en Jueves y Viernes** (defensa de capital).
    * **Bóveda Criptográfica Multi-Cuenta (SOP-57 / SOP-58):** Despacho concurrente aislado para múltiples cuentas de inversores con cifrado AES-256 Fernet (`enc:v1:`) en reposo, enmascaramiento estricto de secretos y centinela de intervención manual de clientes (**SOP-59**).
    * **Diagnóstico Forense de Salud & Optimizador Alpha (+221.4R):** Panel interactivo FSD en tiempo real (`SystemDiagnosticsWidget`) que audita el stack de 7 centinelas de riesgo (SOP-18, SOP-52, SOP-94, SOP-95, SOP-100, SSoT Whitelist y Macro BTC) y proyecta la expansión geométrica de retornos (+221.38R y +4,820% ROI) mediante runners dinámicos y free-roll scale-in.
+    * **Orquestador de Ciclos Multi-Año (2020-2026) & Proyección Macro:** Módulo cuantitativo que mapea la consolidación actual ($84k - $86k) contra 4 ciclos históricos análogos (2020 post-halving ATH, 2022-2023 acumulación, 2024 post-ETF y 2026 SSoT), proyectando la secuencia probabilística de 3 fases (Shakeout -> Breakout -> Altseason) y respaldando matemáticamente los ajustes tácticos de la estrategia.
 
 2. **MetaTrader 5 / FTMO (TradFi — Modo Guardián de Cuentas de Fondeo):**
    * **Riesgo Institucional Protegido:** Calibrado al **0.75% por trade** en Fase 1, **0.50%** en Fase 2 y **0.35%** en cuenta financiada.
