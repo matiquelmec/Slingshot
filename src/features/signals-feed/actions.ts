@@ -68,6 +68,21 @@ export async function fetchSignalsAction(
       .orderBy(desc(signals.createdAt))
       .limit(parsedParams.limit);
 
+    const safeDateIso = (val: unknown): string | undefined => {
+      if (!val) return undefined;
+      if (val instanceof Date) return isNaN(val.getTime()) ? undefined : val.toISOString();
+      if (typeof val === 'number') {
+        const ms = val < 10000000000 ? val * 1000 : val;
+        const d = new Date(ms);
+        return isNaN(d.getTime()) ? undefined : d.toISOString();
+      }
+      if (typeof val === 'string') {
+        const d = new Date(val);
+        return isNaN(d.getTime()) ? undefined : d.toISOString();
+      }
+      return undefined;
+    };
+
     const formatted: QuantitativeSignal[] = rows.map((r) => ({
       id: r.id,
       tenantId: r.tenantId,
@@ -84,7 +99,7 @@ export async function fetchSignalsAction(
       kerValue: r.kerValue,
       isExecutionAllowed: r.confluenceScore >= 70,
       status: (r.status || 'PENDING') as any,
-      createdAt: r.createdAt ? new Date(r.createdAt).toISOString() : undefined,
+      createdAt: safeDateIso(r.createdAt),
     }));
 
     return {

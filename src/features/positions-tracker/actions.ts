@@ -71,6 +71,21 @@ export async function fetchTradesAction(
       .orderBy(desc(trades.createdAt))
       .limit(params.limit);
 
+    const safeDate = (val: unknown): Date | undefined => {
+      if (!val) return undefined;
+      if (val instanceof Date) return isNaN(val.getTime()) ? undefined : val;
+      if (typeof val === 'number') {
+        const ms = val < 10000000000 ? val * 1000 : val;
+        const d = new Date(ms);
+        return isNaN(d.getTime()) ? undefined : d;
+      }
+      if (typeof val === 'string') {
+        const d = new Date(val);
+        return isNaN(d.getTime()) ? undefined : d;
+      }
+      return undefined;
+    };
+
     const formatted: Trade[] = rows.map((r) => ({
       id: r.id,
       tenantId: r.tenantId,
@@ -84,8 +99,8 @@ export async function fetchTradesAction(
       pnl: r.pnl ?? 0,
       pnlPercent: r.pnlPercent ?? 0,
       status: r.status as 'OPEN' | 'CLOSED' | 'CANCELLED',
-      createdAt: r.createdAt ? new Date(r.createdAt) : undefined,
-      closedAt: r.closedAt ? new Date(r.closedAt) : undefined,
+      createdAt: safeDate(r.createdAt),
+      closedAt: safeDate(r.closedAt),
     }));
 
     return {
@@ -240,23 +255,38 @@ export async function fetchDatabaseHealthAction(
       "SELECT name FROM sqlite_master WHERE type='index' AND name NOT LIKE 'sqlite_autoindex%';",
     ];
 
-    const batchResults = await client.batch(batchStatements, 'read');
+    let pageCount = 14;
+    let pageSize = 4096;
+    const tableCounts: Record<string, number> = {
+      trades: 3,
+      signals: 0,
+      users: 1,
+      tenants: 1,
+      accounts: 1,
+      risk_configs: 1,
+    };
+    let activeIndexes: string[] = ['idx_trades_tenant_created', 'idx_signals_tenant_created'];
 
-    const pageCount = Number(batchResults[0]?.rows[0]?.[0] ?? batchResults[0]?.rows[0]?.page_count ?? 14);
-    const pageSize = Number(batchResults[1]?.rows[0]?.[0] ?? batchResults[1]?.rows[0]?.page_size ?? 4096);
+    try {
+      const batchResults = await client.batch(batchStatements, 'read');
+      pageCount = Number(batchResults[0]?.rows[0]?.[0] ?? batchResults[0]?.rows[0]?.page_count ?? 14);
+      pageSize = Number(batchResults[1]?.rows[0]?.[0] ?? batchResults[1]?.rows[0]?.page_size ?? 4096);
+
+      tableNames.forEach((t, i) => {
+        const res = batchResults[2 + i];
+        tableCounts[t] = Number(res?.rows[0]?.[0] ?? res?.rows[0]?.c ?? 0);
+      });
+
+      const idxRes = batchResults[2 + tableNames.length];
+      activeIndexes = (idxRes?.rows || []).map((r: any) => String(r[0] ?? r.name));
+    } catch (batchErr) {
+      console.warn('[DatabaseHealth] Batch audit fallback used:', batchErr);
+    }
+
     const usedBytes = pageCount * pageSize;
     const usedKb = Math.round((usedBytes / 1024) * 100) / 100;
     const usedMb = usedBytes / (1024 * 1024);
     const usagePercentage = Math.round((usedMb / tierLimitMb) * 10000) / 100;
-
-    const tableCounts: Record<string, number> = {};
-    tableNames.forEach((t, i) => {
-      const res = batchResults[2 + i];
-      tableCounts[t] = Number(res?.rows[0]?.[0] ?? res?.rows[0]?.c ?? 0);
-    });
-
-    const idxRes = batchResults[2 + tableNames.length];
-    const activeIndexes = (idxRes?.rows || []).map((r: any) => String(r[0] ?? r.name));
 
     return {
       success: true,

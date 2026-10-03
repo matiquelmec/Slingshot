@@ -6,10 +6,15 @@ const DEFAULT_TURSO_URL = 'libsql://slingshot-slingshotagente.aws-ap-northeast-1
 const DEFAULT_TURSO_TOKEN = 'eyJhbGciOiJFZERTQSIsInR5cCI6IkpXVCJ9.eyJhIjoicnciLCJpYXQiOjE3OTA5NTQwNDEsImlkIjoiMDFhMGZkMmQtY2EwMS03NTNiLTliNWMtMGE2MGQzYTM4NWJiIiwia2lkIjoicUMwQ0plVkY2amwzUkE1dlNjbEJXbG5XRXNoNHpyZURUbUE0bDBqUm1NQSIsInJpZCI6IjM5NzMxMDAyLTg3YzYtNGUyOS05NDc2LTZjZDZmM2VkNTViNSJ9.vvPQtU5zulZzdYMY2G70VyOoyKDvGrVXpbp2QiPhPJHp2Y5oVTN1XNhE0vRn8qzD4UrLhr2OR1TpLqHs_i59Dg';
 
 // En Vercel / Web standard APIs, 'file:' no está soportado. Usamos siempre el endpoint institucional de Turso Cloud.
-const rawUrl = process.env.TURSO_DATABASE_URL || DEFAULT_TURSO_URL;
+const rawUrl = (process.env.TURSO_DATABASE_URL || DEFAULT_TURSO_URL).trim();
 const isWebOrVercel = typeof window !== 'undefined' || !!process.env.VERCEL || !rawUrl.startsWith('file:');
 const url = isWebOrVercel && rawUrl.startsWith('file:') ? DEFAULT_TURSO_URL : rawUrl;
-const authToken = process.env.TURSO_AUTH_TOKEN || (url === DEFAULT_TURSO_URL ? DEFAULT_TURSO_TOKEN : undefined);
+
+// Fallback robusto: si no hay TURSO_AUTH_TOKEN explícito en el entorno pero la URL apunta a Turso Cloud (o es la default),
+// se inyecta siempre el DEFAULT_TURSO_TOKEN institucional garantizando que Vercel nunca falle con 401.
+const envToken = process.env.TURSO_AUTH_TOKEN?.trim();
+const isTursoCloud = url.includes('turso.io') || url.startsWith('libsql:') || url.startsWith('https:');
+const authToken = envToken || (isTursoCloud ? DEFAULT_TURSO_TOKEN : undefined);
 
 export const client = createClient({
   url,
