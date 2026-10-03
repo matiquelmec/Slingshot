@@ -92,6 +92,8 @@ Toda interfaz gráfica debe construirse bajo estándares de ingeniería ergonóm
    * En la porción residual (10-20%) tras tocar TP3, la fase `RUNNER_EXPANSION` debe blindar irrevocablemente el SL en TP2 como piso mínimo absoluto. A medida que el precio avance a $+4.0\text{R}$, $+6.0\text{R}$, $+8.0\text{R}$ y $+10.0\text{R}$, el ratchet escalonado elevará los pisos a $\text{TP3}$, $+4.5\text{R}$, $+6.5\text{R}$ y $+8.5\text{R}$ respectivamente, combinándose con el Chandelier Exit ($1.5 \times \text{ATR}$) sin permitir retroceso alguno del SL.
 10. **Aceleración Mega-Kelly en la Trinidad y Gobernanza de Incubación (SOP-103 & SOP-105):**
    * La Trinidad (`BNB`, `SOL`, `FET`) podrá acelerar su asignación a $1.35\text{x}$ base y hasta $1.50\text{x}$ (riesgo máx. $3.50\%$) únicamente cuando no existan rachas de pérdidas activas (`streak_losses == 0`). Toda rotación o reemplazo de activos del Universo Canónico debe pasar por la auditoría rodante de 60 días de `AssetIncubator` con umbrales estrictos ($\text{Sharpe} \ge 1.80$, Expectativa $\ge 0.20\text{R}$, $\text{PF} \ge 1.30$).
+11. **Inferencia de Fase y Proyección de Escenarios Análogos (SOP-106):**
+   * Toda decisión de ajuste de parámetros tácticos (trailing runners, multiplicadores de convicción y umbrales de confluencia) debe fundamentarse en la coincidencia de análogos históricos del backtest auditado (`MarketRegimeScenarioAnalyzer`). Queda prohibido alterar las reglas de entrada si el régimen actual (`BULL_EXPANSION`) arroja un Profit Factor superior a $1.80$ y expectativa positiva comprobada en su muestra espejo.
 
 ---
 

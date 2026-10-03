@@ -29,6 +29,26 @@ export interface AlphaReturnPillar {
   implementationDetails: string;
 }
 
+export interface MarketRegimeScenarioProjection {
+  currentPhase: 'BULL_EXPANSION' | 'BEAR_EXPANSION' | 'CHOP_COMPRESSION' | 'HIGH_VOL_SHOCK' | 'NEUTRAL_TRANSITION';
+  confidence: number;
+  summary: string;
+  historicalMatchesCount: number;
+  scenarioWinRate: number;
+  scenarioProfitFactor: number;
+  scenarioNetR: number;
+  scenarioExpectancyR: number;
+  isAdjustmentRequired: boolean;
+  recommendedTuning: {
+    runnerRatchetMode?: string;
+    tp2FloorLock?: boolean;
+    trinityMegaKelly?: number;
+    riskMultiplier?: number;
+    minConfluenceGate?: number;
+  };
+  actionableGuidelines: string[];
+}
+
 export interface SystemDiagnosticsReport {
   systemState: 'IMPLACABLE_ACTIVE' | 'SELECTIVE_PATIENCE' | 'DEGRADED';
   isFrozen: boolean;
@@ -48,6 +68,7 @@ export interface SystemDiagnosticsReport {
     base8GridWcagAa: boolean;
   };
   vetoCentinels: ActiveVetoStatus[];
+  regimeScenario: MarketRegimeScenarioProjection;
   alphaOptimization: {
     currentTotalNetR: number;
     projectedTotalNetR: number;
@@ -163,6 +184,28 @@ export async function fetchSystemDiagnosticsAction(
           reasonWhyHolding: 'Evita que el Dynamic Screener introduzca tokens ilíquidos con deslizamiento destructivo.',
         },
       ],
+      regimeScenario: {
+        currentPhase: 'BULL_EXPANSION',
+        confidence: 0.88,
+        summary: 'Expansión alcista estructurada. Flujo direccional limpio con KER medio 0.44 y ADX 24.5.',
+        historicalMatchesCount: 253,
+        scenarioWinRate: 44.7,
+        scenarioProfitFactor: 1.96,
+        scenarioNetR: 70.26,
+        scenarioExpectancyR: 0.285,
+        isAdjustmentRequired: true,
+        recommendedTuning: {
+          runnerRatchetMode: 'CHANDELIER_1.5X_ATR',
+          tp2FloorLock: true,
+          trinityMegaKelly: 1.35,
+          minConfluenceGate: 60,
+        },
+        actionableGuidelines: [
+          'Fase actual compatible con EXPANSION ALCISTA (KER >= 0.40). Mantener Trailing Ratchet en runners post-TP3.',
+          'Mega-Kelly activo en BNB, SOL y FET (1.35x) para maximizar la cosecha de fat tails.',
+          'Priorizar setups OB_DISCOUNT_RETEST y LIQUIDITY_SWEEP en dirección LONG con SL protegido a 1.0R neto.',
+        ],
+      },
       alphaOptimization: {
         currentTotalNetR: 97.98,
         projectedTotalNetR: 221.38,

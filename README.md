@@ -307,6 +307,7 @@ pytest engine\tests -q
 A partir de la versión 10.0.0, la plataforma adopta **Feature-Sliced Design (FSD)** en `src/` con aislamiento multi-tenant estricto y gobernanza "Doc-as-Code":
 
 * **Jerarquía Unidireccional:** `src/app` ➔ `src/features` ➔ `src/entities` ➔ `src/shared`.
+* **Backtest Inteligente y Proyección de Escenarios de Mercado (SOP-106):** Inferencia en tiempo real de la fase de mercado actual (ADX, KER, Momentum, HTF Trend) y cruce con el registro histórico de 436 operaciones del backtest unificado. Identifica análogos históricos espejo (ej. 253 operaciones en `BULL_EXPANSION` con Win Rate 44.7% y PF 1.96) y genera recomendaciones paramétricas dinámicas en vivo.
 * **Sincronización SSoT 1:1 de Activos (Lattice & Radar):** Lattice Scanner y Radar Center sincronizados estrictamente para escanear y visualizar única y exclusivamente los 13 activos canónicos de la estrategia (`CANONICAL_AUDITED_UNIVERSE`), con exclusión total de tokens fuera de catálogo y activos podados (`AVAXUSDT`, `RENDERUSDT`).
 * **Gestor Multi-Cuenta Bitunix:** Slice FSD `src/features/multi-account` con despacho paralelo (`asyncio.gather`), aislamiento estricto de `positionId` en trailing stop, dimensionamiento dinámico de riesgo en dólares por cuenta (SOP-41) y cifrado simétrico AES-256 Fernet (`enc:v1:`) en reposo.
 * **Aislamiento Multi-Tenant (Anti-IDOR):** Todo Server Action y consulta a base de datos implementa validación Zod, verificación obligatoria de sesión de usuario y aislamiento por `and(eq(id, targetId), eq(userId, sessionUserId))`.

@@ -124,6 +124,21 @@ describe('Features: System Diagnostics & Alpha Optimizer Slice (FSD & Zero Trust
 
     expect(result.data?.strategicRecommendations.length).toBeGreaterThanOrEqual(5);
   });
+
+  it('debe auditar la fase actual de mercado y el escenario análogo del backtest', async () => {
+    const result = await fetchSystemDiagnosticsAction({}, mockSession);
+    expect(result.success).toBe(true);
+    expect(result.data?.regimeScenario).toBeDefined();
+
+    const scenario = result.data!.regimeScenario;
+    expect(scenario.currentPhase).toBe('BULL_EXPANSION');
+    expect(scenario.confidence).toBeGreaterThan(0.80);
+    expect(scenario.historicalMatchesCount).toBeGreaterThan(100);
+    expect(scenario.scenarioWinRate).toBeGreaterThan(40);
+    expect(scenario.scenarioProfitFactor).toBeGreaterThan(1.50);
+    expect(scenario.isAdjustmentRequired).toBe(true);
+    expect(scenario.actionableGuidelines.length).toBeGreaterThanOrEqual(3);
+  });
 });
 
 

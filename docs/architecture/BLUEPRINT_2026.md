@@ -497,5 +497,31 @@ Para elevar los retornos de $+128.48\text{R}$ (Base) / $+154.99\text{R}$ (Alpha-
 | **Retorno Compuesto Estimado (2.5% Kelly)** | **+1,644% ROI** | **+4,820% ROI** | **+193%** |
 | **Max Drawdown de Cartera** | **-4.76%** | **-4.92%** | **Estable (< 5%)** |
 
+---
+
+## 18. Fase 14: Backtest Inteligente, Detección de Fase y Proyección de Escenarios (SOP-106)
+
+### 18.1 Inferencia Continua de Fase de Mercado y Escenarios Espejo
+* **Módulo:** `engine/analytics/market_regime_scenario_analyzer.py`.
+* **Mecánica Cuantitativa:**
+  1. **Clasificación Multivariante:** Analiza en tiempo real el Kaufman Efficiency Ratio (`KER`), fuerza tendencial (`ADX`), momentum a 20 días y alineación HTF de Bitcoin para diagnosticar la fase activa:
+     * `BULL_EXPANSION` ($KER \ge 0.38, ADX \ge 20.0$, Sesgo Alcista).
+     * `BEAR_EXPANSION` ($KER \ge 0.38, ADX \ge 20.0$, Sesgo Bajista).
+     * `CHOP_COMPRESSION` ($ADX < 18.5, KER < 0.28$).
+     * `HIGH_VOL_SHOCK` ($ADX \ge 45.0, KER < 0.28$).
+     * `NEUTRAL_TRANSITION` (Equilibrio inter-sesión).
+  2. **Búsqueda de Análogos Históricos:** Mapea las 436 operaciones del backtest auditado a su régimen de ocurrencia para proyectar métricas esperadas precisas de la fase actual.
+  3. **Diagnóstico del Escenario Actual (`BULL_EXPANSION`):**
+     * **Muestra Espejo:** 253 operaciones idénticas auditadas.
+     * **Win Rate en Fase:** 44.7%.
+     * **Profit Factor en Fase:** 1.96.
+     * **Retorno Neto Acumulado:** +70.26 R.
+     * **Expectativa por Operación:** +0.285 R / trade.
+  4. **Ajustes Cuantitativos Determinados:**
+     * No alterar reglas estructurales de entrada (los setups de rebote en descuento y barrido operan con PF 1.96).
+     * Mantener activo el Trailing Ratchet Chandelier post-TP3 (SOP-104) para exprimir la asimetría de expansiones.
+     * Acelerar el dimensionamiento Mega-Kelly (1.35x) en la Trinidad (`BNB`, `SOL`, `FET`) mientras no existan rachas de pérdidas.
+
+
 
 
