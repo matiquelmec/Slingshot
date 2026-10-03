@@ -16,9 +16,12 @@ const envToken = process.env.TURSO_AUTH_TOKEN?.trim();
 const isTursoCloud = url.includes('turso.io') || url.startsWith('libsql:') || url.startsWith('https:');
 const authToken = envToken || (isTursoCloud ? DEFAULT_TURSO_TOKEN : undefined);
 
+// En Vercel Serverless Functions, usar https:// en lugar de libsql:// evita problemas con WebSockets y usa HTTP/1.1 pipelining estándar
+const normalizedUrl = url.startsWith('libsql://') ? url.replace('libsql://', 'https://') : url;
+
 export const client = createClient({
-  url,
-  authToken: url.startsWith('file:') ? undefined : authToken,
+  url: normalizedUrl,
+  authToken: normalizedUrl.startsWith('file:') ? undefined : authToken,
 });
 
 export const db = drizzle(client, { schema });
