@@ -1,4 +1,4 @@
-﻿# ==============================================================================
+# ==============================================================================
 # SLINGSHOT v42.0 APEX TITAN — BOOTSTRAP TOTAL AUTOMATIZADO WINDOWS SERVER
 # ==============================================================================
 $ErrorActionPreference = "Continue"
@@ -53,8 +53,8 @@ if (-not (Test-Path "C:\Slingshot")) {
     & "git" clone https://github.com/matiquelmec/Slingshot.git
 }
 cd C:\Slingshot
-& "git" checkout cleanup-v1
-& "git" pull origin cleanup-v1
+& "git" checkout main
+& "git" pull origin main
 
 # 5. Ejecutar instalacion del entorno y QA Tests
 powershell -ExecutionPolicy Bypass -File .\scripts\deploy\setup_vps_windows.ps1
