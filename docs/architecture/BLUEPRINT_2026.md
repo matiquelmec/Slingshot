@@ -653,3 +653,32 @@ Históricamente, los algoritmos SMC trataban a los Order Blocks como rectángulo
    * Si un cluster de liquidación masiva ($\text{strength} > 80\%$) coincide geográficamente dentro del rango $[\text{bottom}, \text{top}]$ de un Order Block activo, el factor de liquidaciones se gradúa como ELITE (+5.0 pts adicionales de confluencia magnética).
 4. **Telemetría y Contratos Full-Stack:**
    * Esquemas Zod estrictos en src/entities/signal/model.ts (obLiquidityAuditReportSchema) y exposición reactiva en SystemDiagnosticsWidget.tsx para los 13 activos del Universo Canónico SSoT.
+
+---
+
+## 26. Fase 22: Inviolabilidad de Adopción de Posiciones y Aislamiento Multi-Cuenta (SOP-113)
+
+### 26.1 Justificación Forense (Incidente QNTUSDT)
+Durante la sesión del 2026-10-04, una orden externa o manual en `QNTUSDT` (activo no canónico) ejecutada en el exchange fue detectada por el bucle continuo del reconciliador (`NexusNode._sync_exchange_positions_loop`). Debido a que el reconciliador no filtraba contra el Universo Canónico, la posición fue adoptada en el estado local de Nexus, se le asignó un Stop Loss sintético de 1.8% y consumió margen algorítmico hasta ser cerrada en stop out (-9.25 USDT).
+
+### 26.2 Especificación del Protocolo SOP-113
+1. **SSoT Canonical Universe Guard en Reconciliación:**
+   * `NexusNode._sync_exchange_positions_loop` valida cada posición detectada en Bitunix contra `CANONICAL_AUDITED_UNIVERSE`.
+   * Si el activo no pertenece a los 13 activos auditados, **se rechaza su adopción algorítmica** y se ignora para gestión de trailing.
+2. **Alerta de Seguridad en Telegram:**
+   * Se despacha asíncronamente `send_unauthorized_position_alert` notificando al operador sobre la presencia de un trade no auditado en el exchange para su revisión manual.
+
+---
+
+## 27. Fase 23: Blindaje Direccional Cuantitativo en Régimen RANGING (SOP-114)
+
+### 27.1 Diagnóstico de Trampas de Dirección en Rango
+El análisis de expectativa demostró que en régimen `RANGING`, el jurado de confluencia otorgaba el 100% de los puntos de narrativa SMC tanto a compras como a ventas (`regime in ('ACCUMULATION', 'MARKUP', 'RANGING')` y `regime in ('DISTRIBUTION', 'MARKDOWN', 'RANGING')`). Esto permitía que impulsos locales de 15 minutos comprasen techos de rango o vendiesen suelos en momentos donde la tendencia macro de Bitcoin era divergente.
+
+### 27.2 Especificación del Protocolo SOP-114
+1. **Condicionamiento Asimétrico de Narrativa en Rango:**
+   * **LONG en RANGING:** Exige obligatoriamente cotizar con descuento relativo a VWAP institucional (`vwap_dist_pct <= +0.20%`) y sin veto macro de BTC (`btc_aligned is not False`).
+   * **SHORT en RANGING:** Exige cotizar en zona de sobreprecio institucional relativo a VWAP (`vwap_dist_pct >= -0.20%`).
+2. **Penalización Cuantitativa:**
+   * Toda señal que intente comprar techos o vender suelos en rango recibe una penalización de narrativa de $-50\%$ de su peso dinámico bayesiano, resultando en un checklist `DIVERGENTE` y previniendo ejecuciones contra-tendencia.
+

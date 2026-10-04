@@ -410,6 +410,26 @@ class NexusNode:
                         margin = float(p.get("margin", 0))
                         position_id = p.get("positionId", f"manual_{int(time.time())}")
 
+                        # ── SOP-113: SSoT CANONICAL AUDITED UNIVERSE GUARD EN ADOPCIÓN EXTERNA ──
+                        # Impedir adopción de activos no canónicos (ej: QNTUSDT) que no pertenezcan al universo auditado
+                        from engine.workers.asset_incubator import CANONICAL_AUDITED_UNIVERSE
+                        clean_sym = symbol.replace("/", "").upper()
+                        if clean_sym not in CANONICAL_AUDITED_UNIVERSE:
+                            logger.warning(f"🚨 [NEXUS SYNC VETO SOP-113] [{target_ex.account_label}] Rechazada adopción de activo no canónico: {symbol} ({side}, qty={qty}). No auditado.")
+                            try:
+                                from engine.router.telegram_dispatcher import telegram_dispatcher
+                                asyncio.create_task(
+                                    telegram_dispatcher.send_unauthorized_position_alert(
+                                        symbol=symbol,
+                                        side=side,
+                                        qty=qty,
+                                        account_label=target_ex.account_label
+                                    )
+                                )
+                            except Exception as tg_err:
+                                logger.debug(f"[NEXUS SYNC] Error despachando alerta de seguridad Telegram: {tg_err}")
+                            continue
+
                         logger.info(f"📈 [NEXUS SYNC] [{target_ex.account_label}] Sincronizando posición externa Bitunix: {symbol} ({side})")
 
                         # 1. Comprobar si la posición YA tiene un Stop Loss activo en Bitunix

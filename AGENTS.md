@@ -122,6 +122,15 @@ Toda interfaz gráfica debe construirse bajo estándares de ingeniería ergonóm
    * Queda terminantemente prohibido disparar entradas de alta convicción en Order Blocks degradados (con 3 o más testeos previos sin re-expansión estructural).
    * Cuando un cluster de liquidación masiva (>80% de fuerza) coincida geográficamente con un Order Block activo, el motor de confluencia debe aplicar la bonificación por Confluencia Magnética Dual (+5.0 pts).
 
+19. **Inviolabilidad del Universo Canónico en Adopción de Posiciones (SOP-113):**
+   * El reconciliador de posiciones externas (`NexusNode._sync_exchange_positions_loop`) tiene prohibido adoptar, asumir o gestionar cualquier posición en el exchange cuyo activo no pertenezca estrictamente al `CANONICAL_AUDITED_UNIVERSE` (13 activos auditados).
+   * Si se detecta una posición en un activo no canónico (ej: `QNTUSDT`), el sistema debe rechazar su incorporación, loguear un veto crítico y emitir inmediatamente una alerta de seguridad por Telegram (`send_unauthorized_position_alert`), impidiendo que trades no autorizados o manuales consuman margen de riesgo algorítmico o sufran asignación ciega de Stop Loss.
+
+20. **Blindaje Direccional Cuantitativo en Régimen RANGING (SOP-114):**
+   * En régimen de consolidación o rango (`RANGING`), queda prohibido otorgar puntaje incondicional de narrativa tanto a compras como a ventas.
+   * Las operaciones LONG en rango exigen obligatoriamente cotizar con descuento institucional relativo a VWAP (`vwap_dist_pct <= +0.20%`) y alineación macro con BTC (`btc_aligned is not False`).
+   * Las operaciones SHORT en rango exigen cotizar en zona de sobreprecio institucional (`vwap_dist_pct >= -0.20%`). Toda entrada que viole estos umbrales sufrirá penalización de narrativa y veto en el motor de confluencia.
+
 ---
 
 ## 5. Gobernanza "Doc-as-Code" en Cascada

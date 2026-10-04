@@ -67,14 +67,34 @@ class ConfluenceManager:
         narrative_weight = bayesian_calibrator.get_weight("narrative_weight", default=15.0)
         total_weight += narrative_weight
         regime = str(current.get('market_regime', signal.get('regime', 'UNKNOWN'))).upper()
-        # En Sigma, permitimos operar en RANGING si la estructura interna es fuerte
-        regime_ok = (is_long and regime in ('ACCUMULATION', 'MARKUP', 'RANGING')) or \
-                   (not is_long and regime in ('DISTRIBUTION', 'MARKDOWN', 'RANGING'))
+        
+        # [SOP-114] BLINDAJE DIRECCIONAL EN RANGING:
+        # En régimen tendencial (MARKUP/MARKDOWN/ACCUMULATION/DISTRIBUTION) el flujo es claro.
+        # En RANGING, queda prohibido aprobar ciegamente ambas direcciones. Solo se valida si:
+        # - Para LONG: El precio cotiza con descuento bajo VWAP institucional (vwap_dist_pct <= 0) o Session AVWAP favorable, Y no está vetado por BTC.
+        # - Para SHORT: El precio cotiza en premium sobre VWAP institucional (vwap_dist_pct >= 0) o Session AVWAP favorable.
+        vwap_dist_check = float(current.get('vwap_dist_pct', 0.0))
+        btc_aligned_check = kwargs.get('btc_aligned', None)
+        
+        if regime == 'RANGING':
+            if is_long:
+                # Long en rango solo permitido en zona de descuento institucional y sin desalineación macro BTC
+                regime_ok = (vwap_dist_check <= 0.20) and (btc_aligned_check is not False)
+            else:
+                # Short en rango solo permitido en zona de premium institucional
+                regime_ok = (vwap_dist_check >= -0.20) and (btc_aligned_check is not True or btc_aligned_check is None)
+        else:
+            regime_ok = (is_long and regime in ('ACCUMULATION', 'MARKUP')) or \
+                       (not is_long and regime in ('DISTRIBUTION', 'MARKDOWN'))
+                       
         if regime_ok:
             score += narrative_weight
-            checklist.append({"factor": "Narrativa SMC", "status": "CONFIRMADO", "detail": f"Alineado con {regime}"})
+            detail_msg = f"Alineado con {regime} (OTE/VWAP validado)" if regime == 'RANGING' else f"Alineado con {regime}"
+            checklist.append({"factor": "Narrativa SMC", "status": "CONFIRMADO", "detail": detail_msg})
         else:
-            checklist.append({"factor": "Narrativa SMC", "status": "DIVERGENTE", "detail": f"Régimen {regime}"})
+            score -= (narrative_weight * 0.5) if regime == 'RANGING' else 0.0
+            detail_msg = f"Régimen RANGING sin descuento institucional (VWAP: {vwap_dist_check:+.2f}%)" if regime == 'RANGING' else f"Régimen {regime}"
+            checklist.append({"factor": "Narrativa SMC", "status": "DIVERGENTE", "detail": detail_msg})
 
         # 2. PUNTOS DE INTERÉS OB/FVG (Peso Dinámico Bayesiano - Base 40)
         poi_weight = bayesian_calibrator.get_weight("poi_weight", default=40.0)

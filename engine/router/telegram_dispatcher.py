@@ -343,5 +343,21 @@ class TelegramDispatcher:
         text = f"TRADE CERRADO: {sym} ({reason}) @ ${exit_price:.4f} | PnL: ${pnl_usd:.2f} USD ({pnl_r:.2f}R)"
         return await self.send_raw_message(text)
 
+    async def send_unauthorized_position_alert(self, symbol: str, side: str, qty: float, account_label: str = "Primary") -> bool:
+        if not self.enabled:
+            return False
+        text = (
+            f"🚨 <b>[ALERTA DE SEGURIDAD SLINGSHOT]</b> 🚨\n"
+            f"<b>Posición Externa No Canónica Detectada</b>\n\n"
+            f"• <b>Activo:</b> <code>{symbol}</code>\n"
+            f"• <b>Dirección:</b> <code>{side}</code>\n"
+            f"• <b>Cantidad:</b> <code>{qty}</code>\n"
+            f"• <b>Cuenta:</b> <code>{account_label}</code>\n\n"
+            f"⚠️ <b>Acción del Sistema:</b> Rechazada su adopción en Nexus. El activo NO pertenece al <code>CANONICAL_AUDITED_UNIVERSE</code> (13 activos auditados).\n"
+            f"Por favor revise y gestione esta posición manualmente en el exchange para evitar pérdidas de capital no auditadas."
+        )
+        return await self.send_raw_message(text, parse_mode="HTML")
+
 # Instancia singleton para importacion
 telegram_dispatcher = TelegramDispatcher()
+
