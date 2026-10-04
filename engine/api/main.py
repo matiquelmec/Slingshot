@@ -166,6 +166,9 @@ async def lifespan(app: FastAPI):
     # 5. Activar centinela asíncrono de telemetría Bitunix en segundo plano
     asyncio.create_task(_bitunix_telemetry_background_updater())
 
+    # 6. Activar GitOps Autónomo 24/7 (SOP-88 Continuous Deployment Gate)
+    asyncio.create_task(_cicd_autonomous_worker())
+
     logger.info(f"🏎️  [SYSTEM] Slingshot v{settings.VERSION} listo para el despliegue.")
 
     yield
@@ -712,6 +715,33 @@ async def _bitunix_telemetry_background_updater():
         except Exception as err:
             logger.debug(f"[TELEMETRY BG] Latencia temporal en refresco: {err}")
         await asyncio.sleep(3.0)
+
+
+async def _cicd_autonomous_worker():
+    """
+    [SOP-88 GITOPS AUTÓNOMO 24/7]
+    Worker en segundo plano que consulta de forma no bloqueante nuevos commits en GitHub cada 5 minutos.
+    Si detecta un commit nuevo en origin/main, ejecuta los tests y aplica git pull atómico.
+    """
+    await asyncio.sleep(60.0) # Espera 1 minuto tras el boot para estabilizar servicios
+    logger.info("🤖 [GITOPS AUTÓNOMO] Worker de auto-despliegue continuo 24/7 activado (Polling: 300s).")
+    while True:
+        try:
+            from engine.workers.ci_cd_sentinel import CICDSentinel
+            sentinel = CICDSentinel(branch="main", remote="origin")
+            
+            # Ejecutar en hilo separado para no bloquear el bucle de eventos asyncio
+            res = await asyncio.to_thread(sentinel.check_and_deploy)
+            if res.get("status") == "deployed":
+                logger.info(f"🎉 [GITOPS AUTÓNOMO] Nueva versión desplegada automáticamente: {res.get('new_commit')[:8]}. Reiniciando proceso...")
+                import sys
+                os._exit(0) # Salir limpiamente para que el wrapper (arrancar_slingshot o ScheduledTask) lo reinicie de inmediato
+            elif res.get("status") not in ("up_to_date", None):
+                logger.info(f"ℹ️ [GITOPS AUTÓNOMO] Estado de verificación: {res.get('status')}")
+        except Exception as e:
+            logger.debug(f"[GITOPS AUTÓNOMO] Error en ciclo de auto-verificación: {e}")
+        await asyncio.sleep(300.0) # Chequeo cada 5 minutos
+
 
 @app.get("/api/v1/bitunix/telemetry")
 async def get_bitunix_telemetry(account_id: str = "primary"):

@@ -1,4 +1,4 @@
-﻿# ==============================================================================
+# ==============================================================================
 # SLINGSHOT v42.0 APEX TITAN — AUTO-DEPLOY SCRIPT PARA WINDOWS SERVER VPS
 # ==============================================================================
 
@@ -59,18 +59,23 @@ HOST=0.0.0.0
     Write-Host "Archivo .env generado. Recuerda colocar tus API Keys de Bitunix." -ForegroundColor Magenta
 }
 
-# 5. Crear Lanzador .BAT para el Escritorio
+# 5. Crear Lanzador .BAT para el Escritorio con Auto-Reinicio GitOps
 $launcherContent = @"
 @echo off
-title SLINGSHOT TRADING DUAL ENGINE (BITUNIX + MT5)
+title SLINGSHOT TRADING DUAL ENGINE (BITUNIX + MT5) - GITOPS AUTONOMOUS
 color 0A
 cd /d %~dp0
+
+:loop
+echo [%date% %time%] Iniciando Slingshot Engine...
 call .venv\Scripts\activate.bat
 python -m uvicorn engine.api.main:app --host 0.0.0.0 --port 8000
-pause
+echo [%date% %time%] Motor finalizado o actualizado. Reiniciando en 3 segundos...
+timeout /t 3 /nobreak >nul
+goto loop
 "@
 $launcherContent | Out-File -FilePath "arrancar_slingshot.bat" -Encoding ascii
-Write-Host "Lanzador 'arrancar_slingshot.bat' generado con exito." -ForegroundColor Green
+Write-Host "Lanzador 'arrancar_slingshot.bat' con auto-reinicio generado con exito." -ForegroundColor Green
 
 # 6. Ejecutar Certificacion QA Oficial (212 Tests)
 Write-Host ""
