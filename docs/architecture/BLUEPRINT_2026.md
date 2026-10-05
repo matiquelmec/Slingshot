@@ -682,3 +682,24 @@ El análisis de expectativa demostró que en régimen `RANGING`, el jurado de co
 2. **Penalización Cuantitativa:**
    * Toda señal que intente comprar techos o vender suelos en rango recibe una penalización de narrativa de $-50\%$ de su peso dinámico bayesiano, resultando en un checklist `DIVERGENTE` y previniendo ejecuciones contra-tendencia.
 
+---
+
+## 28. Fase 24: Auditoría de Telemetría Telegram, State Machine y Mitigación de Posiciones Fantasma (SOP-115)
+
+### 28.1 Diagnóstico Forense (Incidentes BNBUSD, XAUUSD, US30 y US100)
+1. **Alertas Erráticas de Take Profit en BNBUSD:**
+   * Un registro manual estático en la tabla de base de datos de Turso (`pos_bitunix_bnb_manual`) era evaluado en bucle por `TradeManager` ante caídas de conexión o respuestas con código de error temporal (`100007`) de la API del exchange. Al carecer de un conjunto de estados ya notificados (`_dispatched_trade_stages`), fluctuaciones de precio en el mercado spot recalculaban la ganancia en unidades $R$ emitiendo falsas alertas sucesivas (`+1.2R` y posteriormente `+1.0R`).
+2. **Duplicación de Factores Cuantitativos en Índices y Oro en Sesión ASIA:**
+   * En `engine/router/telegram_dispatcher.py`, los valores `RVOL 1.6x` y `KER 0.35` actuaban como valores por defecto hardcodeados ante la ausencia de telemetría de volumen en activos TradFi fuera de horario regular (RTH), emitiendo órdenes límite para índices estadounidenses a las 04:00 AM (Sesión Asia).
+
+### 28.2 Especificación del Protocolo SOP-115
+1. **Deduplicación Estricta de Notificaciones en TradeManager:**
+   * Se inicializa `_dispatched_trade_stages: Dict[str, set]` por posición y símbolo, garantizando que cada hito (`FAST_BE`, `TP1`, `TP2`, `TP3`) se despache exactamente una vez, suprimiendo retrocesos lógicos o ráfagas repetidas.
+2. **Supresión de Fallbacks Silenciosos en Telegram Dispatcher:**
+   * Se elimina la inyección de `1.6x` y `0.35` como valores fijos de respaldo. Si una señal carece de volumen relativo o eficiencia de Kaufman, se omiten dichas insignias del mensaje.
+3. **Veto de Horario Institucional para Índices Bursátiles (US30, US100, SPX500):**
+   * Se bloquea el despacho de órdenes para índices estadounidenses en sesión `ASIA` u `OFF_HOURS` por falta de liquidez y spreads no institucionales.
+4. **Purga de Posición Fantasma en Turso LibSQL:**
+   * La posición manual `pos_bitunix_bnb_manual` fue transicionada formalmente a estado `CLOSED` en la base de datos distribuida perimetral.
+
+

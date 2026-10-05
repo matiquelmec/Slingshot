@@ -153,8 +153,18 @@ class TelegramDispatcher:
         if not session or session in ("UNKNOWN", "KILLZONE", "NEW_YORK"):
             session = computed_session
             
-        ker_val = float(signal.get('asset_health', {}).get('ker', 0.35))
-        rvol = float(signal.get('rvol', 1.6))
+        # Veto institucional: Índices de EE.UU. no deben operar en sesión ASIA u OFF_HOURS
+        is_us_index = any(idx in asset.upper() for idx in ("US30", "US100", "SPX500", "NAS100", "DJI"))
+        if is_us_index and "ASIA" in session:
+            logger.warning(f"[TELEGRAM] 🛡️ Veto de Sesión: {asset} bloqueado para despacho en {session} por falta de liquidez en RTH.")
+            return False
+
+        # Extracción estricta sin fallbacks ficticios hardcodeados
+        raw_ker = signal.get('asset_health', {}).get('ker')
+        ker_val = float(raw_ker) if raw_ker is not None else None
+        
+        raw_rvol = signal.get('rvol')
+        rvol = float(raw_rvol) if raw_rvol is not None else None
         
         # Formato de copiado 1-clic para MT5 y Exchanges con decimales precisos
         p_str = f"{price:.{decimals}f}"
@@ -166,11 +176,11 @@ class TelegramDispatcher:
         
         one_click_text = f"[{account_profile.split('_')[0]} MT5] {action} {sym_mt5} @ {p_str} | LOTS: {lots:.2f} | SL: {sl_str} | 🛡️ BE (+1.0R): {be_str} | TP1 (50%): {tp1_str} | TP2 (30%): {tp2_str} | TP3 (20%): {tp3_str}"
 
-        # Resumen de confluencias
+        # Resumen de confluencias dinámicas reales
         conf_badges = []
         if score >= 75: conf_badges.append("🔥 Grado ELITE")
-        if rvol >= 1.3: conf_badges.append(f"📊 RVOL {rvol:.1f}x (Bancos)")
-        if ker_val >= 0.35: conf_badges.append(f"⚡ KER {ker_val:.2f} (Limpio)")
+        if rvol is not None and rvol >= 1.3: conf_badges.append(f"📊 RVOL {rvol:.1f}x (Bancos)")
+        if ker_val is not None and ker_val >= 0.35: conf_badges.append(f"⚡ KER {ker_val:.2f} (Limpio)")
         conf_summary = " • ".join(conf_badges) if conf_badges else "Confirmación SMC Institucional"
 
         exec_st = signal.get("execution_status")

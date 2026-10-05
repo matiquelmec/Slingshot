@@ -102,3 +102,59 @@ async def test_fresh_execution_dispatches_with_badge_without_self_suppression():
         called_payload = mock_post.call_args[1]["json"]
         assert "ORDEN LÍMITE ACTIVA EN BITUNIX" in called_payload["text"]
         assert "999888777" in called_payload["text"]
+
+
+@pytest.mark.asyncio
+async def test_us_index_session_veto_in_asia():
+    """Valida que índices estadounidenses queden vetados en sesión ASIA."""
+    dispatcher = TelegramDispatcher()
+    dispatcher.enabled = True
+    dispatcher.bot_token = "mock_token"
+    dispatcher.chat_ids = ["123456"]
+
+    signal = {
+        "asset": "US30",
+        "symbol": "US30",
+        "signal_type": "SHORT",
+        "price": 51450.54,
+        "stop_loss": 51501.96,
+        "confluence_score": 95,
+        "is_test": True,
+        "session": "ASIA (Tokyo / Sydney)",
+    }
+
+    sent = await dispatcher.send_signal_alert(signal)
+    assert sent is False
+
+
+@pytest.mark.asyncio
+async def test_rvol_ker_dynamic_extraction_without_fallbacks():
+    """Valida que si no se provee rvol o ker, no se inyecten valores hardcodeados erróneos."""
+    dispatcher = TelegramDispatcher()
+    dispatcher.enabled = True
+    dispatcher.bot_token = "mock_token"
+    dispatcher.chat_ids = ["123456"]
+
+    signal = {
+        "asset": "ETHUSDT",
+        "symbol": "ETHUSDT",
+        "signal_type": "LONG",
+        "price": 2500.0,
+        "stop_loss": 2450.0,
+        "confluence_score": 80,
+        "is_test": True,
+        "session": "NEW_YORK (RTH)",
+    }
+
+    from unittest.mock import MagicMock
+    mock_resp = MagicMock()
+    mock_resp.status_code = 200
+
+    with patch("httpx.AsyncClient.post", new_callable=AsyncMock) as mock_post:
+        mock_post.return_value = mock_resp
+        sent = await dispatcher.send_signal_alert(signal)
+        assert sent is True
+        payload_text = mock_post.call_args[1]["json"]["text"]
+        # No debe tener RVOL 1.6x hardcodeado si la señal no lo traía
+        assert "RVOL 1.6x" not in payload_text
+        assert "KER 0.35" not in payload_text

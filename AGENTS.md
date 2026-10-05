@@ -166,3 +166,15 @@ Todos los mensajes de commit deben seguir estrictamente el estándar de Conventi
 * `docs:` Cambios exclusivos en documentación (`AGENTS.md`, `BLUEPRINT_2026.md`, `README.md`).
 * `chore:` Tareas rutinarias de mantenimiento, dependencias o configuración de build.
 * `perf:` Mejoras de rendimiento o reducción de latencia.
+
+---
+
+## 7. Regla 17: Inviolabilidad de Telemetría y Protección Anti-Posiciones Fantasma (SOP-115)
+
+1. **Cero Fallbacks Ficticios en Alertas:**
+   * El despachador de señales de Telegram (`telegram_dispatcher.py`) jamás debe inyectar valores fijos por defecto (como `RVOL 1.6x` o `KER 0.35`) cuando falte telemetría de mercado. Si un factor cuantitativo no está medido en vivo, debe omitirse o marcarse como no disponible.
+2. **Veto de Horarios RTH para Índices Bursátiles:**
+   * Índices TradFi (`US30`, `US100`, `SPX500`) tienen veto innegociable de despacho en sesión `ASIA` u `OFF_HOURS`, protegiendo la cuenta contra trampas de liquidez baja y spreads excesivos.
+3. **State Machine Estricto en TradeManager:**
+   * Todo gestor de ciclo de vida (`TradeManager`) debe mantener el conjunto de estados ya notificados (`_dispatched_trade_stages`) para impedir ráfagas de falsos Take Profits o retrocesos lógicos ante desconexiones de la API.
+

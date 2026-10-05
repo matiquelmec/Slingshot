@@ -78,6 +78,7 @@ class TradeManager:
         self._last_active_positions: Dict[str, set] = {}
         self._mt5_partial_states: Dict[str, Any] = self._load_mt5_partial_states()
         self._initial_risk_cache: Dict[str, float] = {}
+        self._dispatched_trade_stages: Dict[str, set] = {}
 
     def _load_mt5_partial_states(self) -> Dict[str, Any]:
         path = r"C:\Slingshot\data\mt5_partial_states.json"
@@ -1312,17 +1313,24 @@ class TradeManager:
                                 asyncio.create_task(nexus.on_risk_released(acc_id, reason=f"FAST_BE_ACTIVADO_{sym}"))
 
                                 try:
-                                    from engine.router.telegram_dispatcher import telegram_dispatcher
-                                    pnl_est = r_profit * 19.58
-                                    asyncio.create_task(telegram_dispatcher.send_tp_hit_alert(
-                                        symbol=sym,
-                                        tp_label=status_msg,
-                                        exit_price=cur_price,
-                                        pnl_usd=pnl_est,
-                                        is_be=True
-                                    ))
-                                except Exception:
-                                    pass
+                                    stage_key = f"{acc_id}_{sym}_{pos_id}" if pos_id else f"{acc_id}_{sym}"
+                                    already_sent = self._dispatched_trade_stages.setdefault(stage_key, set())
+                                    
+                                    # Evitar notificar dos veces la misma etapa o retrocesos lógicos
+                                    stage_id = "FAST_BE" if "FAST_BE" in status_msg else status_msg.split()[0]
+                                    if stage_id not in already_sent:
+                                        already_sent.add(stage_id)
+                                        from engine.router.telegram_dispatcher import telegram_dispatcher
+                                        pnl_est = r_profit * 19.58
+                                        asyncio.create_task(telegram_dispatcher.send_tp_hit_alert(
+                                            symbol=sym,
+                                            tp_label=status_msg,
+                                            exit_price=cur_price,
+                                            pnl_usd=pnl_est,
+                                            is_be=True
+                                        ))
+                                except Exception as disp_err:
+                                    logger.debug(f"[TRADE_MANAGER] Error enviando alerta de TP protegido: {disp_err}")
 
                         else:
 
