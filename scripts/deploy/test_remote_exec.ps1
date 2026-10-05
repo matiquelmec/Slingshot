@@ -1,5 +1,6 @@
 
-$secpasswd = ConvertTo-SecureString "matigol1" -AsPlainText -Force
+$passRaw = if ($env:SLINGSHOT_VPS_PASS) { $env:SLINGSHOT_VPS_PASS } else { "matigol1" }
+$secpasswd = ConvertTo-SecureString $passRaw -AsPlainText -Force
 $cred = New-Object System.Management.Automation.PSCredential ("Administrator", $secpasswd)
 $sopt = New-PSSessionOption -SkipCACheck -SkipCNCheck -SkipRevocationCheck
 

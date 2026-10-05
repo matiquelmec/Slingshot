@@ -202,6 +202,16 @@ class BitunixExecutor:
                     response.raise_for_status()
                     res_json = response.json()
 
+                    # Calibración dinámica continua mediante header oficial req-arrive-time (SOP-116)
+                    server_arrive_ts = response.headers.get("req-arrive-time")
+                    if server_arrive_ts and server_arrive_ts.isdigit():
+                        s_ts = int(server_arrive_ts)
+                        l_ts = int(time.time() * 1000)
+                        drift_ms = s_ts - l_ts
+                        BitunixExecutor._shared_server_time_offset_ms = drift_ms
+                        BitunixExecutor._shared_last_time_sync = time.time()
+                        self._server_time_offset_ms = drift_ms
+
                     if res_json.get("code") != 0:
                         # Errores específicos de exchange (ej. 100007, 10002) no requieren retry infinito
                         logger.error(f"❌ Bitunix API error en {path}: {res_json}")

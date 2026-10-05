@@ -1314,12 +1314,15 @@ class TradeManager:
 
                                 try:
                                     stage_key = f"{acc_id}_{sym}_{pos_id}" if pos_id else f"{acc_id}_{sym}"
-                                    already_sent = self._dispatched_trade_stages.setdefault(stage_key, set())
-                                    
-                                    # Evitar notificar dos veces la misma etapa o retrocesos lógicos
                                     stage_id = "FAST_BE" if "FAST_BE" in status_msg else status_msg.split()[0]
-                                    if stage_id not in already_sent:
-                                        already_sent.add(stage_id)
+                                    
+                                    from engine.core.vault import vault
+                                    already_dispatched = vault.has_trade_stage_dispatched(stage_key, stage_id)
+                                    
+                                    if not already_dispatched:
+                                        vault.record_trade_stage_dispatch(stage_key, stage_id)
+                                        self._dispatched_trade_stages.setdefault(stage_key, set()).add(stage_id)
+                                        
                                         from engine.router.telegram_dispatcher import telegram_dispatcher
                                         pnl_est = r_profit * 19.58
                                         asyncio.create_task(telegram_dispatcher.send_tp_hit_alert(
@@ -1330,7 +1333,7 @@ class TradeManager:
                                             is_be=True
                                         ))
                                 except Exception as disp_err:
-                                    logger.debug(f"[TRADE_MANAGER] Error enviando alerta de TP protegido: {disp_err}")
+                                    logger.debug(f"[TRADE_MANAGER] Error persistiendo y enviando alerta de TP protegido: {disp_err}")
 
                         else:
 

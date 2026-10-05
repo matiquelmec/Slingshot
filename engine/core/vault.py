@@ -106,6 +106,16 @@ class SlingshotVault:
             );
             """)
 
+            # 3.1 Tabla de Hitos de Trailing Stop Notificados (Inmunidad a Reinicios SOP-116)
+            cursor.execute("""
+            CREATE TABLE IF NOT EXISTS trade_dispatched_milestones (
+                stage_key TEXT NOT NULL,
+                stage_id TEXT NOT NULL,
+                notified_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (stage_key, stage_id)
+            );
+            """)
+
             # 4. Tabla de Rendimiento Transaccional SSoT (Tear Sheets SOP-60)
             cursor.execute("""
             CREATE TABLE IF NOT EXISTS closed_trades (
@@ -236,6 +246,26 @@ class SlingshotVault:
         with self._get_connection() as conn:
             cutoff = time.time() - (retention_hours * 3600)
             conn.execute("DELETE FROM telegram_dispatches WHERE timestamp < ?", (cutoff,))
+            conn.commit()
+
+    def has_trade_stage_dispatched(self, stage_key: str, stage_id: str) -> bool:
+        """Verifica de forma atómica si una etapa de trade ya fue notificada a Telegram."""
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT 1 FROM trade_dispatched_milestones WHERE stage_key = ? AND stage_id = ?",
+                (stage_key, stage_id)
+            )
+            return cursor.fetchone() is not None
+
+    def record_trade_stage_dispatch(self, stage_key: str, stage_id: str):
+        """Registra una etapa notificada para que sobreviva a reinicios del proceso o del VPS."""
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+            INSERT OR IGNORE INTO trade_dispatched_milestones (stage_key, stage_id)
+            VALUES (?, ?)
+            """, (stage_key, stage_id))
             conn.commit()
 
     # ── MÉTODOS DE SESSION MANAGER ───────────────────────────────────────────

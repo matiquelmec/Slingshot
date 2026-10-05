@@ -702,4 +702,23 @@ El análisis de expectativa demostró que en régimen `RANGING`, el jurado de co
 4. **Purga de Posición Fantasma en Turso LibSQL:**
    * La posición manual `pos_bitunix_bnb_manual` fue transicionada formalmente a estado `CLOSED` en la base de datos distribuida perimetral.
 
+---
+
+## 29. Fase 25: Resiliencia de Ejecución, Calibración Dinámica de Reloj y Persistencia Transaccional (SOP-116)
+
+### 29.1 Diagnóstico de Riesgos de Capital y Resiliencia
+1. **Volatilidad de Estados en Memoria RAM:**
+   * Los filtros de etapas de trailing stops residían en memoria volátil de Python. Cualquier reinicio del VPS por actualizaciones de sistema o reconexiones de red borraba el historial de alertas, re-notificando Take Profits al reconectarse.
+2. **Desincronización de Reloj Atómico (Timestamp Drift):**
+   * Desviaciones de reloj de más de 1000ms entre el servidor Windows del VPS y los servidores de emparejamiento de Bitunix causaban rechazos `HTTP 200 {code: 100007, msg: "System error"}` por timestamp expirado, imposibilitando la modificación de Stop Loss a Breakeven.
+
+### 29.2 Especificación del Protocolo SOP-116
+1. **Persistencia Transaccional ACID en SQLite WAL:**
+   * Creación de la tabla `trade_dispatched_milestones` en `slingshot_vault.db`. Todo hito (`FAST_BE`, `TP1`, `TP2`, etc.) es verificado y registrado de manera atómica, garantizando que sobreviva a caídas del proceso o reinicios del VPS.
+2. **Calibración Dinámica Continua de Reloj Exchange:**
+   * Ingesta del encabezado HTTP `req-arrive-time` en cada respuesta recibida en `BitunixExecutor._request` para recalcular y compensar el drift de milisegundos en tiempo real sin peticiones extra.
+3. **Seguridad y Cero Credenciales en Texto Plano:**
+   * Saneamiento de scripts de administración remota para leer contraseñas desde variables de entorno seguras (`$env:SLINGSHOT_VPS_PASS`).
+
+
 
