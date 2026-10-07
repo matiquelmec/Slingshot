@@ -105,6 +105,13 @@ const server = http.createServer(async (req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Content-Type', 'application/json');
   
+  // Health check para el supervisor Sentinel Watchdog (SOP-HFT)
+  if (req.method === 'GET' && req.url === '/health') {
+    res.writeHead(200);
+    res.end(JSON.stringify({ status: "ok", uptime: process.uptime(), timestamp: Date.now() }));
+    return;
+  }
+
   // A. Obtener Ticks del WebSocket de Binance (GET)
   if (req.method === 'GET' && req.url === '/ticks') {
     res.writeHead(200);
