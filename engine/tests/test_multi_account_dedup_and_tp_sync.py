@@ -173,3 +173,65 @@ async def test_tp_grid_consolidates_under_min_trade_volume():
     assert f1 == 34.0 # Consolidado a 34 porque f2 < 10
     assert f2 == 0
     assert f3 == 0
+
+@pytest.mark.asyncio
+async def test_bitunix_executor_injects_instant_tp_in_limit_and_market_payloads():
+    from engine.execution.bitunix_executor import BitunixExecutor
+    executor = BitunixExecutor(dry_run=False)
+    executor.api_key = "k"
+    executor.secret_key = "s"
+    
+    captured_payloads = []
+    async def mock_req(method, path, params=None, json_body=None):
+        if json_body:
+            captured_payloads.append((path, json_body))
+        if "/api/v1/futures/account/change_leverage" in path:
+            return {"code": 0, "data": {}}
+        if "/api/v1/futures/trade/place_order" in path:
+            return {"code": 0, "data": {"orderId": "ord_mock_123"}}
+        if "/api/v1/futures/trade/get_pending_positions" in path:
+            return {"code": 0, "data": []}
+        return {"code": 0, "data": {}}
+    
+    executor._request = mock_req
+    executor._last_verified_balance = 200.0
+    
+    # 1. Probar orden Límite con TP
+    sig_limit = {
+        "asset": "BTCUSDT",
+        "type": "LONG",
+        "price": 60000.0,
+        "stop_loss": 59000.0,
+        "tp1": 61000.0,
+        "tp3": 63000.0,
+        "position_size": 20.0,
+        "leverage": 10
+    }
+    res_lim = await executor.place_limit_signal(sig_limit)
+    assert res_lim["status"] == "success"
+    limit_payload = next(b for p, b in captured_payloads if b.get("orderType") == "LIMIT")
+    assert limit_payload["slPrice"] == "59000.0"
+    assert limit_payload["tpPrice"] == "63000.0"
+    assert limit_payload["tpStopType"] == "LAST_PRICE"
+    assert limit_payload["tpOrderType"] == "MARKET"
+
+    # 2. Probar orden a Mercado con TP
+    captured_payloads.clear()
+    sig_market = {
+        "asset": "BTCUSDT",
+        "type": "BUY",
+        "price": 60000.0,
+        "stop_loss": 59000.0,
+        "tp1": 61200.0,
+        "take_profit_3r": 63500.0,
+        "position_size": 20.0,
+        "leverage": 10
+    }
+    res_mkt = await executor.execute_signal(sig_market)
+    assert res_mkt["status"] == "success"
+    market_payload = next(b for p, b in captured_payloads if b.get("orderType") == "MARKET")
+    assert market_payload["slPrice"] == "59000.0"
+    assert market_payload["tpPrice"] == "63500.0"
+    assert market_payload["tpStopType"] == "LAST_PRICE"
+    assert market_payload["tpOrderType"] == "MARKET"
+

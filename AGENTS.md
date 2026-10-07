@@ -178,3 +178,14 @@ Todos los mensajes de commit deben seguir estrictamente el estándar de Conventi
 3. **State Machine Estricto en TradeManager:**
    * Todo gestor de ciclo de vida (`TradeManager`) debe mantener el conjunto de estados ya notificados (`_dispatched_trade_stages`) para impedir ráfagas de falsos Take Profits o retrocesos lógicos ante desconexiones de la API.
 
+---
+
+## 8. Regla 18: Inviolabilidad de Colocación Inmediata de Take Profit Nativo y Blindaje Multi-Cuenta (SOP-117)
+
+1. **Paridad Nativa de TP y SL en Órdenes de Entrada (Zero Phantom Orders):**
+   * Toda orden despachada al exchange (`place_limit_signal` y `execute_signal` en `BitunixExecutor`) debe inyectar inmediatamente en su payload los parámetros nativos de Take Profit (`tpPrice`, `tpStopType="LAST_PRICE"`, `tpOrderType="MARKET"`), asegurando que la posición quede blindada con SL y TP simultáneamente en el motor de casamiento del exchange antes de que la orden sea llenada o reconciliada.
+2. **Reconciliación Activa y Auto-Healing Continuo:**
+   * El reconciliador continuo en `NexusNode` y `TradeManager` debe auditar en cada ciclo las órdenes de cierre y el endpoint de TPSL de todas las cuentas vinculadas. Si una posición abierta carece de órdenes de Take Profit en el libro o en el motor TPSL, el sistema debe disparar la auto-reparación inmediata dividiendo el volumen en la grilla canónica institucional (50% / 30% / 20%).
+3. **Aislamiento Multi-Cuenta en Ejecución y Protección:**
+   * Toda cuenta vinculada debe despachar y gestionar sus órdenes límite y de protección de forma totalmente desacoplada, con cerrojos atómicos independientes y consulta asíncrona de posiciones reales, previniendo estados huérfanos o desprotegidos ante latencias de red.
+

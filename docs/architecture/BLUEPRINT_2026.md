@@ -720,5 +720,24 @@ El análisis de expectativa demostró que en régimen `RANGING`, el jurado de co
 3. **Seguridad y Cero Credenciales en Texto Plano:**
    * Saneamiento de scripts de administración remota para leer contraseñas desde variables de entorno seguras (`$env:SLINGSHOT_VPS_PASS`).
 
+---
+
+## 30. Fase 26: Inviolabilidad de Colocación Inmediata de Take Profit Nativo y Blindaje Multi-Cuenta (SOP-117)
+
+### 30.1 Diagnóstico de Causa Raíz de Órdenes Sin Take Profit
+1. **Asimetría de Colocación en Órdenes de Entrada:**
+   * Las órdenes límite generadas por `place_limit_signal` enviaban `slPrice`, `slStopType="LAST_PRICE"` y `slOrderType="MARKET"` a `/api/v1/futures/trade/place_order`, pero **no incluían los parámetros nativos de Take Profit** (`tpPrice`, `tpStopType`, `tpOrderType`).
+   * Al llenarse la orden límite de forma pasiva, Bitunix activaba el Stop Loss nativo inmediatamente, pero la orden no tenía Take Profit vinculado a nivel de exchange.
+   * La fragmentación de Take Profits límite dependía exclusivamente del bucle asíncrono de reconciliación (`_sync_exchange_positions_loop`), el cual corre con un intervalo de 15 segundos y consulta la posición en el exchange. Si la posición tocaba el Stop Loss por volatilidad rápida antes del siguiente ciclo del reconciliador, o si el positionId tardaba en registrarse, el TP nunca llegaba a existir en el libro de órdenes.
+
+### 30.2 Especificación y Arquitectura del Protocolo SOP-117
+1. **Inyección Nativa Inmediata de TP en BitunixExecutor:**
+   * En `place_limit_signal` y `execute_signal`, se inyecta directamente `tpPrice = tp3 or take_profit_3r or tp1` con `tpStopType="LAST_PRICE"` y `tpOrderType="MARKET"` en el cuerpo del payload de la orden principal.
+   * Garantía matemática: Desde el milisegundo 0 en que la orden entra al libro de órdenes de Bitunix, el exchange cuenta con la orden condicional de Take Profit y Stop Loss activos de manera simultánea en el motor de casamiento.
+2. **Auto-Healing y Reconciliación Robusta Multi-Cuenta:**
+   * El reconciliador continuo de `NexusNode` inspecciona periódicamente todas las cuentas vinculadas (`enabled_only=False`), asegurando que las cuentas secundarias o pausadas sigan siendo monitoreadas y auto-reparadas con la grilla canónica escalonada 50% / 30% / 20% (SOP-102) si las órdenes límite de salida faltasen en el exchange.
+3. **Cero Impacto en Latencia y Seguridad Zod/TypeScript:**
+   * La validación estricta en TypeScript / Vitest y la suite de pytest garantizan que no existan regresiones en las cuotas de riesgo ni en la firma criptográfica de las peticiones a Bitunix.
+
 
 

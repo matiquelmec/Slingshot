@@ -452,6 +452,12 @@ class BitunixExecutor:
                 order_payload["slPrice"] = f"{float(stop_loss):.{price_decimals}f}"
                 order_payload["slStopType"] = "LAST_PRICE"
                 order_payload["slOrderType"] = "MARKET"
+
+            tp_final_main = signal.get("tp3") or signal.get("take_profit_3r") or signal.get("tp1")
+            if tp_final_main and float(tp_final_main) > 0:
+                order_payload["tpPrice"] = f"{float(tp_final_main):.{price_decimals}f}"
+                order_payload["tpStopType"] = "LAST_PRICE"
+                order_payload["tpOrderType"] = "MARKET"
             
             main_order = await self._request("POST", "/api/v1/futures/trade/place_order", json_body=order_payload)
             
@@ -672,6 +678,12 @@ class BitunixExecutor:
                 order_payload["slPrice"] = f"{stop_loss:.{price_decimals}f}"
                 order_payload["slStopType"] = "LAST_PRICE"
                 order_payload["slOrderType"] = "MARKET"
+
+            tp_final = signal.get("tp3") or signal.get("take_profit_3r") or signal.get("tp1")
+            if tp_final and float(tp_final) > 0:
+                order_payload["tpPrice"] = f"{float(tp_final):.{price_decimals}f}"
+                order_payload["tpStopType"] = "LAST_PRICE"
+                order_payload["tpOrderType"] = "MARKET"
 
             res = await self._request("POST", "/api/v1/futures/trade/place_order", json_body=order_payload)
             if res.get("code") == 0 and res.get("data"):
