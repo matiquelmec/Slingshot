@@ -41,6 +41,38 @@ class TelegramDispatcher:
         self._last_dispatch_time = 0.0
         from engine.core.vault import vault
         self._vault = vault
+        self._sent_state: Dict[str, float] = self._load_sent_state()
+
+    # ── SOP-120: Anti-Spam Gate persistente (sobrevive reinicios del VPS) ──
+    def _load_sent_state(self) -> Dict[str, float]:
+        try:
+            if _STATE_FILE.exists():
+                data = json.loads(_STATE_FILE.read_text(encoding="utf-8"))
+                if isinstance(data, dict):
+                    return {k: float(v) for k, v in data.items() if isinstance(v, (int, float))}
+        except Exception:
+            pass
+        return {}
+
+    def _persist_sent_state(self) -> None:
+        try:
+            _STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
+            _STATE_FILE.write_text(json.dumps(self._sent_state), encoding="utf-8")
+        except Exception as e:
+            logger.debug(f"[TELEGRAM] No se pudo persistir estado anti-spam: {e}")
+
+    def _should_dispatch(self, key: str, ttl_seconds: int) -> bool:
+        """Devuelve True solo si el evento `key` no se envió dentro de `ttl_seconds`."""
+        now = time.time()
+        # Purga de entradas expiradas (máx. 48h) para que el archivo no crezca sin límite
+        self._sent_state = {k: t for k, t in self._sent_state.items() if now - t < 172800}
+        last = self._sent_state.get(key)
+        if last is not None and (now - last) < ttl_seconds:
+            logger.debug(f"[TELEGRAM] Suprimido duplicado '{key}' ({int(now - last)}s < {ttl_seconds}s)")
+            return False
+        self._sent_state[key] = now
+        self._persist_sent_state()
+        return True
 
 
     def _get_bot_execution_status(self) -> str:
@@ -295,6 +327,8 @@ class TelegramDispatcher:
         """Despacha alertas críticas de sistema (SOP-25, mitigaciones, errores de red)."""
         if not self.enabled:
             return False
+        if not self._should_dispatch(f"sys:{title}", cooldown_seconds):
+            return False
         icon = "🚨" if severity.upper() == "CRITICAL" else ("⚠️" if severity.upper() == "WARNING" else "ℹ️")
         msg = (
             f"{icon} <b>ALERTA DE SISTEMA: {title}</b>\n"
@@ -333,6 +367,8 @@ class TelegramDispatcher:
     async def send_trade_fill_alert(self, symbol: str, side: str, price: float, qty: float, account_label: str = "Primary") -> bool:
         if not self.enabled:
             return False
+        if not self._should_dispatch(f"fill:{account_label}:{symbol}:{side.upper()}:{price:.6g}", 86400):
+            return False
         sym = symbol.replace("USDT", "USD")
         side_icon = "LONG" if "BUY" in side.upper() or "LONG" in side.upper() else "SHORT"
         text = f"{side_icon} ORDEN EJECUTADA: {sym} @ ${price:.4f} ({qty} u) - Cuenta: {account_label}"
@@ -340,6 +376,8 @@ class TelegramDispatcher:
 
     async def send_tp_hit_alert(self, symbol: str, tp_label: str, exit_price: float, pnl_usd: float, is_be: bool = True) -> bool:
         if not self.enabled:
+            return False
+        if not self._should_dispatch(f"tp:{symbol}:{tp_label.upper()}", 43200):
             return False
         sym = symbol.replace("USDT", "USD")
         be_str = " | SL a BREAKEVEN" if is_be else ""
@@ -349,12 +387,17 @@ class TelegramDispatcher:
     async def send_trade_closed_alert(self, symbol: str, reason: str, exit_price: float, pnl_usd: float, pnl_r: float = 0.0) -> bool:
         if not self.enabled:
             return False
+        if not self._should_dispatch(f"closed:{symbol}:{exit_price:.6g}", 86400):
+            return False
         sym = symbol.replace("USDT", "USD")
         text = f"TRADE CERRADO: {sym} ({reason}) @ ${exit_price:.4f} | PnL: ${pnl_usd:.2f} USD ({pnl_r:.2f}R)"
         return await self.send_raw_message(text)
 
     async def send_unauthorized_position_alert(self, symbol: str, side: str, qty: float, account_label: str = "Primary") -> bool:
         if not self.enabled:
+            return False
+        # Una sola alerta por posición (re-aviso cada 12h si sigue abierta), no cada ciclo de 15s
+        if not self._should_dispatch(f"unauth:{account_label}:{symbol}:{side.upper()}", 43200):
             return False
         text = (
             f"🚨 <b>[ALERTA DE SEGURIDAD SLINGSHOT]</b> 🚨\n"
