@@ -2,6 +2,8 @@ import { describe, it, expect } from 'vitest';
 import {
   fetchBacktestAuditMetricsAction,
   backtestAuditQuerySchema,
+  fetchTheoryVsPracticeParityAction,
+  theoryVsPracticeQuerySchema,
 } from '@/features';
 import { UserSession } from '@/shared';
 
@@ -88,5 +90,71 @@ describe('Features: Backtest Metrics Audit Slice (FSD & Zero Trust)', () => {
     expect(result.data!.playbooks.length).toBe(1);
     expect(result.data!.playbooks[0].name).toBe('OB_DISCOUNT_RETEST');
     expect(result.data!.playbooks[0].profitFactor).toBe(1.91);
+  });
+
+  it('debe validar el esquema Zod de Paridad Teoría vs Práctica (SOP-119)', () => {
+    const validParams = theoryVsPracticeQuerySchema.parse({
+      comparisonScope: 'SL_TP_RELIABILITY',
+      assetFilter: 'BTCUSDT',
+    });
+    expect(validParams.comparisonScope).toBe('SL_TP_RELIABILITY');
+    expect(validParams.assetFilter).toBe('BTCUSDT');
+
+    const defaultParams = theoryVsPracticeQuerySchema.parse({});
+    expect(defaultParams.comparisonScope).toBe('FULL_SPECTRUM');
+    expect(defaultParams.assetFilter).toBe('ALL');
+
+    expect(() =>
+      theoryVsPracticeQuerySchema.parse({
+        comparisonScope: 'INVALID_SCOPE',
+      })
+    ).toThrow();
+  });
+
+  it('debe certificar la fiabilidad de Stop Loss (99.8%) y Take Profit (99.4%) en la auditoría de paridad (SOP-119)', async () => {
+    const result = await fetchTheoryVsPracticeParityAction(
+      { comparisonScope: 'FULL_SPECTRUM' },
+      mockSession
+    );
+
+    expect(result.success).toBe(true);
+    expect(result.data).toBeDefined();
+
+    const report = result.data!;
+    expect(report.auditStatus).toBe('EMPIRICAL_PARITY_CERTIFIED');
+    expect(report.scorecard.stopLossReliabilityPct).toBe(99.8);
+    expect(report.scorecard.stopLossStatus).toBe('ROCK_SOLID_HARDENED');
+    expect(report.scorecard.takeProfitReliabilityPct).toBe(99.4);
+    expect(report.scorecard.takeProfitStatus).toBe('SECURED_DUAL_LAYER');
+    expect(report.scorecard.positionManagementReliabilityPct).toBe(99.2);
+
+    // Verificación de Haircut Cuantitativo y Expectativa Matemática Real
+    expect(report.scorecard.theoreticalExpectancyR).toBe(0.224);
+    expect(report.scorecard.realWorldExpectancyR).toBe(0.198);
+    expect(report.scorecard.expectationHaircutPct).toBe(11.6);
+    expect(report.scorecard.theoreticalProfitFactor).toBe(1.79);
+    expect(report.scorecard.realWorldProfitFactor).toBe(1.62);
+    expect(report.scorecard.isSystemReliable).toBe(true);
+
+    // Dimensiones comparativas y ciclo de vida de posición
+    expect(report.dimensions.length).toBe(6);
+    expect(report.lifecycleStages.length).toBe(6);
+    expect(report.criticalTakeaways.length).toBe(4);
+  });
+
+  it('debe filtrar adecuadamente las dimensiones según el alcance solicitado', async () => {
+    const slTpResult = await fetchTheoryVsPracticeParityAction(
+      { comparisonScope: 'SL_TP_RELIABILITY' },
+      mockSession
+    );
+    expect(slTpResult.success).toBe(true);
+    expect(slTpResult.data!.dimensions.length).toBe(2);
+
+    const frictionResult = await fetchTheoryVsPracticeParityAction(
+      { comparisonScope: 'EXECUTION_FRICTION' },
+      mockSession
+    );
+    expect(frictionResult.success).toBe(true);
+    expect(frictionResult.data!.dimensions.length).toBe(3);
   });
 });

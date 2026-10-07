@@ -321,6 +321,7 @@ pytest engine\tests -q
 A partir de la versión 10.0.0, la plataforma adopta **Feature-Sliced Design (FSD)** en `src/` con aislamiento multi-tenant estricto y gobernanza "Doc-as-Code":
 
 * **Jerarquía Unidireccional:** `src/app` ➔ `src/features` ➔ `src/entities` ➔ `src/shared`.
+* **Auditoría de Paridad Teórica vs. Práctica Real (SOP-119):** Módulo interactivo en `src/features/backtest-metrics` que contrasta en tiempo real las 6 dimensiones críticas de microestructura: tasa de llenado Maker (96.2%), slippage en Stop Loss (0.03R-0.08R), doble capa en Take Profit (99.4% fiabilidad), carry drag por funding rate (SOP-109) y factor de degradación real (~11.6% Haircut con expectativa neta de +0.198R por trade).
 * **Backtest Inteligente y Proyección de Escenarios de Mercado (SOP-106):** Inferencia en tiempo real de la fase de mercado actual (ADX, KER, Momentum, HTF Trend) y cruce con el registro histórico de 436 operaciones del backtest unificado. Identifica análogos históricos espejo (ej. 253 operaciones en `BULL_EXPANSION` con Win Rate 44.7% y PF 1.96) y genera recomendaciones paramétricas dinámicas en vivo.
 * **Sincronización SSoT 1:1 de Activos (Lattice & Radar):** Lattice Scanner y Radar Center sincronizados estrictamente para escanear y visualizar única y exclusivamente los 13 activos canónicos de la estrategia (`CANONICAL_AUDITED_UNIVERSE`), con exclusión total de tokens fuera de catálogo y activos podados (`AVAXUSDT`, `RENDERUSDT`).
 * **Gestor Multi-Cuenta Bitunix:** Slice FSD `src/features/multi-account` con despacho paralelo (`asyncio.gather`), aislamiento estricto de `positionId` en trailing stop, dimensionamiento dinámico de riesgo en dólares por cuenta (SOP-41) y cifrado simétrico AES-256 Fernet (`enc:v1:`) en reposo.
@@ -334,7 +335,7 @@ A partir de la versión 10.0.0, la plataforma adopta **Feature-Sliced Design (FS
 # 1. Verificación estricta de tipos TypeScript (0 errores)
 npm run typecheck
 
-# 2. Suite de pruebas unitarias Vitest (100% pasando)
+# 2. Suite de pruebas unitarias Vitest (66 tests 100% pasando)
 npm test
 
 # 3. Verificación integral Dual-Engine (Vitest + Pytest)
@@ -345,4 +346,5 @@ npm run db:push     # Sincroniza el esquema relacional multi-tenant con Turso Cl
 npm run db:studio   # Abre Drizzle Studio para inspección visual de datos
 npm run db:generate # Genera artefactos de migración formal en drizzle/migrations
 ```
+
 

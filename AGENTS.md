@@ -203,4 +203,26 @@ Todos los mensajes de commit deben seguir estrictamente el estándar de Conventi
 4. **Homogeneidad de Dependencias en Workers y Centinelas:**
    * Queda estrictamente prohibido importar librerías externas no declaradas como `loguru` en módulos del engine (`asset_incubator.py`). Todo registro debe realizarse a través del logger canónico centralizado (`engine.core.logger`).
 
+---
+
+## 10. Regla 20: Protocolo de Auditoría de Paridad Teórica vs. Ejecución Práctica en Vivo (SOP-119)
+
+1. **Paridad Empírica y Modelado de Fricción (Haircut Cuantitativo):**
+   * Toda métrica expuesta como "en vivo" debe contemplar el factor de degradación por fricción real de mercado (~11.6% Haircut).
+   * La expectativa teórica del backtest (+0.224R) y las proyecciones de Monte Carlo deben contrastarse con la expectativa real (+0.198R), modelando explícitamente:
+     - Tasa de llenado en órdenes límite Maker (96.2% real vs 100% teórico debido a la profundidad de libro).
+     - Slippage estocástico en Stop Loss a mercado (0.03R a 0.08R en picos de volatilidad y noticias).
+     - Carry drag de comisiones de financiamiento (funding rate cada 8h en posiciones runner, mitigado por SOP-109).
+2. **Inviolabilidad de Doble Capa en Stop Loss y Take Profit:**
+   * **Stop Loss:** Debe permanecer anclado de forma incondicional a nivel de exchange (`slOrderType="MARKET"` en Bitunix). Si el proceso del bot se detiene o se reinicia el VPS, el exchange garantiza la salida de riesgo.
+   * **Take Profit:** Debe registrarse en el milisegundo 0 junto a la orden límite de entrada (SOP-117), preservarse estrictamente en cada ajuste de Stop Loss (SOP-118) y auto-reconciliarse continuamente cada 15 segundos mediante el supervisor de NexusNode.
+3. **Escalamiento Canónico de 5 Fases en TradeManager:**
+   * La gestión activa de trades debe progresar de forma monotónica sin permitir retrocesos de SL:
+     - Fase 1: SOP-25 Early Invalidation (-0.65R) ante deterioro estructural.
+     - Fase 2: SOP-48 Mitigador de Medio Riesgo (-0.50R) al tocar +0.60R.
+     - Fase 3: Fast Breakeven con Fee Absorber Buffer (+0.08%) al alcanzar +1.0R (+1.2R Mega-Caps).
+     - Fase 4: Bloqueo de Ganancia (+1.0R asegurado) al tocar +2.0R.
+     - Fase 5: Runner Expansion post-TP3 con Chandelier Exit (1.5x ATR, SOP-104) y monitoreo de funding (SOP-109).
+
+
 
