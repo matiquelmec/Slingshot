@@ -739,5 +739,32 @@ El análisis de expectativa demostró que en régimen `RANGING`, el jurado de co
 3. **Cero Impacto en Latencia y Seguridad Zod/TypeScript:**
    * La validación estricta en TypeScript / Vitest y la suite de pytest garantizan que no existan regresiones en las cuotas de riesgo ni en la firma criptográfica de las peticiones a Bitunix.
 
+---
+
+## 31. Fase 27: Inviolabilidad de PositionId, Preservación de Take Profit y Cierres de Emergencia en Bitunix (SOP-118)
+
+### 31.1 Auditoría Empírica y Diagnóstico de la Posición NEARUSDT
+1. **Historial de la Posición Auditada:**
+   * **Activo:** NEARUSDT | **Dirección:** BUY (Long) | **Cantidad:** 204 unidades.
+   * **Entrada Límite:** $5.126 | **Cierre a Mercado:** $5.033 | **PnL Realizado:** -19.79 USDT.
+   * **Identificador de Posición Exchange:** `6206257468200691483`.
+2. **Causas Raíz Detectadas:**
+   * **Falla de Reconciliador por Dependencia Rota:** El módulo `asset_incubator.py` importaba `loguru`, una librería no instalada en producción. Al evaluar la canonicidad del activo en `NexusNode._sync_exchange_positions_loop`, la ejecución abortaba con `ModuleNotFoundError`, impidiendo que el reconciliador colocara los TP escalonados (50/30/20).
+   * **Error 10002 (Parameter Error) en Órdenes de Cierre de Bitunix:** En modo Hedge/Aislado, Bitunix rechaza con `10002 Parameter error` toda orden `tradeSide="CLOSE"` que no incluya el campo numérico `positionId`. La función `close_position_market()` omitía `positionId` en el payload, provocando que los cierres de emergencia por Stop Loss perforado (SOP-58) fallaran reiteradamente.
+   * **Borrado Inadvertido de Take Profit al Actualizar Stop Loss:** Al mover el Stop Loss a Fast BE (+1.0R/+1.2R) o Trailing Estructural en `trade_manager.py`, se invocaba `modify_position_tpsl` con `tp_price=None`, lo que provocaba que en caso de fallback cancel-and-place, el exchange perdiera la orden de Take Profit original.
+
+### 31.2 Especificación Arquitectónica del Protocolo SOP-118
+1. **Inyección Obligatoria de `positionId` en Cierres a Mercado:**
+   * En `BitunixExecutor.close_position_market()`, se resuelve dinámicamente el `positionId` numérico de la posición en Bitunix y se inyecta en el payload de `/api/v1/futures/trade/place_order`, con reintento automático bajo `reduceOnly: True` si el exchange lo requiere.
+2. **Preservación Invariante del Take Profit Preexistente:**
+   * En `BitunixExecutor.place_position_tpsl()`, si no se suministra un nuevo `tp_price` al ajustar el Stop Loss, el sistema consulta las órdenes existentes en el exchange (`existing_orders`) y preserva de manera inmutable el `raw_tp_str` previo, impidiendo que una orden defensiva de SL borre el TP de la posición.
+3. **Inyección de TP en `TradeManager.sync_live_bitunix_positions()`:**
+   * `sync_live_bitunix_positions()` recupera el `target_tp` de la señal registrada (`matched_sig`) y lo suministra activamente a `modify_position_tpsl()`, asegurando que ambos extremos del trade permanezcan sincronizados en el exchange.
+4. **Fallback Inmediato de Take Profit Nativo de Posición:**
+   * En `NexusNode`, si una orden de salida límite es rechazada con cualquier código de error, el sistema activa automáticamente un fallback hacia `place_position_tpsl()` inyectando el TP objetivo directamente a la posición de Bitunix.
+5. **Erradicación de Dependencias Raras y Unificación con `engine.core.logger`:**
+   * `asset_incubator.py` queda 100% alineado con el logger canónico centralizado del proyecto.
+
+
 
 

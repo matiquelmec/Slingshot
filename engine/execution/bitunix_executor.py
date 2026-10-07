@@ -818,9 +818,15 @@ class BitunixExecutor:
                             continue
 
                         raw_sl_str = eo.get("slPrice") or eo.get("triggerPrice") or ""
+                        raw_tp_str = eo.get("tpPrice") or ""
                         current_eo_id = str(eo.get("id") or eo.get("orderId") or "")
                         if current_eo_id:
                             eo_id = current_eo_id
+
+                        # Si no se pasó un nuevo TP pero la orden previa ya tenía un TP en exchange, preservarlo
+                        if raw_tp_str and not formatted_tp:
+                            formatted_tp = raw_tp_str
+                            logger.info(f"💎 [BITUNIX TPSL] Preservando Take Profit previo de ${raw_tp_str} para {sym} al actualizar SL.")
 
                         if raw_sl_str and formatted_sl:
                             try:
@@ -830,6 +836,7 @@ class BitunixExecutor:
                                 if abs(existing_sl_val - new_sl_val) < 0.0001:
                                     logger.info(f"🛡️ [BITUNIX] {sym} (PosId: {position_id}) ya cuenta con Stop Loss activo blindado en ${existing_sl_val:.4f} (ID: {eo_id}).")
                                     return eo_id
+
 
                                 # 🔒 REGLA DE INVARIANZA: Determinar la dirección de la posición
                                 pos_side = "LONG"
@@ -1063,23 +1070,35 @@ class BitunixExecutor:
             pos_side = target_pos.get("side", "").upper()
             close_side = "SELL" if pos_side in ("BUY", "LONG", "1") else "BUY"
             amount_precision, _ = await self.get_symbol_precision(sym)
-            formatted_qty = f"{pos_qty:.{amount_precision}f}"
+            formatted_qty = f"{pos_qty:.{amount_precision}f}" if amount_precision > 0 else str(int(pos_qty))
             self._recent_algo_closes[sym] = time.time()
+
+            real_pos_id = str(target_pos.get("positionId") or target_pos.get("id") or position_id or "").strip()
+
             payload = {
                 "symbol": sym,
                 "side": close_side,
                 "orderType": "MARKET",
                 "tradeSide": "CLOSE",
-                "qty": formatted_qty,
-                "reduceOnly": True
+                "qty": formatted_qty
             }
+            if real_pos_id and real_pos_id.isdigit():
+                payload["positionId"] = real_pos_id
+
             res = await self._request("POST", "/api/v1/futures/trade/place_order", json_body=payload)
+            # Reintento con reduceOnly si Bitunix lo requiere
+            if res.get("code") != 0 and "reduceOnly" not in payload:
+                payload_ro = dict(payload)
+                payload_ro["reduceOnly"] = True
+                res = await self._request("POST", "/api/v1/futures/trade/place_order", json_body=payload_ro)
+
             if res.get("code") == 0:
                 logger.info(f"⚡ [BITUNIX] Posicion {sym} ({formatted_qty} {pos_side}) cerrada a mercado exitosamente.")
                 return True
             else:
                 logger.error(f"❌ [BITUNIX] Fallo cierre a mercado para {sym}: {res.get('msg')}")
                 return False
+
         except Exception as e:
             logger.error(f"❌ [BITUNIX] Excepcion al cerrar posicion a mercado para {sym}: {e}")
             return False

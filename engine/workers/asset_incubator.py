@@ -16,7 +16,7 @@ Gobernanza bajo AGENTS.md & BLUEPRINT_2026.md:
 
 import math
 from typing import Dict, List, Any, Optional
-from loguru import logger
+from engine.core.logger import logger
 
 CANONICAL_AUDITED_UNIVERSE = [
     "BTCUSDT", "ETHUSDT", "SOLUSDT", "BNBUSDT", "FETUSDT",

@@ -584,16 +584,21 @@ class NexusNode:
                                     tp_payload["positionId"] = str(position_id)
 
                                 tp_res = await target_ex._request("POST", "/api/v1/futures/trade/place_order", json_body=tp_payload)
-                                if tp_res.get("code") != 0 and "positionId" in tp_payload:
-                                    del tp_payload["positionId"]
-                                    tp_res = await target_ex._request("POST", "/api/v1/futures/trade/place_order", json_body=tp_payload)
-
                                 if tp_res.get("code") == 0:
                                     tp_order_id = tp_res.get("data", {}).get("orderId")
                                     logger.info(f"🎯 [NEXUS SYNC] [{target_ex.account_label}] Orden de {label} límite colocada a ${tp_val:.{p_dec}f} ({tp_qty} unidades) | ID: {tp_order_id}")
                                     protection_ids.append(tp_order_id)
                                 else:
-                                    logger.error(f"❌ [NEXUS SYNC] [{target_ex.account_label}] Error al colocar {label}: {tp_res.get('msg')}")
+                                    logger.warning(f"⚠️ [NEXUS SYNC] [{target_ex.account_label}] Orden límite {label} rechazada ({tp_res.get('msg')}). Activando fallback de Take Profit nativo de posición...")
+                                    if position_id and str(position_id).isdigit() and tp_val > 0:
+                                        tpsl_fb = await target_ex.place_position_tpsl(
+                                            symbol=symbol,
+                                            position_id=str(position_id),
+                                            tp_price=float(tp_val)
+                                        )
+                                        if tpsl_fb:
+                                            protection_ids.append(tpsl_fb)
+
                         else:
                             logger.info(f"🛡️ [NEXUS SYNC] [{target_ex.account_label}] {symbol} ya cuenta con {len(existing_close_orders)} órdenes límite de Take Profit activas en Bitunix.")
                             for eo in existing_close_orders:
@@ -719,13 +724,17 @@ class NexusNode:
                                         "positionId": str(pos_id)
                                     }
                                     res_heal = await target_ex._request("POST", "/api/v1/futures/trade/place_order", json_body=tp_pld)
-                                    if res_heal.get("code") != 0 and "positionId" in tp_pld:
-                                        del tp_pld["positionId"]
-                                        res_heal = await target_ex._request("POST", "/api/v1/futures/trade/place_order", json_body=tp_pld)
                                     if res_heal.get("code") == 0:
                                         logger.info(f"✅ [AUTO-HEALING] [{target_ex.account_label}] {symbol} {lbl} colocado a ${p_val:.{p_dec}f} ({q_val} u)")
                                     else:
-                                        logger.warning(f"⚠️ [AUTO-HEALING] [{target_ex.account_label}] No se pudo colocar {lbl} para {symbol}: {res_heal.get('msg')}")
+                                        logger.warning(f"⚠️ [AUTO-HEALING] [{target_ex.account_label}] No se pudo colocar {lbl} límite ({res_heal.get('msg')}). Activando Take Profit nativo de posición...")
+                                        if pos_id and str(pos_id).isdigit() and p_val > 0:
+                                            await target_ex.place_position_tpsl(
+                                                symbol=symbol,
+                                                position_id=str(pos_id),
+                                                tp_price=float(p_val)
+                                            )
+
                     except Exception as heal_err:
                         logger.error(f"❌ [AUTO-HEALING] Error reconciliando {key}: {heal_err}")
 

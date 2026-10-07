@@ -189,3 +189,18 @@ Todos los mensajes de commit deben seguir estrictamente el estándar de Conventi
 3. **Aislamiento Multi-Cuenta en Ejecución y Protección:**
    * Toda cuenta vinculada debe despachar y gestionar sus órdenes límite y de protección de forma totalmente desacoplada, con cerrojos atómicos independientes y consulta asíncrona de posiciones reales, previniendo estados huérfanos o desprotegidos ante latencias de red.
 
+---
+
+## 9. Regla 19: Inviolabilidad de PositionId, Preservación de Take Profit y Cierres de Emergencia en Bitunix (SOP-118)
+
+1. **Obligatoriedad de PositionId en Órdenes de Cierre (`tradeSide="CLOSE"`):**
+   * El motor de Bitunix en modo Hedge/Aislado exige de manera innegociable el campo numérico `positionId` en cualquier orden de cierre (`tradeSide: "CLOSE"`), tanto para órdenes límite como a mercado.
+   * `close_position_market()` debe resolver obligatoriamente `real_pos_id` e inyectarlo en el payload principal, evitando el fallo `10002 Parameter error` que impedía liquidar posiciones con Stop Loss perforado (SOP-58).
+2. **Preservación Invariante de Take Profit en Modificaciones de Stop Loss:**
+   * Al mover el Stop Loss a Fast BE (+1.0R/+1.2R) o Trailing Estructural en `place_position_tpsl` / `modify_position_tpsl`, si no se provee un nuevo `tp_price`, el sistema debe auditar y preservar el Take Profit preexistente en Bitunix (`raw_tp_str`), prohibiendo que una actualización de SL elimine o deje huérfano el TP en el exchange.
+3. **Fallback Inmediato de Take Profit Nativo de Posición ante Rechazo de Salidas Límite:**
+   * Si una orden de salida límite fragmentada (50/30/20) es rechazada por el exchange en el reconciliador de `NexusNode`, el sistema debe activar automáticamente el fallback a orden nativa de posición (`place_position_tpsl`) con el TP objetivo, garantizando que ninguna posición activa permanezca sin Take Profit en Bitunix.
+4. **Homogeneidad de Dependencias en Workers y Centinelas:**
+   * Queda estrictamente prohibido importar librerías externas no declaradas como `loguru` en módulos del engine (`asset_incubator.py`). Todo registro debe realizarse a través del logger canónico centralizado (`engine.core.logger`).
+
+

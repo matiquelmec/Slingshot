@@ -1071,6 +1071,8 @@ class TradeManager:
                     known_signals = await store.get_signals(asset=sym)
                     matched_sig = known_signals[-1] if known_signals else None
                     initial_sl = float(matched_sig.get("initial_stop_loss", 0.0)) if matched_sig else 0.0
+                    target_tp = float((matched_sig or {}).get("tp3") or (matched_sig or {}).get("take_profit_3r") or (matched_sig or {}).get("tp1") or 0.0)
+
 
                     # Distancia de riesgo inicial (1R)
                     is_defensive_sl = (side == "LONG" and 0 < cur_sl < entry_price) or (side == "SHORT" and cur_sl > entry_price)
@@ -1298,7 +1300,12 @@ class TradeManager:
 
                     if should_update_sl:
 
-                        success = await bitunix.modify_position_tpsl(symbol=sym, position_id=pos_id, sl_price=target_sl, tp_price=None)
+                        success = await bitunix.modify_position_tpsl(
+                            symbol=sym,
+                            position_id=pos_id,
+                            sl_price=target_sl,
+                            tp_price=target_tp if target_tp > 0 else None
+                        )
 
                         if success:
 
