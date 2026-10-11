@@ -224,5 +224,21 @@ Todos los mensajes de commit deben seguir estrictamente el estándar de Conventi
      - Fase 4: Bloqueo de Ganancia (+1.0R asegurado) al tocar +2.0R.
      - Fase 5: Runner Expansion post-TP3 con Chandelier Exit (1.5x ATR, SOP-104) y monitoreo de funding (SOP-109).
 
+---
+
+## 11. Regla 21: Gobernanza de Despliegue Continuo, Telemetría y Cero Orfandad en VPS (SOP-120)
+
+1. **Inviolabilidad de Salud Post-Push en VPS (`80.65.211.99`):**
+   * Queda terminantemente prohibido dar por concluida cualquier tarea que afecte el motor de ejecución (`engine/`), Sidecar Node (`sidecar/`), conectores de exchange (`BitunixExecutor`) o scripts sin la sincronización y verificación remota en vivo en el VPS.
+   * La verificación debe ejecutarse mediante `powershell -File scripts/deploy/deploy_and_verify_vps.ps1` certificando que `origin/main` está activo en `C:\Slingshot`.
+2. **Supervisión de la Tríada Operativa de Producción:**
+   * Toda auditoría debe comprobar y registrar la presencia activa de los tres procesos:
+     - `python.exe`: Backend FastAPI en puerto 8000 respondiendo HTTP 200 en `/api/v1/health` o `/docs`.
+     - `node.exe`: Ingestor HFT WebSocket Sidecar de baja latencia.
+     - `terminal64.exe`: Terminal de ejecución TradFi MetaTrader 5.
+3. **Cero Tolerancia a Loops de Falla en Sentinel:**
+   * El log del supervisor (`C:\Slingshot\logs\sentinel.log`) debe certificar paz operativa sin reinicios continuos. Si un servicio crashea tras el despliegue, el agente KRONOS debe diagnosticar el traceback inmediatamente o ejecutar rollback a la versión previa.
+
+
 
 

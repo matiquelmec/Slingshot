@@ -222,7 +222,13 @@ export interface SessionData {
   onh?: number | null;
   onl?: number | null;
   trading_day?: string;
-  volume_profile?: any;
+  volume_profile?: {
+    poc?: number;
+    vah?: number;
+    val?: number;
+    lvns?: number[];
+    levels?: Array<{ price: number; volume: number }>;
+  } | null;
 }
 
 export interface OrderBlockData {
@@ -242,8 +248,21 @@ export interface SMCDataPayload {
     bullish: OrderBlockData[];
     bearish: OrderBlockData[];
   };
-  volume_profile?: any;
-  traps?: any;
+  volume_profile?: {
+    poc?: number;
+    vah?: number;
+    val?: number;
+    lvns?: number[];
+    levels?: Array<{ price: number; volume: number }>;
+  } | null;
+  traps?: {
+    bull_trap_detected?: boolean;
+    bear_trap_detected?: boolean;
+    trap_price?: number;
+    reversal_target?: number;
+    laf_bull?: boolean;
+    laf_bear?: boolean;
+  } | null;
 }
 
 export interface OnChainMetrics {

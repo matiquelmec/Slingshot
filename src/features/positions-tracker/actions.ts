@@ -278,7 +278,10 @@ export async function fetchDatabaseHealthAction(
       });
 
       const idxRes = batchResults[2 + tableNames.length];
-      activeIndexes = (idxRes?.rows || []).map((r: any) => String(r[0] ?? r.name));
+      activeIndexes = (idxRes?.rows || []).map((r) => {
+        const row = r as Record<string, unknown>;
+        return String(row[0] ?? row.name ?? '');
+      }).filter(Boolean);
     } catch (batchErr) {
       console.warn('[DatabaseHealth] Batch audit fallback used:', batchErr);
     }

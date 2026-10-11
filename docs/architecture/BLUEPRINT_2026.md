@@ -794,6 +794,25 @@ El análisis de expectativa demostró que en régimen `RANGING`, el jurado de co
    * Fase 4: Bloqueo de Ganancia en TP2 (+2.0R), asegurando +1.0R neto en verde.
    * Fase 5: Expansión de Runner post-TP3 con Chandelier Exit (1.5x ATR, SOP-104) y blindaje contra Funding Drag (SOP-109).
 
+---
+
+## 33. Fase 29: Orquestación de Despliegue Continuo GitOps y Sentinel en VPS (SOP-120 & KRONOS)
+
+### 33.1 Topología y Supervisión de Producción
+1. **Infraestructura Dedicada 24/7:**
+   * Servidor VPS institucional en `80.65.211.99`, administrado mediante WinRM seguro sobre HTTPS (puerto `5986`).
+   * Directorio raíz de producción: `C:\Slingshot`.
+2. **El Agente KRONOS (SRE & DevOps Sentinel):**
+   * Encargado del ciclo de vida de despliegue post-push (`scripts/deploy/deploy_and_verify_vps.ps1`).
+   * Garantiza que ningún código de ejecución llegue a producción sin verificación activa de salud.
+3. **Supervisión de la Tríada Operativa Concurrente:**
+   * **Motor Algorítmico FastAPI:** `python.exe -m uvicorn engine.api.main:app --port 8000`, validado vía HTTP healthcheck (`/api/v1/health` o `/docs`).
+   * **HFT WebSocket Sidecar:** `node.exe sidecar/index.js`, asegurando la captura de ticks L2 a submilisegundos.
+   * **Terminal TradFi:** `terminal64.exe` (MetaTrader 5) para ejecución de índices y divisas institucionales.
+4. **Auto-Healing y Sentinel Watchdog:**
+   * `sentinel.log` monitorea los procesos cada 60 segundos relanzando automáticamente cualquier componente caído y evitando bucles de fallo post-deploy.
+
+
 
 
 

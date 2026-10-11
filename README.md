@@ -347,4 +347,26 @@ npm run db:studio   # Abre Drizzle Studio para inspección visual de datos
 npm run db:generate # Genera artefactos de migración formal en drizzle/migrations
 ```
 
+---
+
+## 🚀 Orquestación de Despliegue Continuo GitOps y Sentinel en VPS (SOP-120 & Agente KRONOS)
+
+A partir de la versión 10.0.0, la plataforma incorpora el rol del **Agente KRONOS (SRE & DevOps Sentinel)** y el protocolo automatizado de despliegue y auditoría remota para el servidor de producción 24/7 (`80.65.211.99`):
+
+* **Comandos de Gestión y Auditoría Remota (WinRM 5986 HTTPS):**
+  ```powershell
+  # 1. Auditoría remota en vivo (procesos, logs de sentinel y memoria sin reinicio)
+  powershell -File scripts/deploy/sync_and_audit_vps.ps1
+
+  # 2. Despliegue atómico verificado (git pull en C:\Slingshot + restart backend + HTTP healthcheck)
+  powershell -File scripts/deploy/deploy_and_verify_vps.ps1
+  ```
+* **Supervisión de la Tríada Operativa de Producción:**
+  - **Motor Algorítmico FastAPI:** `python.exe` en puerto 8000 respondiendo HTTP 200 en `/api/v1/health`.
+  - **HFT WebSocket Sidecar:** `node.exe` ingiriendo datos L2 en tiempo real para 13 activos canónicos.
+  - **Terminal TradFi:** `terminal64.exe` (MetaTrader 5) con ejecución algorítmica para divisas e índices.
+* **Workflow Institucional Prompt-to-Push:**
+  Invocable mediante `/prompt_to_push`. Ejecuta automáticamente el ciclo completo: Diagnóstico Pre-flight ➔ Validación FSD/Zod/Multi-tenant ➔ Dual-Engine Quality Gate (`typecheck` + `vitest` + `pytest`) ➔ Doc-as-Code en cascada ➔ Commit semántico & Push ➔ **Despliegue y Healthcheck en vivo en el VPS**.
+
+
 
