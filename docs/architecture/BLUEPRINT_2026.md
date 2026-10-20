@@ -813,8 +813,26 @@ El análisis de expectativa demostró que en régimen `RANGING`, el jurado de co
 4. **Auto-Healing y Sentinel Watchdog:**
    * `sentinel.log` monitorea los procesos cada 60 segundos relanzando automáticamente cualquier componente caído y evitando bucles de fallo post-deploy.
 
+---
 
+## 34. Fase 30: Clasificador Canónico de Sesión (SOP-121) y Gating Consciente de Temporalidad (SOP-122)
 
+### 34.1 Clasificador Canónico de Sesión de Mercado SSoT (SOP-121)
+1. **SSoT Centralizado (`classify_market_session`):**
+   * Ubicado en `engine/core/session_manager.py`.
+   * Unifica la clasificación de sesiones para escáneres, despachadores de Telegram y endpoints de API.
+2. **Pureza de Reloj de Pared (Wall-Clock Purity):**
+   * Evalúa la sesión operativa exclusivamente contra el reloj actual de pared en UTC (`datetime.now(timezone.utc)`), desterrando el bug histórico donde el timestamp de velas multitemporales (00:00 UTC) forzaba la etiqueta estática `ASIA` durante la sesión de Londres o Nueva York.
+3. **Mapeo de Sesiones y Ajuste por Horario de Verano (DST):**
+   * Integración de `zoneinfo` (`America/New_York`, `Europe/London`, `Asia/Tokyo`, `Europe/Berlin`).
+   * Despacho con etiquetas canónicas: `ASIA (Tokyo)`, `LONDON (Killzone)`, `NEW YORK (Overlap Londres/NY)`, `NEW YORK (RTH)`, `NEW YORK (Silver Bullet PM)`, `OFF_HOURS (Transición)`.
 
-
-
+### 34.2 Gating Multitemporal e Inteligencia Estructural 1D (SOP-122)
+1. **Desacoplamiento Operativo:**
+   * Las señales de temporalidad diaria (`1d`) representan directrices macro/swing y no deben auto-despacharse como órdenes límite apalancadas a 20x en Bitunix (preservación del capital ante SL de 6-8%).
+2. **Eliminación del Cuello de Botella Intradiario:**
+   * Las velas de 1D quedan exentas de las restricciones horarias intradiarias (`is_trade_allowed_sop18`, ventanas de 10:00 y 14:00 UTC) y del umbral de AVWAP intradiario ($\pm 0.40\%$).
+   * En su lugar, 1D utiliza la alineación de tendencia estructural contra la EMA200 Diaria y el régimen de mercado general.
+3. **Gating Calibrado y Despacho Telegram:**
+   * Umbral mínimo de score para 1D fijado en 70 puntos.
+   * Despacho informativo etiquetado con `⚪ REFERENCIA ESTRUCTURAL 1D (Solo señal manual MT5 / Swing)`.

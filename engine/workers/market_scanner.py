@@ -322,7 +322,7 @@ class MarketScanner:
                 
                 # ── PROTOCOLO CANÓNICO SOP-18 & ANTIRUIDO: EVALUACIÓN DE SALUD DE MERCADO ──
                 now_utc = datetime.now(timezone.utc)
-                is_time_allowed = self.is_trade_allowed_sop18(symbol, now_utc)
+                is_time_allowed = True if interval == "1d" else self.is_trade_allowed_sop18(symbol, now_utc)
 
                 # Calcular métricas de eficiencia Kaufman (KER de 20 períodos alineado a Confluence) y volumen relativo (RVOL)
                 if len(df) >= 20:
@@ -494,7 +494,13 @@ class MarketScanner:
                         })
 
                     # ── EVALUACIÓN CANÓNICA SOP-18: TIME-GATING SSoT ──
-                    if not is_time_allowed:
+                    if interval == "1d":
+                        checklist.append({
+                            "factor": "Marco Temporal (Macro 1D)",
+                            "status": "CUMPLIDO",
+                            "detail": "✅ Referencia Estructural 1D (Inmune a Killzones Intradiarias)",
+                        })
+                    elif not is_time_allowed:
                         checklist.append({
                             "factor": "Ventana Operativa (SOP-18)",
                             "status": "VETO",
@@ -528,26 +534,38 @@ class MarketScanner:
                     cur_avwap_dist = float(df_avwap["session_avwap_dist_pct"].iloc[-1])
                     cur_session = str(df_avwap["session_name"].iloc[-1])
 
-                    is_avwap_aligned = (direction == "LONG" and current_price >= cur_avwap * 0.999) or \
-                                       (direction == "SHORT" and current_price <= cur_avwap * 1.001)
-                    is_avwap_blocked = (direction == "LONG" and cur_avwap_dist < -0.40) or \
-                                       (direction == "SHORT" and cur_avwap_dist > 0.40)
                     is_btc_blocked = (btc_aligned is False and symbol not in ("BTCUSDT", "XAUUSDT", "PAXGUSDT"))
 
-                    if is_avwap_aligned:
-                        base_score = min(100, base_score + 8)
+                    if interval == "1d":
+                        # En 1D, el AVWAP intradiario de sesión no aplica (cada barra es 24h).
+                        # La alineación macro se evalúa mediante EMA200 diaria.
+                        is_avwap_aligned = is_trend_aligned
+                        is_avwap_blocked = False
                         checklist.append({
-                            "factor": f"Session AVWAP ({cur_session})",
-                            "status": "CUMPLIDO",
-                            "detail": f"✅ ALINEADO A FLUJO INSTITUCIONAL (Precio ${current_price:,.2f} vs AVWAP ${cur_avwap:,.2f} | Dist: {cur_avwap_dist:+.2f}%)",
+                            "factor": "Tendencia Estructural Macro (1D)",
+                            "status": "CUMPLIDO" if is_trend_aligned else "ALERTA",
+                            "detail": f"{'✅ Alineado a EMA200 1D' if is_trend_aligned else '⚠️ Divergente de EMA200 1D'} (${current_price:,.2f} vs EMA200 ${ema200_val:,.2f})",
                         })
                     else:
-                        base_score = max(0, base_score - 12)
-                        checklist.append({
-                            "factor": f"Session AVWAP ({cur_session})",
-                            "status": "VETO" if is_avwap_blocked else "ALERTA",
-                            "detail": f"🛑 VETO AVWAP (±0.40%): {cur_avwap_dist:+.2f}%" if is_avwap_blocked else f"⚠️ CONTRA FLUJO DE SESIÓN {cur_session} (Precio ${current_price:,.2f} vs AVWAP ${cur_avwap:,.2f} | Dist: {cur_avwap_dist:+.2f}%)",
-                        })
+                        is_avwap_aligned = (direction == "LONG" and current_price >= cur_avwap * 0.999) or \
+                                           (direction == "SHORT" and current_price <= cur_avwap * 1.001)
+                        is_avwap_blocked = (direction == "LONG" and cur_avwap_dist < -0.40) or \
+                                           (direction == "SHORT" and cur_avwap_dist > 0.40)
+
+                        if is_avwap_aligned:
+                            base_score = min(100, base_score + 8)
+                            checklist.append({
+                                "factor": f"Session AVWAP ({cur_session})",
+                                "status": "CUMPLIDO",
+                                "detail": f"✅ ALINEADO A FLUJO INSTITUCIONAL (Precio ${current_price:,.2f} vs AVWAP ${cur_avwap:,.2f} | Dist: {cur_avwap_dist:+.2f}%)",
+                            })
+                        else:
+                            base_score = max(0, base_score - 12)
+                            checklist.append({
+                                "factor": f"Session AVWAP ({cur_session})",
+                                "status": "VETO" if is_avwap_blocked else "ALERTA",
+                                "detail": f"🛑 VETO AVWAP (±0.40%): {cur_avwap_dist:+.2f}%" if is_avwap_blocked else f"⚠️ CONTRA FLUJO DE SESIÓN {cur_session} (Precio ${current_price:,.2f} vs AVWAP ${cur_avwap:,.2f} | Dist: {cur_avwap_dist:+.2f}%)",
+                            })
 
                     # ── DETERMINACIÓN DE PLAYBOOK INSTITUCIONAL (TRADEZELLA STYLE — PARIDAD SSoT) ──
                     has_dir_sweep = bool(df.get("recent_sweep_bull", pd.Series([False])).iloc[-1]) if direction == "LONG" else bool(df.get("recent_sweep_bear", pd.Series([False])).iloc[-1])
@@ -670,10 +688,12 @@ class MarketScanner:
             if sym_upper in ("RENDERUSDT", "AVAXUSDT"):
                 continue
 
-            # [SOP-101 1H SWING SPECIALIZATION GATEKEEPER]
+            # [SOP-101 1H SWING SPECIALIZATION GATEKEEPER & SOP-122 TIMEFRAME-AWARE GATING]
             if interval == "1h":
                 if not sym_upper.startswith("XAU"):
                     min_score = max(min_score, 75)
+            elif interval == "1d":
+                min_score = 70  # Confluencia estructural macro exigente
             else:
                 # [SOP-100 STAGE 1 GATEKEEPER: 15m SWEEP + LOW KER DEMANDS 82% CONFLUENCE]
                 if playbook_c == "LIQUIDITY_SWEEP_FVG" and ker_c < 0.40:
@@ -751,7 +771,7 @@ class MarketScanner:
         from datetime import datetime, timezone
         from engine.risk.cluster_risk_guard import cluster_risk_guard
         now_utc = datetime.now(timezone.utc)
-        is_time_ok = is_trade_allowed_sop18(sym, now_utc)
+        is_time_ok = True if interval == "1d" else is_trade_allowed_sop18(sym, now_utc)
 
         active_positions = getattr(getattr(self.router, "_nexus", None), "_active_positions", {})
         can_open_cluster, cluster_msg = cluster_risk_guard.can_open_position(

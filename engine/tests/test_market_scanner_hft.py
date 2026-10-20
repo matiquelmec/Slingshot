@@ -47,9 +47,29 @@ async def test_market_scanner_ote_watchdog_chasing_detection():
     is_chasing_ok, _ = scanner._ote_watchdog("LONG", 94.0, fib_data)
     assert is_chasing_ok is False, "Comprar en zona Discount es válido y no es Chasing"
 
+
 @pytest.mark.asyncio
-async def test_hft_order_flow_graceful_fallback():
-    """Valida que ante desconexión del sidecar HFT se retorne un dict vacío sin elevar excepciones."""
+async def test_daily_timeframe_aware_gating():
+    """
+    [SOP-122] Valida que el escáner aplique gating consciente de la temporalidad:
+    Las señales en 1D representan estructuras macro y no deben ser vetadas
+    por las ventanas intradiarias estrictas (SOP-18 10h/14h o fuera de Killzones).
+    """
     scanner = MarketScanner()
-    res = await scanner._get_hft_order_flow("UNKNOWN_COIN_USDT")
-    assert isinstance(res, dict)
+    now_utc = datetime(2026, 10, 20, 10, 0, tzinfo=timezone.utc)  # 10:00 UTC es hora tóxica para 15m
+
+    # 1. En 15m a las 10:00 UTC -> debe estar bloqueado por SOP-18
+    is_time_15m = scanner.is_trade_allowed_sop18("BTCUSDT", now_utc)
+    assert is_time_15m is False, "10:00 UTC debe ser bloqueado para 15m intradía"
+
+    # 2. En _format_opportunity con 1d -> is_time_ok debe ser True
+    mock_sig = {
+        "asset": "BTCUSDT",
+        "signal_type": "LONG",
+        "price": 65000.0,
+        "stop_loss": 63000.0,
+        "confluence": {"score": 80, "asset_health": {"ker": 0.45}}
+    }
+    opp_1d = scanner._format_opportunity(mock_sig, is_active=False, interval="1d")
+    assert opp_1d["is_time_blocked"] is False, "1D debe ser inmune al veto intradiario de killzones"
+

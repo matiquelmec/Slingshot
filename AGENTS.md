@@ -248,3 +248,17 @@ Todos los mensajes de commit deben seguir estrictamente el estándar de Conventi
 3. **Invarianza de DST y Zonas Horarias:**
    * La clasificación debe respetar estrictamente los husos horarios canónicos vía `zoneinfo` (`America/New_York`, `Europe/London`, `Asia/Tokyo`, `Europe/Berlin`).
    * Despachos de alertas a Telegram y payloads WebSocket deben reflejar la etiqueta descriptiva oficial (`ASIA (Tokyo)`, `LONDON (Killzone)`, `NEW YORK (Overlap Londres/NY)`, `NEW YORK (RTH)`, `NEW YORK (Silver Bullet PM)`, `OFF_HOURS (Transición)`).
+
+---
+
+## 13. Regla 23: Gating Consciente de Temporalidad y Desacoplamiento de Señales Macro 1D (SOP-122)
+
+1. **Desacoplamiento Estricto entre Escaneo Macro y Ejecución Automática de Futuros:**
+   * Las señales generadas en temporalidad diaria (`1d`) representan directrices estructurales de posición/swing (convergencia macro, Order Blocks de alto orden y liquidez institucional semanal).
+   * Queda terminantemente prohibido auto-despachar órdenes límite con apalancamiento 20x en Bitunix basadas en temporalidad `1d` sin confirmación y gatillo intradiario (`15m` o `1h`), protegiendo el margen contra Stop Losses de 6% a 8% incompatibles con cuentas de scalping.
+2. **Inmunidad de Velas Diarias a Filtros de Micro-Sesión (Timeframe-Aware Gating):**
+   * El filtro horario intradiario (`is_trade_allowed_sop18`, ventanas 10:00 y 14:00 UTC) aplica exclusivamente a ejecuciones intradiarias (`15m`, `1h`). Las velas diarias (`1d`) abarcan 24 horas continuas y están exentas de veto por hora del día.
+   * La tolerancia estrecha de AVWAP de sesión intradiaria ($\pm 0.40\%$) no debe estrangular las barras de 1D. En su lugar, las señales 1D deben evaluarse contra la tendencia estructural de orden superior (EMA200 Diaria y alineación de régimen macro).
+3. **Despacho Transparente y Alertas Informativas en Telegram:**
+   * Toda señal calificada en 1D con puntaje $\ge 70$ puntos debe despacharse a Telegram identificada explícitamente con el badge `⚪ REFERENCIA ESTRUCTURAL 1D (Solo señal manual MT5 / Swing)`, proporcionando al operador humano la brújula macro sin generar órdenes no autorizadas en futuros perpetuos.
+
