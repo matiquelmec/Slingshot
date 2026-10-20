@@ -237,8 +237,14 @@ Todos los mensajes de commit deben seguir estrictamente el estándar de Conventi
      - `node.exe`: Ingestor HFT WebSocket Sidecar de baja latencia.
      - `terminal64.exe`: Terminal de ejecución TradFi MetaTrader 5.
 3. **Cero Tolerancia a Loops de Falla en Sentinel:**
-   * El log del supervisor (`C:\Slingshot\logs\sentinel.log`) debe certificar paz operativa sin reinicios continuos. Si un servicio crashea tras el despliegue, el agente KRONOS debe diagnosticar el traceback inmediatamente o ejecutar rollback a la versión previa.
+---
 
+## 12. Regla 22: Clasificador Canónico de Sesión de Mercado y Pureza de Reloj de Pared (SOP-121)
 
-
-
+1. **SSoT Único y Centralizado (`classify_market_session`):**
+   * Queda terminantemente prohibido implementar lógica ad-hoc o bifurcada de cálculo de sesiones en despachadores de Telegram, escáneres o procesadores de confluencia. Toda clasificación horaria de mercado debe invocar de forma innegociable `classify_market_session()` de `engine/core/session_manager.py`.
+2. **Evaluación Estricta por Reloj de Pared (Wall-Clock Purity):**
+   * El estado de sesión en tiempo real debe calcularse siempre con el reloj actual de pared (`datetime.now(timezone.utc)`) y nunca con el timestamp de apertura de velas multitemporales. Una vela diaria (1D) o de 4 horas abierta a las 00:00 UTC jamás debe congelar o etiquetar la sesión como `ASIA` durante las sesiones de Londres o Nueva York.
+3. **Invarianza de DST y Zonas Horarias:**
+   * La clasificación debe respetar estrictamente los husos horarios canónicos vía `zoneinfo` (`America/New_York`, `Europe/London`, `Asia/Tokyo`, `Europe/Berlin`).
+   * Despachos de alertas a Telegram y payloads WebSocket deben reflejar la etiqueta descriptiva oficial (`ASIA (Tokyo)`, `LONDON (Killzone)`, `NEW YORK (Overlap Londres/NY)`, `NEW YORK (RTH)`, `NEW YORK (Silver Bullet PM)`, `OFF_HOURS (Transición)`).

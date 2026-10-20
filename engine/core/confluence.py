@@ -794,10 +794,20 @@ class ConfluenceManager:
             is_ol = bool(session_data.get("is_overlap", False)) if isinstance(session_data, dict) else False
 
             # Detección adaptativa de sesión activa:
-            is_ny_session = (sess_name in ["NEW_YORK", "NY_KILLZONE", "LONDON_NY_OVERLAP", "NY_SILVER_BULLET_PM"]) or is_sb or is_ol or (13 <= hr_utc < 17)
-            is_rebalance = (21 <= hr_utc < 24)
-            is_asia_session = (sess_name == "ASIA") or (0 <= hr_utc < 7)
-            is_london_session = (sess_name in ["LONDON", "LONDON_KILLZONE", "FRANKFURT_OPEN"]) or (7 <= hr_utc < 13)
+            # [SOP-121] Si hay telemetría de sesión en vivo (SessionManager), es la ÚNICA fuente de verdad.
+            # El fallback por hora de la vela solo aplica sin session_data (backtest), ya que en 1h/1D
+            # el timestamp de apertura (p.ej. 00:00 UTC) no representa la sesión vigente.
+            if sess_name:
+                sess_hr = int(session_data.get("utc_hour", hr_utc)) if isinstance(session_data, dict) else hr_utc
+                is_ny_session = (sess_name in ["NEW_YORK", "NY_KILLZONE", "LONDON_NY_OVERLAP", "NY_SILVER_BULLET_PM"]) or is_sb or is_ol
+                is_rebalance = (sess_name == "OFF_HOURS") and (21 <= sess_hr < 24)
+                is_asia_session = (sess_name == "ASIA")
+                is_london_session = (sess_name in ["LONDON", "LONDON_KILLZONE", "FRANKFURT_OPEN"])
+            else:
+                is_ny_session = is_sb or is_ol or (13 <= hr_utc < 17)
+                is_rebalance = (21 <= hr_utc < 24)
+                is_asia_session = (0 <= hr_utc < 7)
+                is_london_session = (7 <= hr_utc < 13)
 
             if is_ny_session:
                 score += 5

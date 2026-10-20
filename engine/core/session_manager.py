@@ -39,6 +39,98 @@ _FRA_TZ    = ZoneInfo("Europe/Berlin") # Frankfurt
 # por cada moneda en el arranque, sin importar cuántos intervalos se usen.
 _BOOTSTRAP_MEMO = {} # symbol -> state_data_snapshot
 
+# ──────────────────────────────────────────────────────────────────────────────
+# [SOP-121] CLASIFICADOR CANÓNICO DE SESIÓN (SSoT PURO, DST-AWARE)
+# ──────────────────────────────────────────────────────────────────────────────
+# Etiquetas legibles para Telegram / UI. La clave es el identificador canónico.
+SESSION_DISPLAY_LABELS = {
+    "ASIA":                "ASIA (Tokyo)",
+    "FRANKFURT_OPEN":      "FRANKFURT OPEN (Pre-Londres)",
+    "LONDON_KILLZONE":     "LONDON (Killzone)",
+    "LONDON":              "LONDON",
+    "LONDON_NY_OVERLAP":   "NEW YORK (Overlap Londres/NY)",
+    "NY_KILLZONE":         "NEW YORK (Killzone)",
+    "NEW_YORK":            "NEW YORK (RTH)",
+    "NY_SILVER_BULLET_PM": "NEW YORK (Silver Bullet PM)",
+    "OFF_HOURS":           "OFF_HOURS (Transición)",
+}
+
+
+def _ensure_utc(now_utc: Optional[datetime]) -> datetime:
+    if now_utc is None:
+        return datetime.now(timezone.utc)
+    if now_utc.tzinfo is None:
+        return now_utc.replace(tzinfo=timezone.utc)
+    return now_utc.astimezone(timezone.utc)
+
+
+def classify_market_session(now_utc: Optional[datetime] = None) -> dict:
+    """
+    [SOP-121] Fuente Única de Verdad para la sesión de mercado vigente.
+
+    Función pura (sin estado ni I/O) y DST-aware vía zoneinfo. Debe evaluarse SIEMPRE
+    con el reloj de pared en el momento del análisis/despacho; nunca con el timestamp
+    de apertura de una vela (una vela 1D abre a 00:00 UTC = 09:00 Tokio → "ASIA" todo el día).
+
+    Precedencia canónica:
+      1. Base: ASIA (Tokio 09-15) → LONDON (Londres 08-16, antes de NY 08) → NEW_YORK (NY 08-16) → OFF_HOURS
+      2. LONDON_KILLZONE (Londres 08-11)
+      3. LONDON_NY_OVERLAP (NY 08-11)
+      4. Silver Bullet AM (NY 10-11, flag) / NY_SILVER_BULLET_PM (NY 14-15)
+      5. FRANKFURT_OPEN (Berlín 07-08)
+    """
+    now_utc = _ensure_utc(now_utc)
+    now_ny  = now_utc.astimezone(_NY_TZ)
+    lon_hour = now_utc.astimezone(_LONDON_TZ).hour
+    tok_hour = now_utc.astimezone(_TOKYO_TZ).hour
+    fra_hour = now_utc.astimezone(_FRA_TZ).hour
+    ny_hour  = now_ny.hour
+
+    is_silver_bullet = False
+    is_overlap = False
+    is_killzone = False
+
+    if 9 <= tok_hour < 15:
+        session_name = "ASIA"
+    elif 8 <= lon_hour < 16 and ny_hour < 8:
+        session_name = "LONDON"
+    elif 8 <= ny_hour < 16:
+        session_name = "NEW_YORK"
+    else:
+        session_name = "OFF_HOURS"
+
+    if 8 <= lon_hour < 11:
+        session_name = "LONDON_KILLZONE"
+        is_killzone = True
+
+    if 8 <= ny_hour < 11:
+        session_name = "LONDON_NY_OVERLAP" if lon_hour >= 8 else "NY_KILLZONE"
+        is_killzone = True
+        is_overlap = lon_hour >= 8
+
+    if (10 <= ny_hour < 11) or (14 <= ny_hour < 15):
+        is_silver_bullet = True
+        if ny_hour >= 14:
+            session_name = "NY_SILVER_BULLET_PM"
+            is_killzone = True
+
+    if 7 <= fra_hour < 8:
+        session_name = "FRANKFURT_OPEN"
+        is_killzone = True
+
+    yosh_window = (ny_hour == 10) or (ny_hour == 11 and now_ny.minute <= 30)
+
+    return {
+        "current_session":  session_name,
+        "session_label":    SESSION_DISPLAY_LABELS.get(session_name, session_name),
+        "is_killzone":      bool(is_killzone),
+        "is_silver_bullet": bool(is_silver_bullet),
+        "is_overlap":       bool(is_overlap),
+        "yosh_window":      bool(yosh_window),
+        "utc_hour":         int(now_utc.hour),
+        "timestamp_utc":    now_utc.timestamp(),
+    }
+
 
 def _empty_session() -> dict:
     return {
@@ -383,7 +475,10 @@ class SessionManager:
         if is_closed:
             self._save()
 
-        return self._build_payload(ts)
+        # [SOP-121] Los niveles se actualizan con el timestamp de la vela, pero la sesión
+        # vigente se clasifica SIEMPRE con el reloj de pared (una vela 1h/4h/1D abierta
+        # horas atrás no puede etiquetar la sesión actual).
+        return self._build_payload(max(ts, datetime.now(timezone.utc)))
 
     # ── GESTIÓN DE CAP DE SESIÓN v5.0 ───────────────────────────────────────────
     def get_trades_today(self) -> int:
@@ -466,59 +561,22 @@ class SessionManager:
             },
         }
 
-        # ── Sesión activa (v8.8.0 Institutional Precision) ─────────────────
-        is_silver_bullet = False
-        is_overlap = False
-        is_killzone = False
-        
-        # 1. Definir Sesión Base
-        if 9 <= tokyo_hour < 15:
-            session_name = "ASIA"
-        elif 8 <= lon_hour < 16 and ny_hour < 8:
-            session_name = "LONDON"
-        elif 8 <= ny_hour < 16:
-            session_name = "NEW_YORK"
-        else:
-            session_name = "OFF_HOURS"
-
-        # 2. Refinar con Killzones y Overlaps
-        if 8 <= lon_hour < 11:
-            session_name = "LONDON_KILLZONE"
-            is_killzone = True
-        
-        if 8 <= ny_hour < 11:
-            if session_name == "LONDON_KILLZONE" or lon_hour >= 8:
-                session_name = "LONDON_NY_OVERLAP"
-            else:
-                session_name = "NY_KILLZONE"
-            is_killzone = True
-            is_overlap = True
-
-        # Silver Bullets (SMC Standard)
-        if (10 <= ny_hour < 11) or (14 <= ny_hour < 15):
-            is_silver_bullet = True
-            if ny_hour >= 14: session_name = "NY_SILVER_BULLET_PM"
-
-        # Frankfurt Pre-Open (Berlin TZ Accuracy)
-        fra_hour = now_utc.astimezone(_FRA_TZ).hour
-        if 7 <= fra_hour < 8:
-            session_name = "FRANKFURT_OPEN"
-            is_killzone = True
-
-        # ── 🎯 YOSH EXECUTION WINDOW (10:00 - 11:30 AM EST) ──
-        # Ventana de máxima probabilidad tras los primeros 30 min de "price discovery"
-        yosh_window = False
-        if 10 <= ny_hour <= 11:
-            if ny_hour == 10:
-                yosh_window = True
-            elif ny_hour == 11 and now_ny.minute <= 30:
-                yosh_window = True
+        # ── Sesión activa: delegada al clasificador canónico SOP-121 ─────────
+        cls = classify_market_session(now_utc)
+        session_name     = cls["current_session"]
+        is_killzone      = cls["is_killzone"]
+        is_silver_bullet = cls["is_silver_bullet"]
+        is_overlap       = cls["is_overlap"]
+        # 🎯 YOSH EXECUTION WINDOW (10:00 - 11:30 AM EST)
+        yosh_window      = cls["yosh_window"]
 
         return {
             "type": "session_update",
             "data": {
                 "asset":               str(self._symbol),
                 "current_session":     str(session_name),
+                "session_label":       str(cls["session_label"]),
+                "utc_hour":            int(cls["utc_hour"]),
                 "current_session_utc": now_utc.strftime("%H:%M UTC"),
                 "local_time":          now_chile.strftime("%H:%M Chile"),
                 "local_time_ny":       now_ny.strftime("%H:%M"),
@@ -563,38 +621,19 @@ class SessionManager:
         now_utc = datetime.now(timezone.utc)
         now_ny  = now_utc.astimezone(_NY_TZ)
         now_lon = now_utc.astimezone(_LONDON_TZ)
-        now_tokyo = now_utc.astimezone(_TOKYO_TZ)
 
-        ny_hour  = now_ny.hour
-        lon_hour = now_lon.hour
-        tok_hour = now_tokyo.hour
-
-        # Detección de sesión activa (v8.8.0 Sync)
-        is_silver_bullet = False
-        is_overlap = False
-        
-        if 9 <= tok_hour < 15:
-            session_name, is_killzone = "ASIA", False
-        elif 7 <= lon_hour < 8:
-            session_name, is_killzone = "FRANKFURT_OPEN", True
-        elif 8 <= lon_hour < 11:
-            session_name, is_killzone = "LONDON_KILLZONE", True
-        elif 8 <= ny_hour < 11:
-            session_name, is_killzone = "LONDON_NY_OVERLAP", True
-            is_overlap = True
-        elif 11 <= ny_hour < 16:
-            if 14 <= ny_hour < 15:
-                session_name, is_killzone, is_silver_bullet = "NY_SILVER_BULLET_PM", True, True
-            else:
-                session_name, is_killzone = "NEW_YORK", False
-        else:
-            session_name, is_killzone = "OFF_HOURS", False
+        # [SOP-121] Delegado al clasificador canónico (antes: lógica divergente que
+        # etiquetaba Londres 11:00-13:00 como OFF_HOURS y Frankfurt con 1h de desfase).
+        cls = classify_market_session(now_utc)
 
         return {
-            "current_session": session_name,
-            "is_killzone": is_killzone,
-            "is_silver_bullet": is_silver_bullet,
-            "is_overlap": is_overlap,
+            "current_session": cls["current_session"],
+            "session_label": cls["session_label"],
+            "is_killzone": cls["is_killzone"],
+            "is_silver_bullet": cls["is_silver_bullet"],
+            "is_overlap": cls["is_overlap"],
+            "yosh_window": cls["yosh_window"],
+            "utc_hour": cls["utc_hour"],
             "local_time_ny": now_ny.strftime("%H:%M"),
             "local_time_lon": now_lon.strftime("%H:%M"),
             "local_time_chile": now_utc.astimezone(_CHILE_TZ).strftime("%H:%M"),

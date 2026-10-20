@@ -168,22 +168,17 @@ class TelegramDispatcher:
         # Extracción de factores contextuales y cálculo en vivo de Sesión Real UTC / NY
         timeframe = signal.get('timeframe', signal.get('interval', '15m'))
         
-        # Cálculo de sesión institucional real en el momento exacto del despacho
-        from datetime import datetime, timezone
-        utc_now = datetime.now(timezone.utc)
-        utc_h = utc_now.hour
-        if 12 <= utc_h < 21:
-            computed_session = "NEW_YORK (RTH)"
-        elif 8 <= utc_h < 12:
-            computed_session = "LONDON (Killzone)"
-        elif 0 <= utc_h < 8:
-            computed_session = "ASIA (Tokyo / Sydney)"
-        else:
-            computed_session = "OFF_HOURS (Overnight)"
+        # [SOP-121] Cálculo canónico de sesión institucional en el momento exacto del despacho
+        from engine.core.session_manager import classify_market_session
+        live_session_info = classify_market_session()
+        computed_session = live_session_info.get("session_label", "OFF_HOURS (Transición)")
             
         session = signal.get('session')
-        if not session or session in ("UNKNOWN", "KILLZONE", "NEW_YORK"):
+        # Si la señal no trae sesión o trae valores genéricos, adoptar la sesión canónica en vivo
+        if not session or session in ("UNKNOWN", "KILLZONE", "NEW_YORK", "LIVE_SIGNAL"):
             session = computed_session
+        elif session in live_session_info:
+            session = live_session_info["session_label"]
             
         # Veto institucional: Índices de EE.UU. no deben operar en sesión ASIA u OFF_HOURS
         is_us_index = any(idx in asset.upper() for idx in ("US30", "US100", "SPX500", "NAS100", "DJI"))

@@ -64,3 +64,35 @@ def test_session_sweep_logic():
     payload = sm.update(candle)
     assert payload["data"]["pdh_swept"] is True, "El barrido de PDH debe registrarse en True"
     assert payload["data"]["pdl_swept"] is False
+
+
+def test_classify_market_session_canonical():
+    """Valida la clasificación determinista de sesiones DST-aware (SOP-121)."""
+    from engine.core.session_manager import classify_market_session
+    from datetime import datetime, timezone
+
+    # 1. ASIA: 02:00 UTC = 11:00 JST (Tokio)
+    dt_asia = datetime(2026, 10, 20, 2, 0, tzinfo=timezone.utc)
+    res_asia = classify_market_session(dt_asia)
+    assert res_asia["current_session"] == "ASIA"
+    assert "ASIA" in res_asia["session_label"]
+
+    # 2. LONDON KILLZONE: 08:30 UTC = 09:30 London BST
+    dt_lon = datetime(2026, 10, 20, 8, 30, tzinfo=timezone.utc)
+    res_lon = classify_market_session(dt_lon)
+    assert res_lon["current_session"] == "LONDON_KILLZONE"
+    assert res_lon["is_killzone"] is True
+
+    # 3. LONDON - NY OVERLAP: 13:00 UTC = 09:00 NY EDT, 14:00 London BST
+    dt_ny_overlap = datetime(2026, 10, 20, 13, 0, tzinfo=timezone.utc)
+    res_ny_overlap = classify_market_session(dt_ny_overlap)
+    assert res_ny_overlap["current_session"] == "LONDON_NY_OVERLAP"
+    assert res_ny_overlap["is_overlap"] is True
+    assert res_ny_overlap["is_killzone"] is True
+
+    # 4. NY SILVER BULLET PM: 18:30 UTC = 14:30 NY EDT
+    dt_sb_pm = datetime(2026, 10, 20, 18, 30, tzinfo=timezone.utc)
+    res_sb_pm = classify_market_session(dt_sb_pm)
+    assert res_sb_pm["current_session"] == "NY_SILVER_BULLET_PM"
+    assert res_sb_pm["is_silver_bullet"] is True
+

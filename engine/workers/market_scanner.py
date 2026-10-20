@@ -136,19 +136,22 @@ class MarketScanner:
 
     def _calculate_session(self, timestamp=None) -> dict:
         """
-        Calcula el estado de sesión y ventanas institucionales utilizando
-        la Fuente Única de Verdad (SSoT) con soporte DST exacto (SessionManager).
+        [SOP-121] Estado de sesión calculado con el RELOJ DE PARED en cada ciclo de escaneo.
+        El parámetro `timestamp` se ignora deliberadamente: el timestamp de apertura de una
+        vela 1h/1D no representa la sesión vigente (una vela 1D abre a 00:00 UTC = ASIA).
         """
         try:
-            from engine.core.session_manager import session_manager
-            state = session_manager.get_current_state()
-            data = state.get("data", {})
+            from engine.core.session_manager import session_manager, classify_market_session
+            cls = classify_market_session()
+            data = session_manager.get_current_state().get("data", {})
             return {
-                "current_session": data.get("current_session", "UNKNOWN"),
-                "is_killzone": data.get("is_killzone", False),
-                "is_silver_bullet": data.get("is_silver_bullet", False),
-                "is_overlap": data.get("is_overlap", False),
-                "yosh_window": data.get("yosh_window", False),
+                "current_session": cls["current_session"],
+                "session_label": cls["session_label"],
+                "utc_hour": cls["utc_hour"],
+                "is_killzone": cls["is_killzone"],
+                "is_silver_bullet": cls["is_silver_bullet"],
+                "is_overlap": cls["is_overlap"],
+                "yosh_window": cls["yosh_window"],
                 "pdh": data.get("pdh"),
                 "pdl": data.get("pdl"),
             }
@@ -280,21 +283,21 @@ class MarketScanner:
                 cache_key = f"{symbol}:{interval}"
                 
                 # ── OPTIMIZACIÓN v16.0: Throttle por Cierre de Vela ──
+                # [SOP-121] La sesión NO se cachea por vela: se recalcula en cada ciclo con el
+                # reloj de pared (antes, en 1D quedaba congelada en "ASIA" todo el día).
+                session_data = self._calculate_session()
                 cached = self._tactical_cache.get(cache_key)
                 if cached and cached["last_timestamp"] == last_timestamp:
                     result       = cached["result"]
                     fib_data     = cached["fib_data"]
-                    session_data = cached["session_data"]
                 else:
                     result = await self.router.process_market_data(df, asset=symbol, interval=interval, silent=True)
                     fib_data     = self._calculate_ote(df)
-                    session_data = self._calculate_session(last_timestamp)
                     
                     self._tactical_cache[cache_key] = {
                         "last_timestamp": last_timestamp,
                         "result": result,
                         "fib_data": fib_data,
-                        "session_data": session_data
                     }
 
                 detected_regime = result.get("market_regime") or (result.get("diagnostic") or {}).get("regime_details") or "RANGING"
@@ -333,7 +336,7 @@ class MarketScanner:
                     rvol_val = round(cur_vol / (vol_sma + 1e-9), 2)
                 else:
                     ker_val = 0.5
-                    rvol_val = 1.0
+                    rvol_val = None  # SOP-115: sin muestra suficiente no se inventa RVOL
 
                 is_ker_clean = ker_val >= 0.35
 
@@ -588,6 +591,7 @@ class MarketScanner:
                         "session_avwap_dist_pct": round(cur_avwap_dist, 2),
                         "is_avwap_aligned":  is_avwap_aligned,
                         "asset_health":      conf_res.get("asset_health", {}),
+                        "rvol":              rvol_val,
                     }
                     candidates.append(cand)
 
@@ -710,8 +714,9 @@ class MarketScanner:
                     "take_profit_3r": float(top_c["tp3"]),
                     "confluence_score": score,
                     "score": score,
-                    "session": top_c.get("session", "NEW_YORK"),
+                    "session": top_c.get("session"),
                     "asset_health": top_c.get("asset_health", {}),
+                    "rvol": top_c.get("rvol"),
                     "ker": ker_c,
                     "adx": float((top_c.get("asset_health") or {}).get("adx", 25.0)),
                     "vwap_dist_pct": float(top_c.get("session_avwap_dist_pct", 0.0)),
