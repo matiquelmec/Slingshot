@@ -807,7 +807,7 @@ class MarketScanner:
             "cluster_reason":    cluster_msg,
             "is_time_blocked":   not is_time_ok,
             "is_ker_blocked":    not is_ker_clean,
-            "session":           (session_data or {}).get("current_session", "LIVE_SIGNAL"),
+            "session":           (session_data or {}).get("session_label", (session_data or {}).get("current_session", "NEW_YORK")),
             "session_avwap":     round(cur_avwap, 4),
             "session_avwap_dist_pct": round(cur_avwap_dist, 2),
             "is_avwap_aligned":  is_avwap_aligned,
