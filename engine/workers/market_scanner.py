@@ -567,6 +567,57 @@ class MarketScanner:
                                 "detail": f"🛑 VETO AVWAP (±0.40%): {cur_avwap_dist:+.2f}%" if is_avwap_blocked else f"⚠️ CONTRA FLUJO DE SESIÓN {cur_session} (Precio ${current_price:,.2f} vs AVWAP ${cur_avwap:,.2f} | Dist: {cur_avwap_dist:+.2f}%)",
                             })
 
+                    # ── EVALUACIÓN CANÓNICA SOP-123: TRIPLE-SCREEN MACRO CONFLUENCE (1D -> 1h -> 15m) ──
+                    if interval != "1d" and len(df) >= 40:
+                        daily_span = 1920 if interval == "15m" else 480
+                        ema_daily_macro = float(df["close"].ewm(span=daily_span).mean().iloc[-1])
+                        is_triple_screen = (direction == "LONG" and current_price >= ema_daily_macro) or \
+                                           (direction == "SHORT" and current_price <= ema_daily_macro)
+                        if is_triple_screen:
+                            base_score = min(100, base_score + 5)
+                            checklist.append({
+                                "factor": "Triple Screen Macro (1D/1h/15m)",
+                                "status": "CUMPLIDO",
+                                "detail": f"✅ ALINEADO CON TENDENCIA 1D (+5pts | EMA Macro ${ema_daily_macro:,.2f})",
+                            })
+                        else:
+                            checklist.append({
+                                "factor": "Triple Screen Macro (1D/1h/15m)",
+                                "status": "ALERTA",
+                                "detail": f"⚠️ Divergente de EMA Macro 1D (${ema_daily_macro:,.2f})",
+                            })
+
+                    # ── EVALUACIÓN CANÓNICA SOP-123: ORDER FLOW DELTA / CVD CONVERGENCE ──
+                    if len(df) >= 30:
+                        try:
+                            from engine.indicators.volume import calculate_cvd_divergence
+                            cvd_eval = calculate_cvd_divergence(df, window=min(30, len(df)))
+                            cvd_status = cvd_eval.get("status", "IN_SYNC")
+                            if (direction == "LONG" and cvd_status == "BULLISH_DIVERGENCE") or \
+                               (direction == "SHORT" and cvd_status == "BEARISH_DIVERGENCE"):
+                                base_score = min(100, base_score + 5)
+                                checklist.append({
+                                    "factor": "Order Flow CVD (Absorción L2)",
+                                    "status": "CUMPLIDO",
+                                    "detail": f"✅ Absorción Institucional Confirmada ({cvd_status} +5pts)",
+                                })
+                            elif (direction == "LONG" and cvd_status == "BEARISH_DIVERGENCE") or \
+                                 (direction == "SHORT" and cvd_status == "BULLISH_DIVERGENCE"):
+                                base_score = max(0, base_score - 5)
+                                checklist.append({
+                                    "factor": "Order Flow CVD (Absorción L2)",
+                                    "status": "ALERTA",
+                                    "detail": f"⚠️ Divergencia de Absorción en contra ({cvd_status} -5pts)",
+                                })
+                            else:
+                                checklist.append({
+                                    "factor": "Order Flow CVD (Absorción L2)",
+                                    "status": "NEUTRAL",
+                                    "detail": f"Flujo CVD en sintonía ({cvd_status})",
+                                })
+                        except Exception as cvd_err:
+                            pass
+
                     # ── DETERMINACIÓN DE PLAYBOOK INSTITUCIONAL (TRADEZELLA STYLE — PARIDAD SSoT) ──
                     has_dir_sweep = bool(df.get("recent_sweep_bull", pd.Series([False])).iloc[-1]) if direction == "LONG" else bool(df.get("recent_sweep_bear", pd.Series([False])).iloc[-1])
                     has_dir_ob = bool(df.get("recent_ob_bull", pd.Series([False])).iloc[-1]) if direction == "LONG" else bool(df.get("recent_ob_bear", pd.Series([False])).iloc[-1])

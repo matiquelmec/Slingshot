@@ -228,6 +228,20 @@ class ConfluenceManager:
             score += 10 # Bono por volumen en noticia
             checklist.append({"factor": "Contexto Macro", "status": "VOLÁTIL", "detail": "Volumen validado por Noticia de Alto Impacto"})
 
+        # [SOP-123] TRIPLE-SCREEN MACRO CONFLUENCE (1D -> 1h -> 15m)
+        # Bonificación cuantitativa de +5.0 pts cuando la dirección intradiaria está
+        # confirmada por la tendencia estructural de orden superior (1D EMA200 / EMA50).
+        daily_trend = kwargs.get('daily_trend', None)
+        if daily_trend:
+            daily_str = str(daily_trend).upper()
+            is_daily_aligned = (is_long and any(w in daily_str for w in ('BULL', 'UP', 'ACCUMULATION', 'MARKUP'))) or \
+                               (not is_long and any(w in daily_str for w in ('BEAR', 'DOWN', 'DISTRIBUTION', 'MARKDOWN')))
+            if is_daily_aligned:
+                score += 5.0
+                checklist.append({"factor": "Triple Screen Macro", "status": "CONFIRMADO", "detail": f"Alineación Estructural 1D + 1h + 15m (+5.0pts)"})
+            else:
+                checklist.append({"factor": "Triple Screen Macro", "status": "DIVERGENTE", "detail": f"Divergencia con tendencia 1D ({daily_str})"})
+
         # 6. CALENDARIO ECONÓMICO Y NARRATIVA RECIENTE (Peso Dinámico Bayesiano - Base 20) v5.7.155 Master Gold
         econ_weight = bayesian_calibrator.get_weight("econ_weight", default=20.0)
         total_weight += econ_weight
@@ -497,8 +511,8 @@ class ConfluenceManager:
                 else:
                     checklist.append({"factor": "CVD Divergence", "status": "CONFIRMADO", "detail": f"Absorción acumulada detectada ({cvd_status}) (+15pts)"})
             elif cvd_divergent:
-                score -= 15
-                checklist.append({"factor": "CVD Divergence", "status": "DIVERGENTE", "detail": f"Distribución acumulada en contra ({cvd_status}) (-15pts)"})
+                score -= 10
+                checklist.append({"factor": "CVD Divergence", "status": "DIVERGENTE", "detail": f"Distribución acumulada en contra ({cvd_status}) (-10pts)"})
             else:
                 checklist.append({"factor": "CVD Divergence", "status": "NEUTRAL", "detail": "CVD acumulado en sintonía"})
         except Exception as cvd_err:

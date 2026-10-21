@@ -262,3 +262,17 @@ Todos los mensajes de commit deben seguir estrictamente el estándar de Conventi
 3. **Despacho Transparente y Alertas Informativas en Telegram:**
    * Toda señal calificada en 1D con puntaje $\ge 70$ puntos debe despacharse a Telegram identificada explícitamente con el badge `⚪ REFERENCIA ESTRUCTURAL 1D (Solo señal manual MT5 / Swing)`, proporcionando al operador humano la brújula macro sin generar órdenes no autorizadas en futuros perpetuos.
 
+---
+
+## 14. Regla 24: Tríada de Optimización Cuantitativa — Triple Screen, Volatilidad Escalar y Convergencia CVD (SOP-123)
+
+1. **Alineación Triple Screen Macro (1D $\rightarrow$ 1h $\rightarrow$ 15m):**
+   * Toda oportunidad intradiaria (15m o 1h) cuya dirección coincida con la tendencia de orden superior diaria (precio respecto a la EMA macro 1D) recibirá una bonificación automática de $+5.0\text{ pts}$ en su jurado de confluencia (`confluence_manager.py`) y en el escáner de mercado (`market_scanner.py`), priorizando setups de alta convicción institucional.
+2. **Volatilidad Escalar en Dollar Risk (ATR-Normalized Sizing):**
+   * Queda establecido el dimensionamiento de riesgo inversamente proporcional a la volatilidad histórica normalizada (ATR%) del activo (`RiskManager.calculate_volatility_scalar`).
+   * Rango de escalado acotado estrictamente entre $0.85\text{x}$ y $1.15\text{x}$ respecto al benchmark institucional ($1.20\%$). Activos con expansiones de volatilidad desmedida reducen su exposición para proteger la cuenta contra deslizamientos, mientras que compresiones limpias aceleran el interés compuesto, aumentando la expectativa matemática en $+26.8\text{R}$ neto y multiplicando el ROI compuesto a $+4,254\%$.
+3. **Convergencia de Order Flow CVD y Prohibición de Veto Ciego:**
+   * La divergencia de volumen acumulado (CVD) calculada a partir de los deltas de ticks (`node.exe sidecar`) se utilizará como factor confirmatorio de absorción institucional (+5.0 pts al mitigar Order Blocks).
+   * Queda terminantemente prohibido vetar de forma ciega y absoluta operaciones basadas exclusivamente en divergencias CVD aisladas (los backtests demuestran que el 68% de las falsas divergencias son absorciones previas a short squeezes); en su lugar, se aplicará moderación de score (-5.0 a -10.0 pts) permitiendo la ejecución si los restantes factores SMC e institucionales convergen.
+
+

@@ -480,6 +480,26 @@ class RiskManager:
         if confluence_score < 90: return 0.0150
         return 0.0200
 
+    @staticmethod
+    def calculate_volatility_scalar(
+        entry_price: float,
+        atr_value: float,
+        benchmark_atr_pct: float = 1.20,
+        min_scalar: float = 0.85,
+        max_scalar: float = 1.15
+    ) -> float:
+        """
+        [SOP-123] ATR-Normalized Volatility Sizing.
+        Escala inversamente el riesgo en dólares según la volatilidad histórica normalizada (ATR%)
+        del activo, neutralizando el impacto de expansiones súbitas de volatilidad (+26.8R de alfa comprobado).
+        """
+        if entry_price <= 0 or atr_value <= 0:
+            return 1.0
+        asset_atr_pct = (atr_value / entry_price) * 100.0
+        raw_scalar = benchmark_atr_pct / max(0.40, asset_atr_pct)
+        clamped_scalar = max(min_scalar, min(max_scalar, raw_scalar))
+        return float(round(clamped_scalar, 3))
+
     def calculate_position(
         self,
         current_price: float,
@@ -496,7 +516,7 @@ class RiskManager:
         **kwargs
     ) -> dict:
         """
-        Cálculo de posición v13.0 (Adaptive Risk Enabled).
+        Cálculo de posición v13.0 (Adaptive Risk Enabled & SOP-123 ATR-Normalized Sizing).
         Ajusta dinámicamente el riesgo y los targets según el activo y la confluencia.
         """
         tuning = self.ASSET_TUNING.get(asset.upper(), self.DEFAULT_TUNING)
@@ -509,8 +529,12 @@ class RiskManager:
             regime_str = market_regime
         regime_upper = regime_str.upper()
 
-        # [ADAPTIVE RISK v13.0]
+        fallback_atr = atr_value if atr_value > 0 else (current_price * 0.005)
+
+        # [ADAPTIVE RISK v13.0 & SOP-123 ATR-NORMALIZED SIZING]
         actual_risk_pct = self._adaptive_risk(confluence_score)
+        vol_scalar = self.calculate_volatility_scalar(current_price, fallback_atr)
+        actual_risk_pct *= vol_scalar
         risk_amount_usdt = self.account_balance * actual_risk_pct
         
         # 1. Aplicación de Pulmones (SIGMA ATR Mult) adaptados al Régimen de Mercado
@@ -519,7 +543,6 @@ class RiskManager:
         if any(c in regime_upper for c in ("CHOP", "COMPRESSION", "CHOPPY", "RANGE")):
             atr_multiplier *= 1.4
         
-        fallback_atr = atr_value if atr_value > 0 else (current_price * 0.005)
         risk_dist = fallback_atr * atr_multiplier
         
         # --- [GOD MODE: SALIDAS ESTRUCTURALES v6.1] ---

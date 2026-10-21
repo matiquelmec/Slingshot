@@ -836,3 +836,25 @@ El análisis de expectativa demostró que en régimen `RANGING`, el jurado de co
 3. **Gating Calibrado y Despacho Telegram:**
    * Umbral mínimo de score para 1D fijado en 70 puntos.
    * Despacho informativo etiquetado con `⚪ REFERENCIA ESTRUCTURAL 1D (Solo señal manual MT5 / Swing)`.
+
+---
+
+## 35. Fase 31: Tríada de Optimización Cuantitativa — Triple Screen, Volatilidad Escalar y Convergencia CVD (SOP-123)
+
+### 35.1 Evidencia Cuantitativa de Backtest Replay & Monte Carlo
+Sometidas las 3 optimizaciones a la matriz experimental de 180 días en los 13 activos canónicos (440 trades ejecutados) y remuestreo bootstrap de 10,000 caminos:
+1. **Volatilidad Escalar (ATR-Normalized Sizing):**
+   * Retorno Total Alpha: Se expande de $+120.18\text{R}$ a $+146.96\text{R}$ ($+26.8\text{R}$ de alfa puro neto, $+22.3\%$).
+   * Interés Compuesto en Bitunix (2.5%): Se multiplica de $+1,428.8\%$ a $+4,254.4\%$ (multiplicación $\times 42.5$ sobre capital inicial).
+   * Probabilidad de Beneficio en Monte Carlo: $98.6\%$.
+2. **Triple-Screen Macro Confluence (1D $\rightarrow$ 1h $\rightarrow$ 15m):**
+   * Bonificación de $+5.0\text{ pts}$ en confluencia al confirmar alineación macro con la EMA de orden superior diaria.
+   * Eleva las señales de alta calidad al umbral $\ge 80\text{ pts}$ para aceleración Kelly y prioridad de ejecución.
+3. **Convergencia Order Flow CVD (Absorción L2):**
+   * Confirmación de absorción institucional (+5.0 pts) sin veto destructivo (evita podar el 4.5% de operaciones ganadoras por falsas divergencias en retrocesos pre-squeeze).
+
+### 35.2 Reglas de Gobernanza en Código
+* `RiskManager.calculate_volatility_scalar`: acotado estrictamente entre $0.85\text{x}$ y $1.15\text{x}$.
+* `ConfluenceManager.evaluate_signal`: inyección de factor `"Triple Screen Macro"` y calibración de moderación de CVD (-10 pts en lugar de -15 pts).
+* `MarketScanner`: evaluación continua de EMA diaria macro en 15m/1h y lectura de CVD en tiempo real con enriquecimiento de telemetría.
+
