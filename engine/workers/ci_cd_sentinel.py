@@ -111,7 +111,7 @@ class CICDSentinel:
     def reload_services(self) -> bool:
         """Recarga los servicios en Windows Server."""
         try:
-            ps_script = """
+            ps_script = r"""
 Stop-ScheduledTask -TaskName 'SlingshotBot' -ErrorAction SilentlyContinue
 Stop-ScheduledTask -TaskName 'SlingshotTrading' -ErrorAction SilentlyContinue
 Get-CimInstance Win32_Process -Filter "Name = 'python.exe'" | Where-Object { $_.CommandLine -match "engine.api.main" -and $_.ProcessId -ne $PID } | ForEach-Object {
@@ -125,7 +125,7 @@ Stop-ScheduledTask -TaskName 'SlingshotFrontend' -ErrorAction SilentlyContinue
 Get-Process node -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
 Start-ScheduledTask -TaskName 'SlingshotFrontend' -ErrorAction SilentlyContinue
 Start-Sleep -Seconds 2
-Start-Process node -ArgumentList "sidecar\index.js" -WorkingDirectory "C:\Slingshot" -WindowStyle Hidden
+Start-Process node -ArgumentList "sidecar/index.js" -WorkingDirectory "C:\Slingshot" -WindowStyle Hidden
 """
             subprocess.run(["powershell", "-NoProfile", "-Command", ps_script], capture_output=True)
             self.log_audit("🔄 Servicios SlingshotBot, SlingshotFrontend y Sidecar HFT recargados exitosamente.")
