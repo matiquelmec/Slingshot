@@ -124,16 +124,46 @@ Start-ScheduledTask -TaskName 'SlingshotTrading' -ErrorAction SilentlyContinue
 Stop-ScheduledTask -TaskName 'SlingshotFrontend' -ErrorAction SilentlyContinue
 Get-Process node -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
 Start-ScheduledTask -TaskName 'SlingshotFrontend' -ErrorAction SilentlyContinue
+Start-Sleep -Seconds 2
+Start-Process node -ArgumentList "sidecar\index.js" -WorkingDirectory "C:\Slingshot" -WindowStyle Hidden
 """
             subprocess.run(["powershell", "-NoProfile", "-Command", ps_script], capture_output=True)
-            self.log_audit("🔄 Servicios SlingshotBot / SlingshotTrading y SlingshotFrontend recargados exitosamente.")
+            self.log_audit("🔄 Servicios SlingshotBot, SlingshotFrontend y Sidecar HFT recargados exitosamente.")
             return True
         except Exception as e:
             self.log_audit(f"❌ Error recargando servicios: {e}")
             return False
 
+    def check_service_health(self) -> Dict[str, bool]:
+        """Verifica salud de FastAPI (:8000) y Sidecar (:8080)."""
+        import urllib.request
+        fastapi_ok = False
+        sidecar_ok = False
+        try:
+            req = urllib.request.Request("http://127.0.0.1:8000/api/v1/health", headers={"User-Agent": "Sentinel/1.0"})
+            with urllib.request.urlopen(req, timeout=5) as res:
+                fastapi_ok = (res.status == 200)
+        except Exception:
+            fastapi_ok = False
+
+        try:
+            req2 = urllib.request.Request("http://127.0.0.1:8080/health", headers={"User-Agent": "Sentinel/1.0"})
+            with urllib.request.urlopen(req2, timeout=3) as res2:
+                sidecar_ok = (res2.status == 200)
+        except Exception:
+            sidecar_ok = False
+
+        return {"fastapi": fastapi_ok, "sidecar": sidecar_ok}
+
     def check_and_deploy(self) -> Dict[str, Any]:
-        """Ciclo completo de auditoría y despliegue."""
+        """Ciclo completo de auditoría, auto-sanación y despliegue."""
+        # 1. Rotar logs preventivamente para evitar bloqueos por tamaño excesivo
+        try:
+            from engine.core.maintenance import rotate_all_slingshot_logs
+            rotate_all_slingshot_logs()
+        except Exception:
+            pass
+
         local_hash = self.get_local_commit()
         remote_hash = self.get_remote_commit()
 
@@ -141,7 +171,13 @@ Start-ScheduledTask -TaskName 'SlingshotFrontend' -ErrorAction SilentlyContinue
             return {"status": "error", "message": "No se pudo consultar el commit remoto en GitHub."}
 
         if local_hash == remote_hash:
-            return {"status": "up_to_date", "commit": local_hash}
+            # Auto-healing continuo si los servicios están caídos
+            health = self.check_service_health()
+            if not health["fastapi"] or not health["sidecar"]:
+                self.log_audit(f"⚠️ [AUTO-HEALING] Alerta de servicio caído (FastAPI={health['fastapi']}, Sidecar={health['sidecar']}). Reiniciando...")
+                self.reload_services()
+                return {"status": "reloaded_unhealthy", "health": health}
+            return {"status": "up_to_date", "commit": local_hash, "health": health}
 
         self.log_audit(f"🚀 Nuevo commit detectado en GitHub: {remote_hash[:8]} (Local actual: {local_hash[:8]})")
 

@@ -99,6 +99,9 @@ def rotate_single_log(file_path: str, max_size_mb: float = MAX_LOG_SIZE_MB, max_
 def rotate_all_slingshot_logs():
     """Escanea y rota todos los logs principales del ecosistema Slingshot."""
     target_logs = [
+        r"C:\Slingshot\logs\slingshot_service.log",
+        r"C:\Slingshot\logs\sentinel.log",
+        r"C:\Slingshot\deploy_audit.log",
         r"C:\Slingshot\slingshot_service.log",
         r"C:\Slingshot\tmp\logs\slingshot.log",
         r"C:\Slingshot\slingshot_stderr.log",

@@ -275,4 +275,17 @@ Todos los mensajes de commit deben seguir estrictamente el estándar de Conventi
    * La divergencia de volumen acumulado (CVD) calculada a partir de los deltas de ticks (`node.exe sidecar`) se utilizará como factor confirmatorio de absorción institucional (+5.0 pts al mitigar Order Blocks).
    * Queda terminantemente prohibido vetar de forma ciega y absoluta operaciones basadas exclusivamente en divergencias CVD aisladas (los backtests demuestran que el 68% de las falsas divergencias son absorciones previas a short squeezes); en su lugar, se aplicará moderación de score (-5.0 a -10.0 pts) permitiendo la ejecución si los restantes factores SMC e institucionales convergen.
 
+---
+
+## 15. Regla 25: Higiene Perpetua de Logs, Auto-Healing de Sentinel e Inmunidad a Falsas Alarmas de Infraestructura (SOP-124)
+
+1. **Inmunidad a Alertas de Vulnerabilidad Exógenas:**
+   * Servicios o tecnologías no desplegados en el stack (como PHP) no aplican a la arquitectura de Slingshot en Windows Server. Toda alerta de proveedor de hosting (Contabo, etc.) debe auditarse exhaustivamente contra el inventario real del sistema antes de cualquier intervención técnica.
+2. **Higiene Perpetua de Logs y Zero-Bloat Stream Handler:**
+   * La consola/StreamHandler de logging debe configurarse en nivel mínimo `INFO` (`console_handler.setLevel(logging.INFO)`), impidiendo que la telemetría microsegundo a microsegundo de ticks inunde las salidas estándar hacia archivos de servicio (`slingshot_service.log`).
+   * El subsistema de mantenimiento (`engine/core/maintenance.py`) debe rotar obligatoriamente todos los descriptores de log del ecosistema (`slingshot_service.log`, `sentinel.log`, `deploy_audit.log`, etc.) manteniendo un techo estricto de 15 MB.
+3. **Auto-Healing Activo en CI/CD Sentinel:**
+   * La tarea del centinela (`ci_cd_sentinel.py`), ejecutada periódicamente por el programador de tareas de Windows, debe auditar en cada ciclo la respuesta HTTP 200 de los endpoints de salud de FastAPI (`:8000/api/v1/health`) y del Sidecar HFT (`:8080/health`). Si se detecta caída o congelamiento, debe disparar la auto-recuperación y reinicio inmediato de la tríada operativa.
+
+
 

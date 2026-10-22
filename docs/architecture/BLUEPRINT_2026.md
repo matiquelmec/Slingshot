@@ -858,3 +858,29 @@ Sometidas las 3 optimizaciones a la matriz experimental de 180 días en los 13 a
 * `ConfluenceManager.evaluate_signal`: inyección de factor `"Triple Screen Macro"` y calibración de moderación de CVD (-10 pts en lugar de -15 pts).
 * `MarketScanner`: evaluación continua de EMA diaria macro en 15m/1h y lectura de CVD en tiempo real con enriquecimiento de telemetría.
 
+---
+
+## 36. Fase 32: Higiene Perpetua de Logs, Auto-Healing de Sentinel y Auditoría de Vulnerabilidad Contabo (SOP-124)
+
+### 36.1 Auditoría Forense del Incidente en VPS (21-22 Octubre 2026)
+1. **Descarte de Vulnerabilidad PHP (Contabo CVE-2026-109618 / CVE-2026-109619):**
+   * El correo automatizado enviado por Contabo advertía sobre vulnerabilidades críticas en PHP.
+   * La auditoría del sistema certificó que PHP **no existe, no está instalado ni está en el PATH** de Windows Server 2025. El servidor aloja exclusivamente la tríada Slingshot (Python FastAPI, Node.js WebSocket HFT y MetaTrader 5). La alerta de Contabo fue una advertencia masiva estándar del proveedor sin ningún impacto sobre el VPS.
+2. **Causa Raíz Real de la Detención:**
+   * El archivo de log `C:\Slingshot\logs\slingshot_service.log` había alcanzado **1.46 GB** debido a la captura de ticks en nivel `DEBUG` a través de stdout sin rotación en el script bat.
+   * A las 17:46 UTC del 21 de octubre, Windows Update/Software Protection ejecutó mantenimiento en background, lo que terminó el proceso padre `cmd.exe` de la tarea programada `SlingshotBot`.
+   * El centinela `ci_cd_sentinel.py` sólo comprobaba nuevos commits de Git y no supervisaba la salud HTTP activa en ausencia de nuevos commits en el repositorio remoto.
+
+### 36.2 Medidas Correctivas y Hardening Definitivo
+1. **Remediación en Vivo Ejecutada con Éxito:**
+   * Archivo de log de 1.46 GB respaldado y truncado a < 1 KB.
+   * Backend FastAPI reiniciado y respondiendo `{"status":"healthy","version":"10.0.0","ollama_active":true}` en puerto 8000.
+   * Ingestor Sidecar HFT WebSocket reiniciado y respondiendo `status=ok` en puerto 8080.
+   * MetaTrader 5 (`terminal64.exe`) verificado en ejecución.
+2. **Higiene Perpetua de Logs (`engine/core/logger.py` & `engine/core/maintenance.py`):**
+   * Nivel de StreamHandler/consola fijado en `INFO` para eliminar el volcado masivo de ticks a `slingshot_service.log`.
+   * `rotate_all_slingshot_logs()` actualizado para vigilar y rotar obligatoriamente `logs/slingshot_service.log`, `logs/sentinel.log` y `deploy_audit.log`.
+3. **Auto-Healing Activo 24/7 (`engine/workers/ci_cd_sentinel.py`):**
+   * En cada ciclo (cada 5 min), valida la respuesta HTTP de `:8000/api/v1/health` y `:8080/health`. Si algún servicio cae, dispara auto-sanación instantánea recargando los servicios.
+
+
