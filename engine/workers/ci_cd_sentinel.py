@@ -20,6 +20,13 @@ import logging
 from pathlib import Path
 from typing import Tuple, Dict, Any
 
+if sys.platform == "win32":
+    try:
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+        sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
+
 # Configurar logging institucional
 logging.basicConfig(
     level=logging.INFO,
@@ -48,7 +55,13 @@ class CICDSentinel:
     def log_audit(self, message: str):
         timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
         entry = f"[{timestamp}] {message}\n"
-        print(entry.strip())
+        try:
+            print(entry.strip())
+        except Exception:
+            try:
+                print(entry.encode("ascii", errors="replace").decode("ascii").strip())
+            except Exception:
+                pass
         try:
             with open(LOG_FILE, "a", encoding="utf-8") as f:
                 f.write(entry)
