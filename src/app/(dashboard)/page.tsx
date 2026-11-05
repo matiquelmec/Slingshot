@@ -63,7 +63,13 @@ export default function OverviewPage() {
         const localWatchlist = localStorage.getItem('slingshot_watchlist');
         if (localWatchlist) {
             try {
-                const parsed = JSON.parse(localWatchlist) as WatchlistEntry[];
+                const rawParsed = JSON.parse(localWatchlist) as WatchlistEntry[];
+                const parsed = rawParsed
+                    .filter(w => w.asset !== 'AVAXUSDT' && w.asset !== 'RENDERUSDT')
+                    .map(w => w.asset === 'PAXGUSDT' ? { ...w, asset: 'XAUUSDT' } : w);
+                if (JSON.stringify(parsed) !== JSON.stringify(rawParsed)) {
+                    localStorage.setItem('slingshot_watchlist', JSON.stringify(parsed));
+                }
                 setWatchlist(parsed);
                 if (parsed.length > 0 && !activeSymbol) {
                     connect(parsed[0].asset, parsed[0].interval as Timeframe);
@@ -78,7 +84,7 @@ export default function OverviewPage() {
                 { id: '2', asset: 'ETHUSDT', interval: '15m', alerts_enabled: true },
                 { id: '3', asset: 'SOLUSDT', interval: '15m', alerts_enabled: true },
                 { id: '4', asset: 'BNBUSDT', interval: '15m', alerts_enabled: true },
-                { id: '5', asset: 'PAXGUSDT', interval: '1h', alerts_enabled: true }, // Oro institucional en 1H Intraday
+                { id: '5', asset: 'XAUUSDT', interval: '1h', alerts_enabled: true }, // Oro institucional en 1H Intraday
                 { id: '6', asset: 'LINKUSDT', interval: '1h', alerts_enabled: true }, // Oráculos y estructura swing en 1H
                 { id: '7', asset: 'XRPUSDT', interval: '15m', alerts_enabled: true },
                 { id: '8', asset: 'INJUSDT', interval: '15m', alerts_enabled: true },

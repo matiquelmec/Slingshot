@@ -45,18 +45,28 @@ class NexusNode:
         self._load_streak_state()
         logger.info(f"🛡️ [NEXUS] Nodo de Ejecución Multi-Cuenta inicializado (Dry Run: {dry_run})")
 
-    def is_asset_in_cooldown(self, asset: str) -> bool:
+    def is_asset_in_cooldown(self, asset: str, account_id: Optional[str] = None) -> bool:
         """Comprueba si un activo está en cuarentena de enfriamiento tras un stop loss (SOP-52)."""
         clean = (asset or "").replace("/", "").upper()
-        expiry = getattr(self, "_asset_cooldown", {}).get(clean, 0)
+        cd_map = getattr(self, "_asset_cooldown", {})
+        if account_id:
+            return time.time() < cd_map.get(f"{account_id}_{clean}", 0)
+        expiry = cd_map.get(clean, 0)
         return time.time() < expiry
 
-    def set_asset_cooldown(self, asset: str, duration_sec: int = 3600, reason: str = "STOP_LOSS"):
+    def set_asset_cooldown(self, asset: str, duration_sec: int = 3600, reason: str = "STOP_LOSS", account_id: Optional[str] = None):
         """Coloca un activo en enfriamiento temporal para evitar pérdidas en cascada (SOP-52)."""
         clean = (asset or "").replace("/", "").upper()
         if not hasattr(self, "_asset_cooldown"):
             self._asset_cooldown = {}
-        self._asset_cooldown[clean] = time.time() + duration_sec
+        exp_ts = time.time() + duration_sec
+        if account_id:
+            self._asset_cooldown[f"{account_id}_{clean}"] = exp_ts
+            if account_id == "primary":
+                self._asset_cooldown[clean] = exp_ts
+        else:
+            self._asset_cooldown[clean] = exp_ts
+            self._asset_cooldown[f"primary_{clean}"] = exp_ts
         logger.warning(f"🧊 [SOP-52 COOLDOWN] Activo {clean} en cuarentena por {duration_sec}s ({duration_sec//60} min) debido a: {reason}.")
 
     def start_centinels(self):
@@ -149,7 +159,7 @@ class NexusNode:
                                         side = 'buy' if is_long else 'sell'
                                         logger.warning(f"📈 [SOP-16 SCALE-IN] Retesteo OTE detectado en {asset} (${current_price:.2f}). Ejecutando Scale-In (+${add_on_usd:.2f} USDT, PnL Neto >= ${scale_calc.get('net_pnl_at_sl'):.2f})...")
 
-                                        scale_success = await self.executor.scale_position(
+                                        scale_success = await target_ex.scale_position(
                                             symbol=asset,
                                             side=side,
                                             amount_usd=add_on_usd,
@@ -926,7 +936,7 @@ class NexusNode:
             confluence_score=confluence_score,
             active_positions=self._active_positions
         )
-        if not can_open:
+        if not can_open and len(self.account_manager.get_all_accounts(enabled_only=True)) <= 1:
             logger.warning(f"🛑 [NEXUS CLUSTER] Rechazada orden en {asset}: {cluster_reason}")
             return
 
@@ -1031,6 +1041,21 @@ class NexusNode:
         from engine.risk.cluster_risk_guard import cluster_risk_guard
         if asset in cluster_risk_guard.QUARANTINE_ASSETS or any(asset.startswith(qa) for qa in cluster_risk_guard.QUARANTINE_ASSETS):
             logger.warning(f"🛑 [NEXUS QUARANTINE] Rechazada orden para {asset}: Activo en lista de exclusión temporal.")
+            return None
+        if self.is_asset_in_cooldown(asset, account_id=acc_id):
+            logger.info(f"❄️ [NEXUS SOP-52] [{account.label}] Omitiendo entrada en {asset}: Activo en enfriamiento para esta cuenta.")
+            return None
+        sig_dir_acc = str(acc_signal.get("type", acc_signal.get("signal_type", "LONG"))).upper()
+        conf_acc = float(acc_signal.get("confluence_score") or (acc_signal.get("confluence") or {}).get("score", 70.0))
+        can_open_acc, cluster_reason_acc = cluster_risk_guard.can_open_position(
+            new_asset=asset,
+            new_direction=sig_dir_acc,
+            confluence_score=conf_acc,
+            active_positions=self._active_positions,
+            account_id=acc_id
+        )
+        if not can_open_acc:
+            logger.info(f"🛑 [NEXUS CLUSTER] [{account.label}] Rechazada orden en {asset}: {cluster_reason_acc}")
             return None
 
         # 1. HARD CAP FÍSICO ABSOLUTO (SOP-40): Máximo 4 posiciones abiertas simultáneamente en la cuenta
@@ -1415,7 +1440,7 @@ class NexusNode:
                 logger.warning(f"📉 [SOP-94 STREAK] Racha de pérdidas consecutivas en [{account_id}]: {self._consecutive_losses[account_id]}.")
                 for part in reason.split("_"):
                     if "USDT" in part:
-                        self.set_asset_cooldown(part, duration_sec=3600, reason=reason)
+                        self.set_asset_cooldown(part, duration_sec=3600, reason=reason, account_id=account_id)
             elif "FAST_BE" in reason.upper() or "BREAKEVEN" in reason.upper() or "TP" in reason.upper() or "PROTEGIDO" in reason.upper():
                 self._consecutive_losses[account_id] = 0
                 self._risk_released_recently[account_id] = True
@@ -1443,7 +1468,7 @@ class NexusNode:
                 while queue:
                     top_cand = queue.pop(0)
                     sym_c = top_cand.get("asset", top_cand.get("symbol", "")).upper()
-                    if self.is_asset_in_cooldown(sym_c):
+                    if self.is_asset_in_cooldown(sym_c, account_id=account_id):
                         logger.info(f"❄️ [SLOT RECYCLER] Omitiendo {sym_c} por período de enfriamiento/cuarentena activo (SOP-52).")
                         continue
                     if sym_c not in self._active_positions and f"{account_id}_{sym_c}" not in self._active_positions:
@@ -1591,7 +1616,8 @@ class NexusNode:
                 return {"placed": False, "status": "BLOCKED_SESSION_AVWAP", "reason": msg_avwap, "order_id": None}
 
         # ── SOP-52: COOLDOWN GUARD (ANTI-CASCADE RE-ENTRY) ──
-        if self.is_asset_in_cooldown(asset):
+        _en_accs = self.account_manager.get_all_accounts(enabled_only=True)
+        if self.is_asset_in_cooldown(asset) and (len(_en_accs) <= 1 or all(self.is_asset_in_cooldown(asset, account_id=a.account_id) for a in _en_accs)):
             logger.info(f"❄️ [NEXUS AUTO-LIMIT SOP-52] Omitida orden límite para {asset}: Activo en enfriamiento temporal post-stopout.")
             return {"placed": False, "status": "BLOCKED_COOLDOWN", "reason": "Activo en enfriamiento post-stopout", "order_id": None}
 
@@ -1603,7 +1629,7 @@ class NexusNode:
             confluence_score=confluence_score,
             active_positions=self._active_positions
         )
-        if not can_open:
+        if not can_open and len(self.account_manager.get_all_accounts(enabled_only=True)) <= 1:
             logger.info(f"🛑 [NEXUS AUTO-LIMIT] Omitida orden límite para {asset}: {cluster_reason}")
             return {"placed": False, "status": "BLOCKED_CLUSTER", "reason": cluster_reason, "order_id": None}
 
@@ -1717,7 +1743,7 @@ class NexusNode:
                             continue
                     ex = self.account_manager.get_executor(acc.account_id) or self.executor
                     if not getattr(acc, "is_primary", False) and getattr(acc, "account_id", "") != "primary":
-                        if getattr(ex, "_last_verified_balance", -1.0) == 0.0:
+                        if getattr(ex, "_last_verified_balance", -1.0) == 0.0 and time.time() < getattr(ex, "_zero_balance_until_ts", 0.0):
                             continue
                     tasks.append(self._place_limit_for_account(ex, acc, signal, safe_lev, entry_p, sl_p))
                 if tasks:
@@ -1770,6 +1796,21 @@ class NexusNode:
         from engine.risk.cluster_risk_guard import cluster_risk_guard
         if asset in cluster_risk_guard.QUARANTINE_ASSETS or any(asset.startswith(qa) for qa in cluster_risk_guard.QUARANTINE_ASSETS):
             logger.warning(f"🛑 [NEXUS AUTO-LIMIT QUARANTINE] Rechazada orden límite para {asset}: Activo en cuarentena.")
+            return None
+        if self.is_asset_in_cooldown(asset, account_id=acc_id):
+            logger.info(f"❄️ [NEXUS AUTO-LIMIT SOP-52] [{account.label}] Omitiendo orden límite en {asset}: Enfriamiento activo en esta cuenta.")
+            return None
+        sig_dir_l = str(acc_signal.get("type", acc_signal.get("signal_type", "LONG"))).upper()
+        conf_l = float(acc_signal.get("confluence_score") or (acc_signal.get("confluence") or {}).get("score", 70.0))
+        can_open_l, cluster_reason_l = cluster_risk_guard.can_open_position(
+            new_asset=asset,
+            new_direction=sig_dir_l,
+            confluence_score=conf_l,
+            active_positions=self._active_positions,
+            account_id=acc_id
+        )
+        if not can_open_l:
+            logger.info(f"🛑 [NEXUS AUTO-LIMIT CLUSTER] [{account.label}] Omitida orden límite para {asset}: {cluster_reason_l}")
             return None
 
         # 1. HARD CAP FÍSICO ABSOLUTO (SOP-40): Máximo 4 operaciones abiertas para esta cuenta
@@ -1867,6 +1908,7 @@ class NexusNode:
         if avail_margin < 5.0:
             if not getattr(account, "is_primary", False) and acc_id != "primary":
                 executor._last_verified_balance = 0.0
+                executor._zero_balance_until_ts = time.time() + 60.0
             logger.debug(f"[NEXUS AUTO-LIMIT] [{account.label}] Saldo insuficiente o no verificado para {asset}: ${avail_margin:.2f} USDT.")
             return None
 

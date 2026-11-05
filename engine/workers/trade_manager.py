@@ -1331,8 +1331,21 @@ class TradeManager:
                                         self._dispatched_trade_stages.setdefault(stage_key, set()).add(stage_id)
                                         
                                         from engine.router.telegram_dispatcher import telegram_dispatcher
-                                        pnl_est = r_profit * 19.58
-                                        asyncio.create_task(telegram_dispatcher.send_tp_hit_alert(
+                                        acc_cfg = mgr.get_account(acc_id) if "mgr" in locals() else None
+                                        acc_bal = float(getattr(bitunix, "_last_verified_balance", 0.0) or 783.34)
+                                        acc_r_pct = float(getattr(acc_cfg, "risk_pct", 0.025) if acc_cfg else 0.025)
+                                        base_1r_usd = max(5.0, acc_bal * acc_r_pct) if acc_bal > 0 else 19.58
+                                        pnl_est = r_profit * base_1r_usd
+                                        if acc_id == "primary":
+                                            asyncio.create_task(telegram_dispatcher.send_tp_hit_alert(
+                                                symbol=sym,
+                                                tp_label=status_msg,
+                                                exit_price=cur_price,
+                                                pnl_usd=pnl_est,
+                                                is_be=True
+                                            ))
+                                        # Public TP alert gated to primary account
+                                        _unused_tp_alert = lambda: 0 and asyncio.create_task(telegram_dispatcher.send_tp_hit_alert(
                                             symbol=sym,
                                             tp_label=status_msg,
                                             exit_price=cur_price,
@@ -1510,7 +1523,11 @@ class TradeManager:
                             exit_label = "MANUAL_CLIENT" if is_manual else "EXIT_REACHED"
 
                             # Estimación de R asumiendo 2.5% de riesgo base ($19.58 base aprox)
-                            est_r = round(real_pnl_usd / 19.58, 2) if real_pnl_usd != 0 else 0.0
+                            acc_cfg = mgr.get_account(acc_id) if "mgr" in locals() else None
+                            acc_bal = float(getattr(bitunix, "_last_verified_balance", 0.0) or 783.34)
+                            acc_r_pct = float(getattr(acc_cfg, "risk_pct", 0.025) if acc_cfg else 0.025)
+                            base_1r_usd = max(5.0, acc_bal * acc_r_pct) if acc_bal > 0 else 19.58
+                            est_r = round(real_pnl_usd / base_1r_usd, 2) if real_pnl_usd != 0 else 0.0
 
                             closed_id = vault.record_closed_trade(
                                 account_id=acc_id,
@@ -1524,7 +1541,16 @@ class TradeManager:
                             # 📡 [TELEGRAM TRADE CLOSED ALERT]
                             try:
                                 from engine.router.telegram_dispatcher import telegram_dispatcher
-                                asyncio.create_task(telegram_dispatcher.send_trade_closed_alert(
+                                if acc_id == "primary":
+                                    asyncio.create_task(telegram_dispatcher.send_trade_closed_alert(
+                                        symbol=csym,
+                                        reason=exit_label,
+                                        exit_price=float(filled_order.get("avgPrice") or filled_order.get("price") or 0.0),
+                                        pnl_usd=real_pnl_usd,
+                                        pnl_r=est_r
+                                    ))
+                                if False:
+                                    asyncio.create_task(telegram_dispatcher.send_trade_closed_alert(
                                     symbol=csym,
                                     reason=exit_label,
                                     exit_price=float(filled_order.get("avgPrice") or filled_order.get("price") or 0.0),

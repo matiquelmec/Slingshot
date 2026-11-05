@@ -10,6 +10,7 @@ Mantiene 100% de compatibilidad con la interface pública anterior:
 from __future__ import annotations
 from engine.core.logger import logger
 
+import asyncio
 import pandas as pd
 import time
 
@@ -101,7 +102,8 @@ class SlingshotRouter:
         # ── Fase 1: Análisis del Mercado (Capa 1-3) ──────────────────────────
         # Intentamos recuperar del cache si el timestamp no ha cambiado
         # Nota: En v5.7 usamos un hash ligero basado en el último timestamp
-        market_map = self._analyzer.analyze(
+        market_map = await asyncio.to_thread(
+            self._analyzer.analyze,
             df=df,
             asset=asset,
             interval=interval,
@@ -116,11 +118,11 @@ class SlingshotRouter:
 
         # ── Fase 2: Detección de Oportunidades SMC y Larry Williams ──────────
         df_analyzed   = market_map.df_analyzed
-        analyzed_df   = self._strategy.analyze(df_analyzed, interval=interval)
-        opportunities = self._strategy.find_opportunities(analyzed_df, asset=asset)
+        analyzed_df   = await asyncio.to_thread(self._strategy.analyze, df_analyzed, interval)
+        opportunities = await asyncio.to_thread(self._strategy.find_opportunities, analyzed_df, asset)
 
         try:
-            df_williams = self._williams_strategy.analyze(analyzed_df, interval=interval)
+            df_williams = await asyncio.to_thread(self._williams_strategy.analyze, analyzed_df, interval)
             williams_opps = self._williams_strategy.find_opportunities(df_williams, asset=asset)
             opportunities.extend(williams_opps)
         except Exception as we:
@@ -141,7 +143,7 @@ class SlingshotRouter:
             try:
                 # Calcular clusters de liquidación en vivo para este activo
                 latest_price = float(sig.get("price", 0))
-                liq_clusters = estimate_liquidation_clusters(analyzed_df, latest_price)
+                liq_clusters = await asyncio.to_thread(estimate_liquidation_clusters, analyzed_df, latest_price)
                 
                 risk_data = self._risk.calculate_position(
                     current_price=latest_price,

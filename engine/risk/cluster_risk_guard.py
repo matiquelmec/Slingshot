@@ -141,7 +141,8 @@ class ClusterRiskGuard:
         new_asset: str,
         new_direction: str,
         confluence_score: float = 70.0,
-        active_positions: Optional[Dict[str, Any]] = None
+        active_positions: Optional[Dict[str, Any]] = None,
+        account_id: Optional[str] = None
     ) -> Tuple[bool, str]:
         """
         Evalúa si abrir una nueva posición viola la regla de riesgo por cluster.
@@ -163,8 +164,21 @@ class ClusterRiskGuard:
         
         correlated_risk_count = 0
         conflicting_assets = []
-        
+        target_acc = account_id or "primary"
+        dedup_positions: Dict[str, Any] = {}
         for active_asset, pos_data in active_positions.items():
+            if not isinstance(pos_data, dict):
+                continue
+            pos_acc = pos_data.get("account_id", "primary")
+            if pos_acc != target_acc:
+                continue
+            sig_d = pos_data.get("signal", {})
+            raw_s = sig_d.get("asset") or sig_d.get("symbol") or (str(active_asset).split("_")[-1] if "_" in str(active_asset) else active_asset)
+            clean_s = self._clean_symbol(raw_s)
+            if clean_s:
+                dedup_positions[clean_s] = pos_data
+        
+        for active_asset, pos_data in dedup_positions.items():
             active_sym = self._clean_symbol(active_asset)
             if active_sym == new_sym:
                 continue
@@ -199,7 +213,7 @@ class ClusterRiskGuard:
         if "CRYPTO" in new_cluster and new_dir in ("LONG", "SHORT"):
             same_dir_crypto_count = 0
             same_dir_conflicts = []
-            for act_asset, p_data in active_positions.items():
+            for act_asset, p_data in dedup_positions.items():
                 act_sym = self._clean_symbol(act_asset)
                 if act_sym == new_sym:
                     continue

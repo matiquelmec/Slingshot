@@ -1,7 +1,8 @@
 /**
  * Institutional Dynamic URL Resolver (Shared FSD Primitive)
- * Automatically binds browser requests to relative path under HTTPS/Vercel
- * or to local/remote backend endpoints on development environments.
+ * Automatically binds browser requests to relative path (/api/v1/...)
+ * so Next.js rewrites proxy seamlessly to the production VPS (80.65.211.99:8000)
+ * on both Vercel HTTPS and local development (localhost:3000).
  */
 export function getApiBaseUrl(): string {
   if (typeof window !== 'undefined') {
@@ -11,11 +12,13 @@ export function getApiBaseUrl(): string {
       }
       return '';
     }
-    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-      return `${window.location.protocol}//${window.location.hostname}:8000`;
-    }
+    return '';
   }
-  if (process.env.NEXT_PUBLIC_API_URL) {
+  if (
+    process.env.NEXT_PUBLIC_API_URL &&
+    !process.env.NEXT_PUBLIC_API_URL.includes('localhost') &&
+    !process.env.NEXT_PUBLIC_API_URL.includes('127.0.0.1')
+  ) {
     return process.env.NEXT_PUBLIC_API_URL.replace(/\/$/, '');
   }
   return 'http://80.65.211.99:8000';
@@ -29,12 +32,12 @@ export function getWsBaseUrl(): string {
       }
       return '';
     }
-    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      return `${protocol}//${window.location.hostname}:8000`;
-    }
   }
-  if (process.env.NEXT_PUBLIC_API_WS_URL) {
+  if (
+    process.env.NEXT_PUBLIC_API_WS_URL &&
+    !process.env.NEXT_PUBLIC_API_WS_URL.includes('localhost') &&
+    !process.env.NEXT_PUBLIC_API_WS_URL.includes('127.0.0.1')
+  ) {
     return process.env.NEXT_PUBLIC_API_WS_URL.replace(/\/$/, '');
   }
   return 'ws://80.65.211.99:8000';

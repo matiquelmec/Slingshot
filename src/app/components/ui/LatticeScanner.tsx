@@ -3,7 +3,7 @@
 import React, { useState, useMemo, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { Activity, Zap, ShieldCheck, Search } from 'lucide-react';
-import { useTelemetryStore, MASTER_WATCHLIST } from '../../store/telemetryStore';
+import { useTelemetryStore, MASTER_WATCHLIST, getAssetExecutionBadge } from '../../store/telemetryStore';
 import { formatCurrency } from '../../utils/formatters';
 import { isPrunedAsset } from '@/entities/signal';
 
@@ -169,7 +169,11 @@ export default function LatticeScanner() {
                                                     </span>
                                                 )}
                                             </span>
-                                            {!isActive && <span className="text-[7px] text-white/20 font-bold">/USDT</span>}
+                                            {!isActive && (
+                                                <span className={`text-[6.5px] font-bold px-1 py-0.2 rounded ${getAssetExecutionBadge(pair.asset).isExecutable ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/25' : 'bg-white/5 text-white/30'}`}>
+                                                    {getAssetExecutionBadge(pair.asset).label}
+                                                </span>
+                                            )}
                                         </div>
 
                                         <div className="w-20 shrink-0 flex items-center justify-center">

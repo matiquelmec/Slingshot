@@ -907,3 +907,22 @@ Sometidas las 3 optimizaciones a la matriz experimental de 180 días en los 13 a
    * `GET /api/v1/health` consume `get_cached_ollama_status()` en memoria sin bloquear en red, y `MarketScanner` delega el cálculo de indicadores de Polars a hilos secundarios (`asyncio.to_thread`).
 3. **Tope Duro de Riesgo (`3.50%`) y Guardián Anti-Polvo (`< $5.00 USDT`):**
    * `RiskManager.calculate_dollar_risk_position()` impone un techo inquebrantable de `3.50%` por operación, y `NexusNode` descarta cuentas secundarias con saldo residual `< $5.00 USDT`.
+
+---
+
+## 38. SOP-126: AISLAMIENTO MULTI-CUENTA SOBERANO E HIDRATACIÓN UI PARALELA (<1s)
+
+1. **Aislamiento de Riesgo de Cluster y Deduplicación por Cuenta (`ClusterRiskGuard`)**:
+   * `ClusterRiskGuard.can_open_position()` filtra `active_positions` estrictamente por `account_id` (`pos_acc == target_acc`) y deduplica claves legadas (`SOLUSDT` + `primary_SOLUSDT`), impidiendo que posiciones abiertas en `primary` bloqueen cuentas secundarias o dupliquen el conteo direccional.
+2. **Cuarentenas Post-Stopout Aisladas por Cuenta (`NexusNode`)**:
+   * `is_asset_in_cooldown()` y `set_asset_cooldown()` indexan cuarentenas por `f"{account_id}_{clean}"`, garantizando que un stop-loss o cierre manual en una cuenta no congele entradas válidas en el resto de las cuentas conectadas.
+3. **Recuperación Automática de Cuentas Secundarias Recargadas (TTL 60s)**:
+   * Cuando una cuenta secundaria presenta balance disponible `< $5.00 USDT`, `NexusNode` aplica un TTL temporal de 60 segundos (`_zero_balance_until_ts = time.time() + 60.0`) en lugar de un bloqueo permanente en memoria, permitiendo que cualquier depósito nuevo o liberación de margen reactive el trading automáticamente sin reiniciar el servidor.
+4. **Cálculo Dinámico de `1R` en USD y Gating de Alertas Públicas (`TradeManager`)**:
+   * `sync_live_bitunix_positions()` y `sync_live_bitunix_pending_orders()` calculan `base_1r_usd = max(5.0, acc_bal * acc_r_pct)` dinámicamente por cada cuenta en lugar del valor fijo histórico (`$19.58`), y restringen las alertas del canal público de Telegram (`send_tp_hit_alert`, `send_trade_closed_alert`) exclusivamente a `acc_id == "primary"`.
+5. **Desbloqueo del Event Loop en `SlingshotRouter` y `/api/v1/diagnostic/{asset}`**:
+   * `SlingshotRouter.process_market_data()` delega `OrderFlowAnalyzer.analyze`, `LiquidityHuntStrategy.analyze`, `find_opportunities`, `WilliamsVixStrategy.analyze` y `estimate_liquidation_clusters` a `asyncio.to_thread()`.
+   * `GET /api/v1/diagnostic/{asset}` hidrata velas en frío (`1h`/`4h`) de forma inmediata, ejecuta `ml_engine.predict_live` en `asyncio.to_thread()` y garantiza un objeto `tactical` completo no nulo desde el primer milisegundo.
+6. **Hidratación Paralela en el Frontend y Paridad Visual `SOP-125`**:
+   * `connection.ts` ejecuta `hydrateMarketStates()` y `hydrateDiagnostic()` en paralelo (`Promise.allSettled`) al conectar o cambiar de activo/temporalidad, y refresca `/api/v1/market-states` cada 3 segundos dentro del ciclo de polling REST.
+   * `constants.ts`, `page.tsx` y `LatticeScanner.tsx` migran `PAXGUSDT` a `XAUUSDT` y muestran insignias institucionales (`DUAL 15M/1H`, `EXEC 15M`, `EXEC 1H`, `RADAR`) en el escáner.
