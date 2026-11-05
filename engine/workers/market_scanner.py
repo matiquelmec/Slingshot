@@ -281,8 +281,9 @@ class MarketScanner:
                         df = await asyncio.to_thread(polars_engine.compute_indicators, df)
                         try:
                             from engine.indicators.structure import identify_order_blocks
-                            df = identify_order_blocks(df)
-                            df = self.router._strategy.analyze(df, interval=interval)
+                            df = await asyncio.to_thread(identify_order_blocks, df)
+                            df = await asyncio.to_thread(self.router._strategy.analyze, df, interval)
+                            pass
                         except Exception as smc_err:
                             logger.debug(f"[MARKET_SCANNER] Fallback estructura SMC en {symbol}: {smc_err}")
                         dfs_dict[symbol] = df

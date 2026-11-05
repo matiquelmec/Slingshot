@@ -227,7 +227,7 @@ class SlingshotOrchestrator:
                     df_h4["timestamp"] = pd.to_datetime(df_h4["timestamp"], unit="s")
                     df_h1["timestamp"] = pd.to_datetime(df_h1["timestamp"], unit="s")
                     
-                    bias = self.htf_analyzer.analyze_bias(df_1m, df_1w, df_1d, df_h4, df_h1)
+                    bias = await asyncio.to_thread(self.htf_analyzer.analyze_bias, df_1m, df_1w, df_1d, df_h4, df_h1)
                     
                     # 3. Persistencia en el Fractal Store
                     await store.save_htf_bias(symbol, bias)

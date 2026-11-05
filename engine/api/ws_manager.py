@@ -270,12 +270,13 @@ class SymbolBroadcaster:
                     df_fast["timestamp"] = pd.to_datetime(df_fast["timestamp"], unit="s")
                     
                     # SMC
-                    fast_smc = extract_smc_coordinates(identify_order_blocks(df_fast))
+                    fast_ob = await asyncio.to_thread(identify_order_blocks, df_fast)
+                    fast_smc = await asyncio.to_thread(extract_smc_coordinates, fast_ob)
                     await self._broadcast({"type": "smc_data", "data": fast_smc})
                     
                     # Initial Liquidations
                     latest_price = float(history[-1]["data"]["close"])
-                    initial_liqs = estimate_liquidation_clusters(df_fast, latest_price)
+                    initial_liqs = await asyncio.to_thread(estimate_liquidation_clusters, df_fast, latest_price)
                     if initial_liqs:
                         await store.update_liquidation_clusters(self.symbol, initial_liqs)
                         liq_msg = {"type": "liquidation_update", "data": initial_liqs}
