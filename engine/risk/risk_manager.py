@@ -965,7 +965,8 @@ class RiskManager:
             }
             
         # Riesgo estricto en dólares
-        target_risk_usd = account_balance * risk_pct
+        effective_risk_pct = min(float(risk_pct), 0.0350)  # SOP-125 Hard Ceiling 3.50% max loss per trade
+        target_risk_usd = account_balance * effective_risk_pct
         
         # Cantidad matemática necesaria para perder exactamente target_risk_usd al tocar SL
         raw_qty = target_risk_usd / sl_dist

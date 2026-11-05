@@ -4,10 +4,10 @@ const crypto = require('crypto');
 
 // Configuración de los 20 activos VIP del Escáner
 const assets = [
-  "btcusdt", "ethusdt", "solusdt", "xrpusdt", "ltcusdt", 
-  "linkusdt", "adausdt", "dotusdt", "avaxusdt", "nearusdt", 
-  "ftmusdt", "atomusdt", "uniusdt", "opusdt", "arbusdt", 
-  "injusdt", "wifusdt", "dogeusdt", "aptusdt", "suiusdt"
+  "btcusdt", "ethusdt", "solusdt", "bnbusdt", "linkusdt",
+  "xrpusdt", "xauusdt", "suiusdt", "injusdt", "nearusdt",
+  "fetusdt", "atomusdt", "tiausdt"
+// 13 Activos Canónicos SSoT (SOP-125)
 ];
 
 // Memoria caché local en microsegundos para Ticks con Order Flow Delta

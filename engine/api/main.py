@@ -24,7 +24,7 @@ from engine.api.ws_manager import fetch_binance_history
 from engine.main_router import SlingshotRouter
 from engine.core.store import store
 from engine.workers.orchestrator import SlingshotOrchestrator
-from engine.api.advisor import check_ollama_status, start_ai_worker
+from engine.api.advisor import check_ollama_status, get_cached_ollama_status, start_ai_worker
 from engine.api.auth import issue_token, validate_token
 
 # ── Global Instances ─────────────────────────────────────────────────────────
@@ -233,7 +233,7 @@ async def health_check():
     return {
         "status": "healthy",
         "version": settings.VERSION,
-        "ollama_active": await check_ollama_status()
+        "ollama_active": get_cached_ollama_status()
     }
 
 @app.post("/api/v1/system/deploy-update")

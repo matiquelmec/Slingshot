@@ -1150,7 +1150,7 @@ class NexusNode:
         if avail_margin <= 0 and executor.dry_run:
             avail_margin = 82.23
 
-        if avail_margin <= 0:
+        if avail_margin < 5.0:
             logger.warning(f"🛑 [NEXUS MULTI-ACCOUNT] [{account.label}] Saldo insuficiente o no verificado para {asset}: ${avail_margin:.2f} USDT.")
             return None
 
@@ -1864,7 +1864,7 @@ class NexusNode:
         if avail_margin <= 0 and executor.dry_run:
             avail_margin = 82.23
 
-        if avail_margin <= 0:
+        if avail_margin < 5.0:
             if not getattr(account, "is_primary", False) and acc_id != "primary":
                 executor._last_verified_balance = 0.0
             logger.debug(f"[NEXUS AUTO-LIMIT] [{account.label}] Saldo insuficiente o no verificado para {asset}: ${avail_margin:.2f} USDT.")

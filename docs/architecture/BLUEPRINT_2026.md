@@ -884,3 +884,26 @@ Sometidas las 3 optimizaciones a la matriz experimental de 180 días en los 13 a
    * En cada ciclo (cada 5 min), valida la respuesta HTTP de `:8000/api/v1/health` y `:8080/health`. Si algún servicio cae, dispara auto-sanación instantánea recargando los servicios.
 
 
+
+---
+
+## 37. Fase 33: Selección Cuantitativa Dual (Backtest + Monte Carlo 5,000 Rutas) y Paridad de Ejecución en Vivo (SOP-125)
+
+### 37.1 Diagnóstico Forense de Divergencia Backtest vs. Ledger Real Bitunix
+1. **Atribución Empírica del Ledger Real (171 Posiciones Cerradas):**
+   * **Cuenta Principal (`primary`, 100 posiciones):** Win Rate `50.00%` (50W / 50L), Profit Factor `0.76`, PnL Neto Realizado `-99.54 USDT` (Gross Profit `+316.58 USDT` vs. Gross Loss `-416.12 USDT`), Payoff Ratio `0.76` (Ganancia Media `+6.33 USDT` vs. Pérdida Media `-8.32 USDT`).
+   * **Cuenta Secundaria (`cliente_2`, 71 posiciones):** Win Rate `43.66%` (31W / 40L), Profit Factor `0.70`, PnL Neto Realizado `-31.60 USDT`. Tras el último cierre el `2026-10-13 17:12:29 UTC`, el saldo fue retirado quedando en polvo residual (`0.0000000066 USDT`), razón por la cual no ejecutó las órdenes posteriores de `BNBUSDT`.
+2. **Causas Mecánicas de la Divergencia frente al Backtest (`PF 1.62 - 1.96`):**
+   * **Bug de Breakeven Prematuro al `+1.0%` (`+0.55R`) en `TradeManager`:** La línea 1251 de `engine/workers/trade_manager.py` incluía la condición residual `or (side == "LONG" and cur_price > entry_price * 1.01)`.Dado que el Stop Loss mínimo en Altcoins es `1.80%`, un avance de `+1.0%` representa apenas `+0.55R` (antes de alcanzar `TP1` en `+1.2R`). Esto forzaba el Stop Loss a Breakeven prematuramente sin haber cobrado ganancias parciales, provocando cierres en `0.00 USDT` ante retrocesos normales.
+   * **Latencia de Muestreo en `SOP-25 Early Invalidation` (`30s` vs. `10s`):** Reducido `POLL_INTERVAL_SECONDS` de `30s` a `10s` para capturar invalidaciones tempranas en `-0.65R` antes de que el precio perfore el Stop Loss completo de `-1.00R`.
+   * **Pares `Activo:Timeframe` con Esperanza Matemática Negativa o Insuficiente:** El cruce del Backtest Cronológico (437 trades) con 5,000 trayectorias Bootstrap Monte Carlo demostró que `INJUSDT:1h` (`PF 0.80`, `MC Win% 32.4%`), `SUIUSDT:15m` (`PF 1.16`, `MC Win% 62.5%`), `LINKUSDT:15m/1h` (`PF 1.16 / 1.41`) y `BTCUSDT:15m` (`PF 1.10`, `MaxDD 8.10R`) degradaban el portafolio tanto en simulación como en producción.
+
+### 37.2 Matriz Cuantitativa Aprobada (`SOP-125`) y Hardening Operativo
+1. **Filtro Cuantitativo de 4 Puertas (`PF >= 1.50`, `Expectancy >= +0.17R`, `Sharpe >= 2.50`, `Monte Carlo Win% >= 80%`):**
+   * **`APPROVED_SCALP_15M_EXECUTION` (7 activos):** `BNBUSDT` (`PF 2.22`, `MC 98.5%`), `ETHUSDT` (`PF 2.19`, `MC 98.2%`), `SOLUSDT` (`PF 1.95`, `MC 96.1%`), `NEARUSDT` (`PF 2.03`, `MC 93.3%`), `FETUSDT` (`PF 2.66`, `MC 96.8%`), `INJUSDT` (`PF 1.93`, `MC 92.4%`), `ATOMUSDT` (`PF 1.60`, `MC 84.2%`).
+   * **`APPROVED_SWING_1H_EXECUTION` (4 activos):** `XAUUSDT` (`PF 1.86`, `MC 92.8%`), `BTCUSDT` (`PF 1.51`, `MC 83.1%`), `NEARUSDT` (`PF 3.06`, `MC 88.4%`), `ATOMUSDT` (`PF 1.70`, `MC 83.2%`).
+   * **Resultado Combinado del Portafolio Aprobado:** Profit Factor `1.96`, Expectancy `+0.326R/trade`, Max Drawdown `5.94R`, Sharpe `5.03` y `100.0%` de probabilidad de beneficio en Monte Carlo (con recorte de fricción real del `11.6%`).
+2. **Desbloqueo del Event Loop y Healthcheck `O(1)` (`< 5 ms`):**
+   * `GET /api/v1/health` consume `get_cached_ollama_status()` en memoria sin bloquear en red, y `MarketScanner` delega el cálculo de indicadores de Polars a hilos secundarios (`asyncio.to_thread`).
+3. **Tope Duro de Riesgo (`3.50%`) y Guardián Anti-Polvo (`< $5.00 USDT`):**
+   * `RiskManager.calculate_dollar_risk_position()` impone un techo inquebrantable de `3.50%` por operación, y `NexusNode` descarta cuentas secundarias con saldo residual `< $5.00 USDT`.

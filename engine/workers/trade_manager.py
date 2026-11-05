@@ -66,7 +66,7 @@ class TradeManager:
 
 
 
-    POLL_INTERVAL_SECONDS = 30  # EvalAAa cada 30 segundos
+    POLL_INTERVAL_SECONDS = 10  # Evalúa cada 10 segundos (SOP-125: Paridad de reacción con Backtest SOP-25)
 
     ATR_BE_BUFFER = 0.3         # 30% del ATR como buffer sobre el precio de entrada en BE
 
@@ -1248,7 +1248,7 @@ class TradeManager:
 
                         status_msg = "PROTEGIDO_TP2 (+1.0R BLOQUEADO)"
 
-                    elif r_profit >= be_threshold or (side == "LONG" and cur_price > entry_price * 1.01) or (side == "SHORT" and cur_price < entry_price * 0.99):
+                    elif r_profit >= be_threshold:
 
                         target_sl = round(entry_price + fee_buffer, 4) if side == "LONG" else round(entry_price - fee_buffer, 4)
 

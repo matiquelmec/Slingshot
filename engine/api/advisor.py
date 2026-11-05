@@ -36,6 +36,21 @@ OLLAMA_URL   = settings.OLLAMA_URL     # Configurable via .env — default: http
 
 _ollama_cache = {"status": False, "last_check": 0, "confirmed_online": False}
 
+def get_cached_ollama_status() -> bool:
+    """Lectura instantánea O(1) sin bloqueo de red para /api/v1/health (SOP-125)."""
+    if getattr(settings, "NVIDIA_NIM_API_KEY", None) or settings.OPENROUTER_API_KEY or settings.GEMINI_API_KEY or settings.GROQ_API_KEY:
+        return True
+    if _ollama_cache["confirmed_online"]:
+        return True
+    try:
+        loop = asyncio.get_running_loop()
+        now = loop.time()
+        if now - _ollama_cache["last_check"] > 60.0:
+            loop.create_task(check_ollama_status())
+    except RuntimeError:
+        pass
+    return bool(_ollama_cache["status"])
+
 async def check_ollama_status(force_recheck=False) -> bool:
     """v5.9.4-Resilience: Salto agresivo si ya está confirmado online en la sesión o si se usa Gemini API."""
     global _ollama_cache

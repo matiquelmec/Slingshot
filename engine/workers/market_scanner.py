@@ -63,6 +63,27 @@ class MarketScanner:
     Escáner profesional de mercado en segundo plano.
     Combina Núcleo Fijo Institucional (Tier 1) con Rotación Dinámica por Volumen y KER (Tier 2).
     """
+    # [SOP-125] Matriz Cuantitativa Aprobada por Backtest (437 trades) + Monte Carlo (5,000 rutas, PF >= 1.50, MC >= 80%)
+    APPROVED_SCALP_15M_EXECUTION = {
+        "BNBUSDT", "ETHUSDT", "SOLUSDT", "NEARUSDT", "FETUSDT", "INJUSDT", "ATOMUSDT"
+    }
+    APPROVED_SWING_1H_EXECUTION = {
+        "XAUUSDT", "BTCUSDT", "NEARUSDT", "ATOMUSDT"
+    }
+
+    @classmethod
+    def is_quant_approved_pair(cls, symbol: str, interval: str) -> bool:
+        """Verifica si el par Activo:Timeframe supera los umbrales de Backtest + Monte Carlo (SOP-125)."""
+        sym = (symbol or "").replace("/", "").upper()
+        if not sym.endswith("USDT") and sym not in ("XAUUSD", "XAUUSDT"):
+            sym = f"{sym}USDT"
+        tf = (interval or "15m").lower()
+        if tf == "15m":
+            return sym in cls.APPROVED_SCALP_15M_EXECUTION
+        if tf == "1h":
+            return sym in cls.APPROVED_SWING_1H_EXECUTION
+        return True
+
     def __init__(self):
         self.router = SlingshotRouter()
         # 🚀 Tier 1: Núcleo Fijo Especializado por Perfil Cuantitativo SSoT (SOP-36, SOP-101 & SOP-102)
@@ -74,7 +95,7 @@ class MarketScanner:
         self.daily_assets = ["BTCUSDT", "ETHUSDT", "SOLUSDT", "XAUUSDT", "BNBUSDT", "NEARUSDT"]
         
         # Activos activos en Scalp 15m (Core + Campeones BNB, SOL y XRP)
-        self.scalp_assets = list(set(self.core_scalp_assets + ["BNBUSDT", "SOLUSDT", "XRPUSDT"]))
+        self.scalp_assets = list(set(self.core_scalp_assets + ["BNBUSDT", "SOLUSDT", "ETHUSDT", "XRPUSDT"]))
         self.swing_1h_assets = list(self.core_swing_1h_assets)
         self.assets = list(set(self.scalp_assets + self.swing_1h_assets + self.daily_assets))
         
@@ -257,7 +278,7 @@ class MarketScanner:
                         df = pd.DataFrame([h["data"] for h in history])
                         df["timestamp"] = pd.to_datetime(df["timestamp"], unit="s")
                         # 🦀 POLARS ACCELERATION + ESTRUCTURA SMC COMPLETA (PARIDAD SSoT CON BACKTEST)
-                        df = polars_engine.compute_indicators(df)
+                        df = await asyncio.to_thread(polars_engine.compute_indicators, df)
                         try:
                             from engine.indicators.structure import identify_order_blocks
                             df = identify_order_blocks(df)
@@ -795,7 +816,10 @@ class MarketScanner:
                     "btc_aligned": top_c.get("btc_aligned")
                 }
 
-                # Secuencia Transaccional SSoT: Primero Bitunix, Luego Telegram
+                # Secuencia Transaccional SSoT: Primero Bitunix, Luego Telegram (SOP-125 Quant Gatekeeper)
+                if is_intraday_operative and not self.is_quant_approved_pair(sym_upper, interval):
+                    logger.info(f"🛡️ [SOP-125 QUANT GATE] {sym_upper}:{interval} omitido de auto-ejecución en Bitunix (PF/Monte Carlo bajo umbral institucional).")
+                    continue
                 exec_result = None
                 if settings.ENABLE_LIVE_TRADING and is_intraday_operative:
                     from engine.execution.nexus import nexus

@@ -45,6 +45,28 @@ class NewsWorker:
     def __init__(self, interval_seconds: int = 60):
         self.interval = interval_seconds
         self._stop_event = asyncio.Event()
+        self._cache_path = "engine/data/news_seen_cache.json"
+        self._seen_urls, self._seen_titles = self._load_seen_cache()
+
+    def _load_seen_cache(self):
+        import json, os
+        try:
+            if os.path.exists(self._cache_path):
+                with open(self._cache_path, "r", encoding="utf-8") as f:
+                    d = json.load(f)
+                    return set(d.get("urls", [])[-500:]), set(d.get("titles", [])[-500:])
+        except Exception:
+            pass
+        return set(), set()
+
+    def _save_seen_cache(self):
+        import json, os
+        try:
+            os.makedirs(os.path.dirname(self._cache_path), exist_ok=True)
+            with open(self._cache_path, "w", encoding="utf-8") as f:
+                json.dump({"urls": list(self._seen_urls)[-500:], "titles": list(self._seen_titles)[-500:]}, f)
+        except Exception:
+            pass
 
     async def start(self):
         logger.info("📰 [NEWS-WORKER] Iniciando radar de noticias en tiempo real...")
@@ -85,7 +107,8 @@ class NewsWorker:
         # Obtener noticias existentes para deduplicación simétrica
         existing_news = await store.get_news()
         existing_titles = {elite_normalize(n.get('title', '')) for n in existing_news}
-        existing_urls = {n.get('url', '').lower().rstrip('/').split('?')[0] for n in existing_news}
+        existing_urls = {n.get('url', '').lower().rstrip('/').split('?')[0] for n in existing_news} | set(self._seen_urls)
+        existing_titles = existing_titles | set(self._seen_titles)
 
         async with httpx.AsyncClient(timeout=httpx.Timeout(6.0, connect=3.0), headers=headers) as client:
             for url in RSS_FEEDS:
@@ -128,6 +151,8 @@ class NewsWorker:
                                 })
                                 existing_titles.add(title_norm)
                                 existing_urls.add(link_norm)
+                                self._seen_urls.add(link_norm)
+                                self._seen_titles.add(title_norm)
                         except Exception as parse_err:
                             logger.debug(f"[NEWS-WORKER] Parseo XML omitido en {url}: {parse_err}")
                             continue
@@ -141,6 +166,7 @@ class NewsWorker:
             return
 
         # Cap de seguridad por batch (Modo Conservador y Limpio)
+        self._save_seen_cache()
         if len(all_new_items) > 10:
             all_new_items = all_new_items[:10]
 
