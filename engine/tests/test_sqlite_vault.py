@@ -91,3 +91,23 @@ def test_concurrent_writes_thread_safety(temp_vault):
         cursor.execute("SELECT COUNT(*) FROM telegram_dispatches;")
         count = cursor.fetchone()[0]
         assert count == 20, "Todos los 20 registros deben ser insertados sin colisiones ni locks"
+
+
+def test_position_risk_cache_persistence(temp_vault):
+    """Valida la persistencia y recuperación inmutable del riesgo inicial (1R) en SQLite WAL (SOP-127)."""
+    pos_key = "primary_FETUSDT_12345"
+    temp_vault.save_position_risk(
+        pos_key=pos_key,
+        symbol="FETUSDT",
+        side="LONG",
+        sl_dist=0.0028,
+        entry_price=0.1596,
+        initial_sl=0.1568
+    )
+
+    retrieved = temp_vault.get_position_risk(pos_key)
+    assert retrieved == 0.0028, f"Se esperaba 0.0028 pero se obtuvo {retrieved}"
+
+    # Purgar y verificar
+    temp_vault.purge_position_risk(pos_key)
+    assert temp_vault.get_position_risk(pos_key) is None

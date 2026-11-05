@@ -116,6 +116,19 @@ class SlingshotVault:
             );
             """)
 
+            # 3.2 Tabla de Cache de Riesgo Inicial por Posicion (Inmunidad a Reinicios SOP-127)
+            cursor.execute("""
+            CREATE TABLE IF NOT EXISTS position_risk_cache (
+                pos_key TEXT PRIMARY KEY,
+                symbol TEXT NOT NULL,
+                side TEXT NOT NULL,
+                sl_dist REAL NOT NULL,
+                entry_price REAL NOT NULL,
+                initial_sl REAL NOT NULL,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+            """)
+
             # 4. Tabla de Rendimiento Transaccional SSoT (Tear Sheets SOP-60)
             cursor.execute("""
             CREATE TABLE IF NOT EXISTS closed_trades (
@@ -266,6 +279,35 @@ class SlingshotVault:
             INSERT OR IGNORE INTO trade_dispatched_milestones (stage_key, stage_id)
             VALUES (?, ?)
             """, (stage_key, stage_id))
+            conn.commit()
+
+    def save_position_risk(self, pos_key: str, symbol: str, side: str, sl_dist: float, entry_price: float, initial_sl: float):
+        """Persiste la distancia de riesgo inicial (1R) en SQLite WAL inmutable ante reinicios."""
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+            INSERT INTO position_risk_cache (pos_key, symbol, side, sl_dist, entry_price, initial_sl, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+            ON CONFLICT(pos_key) DO UPDATE SET
+                sl_dist = excluded.sl_dist,
+                entry_price = excluded.entry_price,
+                initial_sl = excluded.initial_sl,
+                updated_at = CURRENT_TIMESTAMP;
+            """, (pos_key, symbol.upper(), side.upper(), float(sl_dist), float(entry_price), float(initial_sl)))
+            conn.commit()
+
+    def get_position_risk(self, pos_key: str):
+        """Recupera el riesgo inicial (sl_dist) persistido para una posicion."""
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT sl_dist FROM position_risk_cache WHERE pos_key = ?", (pos_key,))
+            row = cursor.fetchone()
+            return float(row[0]) if row and row[0] else None
+
+    def purge_position_risk(self, pos_key: str):
+        """Elimina el registro de riesgo cuando la posicion se ha cerrado definitivamente."""
+        with self._get_connection() as conn:
+            conn.execute("DELETE FROM position_risk_cache WHERE pos_key = ?", (pos_key,))
             conn.commit()
 
     # ── MÉTODOS DE SESSION MANAGER ───────────────────────────────────────────

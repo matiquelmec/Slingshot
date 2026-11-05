@@ -1079,15 +1079,34 @@ class TradeManager:
 
                     cached_key = f"{acc_id}_{sym}_{pos_id}" if pos_id else f"{acc_id}_{sym}"
                     cached_risk = self._initial_risk_cache.get(cached_key)
+                    if not cached_risk or cached_risk <= 0:
+                        try:
+                            from engine.core.vault import vault
+                            vault_risk = vault.get_position_risk(cached_key)
+                            if vault_risk and vault_risk > 0:
+                                cached_risk = vault_risk
+                                self._initial_risk_cache[cached_key] = cached_risk
+                        except Exception:
+                            pass
 
                     if cached_risk and cached_risk > 0:
                         sl_dist = cached_risk
                     elif initial_sl > 0:
                         sl_dist = abs(entry_price - initial_sl)
                         self._initial_risk_cache[cached_key] = sl_dist
+                        try:
+                            from engine.core.vault import vault
+                            vault.save_position_risk(cached_key, sym, side, sl_dist, entry_price, initial_sl)
+                        except Exception:
+                            pass
                     elif is_defensive_sl and abs(entry_price - cur_sl) > (entry_price * 0.002):
                         sl_dist = abs(entry_price - cur_sl)
                         self._initial_risk_cache[cached_key] = sl_dist
+                        try:
+                            from engine.core.vault import vault
+                            vault.save_position_risk(cached_key, sym, side, sl_dist, entry_price, cur_sl)
+                        except Exception:
+                            pass
                     else:
                         default_risk_pct = 0.010 if self.is_megacap(sym) else 0.015
                         sl_dist = entry_price * default_risk_pct
@@ -1139,8 +1158,11 @@ class TradeManager:
                     if is_early_inval and not sl_at_be:
 
                         price_breached_early_sl = (side == "LONG" and cur_price <= early_sl) or (side == "SHORT" and cur_price >= early_sl)
+                        # SOP-127 Guard: Si el precio ya alcanzó o perforó el Stop Loss actual del exchange,
+                        # no enviar orden de mercado ciega para evitar doble ejecución y comisiones de taker innecesarias
+                        at_or_beyond_current_sl = cur_sl > 0 and ((side == "LONG" and cur_price <= cur_sl * 1.0005) or (side == "SHORT" and cur_price >= cur_sl * 0.9995))
 
-                        if price_breached_early_sl:
+                        if price_breached_early_sl and not at_or_beyond_current_sl:
 
                             logger.info(f"s [SOP-25 FLASH EXIT] [{bitunix.account_label}] {sym} {side} invalidado a -0.65R y precio ya perforA3 umbral (Cur: ${cur_price} vs EarlySL: ${early_sl}). Ejecutando Cierre Inmediato a Mercado...")
 

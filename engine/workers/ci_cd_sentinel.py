@@ -62,11 +62,16 @@ class CICDSentinel:
                 print(entry.encode("ascii", errors="replace").decode("ascii").strip())
             except Exception:
                 pass
-        try:
-            with open(LOG_FILE, "a", encoding="utf-8") as f:
-                f.write(entry)
-        except Exception as e:
-            logger.error(f"Error escribiendo en deploy_audit.log: {e}")
+        for attempt in range(3):
+            try:
+                with open(LOG_FILE, "a", encoding="utf-8") as f:
+                    f.write(entry)
+                break
+            except PermissionError:
+                time.sleep(0.3)
+            except Exception as e:
+                logger.error(f"Error escribiendo en deploy_audit.log: {e}")
+                break
 
     def get_local_commit(self) -> str:
         res = subprocess.run([self.git_cmd, "rev-parse", "HEAD"], cwd=ROOT_DIR, capture_output=True, text=True)
@@ -148,23 +153,32 @@ Start-Process node -ArgumentList "sidecar/index.js" -WorkingDirectory "C:\Slings
             return False
 
     def check_service_health(self) -> Dict[str, bool]:
-        """Verifica salud de FastAPI (:8000) y Sidecar (:8080)."""
+        """Verifica salud de FastAPI (:8000) y Sidecar (:8080) con reintentos para evitar falsos reinicios."""
         import urllib.request
         fastapi_ok = False
         sidecar_ok = False
-        try:
-            req = urllib.request.Request("http://127.0.0.1:8000/api/v1/health", headers={"User-Agent": "Sentinel/1.0"})
-            with urllib.request.urlopen(req, timeout=5) as res:
-                fastapi_ok = (res.status == 200)
-        except Exception:
-            fastapi_ok = False
+        
+        # FastAPI Health Check (hasta 3 intentos con 15s timeout cada uno)
+        for attempt in range(3):
+            try:
+                req = urllib.request.Request("http://127.0.0.1:8000/api/v1/health", headers={"User-Agent": "Sentinel/1.0"})
+                with urllib.request.urlopen(req, timeout=15) as res:
+                    if res.status == 200:
+                        fastapi_ok = True
+                        break
+            except Exception:
+                time.sleep(1.5)
 
-        try:
-            req2 = urllib.request.Request("http://127.0.0.1:8080/health", headers={"User-Agent": "Sentinel/1.0"})
-            with urllib.request.urlopen(req2, timeout=3) as res2:
-                sidecar_ok = (res2.status == 200)
-        except Exception:
-            sidecar_ok = False
+        # Sidecar Health Check
+        for attempt in range(2):
+            try:
+                req2 = urllib.request.Request("http://127.0.0.1:8080/health", headers={"User-Agent": "Sentinel/1.0"})
+                with urllib.request.urlopen(req2, timeout=5) as res2:
+                    if res2.status == 200:
+                        sidecar_ok = True
+                        break
+            except Exception:
+                time.sleep(1.0)
 
         return {"fastapi": fastapi_ok, "sidecar": sidecar_ok}
 
