@@ -125,3 +125,23 @@ async def test_secondary_account_zero_balance_ttl_recovery():
     zero_ttl_active = getattr(ex, "_zero_balance_until_ts", 0.0)
     should_skip_active = getattr(ex, "_last_verified_balance", None) == 0.0 and time.time() < zero_ttl_active
     assert should_skip_active is True
+
+
+@pytest.mark.asyncio
+async def test_sop128_privacy_shield_blocks_external_account_telemetry():
+    """
+    [SOP-128] Certifica que GET /api/v1/bitunix/telemetry nunca expone balances ni posiciones
+    de cuentas de terceros (ej. cliente_2) y fuerza siempre STRICT_PRIMARY_ONLY.
+    """
+    import engine.api.main as api_main
+    api_main._last_bitunix_telemetry_cache = {
+        "status": "ONLINE",
+        "account_id": "primary",
+        "account_label": "Cuenta Principal",
+        "balance_usdt": 100.0,
+        "positions": [],
+        "pending_orders": [],
+    }
+    resp = await api_main.get_bitunix_telemetry(account_id="cliente_2")
+    assert resp["account_id"] == "primary"
+    assert resp.get("privacy_shield") == "STRICT_PRIMARY_ONLY"

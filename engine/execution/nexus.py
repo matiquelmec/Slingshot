@@ -1893,7 +1893,9 @@ class NexusNode:
             acc_pending = await executor.get_pending_orders(asset)
             if acc_pending:
                 logger.debug(f"[NEXUS AUTO-LIMIT] [{account.label}] Ya existe orden límite pendiente en Bitunix para {asset}.")
-                self._pending_limit_symbols.add(asset)
+                self._pending_limit_symbols.add(f"{acc_id}_{asset}")
+                if acc_id == "primary":
+                    self._pending_limit_symbols.add(asset)
                 return {"status": "already_active", "message": f"Orden límite ya pendiente en Bitunix para {asset}"}
         except Exception as pe_err:
             logger.debug(f"[NEXUS AUTO-LIMIT] [{account.label}] Error verificando órdenes pendientes: {pe_err}")

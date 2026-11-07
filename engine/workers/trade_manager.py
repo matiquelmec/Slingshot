@@ -1366,14 +1366,6 @@ class TradeManager:
                                                 pnl_usd=pnl_est,
                                                 is_be=True
                                             ))
-                                        # Public TP alert gated to primary account
-                                        _unused_tp_alert = lambda: 0 and asyncio.create_task(telegram_dispatcher.send_tp_hit_alert(
-                                            symbol=sym,
-                                            tp_label=status_msg,
-                                            exit_price=cur_price,
-                                            pnl_usd=pnl_est,
-                                            is_be=True
-                                        ))
                                 except Exception as disp_err:
                                     logger.debug(f"[TRADE_MANAGER] Error persistiendo y enviando alerta de TP protegido: {disp_err}")
 

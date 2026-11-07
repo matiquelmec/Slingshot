@@ -808,19 +808,24 @@ async def _cicd_autonomous_worker():
 @app.get("/api/v1/bitunix/telemetry")
 async def get_bitunix_telemetry(account_id: str = "primary"):
     """
-    Retorna la telemetría viva de Bitunix (Futuros) para la cuenta solicitada o principal en tiempo real (<1ms).
-    Soporta multi-cuentas mediante el parámetro ?account_id=.
+    Retorna la telemetría viva de Bitunix (Futuros) exclusivamente para la cuenta principal en tiempo real (<1ms).
+    [SOP-128 PRIVACY SHIELD]: Las cuentas secundarias de terceros operan en segundo plano pero jamás exponen
+    sus balances, márgenes, PnL o posiciones a través de la API pública ni en el navegador.
     """
     global _last_bitunix_telemetry_cache, _last_bitunix_telemetry_time
     now = time.time()
 
-    target_acc_id = account_id.strip() if account_id else "primary"
+    requested_acc_id = account_id.strip() if account_id else "primary"
+    if requested_acc_id != "primary":
+        logger.warning(f"[PRIVACY SHIELD] Bloqueado intento de lectura de telemetría para cuenta externa '{requested_acc_id}'. Forzando 'primary'.")
+    target_acc_id = "primary"
 
-    if target_acc_id == "primary":
-        if not _last_bitunix_telemetry_cache:
-            _load_bitunix_lkg_cache()
-        if _last_bitunix_telemetry_cache:
-            return _last_bitunix_telemetry_cache
+    if not _last_bitunix_telemetry_cache:
+        _load_bitunix_lkg_cache()
+    if _last_bitunix_telemetry_cache:
+        resp = dict(_last_bitunix_telemetry_cache)
+        resp["privacy_shield"] = "STRICT_PRIMARY_ONLY"
+        return resp
 
     from engine.execution.nexus import nexus
     executor = None
