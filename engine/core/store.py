@@ -261,6 +261,7 @@ class MemoryStore:
                 if isinstance(ms_cached, dict):
                     for sym, st_dict in ms_cached.items():
                         if isinstance(st_dict, dict):
+                            st_dict = self._normalize_ml_fields(dict(st_dict), None)
                             self._market_states[sym] = MarketState(**{
                                 k: v for k, v in st_dict.items() if k in MarketState.__dataclass_fields__
                             })

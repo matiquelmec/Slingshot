@@ -700,6 +700,7 @@ _last_bitunix_telemetry_cache = None
 _last_bitunix_telemetry_time = 0.0
 
 def _load_bitunix_lkg_cache():
+    import json
     global _last_bitunix_telemetry_cache, _last_bitunix_telemetry_time
     try:
         if os.path.exists(_BITUNIX_LKG_PATH):
@@ -713,6 +714,7 @@ def _load_bitunix_lkg_cache():
         pass
 
 def _save_bitunix_lkg_cache(data: dict):
+    import json
     try:
         os.makedirs(os.path.dirname(_BITUNIX_LKG_PATH), exist_ok=True)
         tmp = _BITUNIX_LKG_PATH + ".tmp"
