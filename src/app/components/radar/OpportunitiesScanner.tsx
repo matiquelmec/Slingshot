@@ -82,14 +82,20 @@ export default function OpportunitiesScanner() {
     const fetchOpps = async () => {
         try {
             const BASE_URL = getApiBaseUrl();
-            const res = await fetch(`${BASE_URL}/api/v1/scanner/opportunities`);
+            const res = await fetch(`${BASE_URL}/api/v1/scanner/opportunities`, { cache: 'no-store' });
             if (res.ok) {
                 const data = await res.json();
-                setOpportunities({
-                    scalp: data.scalp || [],
-                    swing: data.swing || [],
-                    daily: data.daily || [],
-                    tradfi: data.tradfi || []
+                setOpportunities(prev => {
+                    const nextState = {
+                        scalp: (Array.isArray(data.scalp) && data.scalp.length > 0) ? data.scalp : prev.scalp,
+                        swing: (Array.isArray(data.swing) && data.swing.length > 0) ? data.swing : prev.swing,
+                        daily: (Array.isArray(data.daily) && data.daily.length > 0) ? data.daily : prev.daily,
+                        tradfi: (Array.isArray(data.tradfi) && data.tradfi.length > 0) ? data.tradfi : prev.tradfi,
+                    };
+                    try {
+                        localStorage.setItem('slingshot_scanner_lkg_v1', JSON.stringify(nextState));
+                    } catch {}
+                    return nextState;
                 });
             }
         } catch (err) {
@@ -101,8 +107,23 @@ export default function OpportunitiesScanner() {
     };
 
     useEffect(() => {
+        try {
+            const cached = localStorage.getItem('slingshot_scanner_lkg_v1');
+            if (cached) {
+                const parsed = JSON.parse(cached);
+                if (parsed && (parsed.scalp?.length || parsed.swing?.length || parsed.daily?.length)) {
+                    setOpportunities({
+                        scalp: parsed.scalp || [],
+                        swing: parsed.swing || [],
+                        daily: parsed.daily || [],
+                        tradfi: parsed.tradfi || []
+                    });
+                    setLoading(false);
+                }
+            }
+        } catch {}
         fetchOpps();
-        const interval = setInterval(fetchOpps, 15000); // Refresco automático cada 15 segundos
+        const interval = setInterval(fetchOpps, 10000);
         return () => clearInterval(interval);
     }, []);
 

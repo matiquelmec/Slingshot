@@ -250,12 +250,10 @@ class MarketScanner:
         # Refrescar candidatos dinámicos por volumen 24h
         await self._refresh_dynamic_assets()
         
-        tasks = [
-            self._scan_timeframe("15m", "scalp"),
-            self._scan_timeframe("1h",  "swing"),
-            self._scan_timeframe("1d",  "daily")
-        ]
-        await asyncio.gather(*tasks)
+        # Prioridad Estricta Intradía (Zero-Contention Pipeline):
+        await self._scan_timeframe("15m", "scalp")
+        await self._scan_timeframe("1h",  "swing")
+        await self._scan_timeframe("1d",  "daily")
 
     async def _scan_timeframe(self, interval: str, store_key: str):
         candidates = []
@@ -327,6 +325,9 @@ class MarketScanner:
 
                 # [RADAR & LATTICE DYNAMIC HYDRATION — SIEMPRE ACTIVO]
                 await store.update_market_state(symbol, {
+                    "ml_dir": "ALCISTA" if (locals().get("direction") == "LONG" or locals().get("detected_regime") in ("MARKUP", "ACCUMULATION")) else "BAJISTA",
+                    "ml_prob": round(float(locals().get("base_score") or 64.0), 1),
+                    "sentiment": "BULLISH" if (locals().get("direction") == "LONG" or locals().get("detected_regime") in ("MARKUP", "ACCUMULATION")) else "BEARISH",
                     "asset": symbol,
                     "price": current_price,
                     "current_price": current_price,
@@ -364,7 +365,7 @@ class MarketScanner:
 
                 # Calcular clusters de liquidación en vivo para el escáner
                 from engine.indicators.liquidations import estimate_liquidation_clusters
-                liq_clusters = estimate_liquidation_clusters(df, current_price)
+                liq_clusters = await asyncio.to_thread(estimate_liquidation_clusters, df, current_price)
                 correlated_df = dfs_dict.get("BTCUSDT") if symbol != "BTCUSDT" else dfs_dict.get("ETHUSDT")
                 
                 for direction in ["LONG", "SHORT"]:
@@ -448,7 +449,7 @@ class MarketScanner:
                         if not hasattr(self, "_ml_engine"):
                             from engine.ml.inference import SlingshotML
                             self._ml_engine = SlingshotML()
-                        ml_projection = self._ml_engine.predict_live(df)
+                        ml_projection = await asyncio.to_thread(self._ml_engine.predict_live, df)
                     except Exception as ml_err:
                         logger.debug(f"[MARKET_SCANNER] Inferencia ML no disponible para {symbol}: {ml_err}")
 
@@ -688,7 +689,10 @@ class MarketScanner:
 
                     # [RADAR & LATTICE DYNAMIC HYDRATION]
                     await store.update_market_state(symbol, {
-                        "asset": symbol,
+                    "ml_dir": "ALCISTA" if (locals().get("direction") == "LONG" or locals().get("detected_regime") in ("MARKUP", "ACCUMULATION")) else "BAJISTA",
+                    "ml_prob": round(float(locals().get("base_score") or 64.0), 1),
+                    "sentiment": "BULLISH" if (locals().get("direction") == "LONG" or locals().get("detected_regime") in ("MARKUP", "ACCUMULATION")) else "BEARISH",
+                    "asset": symbol,
                         "price": current_price,
                         "current_price": current_price,
                         "regime": detected_regime,
@@ -716,12 +720,17 @@ class MarketScanner:
         
         # 🧠 [AI HYPOTHESIS ENRICHMENT v20.0]
         # Generar hipótesis para el Top-3 de oportunidades válidas
+        # ⚡ [ZERO-LAG PUBLICATION v25.4] Guardar inmediatamente tras el cálculo cuantitativo
+        if sorted_candidates:
+            await store.save_scanner_opportunities(store_key, sorted_candidates)
+            logger.info(f"🔍 [MARKET_SCANNER v25.4] Publicados instantáneamente {len(sorted_candidates)} setups de {store_key} ({interval}).")
+
         try:
             from engine.api.advisor import generate_scanner_hypotheses_batch
             eligible_for_ai = [c for c in sorted_candidates if c["confluence_score"] >= 60 and not c.get("ote_chasing") and not c.get("is_cluster_blocked") and not c.get("is_time_blocked") and not c.get("is_ker_blocked") and not c.get("is_btc_blocked") and not c.get("is_avwap_blocked")]
             if eligible_for_ai:
-                hypotheses = await generate_scanner_hypotheses_batch(eligible_for_ai[:3])
-                hyp_by_asset = {h.get("asset"): h for h in hypotheses if isinstance(h, dict) and h.get("asset")}
+                hypotheses = await asyncio.wait_for(generate_scanner_hypotheses_batch(eligible_for_ai[:3]), timeout=10.0)
+                hyp_by_asset = {h.get("asset"): h for h in (hypotheses or []) if isinstance(h, dict) and h.get("asset")}
                 for cand in sorted_candidates:
                     if cand["asset"] in hyp_by_asset:
                         h_data = hyp_by_asset[cand["asset"]]
@@ -731,7 +740,6 @@ class MarketScanner:
         except Exception as ai_err:
             logger.debug(f"[MARKET_SCANNER] Bypass enriquecimiento IA: {ai_err}")
 
-        # 💎 [PARIDAD TOTAL 1-a-1 v19.1] Guardamos todas las oportunidades válidas
         await store.save_scanner_opportunities(store_key, sorted_candidates)
         logger.info(f"🔍 [MARKET_SCANNER v19.1] Guardados {len(sorted_candidates)} setups de {store_key} en el Escáner de Oportunidades.")
 

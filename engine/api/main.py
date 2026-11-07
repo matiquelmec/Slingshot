@@ -695,8 +695,34 @@ async def get_ftmo_positions_and_telemetry():
 
 
 # Cache en memoria de telemetría para estabilidad de UI y cero parpadeos
+_BITUNIX_LKG_PATH = os.path.join(os.getcwd(), "data", "bitunix_telemetry_lkg.json")
 _last_bitunix_telemetry_cache = None
 _last_bitunix_telemetry_time = 0.0
+
+def _load_bitunix_lkg_cache():
+    global _last_bitunix_telemetry_cache, _last_bitunix_telemetry_time
+    try:
+        if os.path.exists(_BITUNIX_LKG_PATH):
+            with open(_BITUNIX_LKG_PATH, "r", encoding="utf-8") as f:
+                cached = json.load(f)
+            if isinstance(cached, dict) and (float(cached.get("equity", 0)) > 0 or cached.get("positions")):
+                cached["connected"] = True
+                _last_bitunix_telemetry_cache = cached
+                _last_bitunix_telemetry_time = time.time()
+    except Exception:
+        pass
+
+def _save_bitunix_lkg_cache(data: dict):
+    try:
+        os.makedirs(os.path.dirname(_BITUNIX_LKG_PATH), exist_ok=True)
+        tmp = _BITUNIX_LKG_PATH + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, default=str)
+        os.replace(tmp, _BITUNIX_LKG_PATH)
+    except Exception:
+        pass
+
+_load_bitunix_lkg_cache()
 
 async def _bitunix_telemetry_background_updater():
     """
@@ -704,8 +730,9 @@ async def _bitunix_telemetry_background_updater():
     Aísla las consultas WAN del hilo de peticiones HTTP para garantizar respuestas en <1ms.
     """
     global _last_bitunix_telemetry_cache, _last_bitunix_telemetry_time
-    logger.info("⚡ [TELEMETRY] Centinela asíncrono de telemetría Bitunix activado.")
-    await asyncio.sleep(2.0)
+    _load_bitunix_lkg_cache()
+    logger.info("⚡ [TELEMETRY] Centinela asíncrono de telemetría Bitunix activado (Single-Writer LKG Bus).")
+    await asyncio.sleep(1.5)
     while True:
         try:
             from engine.execution.nexus import nexus
@@ -716,16 +743,17 @@ async def _bitunix_telemetry_background_updater():
                 executor = getattr(nexus, "executor", None)
 
             if executor:
-                data = await executor.get_account_telemetry_summary()
-                if data and data.get("connected"):
-                    # Anti-Flapping: Si la respuesta viene con 0 posiciones pero antes había activas hace < 8s, retener
+                data = await asyncio.wait_for(executor.get_account_telemetry_summary(), timeout=15.0)
+                if data and (data.get("connected") or float(data.get("equity", 0)) > 0 or data.get("positions")):
+                    data["connected"] = True
                     if _last_bitunix_telemetry_cache and _last_bitunix_telemetry_cache.get("positions"):
-                        if not data.get("positions") and (time.time() - _last_bitunix_telemetry_time) < 8.0:
+                        if not data.get("positions") and (time.time() - _last_bitunix_telemetry_time) < 15.0:
                             data["positions"] = _last_bitunix_telemetry_cache["positions"]
                             data["positions_count"] = len(data["positions"])
                             data["is_stabilizing"] = True
                     _last_bitunix_telemetry_cache = data
                     _last_bitunix_telemetry_time = time.time()
+                    await asyncio.to_thread(_save_bitunix_lkg_cache, data)
 
                     # 🗄️ Sincronización continua de posiciones abiertas en Turso Cloud (Dual-Engine)
                     if data.get("positions"):
@@ -786,8 +814,11 @@ async def get_bitunix_telemetry(account_id: str = "primary"):
 
     target_acc_id = account_id.strip() if account_id else "primary"
 
-    if target_acc_id == "primary" and _last_bitunix_telemetry_cache:
-        return _last_bitunix_telemetry_cache
+    if target_acc_id == "primary":
+        if not _last_bitunix_telemetry_cache:
+            _load_bitunix_lkg_cache()
+        if _last_bitunix_telemetry_cache:
+            return _last_bitunix_telemetry_cache
 
     from engine.execution.nexus import nexus
     executor = None
@@ -798,14 +829,18 @@ async def get_bitunix_telemetry(account_id: str = "primary"):
 
     if executor:
         try:
-            data = await asyncio.wait_for(executor.get_account_telemetry_summary(), timeout=5.0)
-            if data and data.get("connected"):
+            data = await asyncio.wait_for(executor.get_account_telemetry_summary(), timeout=12.0)
+            if data and (data.get("connected") or float(data.get("equity", 0)) > 0 or data.get("positions")):
+                data["connected"] = True
                 if target_acc_id == "primary":
                     _last_bitunix_telemetry_cache = data
                     _last_bitunix_telemetry_time = now
+                    await asyncio.to_thread(_save_bitunix_lkg_cache, data)
                 return data
         except Exception as e:
             logger.debug(f"[BITUNIX TELEMETRY] Calentando telemetría para {target_acc_id}: {e}")
+            if target_acc_id == "primary" and _last_bitunix_telemetry_cache:
+                return _last_bitunix_telemetry_cache
 
     # Fallback canónico si es durante los primeros instantes del arranque en frío
     return {

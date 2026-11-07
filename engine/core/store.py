@@ -1,3 +1,5 @@
+import os
+import json
 from engine.core.logger import logger
 import asyncio
 from collections import deque
@@ -239,14 +241,75 @@ class MemoryStore:
         async with self._lock:
             return self._htf_biases.get(asset)
 
+    _scanner_lkg_path = os.path.join(os.getcwd(), "data", "scanner_lkg_cache.json")
+    _market_states_lkg_path = os.path.join(os.getcwd(), "data", "market_states_lkg_cache.json")
+
+    def _load_lkg_from_disk(self):
+        """Restaura instantáneamente el Last-Known-Good (LKG) desde disco en el arranque."""
+        try:
+            os.makedirs(os.path.dirname(self._scanner_lkg_path), exist_ok=True)
+            if os.path.exists(self._scanner_lkg_path):
+                with open(self._scanner_lkg_path, "r", encoding="utf-8") as f:
+                    cached = json.load(f)
+                if isinstance(cached, dict):
+                    for k in ("scalp", "swing", "daily", "tradfi"):
+                        if isinstance(cached.get(k), list) and len(cached[k]) > 0:
+                            self._scanner_opportunities[k] = cached[k]
+            if os.path.exists(self._market_states_lkg_path):
+                with open(self._market_states_lkg_path, "r", encoding="utf-8") as f:
+                    ms_cached = json.load(f)
+                if isinstance(ms_cached, dict):
+                    for sym, st_dict in ms_cached.items():
+                        if isinstance(st_dict, dict):
+                            self._market_states[sym] = MarketState(**{
+                                k: v for k, v in st_dict.items() if k in MarketState.__dataclass_fields__
+                            })
+        except Exception as e:
+            logger.debug(f"[MemoryStore] No se pudo hidratar caché LKG inicial: {e}")
+
+    def _persist_scanner_lkg_sync(self):
+        try:
+            from dataclasses import asdict
+            os.makedirs(os.path.dirname(self._scanner_lkg_path), exist_ok=True)
+            tmp_path = self._scanner_lkg_path + ".tmp"
+            with open(tmp_path, "w", encoding="utf-8") as f:
+                json.dump(self._scanner_opportunities, f, ensure_ascii=False, default=str)
+            os.replace(tmp_path, self._scanner_lkg_path)
+
+            if self._market_states:
+                ms_dump = {
+                    k: (asdict(v) if hasattr(v, "__dataclass_fields__") else v)
+                    for k, v in self._market_states.items()
+                }
+                tmp_ms = self._market_states_lkg_path + ".tmp"
+                with open(tmp_ms, "w", encoding="utf-8") as f:
+                    json.dump(ms_dump, f, ensure_ascii=False, default=str)
+                os.replace(tmp_ms, self._market_states_lkg_path)
+        except Exception as e:
+            logger.debug(f"[MemoryStore] Error persistiendo LKG scanner: {e}")
+
     async def save_scanner_opportunities(self, timeframe_type: str, opportunities: List[Dict[str, Any]]):
-        """Guarda las mejores oportunidades del escáner para un tipo (scalp/swing)."""
+        """Guarda las mejores oportunidades del escáner con protección Last-Known-Good (LKG) y persistencia atómica."""
         async with self._lock:
+            if not opportunities and self._scanner_opportunities.get(timeframe_type):
+                logger.debug(f"[MemoryStore] Reteniendo LKG para {timeframe_type} ({len(self._scanner_opportunities[timeframe_type])} setups) ante ciclo vacío.")
+                return
             self._scanner_opportunities[timeframe_type] = opportunities
+            await asyncio.to_thread(self._persist_scanner_lkg_sync)
 
     def get_scanner_opportunities(self, timeframe_type: str) -> List[Dict[str, Any]]:
         """Recupera de forma rápida y sincrónica las mejores oportunidades del escáner."""
-        return self._scanner_opportunities.get(timeframe_type, [])
+        res = self._scanner_opportunities.get(timeframe_type, [])
+        if not res and os.path.exists(self._scanner_lkg_path):
+            try:
+                with open(self._scanner_lkg_path, "r", encoding="utf-8") as f:
+                    cached = json.load(f)
+                if isinstance(cached, dict) and isinstance(cached.get(timeframe_type), list):
+                    self._scanner_opportunities[timeframe_type] = cached[timeframe_type]
+                    return cached[timeframe_type]
+            except Exception:
+                pass
+        return res
 
     async def clear_all(self):
         """Wipe total (Reseteo de sistema)."""
@@ -261,3 +324,4 @@ class MemoryStore:
 
 # Singleton Global para todo el proceso
 store = MemoryStore()
+store._load_lkg_from_disk()

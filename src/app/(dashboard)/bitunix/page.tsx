@@ -84,33 +84,47 @@ export default function BitunixDashboardPage() {
 
     useEffect(() => {
         setMounted(true);
+        try {
+            const cached = localStorage.getItem('slingshot_bitunix_lkg_v1');
+            if (cached) {
+                const parsed = JSON.parse(cached);
+                if (parsed && (parsed.equity > 0 || parsed.positions?.length > 0)) {
+                    setData(parsed);
+                    setLoading(false);
+                }
+            }
+        } catch {}
     }, []);
 
     const fetchBitunixData = async () => {
         try {
             const apiHost = getApiBaseUrl();
-            const res = await fetch(`${apiHost}/api/v1/bitunix/telemetry`);
+            const res = await fetch(`${apiHost}/api/v1/bitunix/telemetry`, { cache: 'no-store' });
             if (res.ok) {
                 const json = await res.json();
                 if (json && (json.connected || json.equity > 0 || json.positions_count > 0)) {
                     setData(prev => {
+                        let nextData = json;
                         if (prev?.positions && prev.positions.length > 0 && (!json.positions || json.positions.length === 0)) {
                             if (json.is_stabilizing || zeroPositionsPulses < 2) {
                                 setZeroPositionsPulses(p => p + 1);
-                                return {
+                                nextData = {
                                     ...json,
                                     positions: prev.positions,
                                     positions_count: prev.positions.length,
                                     total_floating_pnl: prev.total_floating_pnl,
                                     is_stabilizing: true
                                 };
+                                try { localStorage.setItem('slingshot_bitunix_lkg_v1', JSON.stringify(nextData)); } catch {}
+                                return nextData;
                             }
                         }
                         setZeroPositionsPulses(0);
-                        return json;
+                        try { localStorage.setItem('slingshot_bitunix_lkg_v1', JSON.stringify(nextData)); } catch {}
+                        return nextData;
                     });
                 } else {
-                    setData(prev => prev ? { ...prev, connected: false } : json);
+                    setData(prev => prev ? { ...prev, connected: true } : json);
                 }
             }
         } catch (e) {
