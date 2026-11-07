@@ -70,11 +70,15 @@ class TradFiScanner:
                 if swing_range <= (atr_val * 0.5):
                     continue
                     
-                # [SOP-29 SESSION KILLZONE GATE]
-                # Indices y Forex TradFi solo operan en Killzones de Alta Liquidez (Londres 07-10 UTC y NY 12-18 UTC)
+                # [SOP-29 & SOP-129 DST-AWARE SESSION KILLZONE GATE]
+                # Indices y Forex TradFi operan sincronizados con la hora local real de Londres y Nueva York (ZoneInfo IANA)
+                from engine.core.session_manager import classify_market_session
+                from zoneinfo import ZoneInfo
                 now_utc = datetime.now(timezone.utc)
-                hour = now_utc.hour
-                is_tradfi_killzone = (7 <= hour <= 10) or (12 <= hour <= 18)
+                cls_sess = classify_market_session(now_utc)
+                lon_h = now_utc.astimezone(ZoneInfo("Europe/London")).hour
+                ny_h = now_utc.astimezone(ZoneInfo("America/New_York")).hour
+                is_tradfi_killzone = bool(cls_sess.get("is_killzone")) or (8 <= lon_h <= 11) or (8 <= ny_h <= 14)
                 
                 # Evaluar Sesgo Institucional
                 is_bull = current_price > ema50 and ema50 > ema200

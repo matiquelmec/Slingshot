@@ -20,27 +20,41 @@ def is_trade_allowed_sop18(
     toxic_hours: tuple = (10, 14)
 ) -> bool:
     """
-    [SOP-18 & SOP-102 TIME-GATING CANONICAL SSoT]
-    Sincronizado 1:1 con unified_backtest_engine.py para filtrar:
-    - Horas tóxicas de barridos de liquidez falsos (10:00 UTC Trampa Londres y 14:00 UTC Apertura NY).
-    - Ventanas institucionales Killzones (07:00-12:00 UTC y 13:00-17:00 UTC).
-    - Reglas específicas de Lunes Pre-NY, Jueves Tarde y transición 13h/18h.
+    [SOP-18, SOP-102 & SOP-129 DST-AWARE TIME-GATING CANONICAL SSoT]
+    Adapta automáticamente las ventanas de Londres y Nueva York según el horario estacional real
+    (invierno EST/GMT vs verano EDT/BST) usando ZoneInfo IANA:
+    - Horas tóxicas: 11:00 Londres (10:00 UTC verano / 11:00 UTC invierno) y 10:00 NY (14:00 UTC verano / 15:00 UTC invierno).
+    - Ventanas institucionales Killzones: Londres (08:00-13:00 hora local Londres) y NY (09:00-13:00 hora local NY).
     """
-    d = dt.strftime("%A")
-    h = dt.hour
+    from zoneinfo import ZoneInfo
+    dt_utc = dt.replace(tzinfo=timezone.utc) if dt.tzinfo is None else dt.astimezone(timezone.utc)
+    lon_dt = dt_utc.astimezone(ZoneInfo("Europe/London"))
+    ny_dt = dt_utc.astimezone(ZoneInfo("America/New_York"))
 
-    # 0. Quirófano Horario SOP-102 (Paridad 1:1 Backtest: Veto Horas Tóxicas 10h y 14h UTC)
-    if toxic_hours and h in toxic_hours:
+    d = dt_utc.strftime("%A")
+    h = dt_utc.hour
+    lon_h = lon_dt.hour
+    ny_h = ny_dt.hour
+
+    # 0. Quirófano Horario DST-Aware (SOP-102 / SOP-129):
+    # Si se pasa el tuple por defecto (10, 14), se evalúa dinámicamente en hora local de Londres (11h) y NY (10h)
+    if toxic_hours:
+        if toxic_hours == (10, 14):
+            if lon_h == 11 or ny_h == 10:
+                return False
+        elif h in toxic_hours:
+            return False
+
+    # 0.1 Killzones Estrictas DST-Aware: Londres (08:00-13:00 London) o NY (09:00-13:00 NY)
+    in_london_window = (8 <= lon_h <= 13)
+    in_ny_window = (9 <= ny_h <= 13)
+    if strict_killzones and not (in_london_window or in_ny_window):
         return False
 
-    # 0.1 Killzones Estrictas SOP-102 (07:00-12:00 UTC Londres y 13:00-17:00 UTC NY)
-    if strict_killzones and not (7 <= h <= 12 or 13 <= h <= 17):
-        return False
-
-    # 1. Reglas Globales de Protección SOP-18
-    if d == "Monday" and h <= 13: return False
-    if d == "Thursday" and h >= 16: return False
-    if h == 18: return False
+    # 1. Reglas Globales de Protección SOP-18 (adaptadas a NY local)
+    if d == "Monday" and ny_h <= 9: return False
+    if d == "Thursday" and ny_h >= 12: return False
+    if ny_h == 14: return False
 
     # 2. Regla Específica AVAXUSDT: Solo ventanas 09:00 y 17:00 UTC
     if symbol == "AVAXUSDT":
@@ -50,8 +64,8 @@ def is_trade_allowed_sop18(
     if symbol == "RENDERUSDT":
         return h in [8, 13, 17, 18]
 
-    # 4. Resto de Activos (Líderes): Pausa en apertura 13h excepto Miércoles
-    if h == 13 and d != "Wednesday":
+    # 4. Resto de Activos (Líderes): Pausa en pre-apertura NY (09h NY = 13h UTC verano / 14h UTC invierno) excepto Miércoles
+    if ny_h == 9 and d != "Wednesday":
         return False
 
     return True

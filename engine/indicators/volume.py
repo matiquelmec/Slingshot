@@ -405,15 +405,22 @@ def calculate_session_anchored_vwap(df: pd.DataFrame) -> pd.DataFrame:
         else:
             dt_series = dt_series.dt.tz_convert('UTC')
 
-    # Identificar la sesión institucional y crear clave de anclaje (fecha + id_sesion)
-    hours = dt_series.dt.hour
-    minutes = dt_series.dt.minute
-    total_minutes = hours * 60 + minutes
+    # [SOP-129 DST-AWARE SESSION ANCHORED VWAP]
+    # Convierte vectorizadamente a Europe/London y America/New_York para que el anclaje de Londres (08:00 local)
+    # y Nueva York (09:30 local = 570 min) se ajuste automáticamente en horario de invierno (EST/GMT) y verano (EDT/BST).
+    lon_series = dt_series.dt.tz_convert('Europe/London')
+    ny_series = dt_series.dt.tz_convert('America/New_York')
 
-    # 00:00 a 06:59 -> ASIA (0)
-    # 07:00 a 13:29 -> LONDON (1)
-    # 13:30 a 23:59 -> NEW_YORK (2)
-    session_ids = np.where(total_minutes < 420, 0, np.where(total_minutes < 810, 1, 2))
+    lon_mins = lon_series.dt.hour * 60 + lon_series.dt.minute
+    ny_mins = ny_series.dt.hour * 60 + ny_series.dt.minute
+
+    # Día UTC de referencia:
+    # 00:00 UTC a apertura Londres (08:00 London local) -> ASIA (0)
+    # 08:00 London local hasta apertura NY RTH (09:30 NY local) -> LONDON (1)
+    # 09:30 NY local hasta 23:59 UTC -> NEW_YORK (2)
+    is_asia = lon_mins < 480
+    is_ny = (~is_asia) & (ny_mins >= 570)
+    session_ids = np.where(is_asia, 0, np.where(is_ny, 2, 1))
     session_names = np.where(session_ids == 0, "ASIA", np.where(session_ids == 1, "LONDON", "NEW_YORK"))
     
     dates = dt_series.dt.date.astype(str)

@@ -265,17 +265,36 @@ export default function PlanOperativoPanel() {
             dayReason = 'Fin de semana. Sin volumen real. Volatilidad artificial por bots minoristas. Riesgo de manipulación alto.';
         }
 
-        // Determinar sesiones activas en UTC
+        // [SOP-129] Determinar sesiones activas con ajuste automático de horario estacional (DST-Aware via Intl)
+        const getHourInTz = (tz: string) => {
+            try {
+                const parts = new Intl.DateTimeFormat('en-US', { timeZone: tz, hour: 'numeric', hour12: false }).formatToParts(d);
+                const hVal = parts.find(p => p.type === 'hour')?.value;
+                return hVal !== undefined ? parseInt(hVal, 10) % 24 : utcHour;
+            } catch {
+                return utcHour;
+            }
+        };
+        const lonHour = getHourInTz('Europe/London');
+        const nyHour = getHourInTz('America/New_York');
+        const tokHour = getHourInTz('Asia/Tokyo');
+
         let sessionName = 'DEAD ZONE (INACTIVO)';
         let isKillzone = false;
-        
-        if (utcHour >= 7 && utcHour <= 10) {
+
+        if (nyHour >= 8 && nyHour <= 11) {
+            sessionName = lonHour >= 8 ? 'LONDON / NY OVERLAP KILLZONE' : 'NEW YORK OPEN KILLZONE';
+            isKillzone = true;
+        } else if (lonHour >= 8 && lonHour <= 11) {
             sessionName = 'LONDON OPEN KILLZONE';
             isKillzone = true;
-        } else if (utcHour >= 12 && utcHour <= 15) {
-            sessionName = 'NEW YORK OPEN KILLZONE';
-            isKillzone = true;
-        } else if (utcHour >= 0 && utcHour <= 4) {
+        } else if (nyHour >= 12 && nyHour < 16) {
+            sessionName = 'NEW YORK SESSION';
+            isKillzone = nyHour === 14;
+        } else if (lonHour >= 12 && lonHour < 16) {
+            sessionName = 'LONDON SESSION';
+            isKillzone = false;
+        } else if (tokHour >= 9 && tokHour < 15) {
             sessionName = 'ASIA SESSION (SWEEP WINDOW)';
             isKillzone = false;
         }

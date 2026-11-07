@@ -90,3 +90,36 @@ def test_session_anchored_vwap_empty_and_fallback():
     res_no_vol = calculate_session_anchored_vwap(df_no_vol)
     assert "session_avwap" in res_no_vol.columns
     assert res_no_vol.iloc[0]["session_avwap"] == 50.0
+
+
+def test_sop129_dst_winter_vs_summer_adaptation():
+    """
+    [SOP-129] Certifica que tanto el Session Anchored VWAP como el filtro horario SOP-18/SOP-102
+    se adapten automáticamente al cambio de horario de verano (EDT/BST) a invierno (EST/GMT).
+    """
+    from datetime import datetime, timezone
+    from engine.workers.market_scanner import is_trade_allowed_sop18
+
+    # En invierno (Noviembre 2026):
+    # - NY está en EST (UTC-5): 09:30 NY = 14:30 UTC (en verano era 13:30 UTC).
+    # - Hora tóxica NY (10:00 AM NY) pasa de 14:00 UTC (verano) a 15:00 UTC (invierno).
+    # - 16:00 UTC en Martes de invierno = 11:00 AM NY (ventana limpia permitida).
+    t_winter_asia = pd.Timestamp("2026-11-10 07:45:00", tz="UTC")    # 07:45 GMT Londres -> ASIA
+    t_winter_lon  = pd.Timestamp("2026-11-10 08:00:00", tz="UTC")    # 08:00 GMT Londres -> LONDON
+    t_winter_ny   = pd.Timestamp("2026-11-10 14:30:00", tz="UTC")    # 09:30 EST NY      -> NEW_YORK
+
+    df_winter = pd.DataFrame({
+        "timestamp": [t_winter_asia, t_winter_lon, t_winter_ny],
+        "high": [100.0, 110.0, 120.0],
+        "low": [90.0, 100.0, 110.0],
+        "close": [95.0, 105.0, 115.0],
+        "volume": [1000, 1000, 1000],
+    })
+    res_w = calculate_session_anchored_vwap(df_winter)
+    assert list(res_w["session_name"]) == ["ASIA", "LONDON", "NEW_YORK"]
+
+    # En invierno (Martes 10 Nov 2026):
+    # 15:00 UTC es 10:00 AM NY (hora tóxica en invierno) -> Bloqueada
+    assert is_trade_allowed_sop18("BTCUSDT", datetime(2026, 11, 10, 15, 0, tzinfo=timezone.utc)) is False
+    # 16:00 UTC es 11:00 AM NY (ventana limpia en invierno) -> Permitida
+    assert is_trade_allowed_sop18("BTCUSDT", datetime(2026, 11, 10, 16, 0, tzinfo=timezone.utc)) is True
