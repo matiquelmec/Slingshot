@@ -824,6 +824,7 @@ async def get_bitunix_telemetry(account_id: str = "primary"):
         _load_bitunix_lkg_cache()
     if _last_bitunix_telemetry_cache:
         resp = dict(_last_bitunix_telemetry_cache)
+        resp["account_id"] = "primary"
         resp["privacy_shield"] = "STRICT_PRIMARY_ONLY"
         return resp
 
