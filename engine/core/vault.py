@@ -129,6 +129,24 @@ class SlingshotVault:
             );
             """)
 
+            # 3.3 Tabla SSoT de Planes de Órdenes Despachadas por el Sistema (SOP-130)
+            cursor.execute("""
+            CREATE TABLE IF NOT EXISTS system_order_plans (
+                plan_key TEXT PRIMARY KEY,
+                account_id TEXT NOT NULL,
+                symbol TEXT NOT NULL,
+                side TEXT NOT NULL,
+                entry_price REAL NOT NULL,
+                initial_sl REAL NOT NULL,
+                tp1 REAL NOT NULL,
+                tp2 REAL NOT NULL,
+                tp3 REAL NOT NULL,
+                order_id TEXT,
+                origin TEXT DEFAULT 'SYSTEM_AUTO',
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+            """)
+
             # 4. Tabla de Rendimiento Transaccional SSoT (Tear Sheets SOP-60)
             cursor.execute("""
             CREATE TABLE IF NOT EXISTS closed_trades (
@@ -304,10 +322,115 @@ class SlingshotVault:
             row = cursor.fetchone()
             return float(row[0]) if row and row[0] else None
 
+    def get_position_risk_record(self, pos_key: str, symbol: Optional[str] = None, side: Optional[str] = None) -> Optional[Dict[str, float]]:
+        """Recupera el registro completo de riesgo inicial (sl_dist, entry_price, initial_sl) por pos_key o fallback por symbol+side."""
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT sl_dist, entry_price, initial_sl FROM position_risk_cache WHERE pos_key = ?",
+                (pos_key,)
+            )
+            row = cursor.fetchone()
+            if not row and symbol and side:
+                cursor.execute(
+                    "SELECT sl_dist, entry_price, initial_sl FROM position_risk_cache WHERE symbol = ? AND side = ? ORDER BY updated_at DESC LIMIT 1",
+                    (symbol.upper(), side.upper())
+                )
+                row = cursor.fetchone()
+            if row and float(row[0] or 0) > 0:
+                return {
+                    "sl_dist": float(row[0]),
+                    "entry_price": float(row[1]),
+                    "initial_sl": float(row[2])
+                }
+            return None
+
     def purge_position_risk(self, pos_key: str):
         """Elimina el registro de riesgo cuando la posicion se ha cerrado definitivamente."""
         with self._get_connection() as conn:
             conn.execute("DELETE FROM position_risk_cache WHERE pos_key = ?", (pos_key,))
+            conn.commit()
+
+    def save_system_order_plan(
+        self,
+        account_id: str,
+        symbol: str,
+        side: str,
+        entry_price: float,
+        initial_sl: float,
+        tp1: float,
+        tp2: float,
+        tp3: float,
+        order_id: str = "",
+        origin: str = "SYSTEM_AUTO"
+    ) -> None:
+        """Persiste el plan de salida exacto de una orden enviada por el motor (SOP-130)."""
+        plan_key = f"{account_id}_{symbol.upper()}_{side.upper()}"
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+            INSERT INTO system_order_plans (
+                plan_key, account_id, symbol, side, entry_price, initial_sl, tp1, tp2, tp3, order_id, origin, updated_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+            ON CONFLICT(plan_key) DO UPDATE SET
+                entry_price = excluded.entry_price,
+                initial_sl = excluded.initial_sl,
+                tp1 = excluded.tp1,
+                tp2 = excluded.tp2,
+                tp3 = excluded.tp3,
+                order_id = excluded.order_id,
+                origin = excluded.origin,
+                updated_at = CURRENT_TIMESTAMP;
+            """, (
+                plan_key,
+                account_id,
+                symbol.upper(),
+                side.upper(),
+                float(entry_price),
+                float(initial_sl),
+                float(tp1),
+                float(tp2),
+                float(tp3),
+                str(order_id or ""),
+                origin
+            ))
+            conn.commit()
+
+    def get_system_order_plan(self, account_id: str, symbol: str, side: str) -> Optional[Dict[str, Any]]:
+        """Recupera el plan de orden original enviado por el motor para esa cuenta, símbolo y dirección (SOP-130)."""
+        plan_key = f"{account_id}_{symbol.upper()}_{side.upper()}"
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+            SELECT entry_price, initial_sl, tp1, tp2, tp3, order_id, origin
+            FROM system_order_plans
+            WHERE plan_key = ?
+            """, (plan_key,))
+            row = cursor.fetchone()
+            if not row:
+                return None
+            return {
+                "entry_price": float(row[0] or 0.0),
+                "initial_sl": float(row[1] or 0.0),
+                "tp1": float(row[2] or 0.0),
+                "tp2": float(row[3] or 0.0),
+                "tp3": float(row[4] or 0.0),
+                "order_id": str(row[5] or ""),
+                "origin": str(row[6] or "SYSTEM_AUTO")
+            }
+
+    def purge_system_order_plan(self, account_id: str, symbol: str, side: Optional[str] = None) -> None:
+        """Limpia el plan de orden de una cuenta/activo cuando la posición se cierra definitivamente."""
+        with self._get_connection() as conn:
+            if side:
+                plan_key = f"{account_id}_{symbol.upper()}_{side.upper()}"
+                conn.execute("DELETE FROM system_order_plans WHERE plan_key = ?", (plan_key,))
+            else:
+                conn.execute(
+                    "DELETE FROM system_order_plans WHERE account_id = ? AND symbol = ?",
+                    (account_id, symbol.upper())
+                )
             conn.commit()
 
     # ── MÉTODOS DE SESSION MANAGER ───────────────────────────────────────────

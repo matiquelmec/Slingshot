@@ -1076,6 +1076,7 @@ class TradeManager:
 
                     # Distancia de riesgo inicial (1R)
                     is_defensive_sl = (side == "LONG" and 0 < cur_sl < entry_price) or (side == "SHORT" and cur_sl > entry_price)
+                    is_initial_sl_defensive = (side == "LONG" and 0 < initial_sl < entry_price) or (side == "SHORT" and initial_sl > entry_price)
 
                     cached_key = f"{acc_id}_{sym}_{pos_id}" if pos_id else f"{acc_id}_{sym}"
                     cached_risk = self._initial_risk_cache.get(cached_key)
@@ -1083,6 +1084,16 @@ class TradeManager:
                         try:
                             from engine.core.vault import vault
                             vault_risk = vault.get_position_risk(cached_key)
+                            if not vault_risk or vault_risk <= 0:
+                                rec = vault.get_position_risk_record(cached_key, symbol=sym, side=side)
+                                if rec and rec.get("sl_dist", 0) > 0:
+                                    vault_risk = float(rec["sl_dist"])
+                            if (not vault_risk or vault_risk <= 0):
+                                plan = vault.get_system_order_plan(acc_id, sym, side)
+                                if plan and float(plan.get("initial_sl", 0)) > 0:
+                                    plan_isl = float(plan["initial_sl"])
+                                    if (side == "LONG" and plan_isl < entry_price) or (side == "SHORT" and plan_isl > entry_price):
+                                        vault_risk = abs(entry_price - plan_isl)
                             if vault_risk and vault_risk > 0:
                                 cached_risk = vault_risk
                                 self._initial_risk_cache[cached_key] = cached_risk
@@ -1091,7 +1102,7 @@ class TradeManager:
 
                     if cached_risk and cached_risk > 0:
                         sl_dist = cached_risk
-                    elif initial_sl > 0:
+                    elif initial_sl > 0 and is_initial_sl_defensive and abs(entry_price - initial_sl) > (entry_price * 0.002):
                         sl_dist = abs(entry_price - initial_sl)
                         self._initial_risk_cache[cached_key] = sl_dist
                         try:
@@ -1326,7 +1337,7 @@ class TradeManager:
                             symbol=sym,
                             position_id=pos_id,
                             sl_price=target_sl,
-                            tp_price=target_tp if target_tp > 0 else None
+                            tp_price=None
                         )
 
                         if success:

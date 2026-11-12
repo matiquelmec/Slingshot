@@ -501,6 +501,20 @@ class BitunixExecutor:
                 tp3 = signal.get("tp3") or signal.get("take_profit_3r")
                 
                 if tp1 and tp2 and tp3:
+                    # [SOP-130] Garantizar invarianza monotónica (Entry < TP1 < TP2 < TP3 en LONG / Entry > TP1 > TP2 > TP3 en SHORT)
+                    try:
+                        from engine.execution.nexus import NexusNode
+                        exec_side_str = "LONG" if side == "BUY" else "SHORT"
+                        _, _, tp1, tp2, tp3 = NexusNode.validate_and_anchor_tp_ladder(
+                            entry_price=float(entry_price),
+                            initial_sl=float(stop_loss or 0.0),
+                            side=exec_side_str,
+                            raw_tp1=float(tp1),
+                            raw_tp2=float(tp2),
+                            raw_tp3=float(tp3)
+                        )
+                    except Exception:
+                        pass
                     # [SOP-21] Respetar la precisión dinámica exacta del símbolo y el volumen mínimo de Bitunix
                     rules = await self.get_symbol_rules(symbol)
                     qty_decimals = rules["qty_precision"]

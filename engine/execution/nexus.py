@@ -69,6 +69,56 @@ class NexusNode:
             self._asset_cooldown[f"primary_{clean}"] = exp_ts
         logger.warning(f"🧊 [SOP-52 COOLDOWN] Activo {clean} en cuarentena por {duration_sec}s ({duration_sec//60} min) debido a: {reason}.")
 
+    @staticmethod
+    def validate_and_anchor_tp_ladder(
+        entry_price: float,
+        initial_sl: float,
+        side: str,
+        raw_tp1: float = 0.0,
+        raw_tp2: float = 0.0,
+        raw_tp3: float = 0.0
+    ) -> Tuple[float, float, float, float, float]:
+        """
+        [SOP-130 MONOTONIC TP LADDER & 1R ANCHOR]
+        Garantiza que TP1 (50%), TP2 (30%) y TP3 (20%) cumplan estrictamente:
+          - LONG:  entry_price < tp1 < tp2 < tp3
+          - SHORT: entry_price > tp1 > tp2 > tp3
+          - Distancias R canónicas dentro de rangos institucionales respecto al 1R real (abs(entry_price - initial_sl)).
+        Si los niveles raw provienen de un setup obsoleto o están invertidos, recalcula la escalera exacta 1.2R / 2.0R / 3.5R.
+        Retorna: (dist_1r, be_price, tp1, tp2, tp3)
+        """
+        is_long = "SHORT" not in str(side).upper() and "SELL" not in str(side).upper()
+        is_defensive_sl = (is_long and 0 < initial_sl < entry_price) or (not is_long and initial_sl > entry_price)
+        dist = abs(entry_price - initial_sl) if (initial_sl > 0 and is_defensive_sl and abs(entry_price - initial_sl) > entry_price * 0.002) else (entry_price * 0.015)
+
+        be_price = entry_price + (dist * 1.0) if is_long else entry_price - (dist * 1.0)
+        canon_tp1 = entry_price + (dist * 1.2) if is_long else entry_price - (dist * 1.2)
+        canon_tp2 = entry_price + (dist * 2.0) if is_long else entry_price - (dist * 2.0)
+        canon_tp3 = entry_price + (dist * 3.5) if is_long else entry_price - (dist * 3.5)
+
+        t1 = float(raw_tp1 or 0.0)
+        t2 = float(raw_tp2 or 0.0)
+        t3 = float(raw_tp3 or 0.0)
+
+        if t1 > 0 and t2 > 0 and t3 > 0 and dist > 0:
+            if is_long:
+                monotonic = entry_price < t1 < t2 < t3
+                r1 = (t1 - entry_price) / dist
+                r2 = (t2 - entry_price) / dist
+                r3 = (t3 - entry_price) / dist
+            else:
+                monotonic = entry_price > t1 > t2 > t3
+                r1 = (entry_price - t1) / dist
+                r2 = (entry_price - t2) / dist
+                r3 = (entry_price - t3) / dist
+
+            # Validar geometría institucional (TP1 ~0.8R-1.65R, TP2 ~1.45R-2.75R, TP3 >= 2.30R)
+            geometry_ok = monotonic and (0.75 <= r1 <= 1.65) and (1.45 <= r2 <= 2.75) and (r3 >= 2.30)
+            if geometry_ok:
+                return dist, be_price, t1, t2, t3
+
+        return dist, be_price, canon_tp1, canon_tp2, canon_tp3
+
     def start_centinels(self):
         """Inicia los procesos de monitoreo y gestión de riesgo."""
         loop = asyncio.get_event_loop()
@@ -361,6 +411,11 @@ class NexusNode:
                     asyncio.create_task(self.on_risk_released(closed_acc, reason=reason_close))
                     sym_clean = pos_info.get("signal", {}).get("asset", mem_key.split("_")[-1]) if pos_info else mem_key
                     self.remove_pending_limit_symbol(sym_clean)
+                    try:
+                        from engine.core.vault import vault
+                        vault.purge_system_order_plan(closed_acc, sym_clean)
+                    except Exception:
+                        pass
                     # 🧹 [SOP-22 PURGA ATÓMICA] Cancelar órdenes huérfanas de ese activo solo en la cuenta correspondiente
                     try:
                         await t_ex.cancel_all_orders_for_symbol(sym_clean)
@@ -466,33 +521,101 @@ class NexusNode:
                             except Exception as e:
                                 logger.debug(f"[NEXUS SYNC] [{target_ex.account_label}] Error consultando TPSL existente: {e}")
 
-                        # Buscar si existe un setup SMC institucional activo para este activo en el escáner
+                        # ── SOP-130: RESOLUCIÓN SSoT DE PLAN DE ORDEN Y PROTECCIÓN DE INITIAL SL POST-BE ──
+                        from engine.core.vault import vault
+                        persisted_plan = None
+                        persisted_risk = None
+                        try:
+                            persisted_plan = vault.get_system_order_plan(acc_id, symbol, side)
+                            pos_risk_key = f"{acc_id}_{symbol}_{position_id}" if position_id else f"{acc_id}_{symbol}"
+                            persisted_risk = vault.get_position_risk_record(pos_risk_key, symbol=symbol, side=side)
+                        except Exception as v_err:
+                            logger.debug(f"[NEXUS SYNC SOP-130] Error consultando plan/riesgo en Vault: {v_err}")
+
+                        # Buscar si existe un setup SMC institucional activo para este activo en el escáner (fallback)
                         all_opps = store.get_scanner_opportunities("scalp") + store.get_scanner_opportunities("swing")
                         matching_setup = next((o for o in all_opps if o.get("asset") == symbol and side in str(o.get("direction", "")).upper()), None)
 
-                        if matching_setup:
-                            sl_price = existing_sl_in_exchange if existing_sl_in_exchange else float(matching_setup.get("stop_loss", 0))
-                            dist = abs(entry_price - sl_price) if sl_price > 0 else entry_price * 0.015
-                            be_price = float(matching_setup.get("be_price") or (entry_price + (dist * 1.0) if side == "LONG" else entry_price - (dist * 1.0)))
-                            tp1 = float(matching_setup.get("tp1") or (entry_price + (dist * 1.2) if side == "LONG" else entry_price - (dist * 1.2)))
-                            tp2 = float(matching_setup.get("tp2") or (entry_price + (dist * 2.0) if side == "LONG" else entry_price - (dist * 2.0)))
-                            tp3 = float(matching_setup.get("tp3") or (entry_price + (dist * 3.5) if side == "LONG" else entry_price - (dist * 3.5)))
-                            logger.info(f"💎 [NEXUS SYNC SOP-102] [{target_ex.account_label}] Setup institucional SMC emparejado para {symbol}: SL: ${sl_price:.4f} | BE: ${be_price:.4f} | TP1: ${tp1:.4f}")
+                        # Determinar si el SL actual en Bitunix ya está en Break-Even o ganancia (no defensivo)
+                        is_long_pos = (side == "LONG")
+                        sl_already_at_be = bool(
+                            existing_sl_in_exchange
+                            and (
+                                (is_long_pos and existing_sl_in_exchange >= entry_price * 0.999)
+                                or (not is_long_pos and existing_sl_in_exchange <= entry_price * 1.001)
+                            )
+                        )
+
+                        origin_tag = "SYSTEM_AUTO" if persisted_plan else "MANUAL_OR_EXTERNAL"
+
+                        if persisted_plan:
+                            initial_sl_true = float(
+                                (persisted_risk or {}).get("initial_sl")
+                                or persisted_plan.get("initial_sl")
+                                or existing_sl_in_exchange
+                                or 0.0
+                            )
+                            sl_price = existing_sl_in_exchange if existing_sl_in_exchange else initial_sl_true
+                            dist, be_price, tp1, tp2, tp3 = self.validate_and_anchor_tp_ladder(
+                                entry_price=entry_price,
+                                initial_sl=initial_sl_true,
+                                side=side,
+                                raw_tp1=float(persisted_plan.get("tp1", 0.0)),
+                                raw_tp2=float(persisted_plan.get("tp2", 0.0)),
+                                raw_tp3=float(persisted_plan.get("tp3", 0.0))
+                            )
+                            logger.info(
+                                f"🏛️ [NEXUS SYNC SOP-130] [{target_ex.account_label}] Plan SSoT del sistema recuperado para {symbol} ({side}): "
+                                f"Entry=${entry_price:.4f} | InitialSL=${initial_sl_true:.4f} | CurrentSL=${sl_price:.4f} | "
+                                f"TP1=${tp1:.4f} | TP2=${tp2:.4f} | TP3=${tp3:.4f}"
+                            )
+                        elif matching_setup:
+                            setup_sl = float(matching_setup.get("stop_loss", 0.0))
+                            initial_sl_true = float(
+                                (persisted_risk or {}).get("initial_sl")
+                                or (setup_sl if sl_already_at_be and setup_sl > 0 else (existing_sl_in_exchange or setup_sl))
+                            )
+                            sl_price = existing_sl_in_exchange if existing_sl_in_exchange else initial_sl_true
+                            dist, be_price, tp1, tp2, tp3 = self.validate_and_anchor_tp_ladder(
+                                entry_price=entry_price,
+                                initial_sl=initial_sl_true,
+                                side=side,
+                                raw_tp1=float(matching_setup.get("tp1") or 0.0),
+                                raw_tp2=float(matching_setup.get("tp2") or 0.0),
+                                raw_tp3=float(matching_setup.get("tp3") or 0.0)
+                            )
+                            logger.info(f"💎 [NEXUS SYNC SOP-130] [{target_ex.account_label}] Setup institucional SMC validado para {symbol}: SL: ${sl_price:.4f} (Init: ${initial_sl_true:.4f}) | BE: ${be_price:.4f} | TP1: ${tp1:.4f}")
                         elif existing_sl_in_exchange:
                             sl_price = existing_sl_in_exchange
-                            dist = abs(entry_price - sl_price) if sl_price > 0 else entry_price * 0.015
-                            be_price = entry_price + (dist * 1.0) if side == "LONG" else entry_price - (dist * 1.0)
-                            tp1 = entry_price + (dist * 1.2) if side == "LONG" else entry_price - (dist * 1.2)
-                            tp2 = entry_price + (dist * 2.0) if side == "LONG" else entry_price - (dist * 2.0)
-                            tp3 = entry_price + (dist * 3.5) if side == "LONG" else entry_price - (dist * 3.5)
-                            logger.info(f"🛡️ [NEXUS SYNC SOP-102] [{target_ex.account_label}] Posición {symbol} ya cuenta con Stop Loss activo blindado en ${sl_price:.4f}. BE Target: ${be_price:.4f}")
+                            if persisted_risk and float(persisted_risk.get("initial_sl", 0)) > 0:
+                                initial_sl_true = float(persisted_risk["initial_sl"])
+                            elif sl_already_at_be:
+                                # Nunca usar un SL en Break-Even como riesgo 1R inicial
+                                initial_sl_true = entry_price * 0.985 if is_long_pos else entry_price * 1.015
+                            else:
+                                initial_sl_true = existing_sl_in_exchange
+                            dist, be_price, tp1, tp2, tp3 = self.validate_and_anchor_tp_ladder(
+                                entry_price=entry_price,
+                                initial_sl=initial_sl_true,
+                                side=side
+                            )
+                            logger.info(f"🛡️ [NEXUS SYNC SOP-130] [{target_ex.account_label}] Posición {symbol} ya cuenta con Stop Loss activo blindado en ${sl_price:.4f} (InitSL: ${initial_sl_true:.4f}). BE Target: ${be_price:.4f}")
                         else:
-                            dist = entry_price * 0.018 # Buffer de 1.8% adaptado a volatilidad
                             sl_price = entry_price * 0.982 if side == "LONG" else entry_price * 1.018
-                            be_price = entry_price + (dist * 1.0) if side == "LONG" else entry_price - (dist * 1.0)
-                            tp1 = entry_price + (dist * 1.2) if side == "LONG" else entry_price - (dist * 1.2)
-                            tp2 = entry_price + (dist * 2.0) if side == "LONG" else entry_price - (dist * 2.0)
-                            tp3 = entry_price + (dist * 3.5) if side == "LONG" else entry_price - (dist * 3.5)
+                            initial_sl_true = sl_price
+                            dist, be_price, tp1, tp2, tp3 = self.validate_and_anchor_tp_ladder(
+                                entry_price=entry_price,
+                                initial_sl=initial_sl_true,
+                                side=side
+                            )
+
+                        # Persistir siempre el riesgo 1R original en Vault si aún no existía
+                        try:
+                            pos_risk_key = f"{acc_id}_{symbol}_{position_id}" if position_id else f"{acc_id}_{symbol}"
+                            if not persisted_risk and dist > 0 and initial_sl_true > 0:
+                                vault.save_position_risk(pos_risk_key, symbol, side, dist, entry_price, initial_sl_true)
+                        except Exception:
+                            pass
 
                         reconstructed_signal = {
                             "asset": symbol,
@@ -514,11 +637,12 @@ class NexusNode:
                             "confluence_score": float((matching_setup or {}).get("confluence_score", 75.0)),
                             "score": float((matching_setup or {}).get("confluence_score", 75.0)),
                             "is_reconstructed": True,
+                            "origin": origin_tag,
                             "timestamp": datetime.now(timezone.utc).isoformat(),
                             "id": position_id,
                             "position_id": position_id,
                             "main_order_id": position_id,
-                            "initial_stop_loss": sl_price,
+                            "initial_stop_loss": initial_sl_true,
                             "account_id": acc_id
                         }
 
@@ -686,8 +810,29 @@ class NexusNode:
                             cur_orders = chk_data.get("orderList", []) if isinstance(chk_data, dict) else (chk_data if isinstance(chk_data, list) else [])
                             close_count = sum(1 for o in cur_orders if o.get("tradeSide") == "CLOSE" or o.get("reduceOnly"))
                             
-                            # Si no hay órdenes de cierre y aún no hemos alcanzado TP1, re-colocar la grilla canónica 50/30/20 (SOP-102)
-                            if close_count == 0 and not pos_data.get("smart_trailing", {}).get("be_active"):
+                            # Si no hay órdenes de cierre y aún no hemos alcanzado TP1/BE, re-colocar la grilla canónica 50/30/20 (SOP-102 / SOP-130)
+                            entry_heal = float(sig.get("entry_price") or sig.get("price") or (live_pos or {}).get("avgOpenPrice") or 0.0)
+                            is_long_heal = "SHORT" not in str(side).upper() and "SELL" not in str(side).upper()
+                            sl_at_be_heal = bool(
+                                entry_heal > 0 and sl_p > 0 and (
+                                    (is_long_heal and sl_p >= entry_heal * 0.999)
+                                    or (not is_long_heal and sl_p <= entry_heal * 1.001)
+                                )
+                            )
+                            stage_key_heal = f"{pos_acc}_{symbol}_{pos_id}" if pos_id else f"{pos_acc}_{symbol}"
+                            try:
+                                from engine.core.vault import vault
+                                be_dispatched_heal = vault.has_trade_stage_dispatched(stage_key_heal, "FAST_BE")
+                            except Exception:
+                                be_dispatched_heal = False
+
+                            is_be_active = (
+                                pos_data.get("be_active", False)
+                                or pos_data.get("smart_trailing", {}).get("be_active", False)
+                                or sl_at_be_heal
+                                or be_dispatched_heal
+                            )
+                            if close_count == 0 and not is_be_active:
                                 logger.warning(f"🩹 [AUTO-HEALING] [{target_ex.account_label}] Posición {symbol} no tiene órdenes límite TP en Bitunix. Auto-reparando salidas escalonadas 50/30/20...")
                                 rules = await target_ex.get_symbol_rules(symbol)
                                 q_dec = rules["qty_precision"]
@@ -1283,6 +1428,32 @@ class NexusNode:
                     acc_signal["main_order_id"] = real_pos_id
                 if "initial_stop_loss" not in acc_signal and "stop_loss" in acc_signal:
                     acc_signal["initial_stop_loss"] = float(acc_signal["stop_loss"])
+                acc_signal["origin"] = "SYSTEM_AUTO"
+                try:
+                    from engine.core.vault import vault
+                    mkt_side = "LONG" if "SHORT" not in str(acc_signal.get("type", acc_signal.get("signal_type", "LONG"))).upper() else "SHORT"
+                    _, _, v_tp1, v_tp2, v_tp3 = self.validate_and_anchor_tp_ladder(
+                        entry_price=float(acc_signal.get("price", entry_val)),
+                        initial_sl=float(acc_signal.get("initial_stop_loss", sl_val)),
+                        side=mkt_side,
+                        raw_tp1=float(acc_signal.get("tp1") or 0.0),
+                        raw_tp2=float(acc_signal.get("tp2") or 0.0),
+                        raw_tp3=float(acc_signal.get("tp3") or acc_signal.get("take_profit_3r") or 0.0)
+                    )
+                    vault.save_system_order_plan(
+                        account_id=getattr(account, "account_id", "primary"),
+                        symbol=asset,
+                        side=mkt_side,
+                        entry_price=float(acc_signal.get("price", entry_val)),
+                        initial_sl=float(acc_signal.get("initial_stop_loss", sl_val)),
+                        tp1=v_tp1,
+                        tp2=v_tp2,
+                        tp3=v_tp3,
+                        order_id=str(real_pos_id or ""),
+                        origin="SYSTEM_AUTO"
+                    )
+                except Exception:
+                    pass
                 pos_entry = {
                     "signal": acc_signal,
                     "execution": result,
@@ -1990,6 +2161,31 @@ class NexusNode:
         res = await executor.place_limit_signal(acc_signal)
         if res.get("status") == "success":
             self._pending_limit_symbols.add(asset)
+            try:
+                from engine.core.vault import vault
+                lim_side = "LONG" if "SHORT" not in str(acc_signal.get("direction") or acc_signal.get("signal_type") or acc_signal.get("type") or "LONG").upper() else "SHORT"
+                _, _, l_tp1, l_tp2, l_tp3 = self.validate_and_anchor_tp_ladder(
+                    entry_price=float(entry_p),
+                    initial_sl=float(sl_p),
+                    side=lim_side,
+                    raw_tp1=float(acc_signal.get("tp1") or 0.0),
+                    raw_tp2=float(acc_signal.get("tp2") or 0.0),
+                    raw_tp3=float(acc_signal.get("tp3") or acc_signal.get("take_profit_3r") or 0.0)
+                )
+                vault.save_system_order_plan(
+                    account_id=acc_id,
+                    symbol=asset,
+                    side=lim_side,
+                    entry_price=float(entry_p),
+                    initial_sl=float(sl_p),
+                    tp1=l_tp1,
+                    tp2=l_tp2,
+                    tp3=l_tp3,
+                    order_id=str(res.get("order_id") or ""),
+                    origin="SYSTEM_AUTO"
+                )
+            except Exception as vp_err:
+                logger.debug(f"[NEXUS AUTO-LIMIT SOP-130] Error guardando plan de orden en Vault: {vp_err}")
             logger.info(f"✅ [NEXUS AUTO-LIMIT] [{account.label}] Orden límite para {asset} colocada exitosamente en Bitunix! ID: {res.get('order_id')}")
         else:
             logger.warning(f"⚠️ [NEXUS AUTO-LIMIT] [{account.label}] No se pudo colocar orden límite en {asset}: {res.get('message')}")
