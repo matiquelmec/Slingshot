@@ -196,6 +196,8 @@ export interface KeyLevel {
 export interface SessionInfo {
   high: number | null;
   low: number | null;
+  prev_high?: number | null;
+  prev_low?: number | null;
   status: 'ACTIVE' | 'CLOSED' | 'PENDING';
   swept_high: boolean;
   swept_low: boolean;
@@ -204,6 +206,7 @@ export interface SessionInfo {
 }
 
 export interface SessionData {
+  asset?: string;
   current_session: string;
   current_session_utc?: string;
   local_time?: string;

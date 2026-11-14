@@ -64,6 +64,12 @@ def _ensure_utc(now_utc: Optional[datetime]) -> datetime:
     return now_utc.astimezone(timezone.utc)
 
 
+def _normalize_ts_seconds(raw_ts: Any) -> float:
+    """[SOP-134] Normaliza timestamps en segundos o milisegundos a segundos UNIX."""
+    val = float(raw_ts)
+    return val / 1000.0 if val > 10_000_000_000 else val
+
+
 def classify_market_session(now_utc: Optional[datetime] = None) -> dict:
     """
     [SOP-121] Fuente Única de Verdad para la sesión de mercado vigente.
@@ -242,44 +248,53 @@ class SessionManager:
         now_utc = datetime.now(timezone.utc)
         today_str = str(now_utc.date())
 
-        # ✅ FAST CACHE: Evitar re-calculo si ya lo hicimos para este símbolo hace menos de 1h
+        # Detectar si el historial recibido es intradiario (< 4h entre velas)
+        valid_candles = []
+        for item in history:
+            c = item.get("data", item) if isinstance(item, dict) else item
+            if isinstance(c, dict) and "timestamp" in c and c.get("high") is not None and c.get("low") is not None:
+                valid_candles.append(c)
+        if not valid_candles:
+            return
+
+        valid_candles.sort(key=lambda x: _normalize_ts_seconds(x["timestamp"]))
+        is_intraday_history = True
+        if len(valid_candles) >= 2:
+            dt_step = _normalize_ts_seconds(valid_candles[-1]["timestamp"]) - _normalize_ts_seconds(valid_candles[-2]["timestamp"])
+            if dt_step >= 14400:  # >= 4h (4h o 1d)
+                is_intraday_history = False
+
+        # ✅ FAST CACHE: Si ya existe un bootstrap intradiario para hoy, reutilizarlo
+        # (y nunca sobrescribir un estado intradiario con velas 4h/1d).
         if self._symbol in _BOOTSTRAP_MEMO:
             cached_day, cached_state = _BOOTSTRAP_MEMO[self._symbol]
             if cached_day == today_str:
                 logger.info(f"[SessionManager:{self._symbol}] ♻️  Reutilizando Bootstrap Global (Sincronización v5.7.156)")
-                
-                # Verificación de integridad: asegurar que el asset en el estado coincide
                 for k, v in cached_state.items():
                     if k != "trades_today":
                         self._state[k] = v
-                
                 self._state["trading_day"] = today_str
-                # Asegurar que el asset en el payload sea el correcto
                 return
 
-        now_utc = datetime.now(timezone.utc)
-        today   = now_utc.date()
+        today = now_utc.date()
         from datetime import timedelta
         yesterday = (now_utc - timedelta(days=1)).date()
 
         # ── Resetear HIGH/LOW del día actual (preservar prev_*) ──────────
-        # Si el JSON cargado tiene datos de una sesión anterior en un día
-        # distinto, o si queremos recalcular, limpiamos hoy para que
-        # el bootstrap sea siempre la fuente de verdad.
         if self._state.get("trading_day") != str(today):
-            # Día diferente: rotar prev_* manualmente antes de limpiar
             for key in ["asia", "london", "ny"]:
                 old_h = self._state[key].get("high")
                 old_l = self._state[key].get("low")
                 if old_h is not None:
                     self._state[key]["prev_high"] = old_h
                     self._state[key]["prev_low"]  = old_l
-        # Limpiar high/low de HOY para que el bootstrap recalcule desde cero
         for key in ["asia", "london", "ny"]:
             self._state[key]["high"] = None
             self._state[key]["low"]  = None
             self._state[key]["swept_high"] = False
             self._state[key]["swept_low"]  = False
+        self._state["pdh_swept"] = False
+        self._state["pdl_swept"] = False
         self._state["onh"] = None
         self._state["onl"] = None
         self._state["trading_day"] = str(today)
@@ -292,94 +307,116 @@ class SessionManager:
                 "london": {"high": None, "low": None},
                 "ny":     {"high": None, "low": None}}
 
-        for item in history:
-            candle = item.get("data", item) if isinstance(item, dict) else item
-            if not isinstance(candle, dict) or "timestamp" not in candle:
-                continue
+        # Si el historial no tiene velas de ayer exacto (ej. fin de semana TradFi),
+        # usar el último día disponible anterior a hoy como referencia de PDH/PDL.
+        prior_days = sorted({
+            datetime.fromtimestamp(_normalize_ts_seconds(c["timestamp"]), tz=timezone.utc).date()
+            for c in valid_candles
+            if datetime.fromtimestamp(_normalize_ts_seconds(c["timestamp"]), tz=timezone.utc).date() < today
+        })
+        ref_prev_day = yesterday if yesterday in prior_days else (prior_days[-1] if prior_days else yesterday)
 
-            ts    = datetime.fromtimestamp(candle["timestamp"], tz=timezone.utc)
-            day   = ts.date()
-            high  = float(candle["high"])
-            low   = float(candle["low"])
+        # Paso 1: Reconstruir PDH/PDL y prev_high/prev_low del día previo de referencia
+        for candle in valid_candles:
+            ts = datetime.fromtimestamp(_normalize_ts_seconds(candle["timestamp"]), tz=timezone.utc)
+            day = ts.date()
+            if day != ref_prev_day:
+                continue
+            high = float(candle["high"])
+            low  = float(candle["low"])
+            pdh_candidates.append(high)
+            pdl_candidates.append(low)
+
+            if not is_intraday_history:
+                continue
 
             ny_hour  = ts.astimezone(_NY_TZ).hour
             lon_hour = ts.astimezone(_LONDON_TZ).hour
-            utc_hour = ts.hour
-
-            # Velas de AYER → prev_high/prev_low por sesión + PDH/PDL
-            if day == yesterday:
-                pdh_candidates.append(high)
-                pdl_candidates.append(low)
-
-                if 0 <= utc_hour < 6:
-                    p = prev["asia"]
-                    p["high"] = max(p["high"], high) if p["high"] is not None else high
-                    p["low"]  = min(p["low"],  low)  if p["low"]  is not None else low
-                if 8 <= lon_hour < 16:
-                    p = prev["london"]
-                    p["high"] = max(p["high"], high) if p["high"] is not None else high
-                    p["low"]  = min(p["low"],  low)  if p["low"]  is not None else low
-                if 9 <= ny_hour < 16: # NY RTH (Yosh Standard)
-                    p = prev["ny"]
-                    p["high"] = max(p["high"], high) if p["high"] is not None else high
-                    p["low"]  = min(p["low"],  low)  if p["low"]  is not None else low
-
-                # 🌙 YOSH OVERNIGHT (Velas de ayer 21:00 - 23:59)
-                if ny_hour >= 21:
-                    oh = self._state.get("onh")
-                    ol = self._state.get("onl")
-                    self._state["onh"] = max(oh, high) if oh is not None else high
-                    self._state["onl"] = min(ol, low)  if ol is not None else low
-
-            # Velas de HOY → sesión actual
-            if day != today:
-                continue
-
             tok_hour = ts.astimezone(_TOKYO_TZ).hour
-            if 9 <= tok_hour < 15: # ASIA (Tokyo Standard)
-                s = self._state["asia"]
-                s["high"] = max(s["high"], high) if s["high"] is not None else high
-                s["low"]  = min(s["low"],  low)  if s["low"]  is not None else low
 
+            if 9 <= tok_hour < 15:
+                p = prev["asia"]
+                p["high"] = max(p["high"], high) if p["high"] is not None else high
+                p["low"]  = min(p["low"],  low)  if p["low"]  is not None else low
             if 8 <= lon_hour < 16:
-                s = self._state["london"]
-                s["high"] = max(s["high"], high) if s["high"] is not None else high
-                s["low"]  = min(s["low"],  low)  if s["low"]  is not None else low
+                p = prev["london"]
+                p["high"] = max(p["high"], high) if p["high"] is not None else high
+                p["low"]  = min(p["low"],  low)  if p["low"]  is not None else low
+            if 8 <= ny_hour < 16:  # [SOP-134] Unificado 08:00-16:00 NY
+                p = prev["ny"]
+                p["high"] = max(p["high"], high) if p["high"] is not None else high
+                p["low"]  = min(p["low"],  low)  if p["low"]  is not None else low
 
-            if 9 <= ny_hour < 16: # NY RTH (Yosh Standard)
-                s = self._state["ny"]
-                s["high"] = max(s["high"], high) if s["high"] is not None else high
-                s["low"]  = min(s["low"],  low)  if s["low"]  is not None else low
-
-            # ── 🌙 YOSH OVERNIGHT RANGE (HOY 00:00 - 09:29 EST) ──
-            is_overnight = False
-            if ny_hour < 9:
-                is_overnight = True
-            elif ny_hour == 9 and ts.astimezone(_NY_TZ).minute < 30:
-                is_overnight = True
-
-            if is_overnight:
+            if ny_hour >= 21:
                 oh = self._state.get("onh")
                 ol = self._state.get("onl")
                 self._state["onh"] = max(oh, high) if oh is not None else high
                 self._state["onl"] = min(ol, low)  if ol is not None else low
 
-        # Aplicar PDH/PDL
         if pdh_candidates:
             self._state["pdh"] = max(pdh_candidates)
             self._state["pdl"] = min(pdl_candidates)
 
-        # Aplicar prev_high/prev_low a cada sesión (referencia del día anterior)
         for key in ["asia", "london", "ny"]:
             if prev[key]["high"] is not None:
                 self._state[key]["prev_high"] = prev[key]["high"]
                 self._state[key]["prev_low"]  = prev[key]["low"]
 
+        # Paso 2: Procesar velas de HOY cronológicamente (rangos y barridos con latch)
+        pdh_ref = self._state.get("pdh")
+        pdl_ref = self._state.get("pdl")
+
+        for candle in valid_candles:
+            ts = datetime.fromtimestamp(_normalize_ts_seconds(candle["timestamp"]), tz=timezone.utc)
+            if ts.date() != today:
+                continue
+            high = float(candle["high"])
+            low  = float(candle["low"])
+
+            if pdh_ref is not None and high > pdh_ref:
+                self._state["pdh_swept"] = True
+            if pdl_ref is not None and low < pdl_ref:
+                self._state["pdl_swept"] = True
+
+            if not is_intraday_history:
+                continue
+
+            ny_time  = ts.astimezone(_NY_TZ)
+            ny_hour  = ny_time.hour
+            lon_hour = ts.astimezone(_LONDON_TZ).hour
+            tok_hour = ts.astimezone(_TOKYO_TZ).hour
+
+            active_map = {
+                "asia":   9 <= tok_hour < 15,
+                "london": 8 <= lon_hour < 16,
+                "ny":     8 <= ny_hour < 16,  # [SOP-134] Unificado 08:00-16:00 NY
+            }
+
+            for key, is_act in active_map.items():
+                s = self._state[key]
+                if is_act:
+                    s["high"] = max(s["high"], high) if s["high"] is not None else high
+                    s["low"]  = min(s["low"],  low)  if s["low"]  is not None else low
+                else:
+                    ref_h = s.get("high") if s.get("high") is not None else s.get("prev_high")
+                    ref_l = s.get("low")  if s.get("low")  is not None else s.get("prev_low")
+                    if ref_h is not None and high > ref_h:
+                        s["swept_high"] = True
+                    if ref_l is not None and low < ref_l:
+                        s["swept_low"] = True
+
+            if (ny_hour < 9) or (ny_hour == 9 and ny_time.minute < 30):
+                oh = self._state.get("onh")
+                ol = self._state.get("onl")
+                self._state["onh"] = max(oh, high) if oh is not None else high
+                self._state["onl"] = min(ol, low)  if ol is not None else low
+
         self._state["trading_day"] = str(today)
-        
-        # ✅ PERSISTIR EN CACHÉ GLOBAL (v5.7.156)
-        _BOOTSTRAP_MEMO[self._symbol] = (str(today), self._state.copy())
-        
+
+        # ✅ PERSISTIR EN CACHÉ GLOBAL solo si el historial era intradiario
+        if is_intraday_history:
+            _BOOTSTRAP_MEMO[self._symbol] = (str(today), self._state.copy())
+
         self._save()
         logger.info(f"[SessionManager:{self._symbol}] ✅ Bootstrap OK: día={today} | PDH={self._state.get('pdh')} | "
               f"London prev={self._state['london'].get('prev_high')} | NY prev={self._state['ny'].get('prev_high')}")
@@ -399,7 +436,7 @@ class SessionManager:
         # Robustez: soporta {"type": "candle", "data": {...}} o el dict plano
         data = candle.get("data", candle) if isinstance(candle, dict) else candle
         
-        ts      = datetime.fromtimestamp(data["timestamp"], tz=timezone.utc)
+        ts      = datetime.fromtimestamp(_normalize_ts_seconds(data["timestamp"]), tz=timezone.utc)
         today   = ts.date()
         high    = float(data["high"])
         low     = float(data["low"])
@@ -428,24 +465,32 @@ class SessionManager:
             self._state = new_state
             self._save()
 
-        # ── Actualizar niveles de la sesión activa ────────────────────────
+        # ── Actualizar niveles de la sesión activa y Sweeps [SOP-134] ────
         ny_hour  = ts.astimezone(_NY_TZ).hour
         lon_hour = ts.astimezone(_LONDON_TZ).hour
         tok_hour = ts.astimezone(_TOKYO_TZ).hour
         fra_hour = ts.astimezone(_FRA_TZ).hour
 
-        def _update_session(key: str, is_active: bool):
-            if not is_active:
-                return
-            s = self._state[key]
-            h = s.get("high")
-            l = s.get("low")
-            s["high"] = max(h, high) if h is not None else high
-            s["low"]  = min(l, low)  if l is not None else low
+        active_map = {
+            "asia":   9 <= tok_hour < 15,
+            "london": 8 <= lon_hour < 16,
+            "ny":     8 <= ny_hour < 16,  # [SOP-134] Unificado 08:00-16:00 NY
+        }
 
-        _update_session("asia",   9 <= tok_hour < 15)
-        _update_session("london", 8 <= lon_hour < 16)
-        _update_session("ny",     9 <= ny_hour < 16) # NY RTH (Yosh Standard)
+        for key, is_active in active_map.items():
+            s = self._state[key]
+            if is_active:
+                h = s.get("high")
+                l = s.get("low")
+                s["high"] = max(h, high) if h is not None else high
+                s["low"]  = min(l, low)  if l is not None else low
+            else:
+                ref_h = s.get("high") if s.get("high") is not None else s.get("prev_high")
+                ref_l = s.get("low")  if s.get("low")  is not None else s.get("prev_low")
+                if ref_h is not None and high > ref_h:
+                    s["swept_high"] = True
+                if ref_l is not None and low < ref_l:
+                    s["swept_low"] = True
 
         # ── 🌙 YOSH OVERNIGHT RANGE UPDATE ──
         ny_time = ts.astimezone(_NY_TZ)
@@ -457,19 +502,13 @@ class SessionManager:
             self._state["onh"] = max(oh, high) if oh is not None else high
             self._state["onl"] = min(ol, low)  if ol is not None else low
 
-        # ── Detección de Sweeps ───────────────────────────────────────────
+        # ── Detección de Sweeps PDH/PDL con Latch [SOP-134] ──────────────
         pdh = self._state.get("pdh")
         pdl = self._state.get("pdl")
-        if pdh is not None:
-            self._state["pdh_swept"] = bool(high > pdh)
-            self._state["pdl_swept"] = bool(low  < pdl)
-
-        for key in ["asia", "london", "ny"]:
-            s    = self._state[key]
-            kh   = s.get("high")
-            kl   = s.get("low")
-            s["swept_high"] = bool(kh is not None and high > kh)
-            s["swept_low"]  = bool(kl is not None and low  < kl)
+        if pdh is not None and high > pdh:
+            self._state["pdh_swept"] = True
+        if pdl is not None and low < pdl:
+            self._state["pdl_swept"] = True
 
         # Guardar en disco solo cuando la vela cierra (no en cada micro-tick)
         if is_closed:
@@ -531,33 +570,39 @@ class SessionManager:
                 "low":         float(self._state["asia"].get("low")) if self._state["asia"].get("low") is not None else None,
                 "prev_high":   float(self._state["asia"].get("prev_high")) if self._state["asia"].get("prev_high") is not None else None,
                 "prev_low":    float(self._state["asia"].get("prev_low")) if self._state["asia"].get("prev_low") is not None else None,
+                "swept_high":  bool(self._state["asia"].get("swept_high", False)),
+                "swept_low":   bool(self._state["asia"].get("swept_low", False)),
                 "start_utc":   int(asia_start_utc),
                 "end_utc":     int(asia_end_utc),
                 "open_chile":  _to_chile_str(asia_start_utc),
                 "close_chile": _to_chile_str(asia_end_utc),
-                "status":      "ACTIVE" if 9 <= tokyo_hour < 15 else ("PENDING" if tokyo_hour < 9 else "CLOSED"),
+                "status":      "ACTIVE" if (9 <= tokyo_hour < 15) else ("PENDING" if utc_hour < asia_start_utc else "CLOSED"),
             },
             "london": {
                 "high":        float(self._state["london"].get("high")) if self._state["london"].get("high") is not None else None,
                 "low":         float(self._state["london"].get("low")) if self._state["london"].get("low") is not None else None,
                 "prev_high":   float(self._state["london"].get("prev_high")) if self._state["london"].get("prev_high") is not None else None,
                 "prev_low":    float(self._state["london"].get("prev_low")) if self._state["london"].get("prev_low") is not None else None,
+                "swept_high":  bool(self._state["london"].get("swept_high", False)),
+                "swept_low":   bool(self._state["london"].get("swept_low", False)),
                 "start_utc":   int(lon_start_utc),
                 "end_utc":     int(lon_end_utc),
                 "open_chile":  _to_chile_str(lon_start_utc),
                 "close_chile": _to_chile_str(lon_end_utc),
-                "status":      "ACTIVE" if 8 <= lon_hour < 16 else ("PENDING" if lon_hour < 8 else "CLOSED"),
+                "status":      "ACTIVE" if (8 <= lon_hour < 16) else ("PENDING" if utc_hour < lon_start_utc else "CLOSED"),
             },
             "ny": {
                 "high":        float(self._state["ny"].get("high")) if self._state["ny"].get("high") is not None else None,
                 "low":         float(self._state["ny"].get("low")) if self._state["ny"].get("low") is not None else None,
                 "prev_high":   float(self._state["ny"].get("prev_high")) if self._state["ny"].get("prev_high") is not None else None,
                 "prev_low":    float(self._state["ny"].get("prev_low")) if self._state["ny"].get("prev_low") is not None else None,
+                "swept_high":  bool(self._state["ny"].get("swept_high", False)),
+                "swept_low":   bool(self._state["ny"].get("swept_low", False)),
                 "start_utc":   int(ny_start_utc),
                 "end_utc":     int(ny_end_utc),
                 "open_chile":  _to_chile_str(ny_start_utc),
                 "close_chile": _to_chile_str(ny_end_utc),
-                "status":      "ACTIVE" if 8 <= ny_hour < 16 else ("PENDING" if ny_hour < 8 else "CLOSED"),
+                "status":      "ACTIVE" if (8 <= ny_hour < 16) else ("PENDING" if utc_hour < ny_start_utc else "CLOSED"),
             },
         }
 

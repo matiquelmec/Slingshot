@@ -96,3 +96,41 @@ def test_classify_market_session_canonical():
     assert res_sb_pm["current_session"] == "NY_SILVER_BULLET_PM"
     assert res_sb_pm["is_silver_bullet"] is True
 
+
+def test_sop134_sweeps_latch_ny_8am_and_asia_closed_status():
+    """
+    [SOP-134] Verifica:
+    1. swept_high/swept_low incluidos en sessions_info y con memoria (latch) al retroceder el precio.
+    2. NY registra high/low desde las 08:00 NY (sin punto ciego 08:00-09:00 NY).
+    3. Asia permanece CLOSED (no vuelve a PENDING) después de las 15:00 UTC (medianoche Tokio).
+    """
+    sm = SessionManager("SOLUSDT")
+    # 16:30 UTC en Noviembre (invierno EST = UTC-5 -> 11:30 NY, 01:30 Tokio del día siguiente)
+    dt_base = datetime(2026, 11, 14, 13, 15, tzinfo=timezone.utc)  # 08:15 AM NY EST
+    sm._state["trading_day"] = str(dt_base.date())
+    sm._state["pdh"] = 200.0
+    sm._state["pdl"] = 180.0
+    sm._state["asia"]["high"] = 195.0
+    sm._state["asia"]["low"] = 185.0
+    sm._state["ny"]["high"] = None
+    sm._state["ny"]["low"] = None
+
+    # Vela a las 08:15 AM NY que barre Asia High (195) y PDH (200)
+    c1 = {"timestamp": dt_base.timestamp() * 1000, "high": 202.0, "low": 190.0, "close": 201.0}
+    p1 = sm.update(c1)["data"]
+    assert p1["ny"]["high"] if "ny" in p1 else p1["sessions"]["ny"]["high"] == 202.0
+    assert p1["sessions"]["asia"]["swept_high"] is True
+    assert p1["pdh_swept"] is True
+
+    # Vela siguiente a las 16:30 UTC (11:30 NY, 01:30 Tokio) que retrocede bajo 195 y 200
+    dt_later = datetime(2026, 11, 14, 16, 30, tzinfo=timezone.utc)
+    c2 = {"timestamp": dt_later.timestamp(), "high": 194.0, "low": 188.0, "close": 191.0}
+    p2 = sm.update(c2)["data"]
+    # El latch debe preservar True en pdh_swept y asia.swept_high
+    assert p2["pdh_swept"] is True
+    assert p2["sessions"]["asia"]["swept_high"] is True
+    # En _build_payload a las 16:30 UTC, Asia ya cerró hoy en UTC (no debe ser PENDING)
+    built = sm._build_payload(dt_later)["data"]
+    assert built["sessions"]["asia"]["status"] == "CLOSED"
+
+

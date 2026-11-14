@@ -36,6 +36,11 @@ export const createConnectionManager = (set: any, get: any) => {
                 isConnected: state.isConnected,
                 connectionStatus: state.isConnected ? 'CONNECTED' : 'CONNECTING',
                 isCalibrating: !state.marketSummary?.[clean],
+                sessionData: state.sessionData?.asset === clean
+                    ? state.sessionData
+                    : (state.marketSummary?.[clean]?.session_state
+                        ? { ...state.marketSummary[clean].session_state, asset: clean }
+                        : null),
                 mlProjection: state.mlProjection?.direction && state.mlProjection.direction !== 'CALIBRANDO'
                     ? state.mlProjection
                     : { direction: 'NEUTRAL', probability: 50, reason: `Sincronizando ${clean}...` },
@@ -75,7 +80,7 @@ export const createConnectionManager = (set: any, get: any) => {
                         marketSummary: { ...state.marketSummary, ...newSummary },
                         latestPrices: { ...state.latestPrices, ...newPrices },
                         latestPrice: newPrices[clean] ?? state.latestPrice,
-                        ...(activeState?.session_state && !state.sessionData ? {
+                        ...(activeState?.session_state && (!state.sessionData || state.sessionData.asset !== clean) ? {
                             sessionData: { ...activeState.session_state, asset: clean }
                         } : {}),
                         ...(activeState && (!state.tacticalDecision?.current_price) ? {

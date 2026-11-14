@@ -221,6 +221,7 @@ graph TB
 | **SOP-131** | Pre-Flight Live Distance, Buffer TTL & Secrets | Validación contra ticker real (`1.5%` 1h / `1.2%` 15m), TTL 45m persistente en `_high_confluence_buffer`, aislamiento MT5 en tests y cero secretos en scripts `.ps1`. |
 | **SOP-132** | Telegram Privacy, Single Emitter & Sanity Gate | Emisor único desde `NexusNode`, paridad exacta SL/TP con Bitunix, bloqueo de `1d` sin gatillo y eliminación de balances/USD en alertas públicas. |
 | **SOP-133** | Closed-Loop ML, Bounded Bandit & Live Sentinels | Auto-init de `DriftMonitor`, embargo 16 velas y Champion-Challenger en `RollingWalkForwardTrainer`, bandit `BlackBox` acotado `[-8, +8]` pts (`>= 15` trades) y ejecución en vivo de `SOP-108` (L2) y `SOP-109` (Funding Drag). |
+| **SOP-134** | SessionClock Wall-Clock Sync, Sweep Latch & DST Range Parity | Unificación 08:00-16:00 NY en `SessionManager`, latch diario en `swept_high`/`swept_low`/`pdh_swept`/`pdl_swept`, relojes IANA en vivo (`NY`/`LON`/`UTC`/`CL`) y aislamiento por `activeSymbol` en `SessionClock.tsx`. |
 
 ---
 

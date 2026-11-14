@@ -967,3 +967,17 @@ Sometidas las 3 optimizaciones a la matriz experimental de 180 días en los 13 a
    * `BitunixExecutor.get_orderbook_depth(symbol, limit=20)` alimenta `OrderBookMicrostructureSentinel().audit_l2_book()` dentro de `NexusNode.process_limit_setup()` (política Fail-Open si no hay snapshot disponible).
    * `TradeManager._calculate_runner_ratchet_sl()` consulta `FundingRateDragSentinel().audit_position_carry()` sobre `MemoryStore._market_states` y ajusta el Chandelier Exit de `1.5x` a `1.0x ATR` cuando el APR de funding alcanza el 50%.
    * La visualización en Frontend reutiliza el panel existente `SystemDiagnosticsWidget` (`src/features/system-diagnostics/ui/SystemDiagnosticsWidget.tsx`) sin duplicar vistas.
+
+---
+
+## 42. SOP-134: SINCRONIZACIÓN DE RANGOS DST-AWARE, LATCH DE BARRIDOS Y RELOJ VIVO EN SESSIONCLOCK
+
+1. **Unificación de Ventanas DST-Aware y Estados Diarios (`engine/core/session_manager.py`):**
+   * Unificación de Nueva York a `08:00–16:00 NY` (`8 <= ny_hour < 16`) en `bootstrap()`, `update()` y `_build_payload()`.
+   * Normalización de timestamps segundos/milisegundos (`_normalize_ts_seconds`) y protección de `_BOOTSTRAP_MEMO` frente a velas `>= 4h`.
+   * Cálculo de estado `PENDING`/`ACTIVE`/`CLOSED` referenciado al avance del día UTC (`utc_hour < start_utc`).
+2. **Detección con Memoria (*Latch*) de Barridos e Inclusión en Payload:**
+   * Inclusión de `swept_high` y `swept_low` por sesión en `_build_payload()` y preservación en `True` durante el día UTC al perforar `PDH`, `PDL` o extremos de sesiones cerradas.
+3. **Frescura en `/api/v1/diagnostic/{asset}` y Cliente Reactivo (`SessionClock.tsx`):**
+   * `get_diagnostic_state()` en `engine/api/main.py` ejecuta `bootstrap()` cuando `pdh` es nulo y evalúa siempre `get_current_state()` con reloj de pared vivo.
+   * `SessionClock.tsx` y `connection.ts` calculan `NY`, `LON`, `UTC` y `Chile` cada segundo en el navegador con `Intl.DateTimeFormat` DST-aware y aíslan los niveles por `activeSymbol`.

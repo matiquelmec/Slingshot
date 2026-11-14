@@ -354,10 +354,7 @@ async def get_diagnostic_state(asset: str, timeframe: str = "15m"):
     
     tactical_data = broadcaster.state.last_tactical.get("data") if broadcaster.state.last_tactical else None
     smc_data = broadcaster.state.last_smc.get("data") if broadcaster.state.last_smc else None
-    session_data = broadcaster.state.last_session.get("data") if broadcaster.state.last_session else None
-    if not session_data:
-        session_data = broadcaster._session_manager.get_current_state().get("data")
-        
+
     # 🚀 [HYDRATION] Extraer velas recientes para alimentar el chart sin latencia de WS
     raw_history = list(broadcaster.state.live_buffer) if broadcaster.state.live_buffer else list(broadcaster.state.history)
     if not raw_history:
@@ -368,6 +365,14 @@ async def get_diagnostic_state(asset: str, timeframe: str = "15m"):
                 broadcaster.state.live_buffer.extend(raw_history[-250:])
         except Exception:
             raw_history = []
+
+    # [SOP-134] Garantizar bootstrap de PDH/PDL y evaluación en reloj de pared vivo
+    if raw_history and broadcaster._session_manager._state.get("pdh") is None:
+        try:
+            broadcaster._session_manager.bootstrap(raw_history)
+        except Exception:
+            pass
+    session_data = broadcaster._session_manager.get_current_state().get("data")
     clean_candles = []
     for item in raw_history[-250:]:
         d = item.get("data", item) if isinstance(item, dict) else item

@@ -324,6 +324,17 @@ Todos los mensajes de commit deben seguir estrictamente el estándar de Conventi
    * `NexusNode.process_limit_setup()` audita el libro L2 vía `BitunixExecutor.get_orderbook_depth()` y `OrderBookMicrostructureSentinel().audit_l2_book()` tras validar distancia límite (Fail-Open si no hay snapshot).
    * `TradeManager._calculate_runner_ratchet_sl()` consulta `FundingRateDragSentinel().audit_position_carry()` sobre `_market_states` y ajusta el Chandelier Exit de `1.5x` a `1.0x ATR` cuando el APR de funding alcanza el 50%.
 
+---
+
+## 19. Regla 29: Sincronización DST-Aware de Rangos de Sesión, Barridos con Latch y Aislamiento de Símbolo en SessionClock (SOP-134)
+
+1. **Paridad Horaria DST-Aware (08:00–16:00 NY / Londres y 09:00–15:00 Tokio):**
+   * `SessionManager.bootstrap()`, `update()` y `_build_payload()` deben compartir exactamente las mismas franjas horarias DST-aware (`8 <= ny_hour < 16`, `8 <= lon_hour < 16`, `9 <= tok_hour < 15`) y calcular `PENDING`/`ACTIVE`/`CLOSED` dentro del día UTC actual (`utc_hour < start_utc`) para impedir que Asia vuelva a `PENDING` al cruzar medianoche en Tokio.
+2. **Memoria Persistente (*Latch*) en Barridos (`swept_high`, `swept_low`, `pdh_swept`, `pdl_swept`):**
+   * Todo barrido de liquidez sobre sesiones cerradas o `PDH`/`PDL` debe preservarse en `True` durante el resto del día UTC e incluirse obligatoriamente en `sessions_info` dentro de `_build_payload()`.
+3. **Relojes Vivos IANA en Cliente y Aislamiento de Activo (`SessionClock.tsx`):**
+   * `SessionClock.tsx` debe calcular `NY`, `LON`, `UTC` y `Chile` cada segundo en el cliente vía `Intl.DateTimeFormat` DST-aware y validar coincidencia de `sessionData.asset === activeSymbol` antes de renderizar niveles `HIGH/LOW/PDH/PDL`.
+
 
 
 
