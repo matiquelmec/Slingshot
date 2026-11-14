@@ -33,7 +33,9 @@ async def test_telegram_lifecycle_suppresses_already_active_position():
         mock_post.assert_not_called()
 
 @pytest.mark.asyncio
-async def test_telegram_lifecycle_milestone_methods():
+async def test_telegram_lifecycle_milestone_methods(tmp_path, monkeypatch):
+    import engine.router.telegram_dispatcher as td
+    monkeypatch.setattr(td, "_STATE_FILE", tmp_path / "telegram_sent_state.json")
     dispatcher = TelegramDispatcher()
     dispatcher.enabled = True
     dispatcher.bot_token = "mock_token"

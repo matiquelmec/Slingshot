@@ -81,19 +81,14 @@ class SignalHandler:
         ghost                    = get_ghost_state()
         approved, macro_blocked  = filter_signals_by_macro(unique_new, ghost)
 
-        # ── Telegram + Persistencia Activas ───────────────────────────────────
+        # ── Persistencia + Enrutamiento Único a Nexus (SOP-132: Sin bypass directo a Telegram) ──
         final_approved = []
         for sig in approved:
             ok_to_send, reason = signal_filter.should_send(self._symbol, sig)
             if ok_to_send:
-                from engine.router.telegram_dispatcher import telegram_dispatcher
-                asyncio.create_task(telegram_dispatcher.send_signal_alert(
-                    signal=sig,
-                    account_profile="FTMO_100K"
-                ))
                 final_approved.append(sig)
             else:
-                logger.info(f"[SIGNAL_HANDLER] {self._symbol} → 🔕 Telegram bloqueado: {reason}")
+                logger.info(f"[SIGNAL_HANDLER] {self._symbol} → 🔕 Señal throttled: {reason}")
                 sig["blocked_reason"] = reason
                 macro_blocked.append(sig)
 
