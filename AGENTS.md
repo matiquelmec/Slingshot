@@ -237,6 +237,7 @@ Todos los mensajes de commit deben seguir estrictamente el estándar de Conventi
      - `node.exe`: Ingestor HFT WebSocket Sidecar de baja latencia.
      - `terminal64.exe`: Terminal de ejecución TradFi MetaTrader 5.
 3. **Cero Tolerancia a Loops de Falla en Sentinel:**
+   * Ante cualquier error recurrente detectado en `logs/sentinel.log` o `logs/slingshot_service.log`, debe diagnosticarse la causa raíz antes de forzar reinicios repetitivos.
 ---
 
 ## 12. Regla 22: Clasificador Canónico de Sesión de Mercado y Pureza de Reloj de Pared (SOP-121)
@@ -298,6 +299,30 @@ Todos los mensajes de commit deben seguir estrictamente el estándar de Conventi
 3. **Aislamiento de MT5 en Tests Locales y Cero Secretos en Scripts de Despliegue:**
    * `MT5Bridge` debe omitir la conexión automática a `terminal64.exe` cuando `PYTEST_CURRENT_TEST` o `SLINGSHOT_DISABLE_MT5` estén activos.
    * Queda prohibido almacenar contraseñas WinRM en texto plano dentro de `scripts/deploy/*.ps1`; los scripts deben leer `SLINGSHOT_VPS_PASS` desde el entorno o `.env`.
+
+---
+
+## 17. Regla 27: Privacidad Estricta, Emisor Único y Gate de Sanidad en Telegram (SOP-132)
+
+1. **Emisor Único Autorizado desde `NexusNode`:**
+   * Las alertas públicas de señales operativas en Telegram solo pueden emitirse cuando `NexusNode` confirma la colocación real de la orden límite en Bitunix (evitando alertas prematuras desde el WebSocket antes de pasar por riesgo y ejecución).
+2. **Paridad Exacta de Niveles y Gate de Sanidad Geométrica:**
+   * `telegram_dispatcher.py` debe respetar exactamente los niveles de Stop Loss y Take Profit enviados al exchange sin sobrescribirlos ni recalcularlos de forma estándar, bloqueando señales `1d` sin gatillo intradiario y señales con deriva o geometría inválida.
+3. **Privacidad Financiera Absoluta y Formato Minimalista:**
+   * Queda prohibido exponer balances de cuenta, tamaños en USD, apalancamiento personal o identificadores de cuenta en mensajes de señal, ciclo de vida o heartbeat de Telegram.
+
+---
+
+## 18. Regla 28: Bucle Cerrado ML, Bandit Bayesiano Acotado y Centinelas en Vivo (SOP-133)
+
+1. **Bucle Cerrado Walk-Forward ML (`SlingshotML` + `DriftMonitor` + `RollingWalkForwardTrainer`):**
+   * `SlingshotML.predict_live()` debe auto-inicializar `drift_monitor.set_reference()` cuando no exista referencia cargada.
+   * `RollingWalkForwardTrainer` debe priorizar velas recientes desde `MemoryStore` (`_candle_history`), aplicar embargo temporal de 16 velas (`embargo_bars = 16`) y exigir validación Champion-Challenger en `train_and_atomic_hot_reload()` antes de promover un modelo nuevo; `_regime_agent_worker` en `orchestrator.py` dispara la evaluación periódica de drift/reentrenamiento.
+2. **Bandit Bayesiano Acotado (`[-8, +8]` pts):**
+   * `BlackBox.get_adaptive_factor_bonus()` ajusta el score en `confluence.py` dentro del rango estricto `[-8, +8]` pts y únicamente tras acumular un mínimo de 15 trades cerrados (`min_samples=15`).
+3. **Centinelas de Microestructura L2 (`SOP-108`) y Funding Drag (`SOP-109`) en Vivo:**
+   * `NexusNode.process_limit_setup()` audita el libro L2 vía `BitunixExecutor.get_orderbook_depth()` y `OrderBookMicrostructureSentinel().audit_l2_book()` tras validar distancia límite (Fail-Open si no hay snapshot).
+   * `TradeManager._calculate_runner_ratchet_sl()` consulta `FundingRateDragSentinel().audit_position_carry()` sobre `_market_states` y ajusta el Chandelier Exit de `1.5x` a `1.0x ATR` cuando el APR de funding alcanza el 50%.
 
 
 

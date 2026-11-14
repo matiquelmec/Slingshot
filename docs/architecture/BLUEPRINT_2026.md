@@ -1,8 +1,8 @@
 # BLUEPRINT_2026.md — Arquitectura de Plataforma Institucional
 
 > **Versión del Sistema:** 10.0.0 (FSD Multi-Tenant Dual-Engine Architecture)  
-> **Fecha de Actualización:** Octubre 2026  
-> **Estado:** Fase 1 — Fundación de Gobernanza y FSD Completada
+> **Fecha de Actualización:** Noviembre 2026  
+> **Estado:** Producción Activa — Arquitectura FSD, Bitunix/MT5 Dual-Engine y SOP-133 Desplegados
 
 ---
 
@@ -939,4 +939,31 @@ Sometidas las 3 optimizaciones a la matriz experimental de 180 días en los 13 a
 3. **Cierre de Cabos Sueltos e Higiene Institucional:**
    * Eliminada telemetría hardcodeada (`BNBUSDT`) en arranque frío de `/api/v1/bitunix/telemetry`, ruta duplicada `/api/v1/system/deploy-update`, `await` faltante en `/api/v1/analyze/{symbol}` y bloque muerto en `trade_manager.py`.
    * `MT5Bridge` respeta `PYTEST_CURRENT_TEST` y `SLINGSHOT_DISABLE_MT5` para no abrir FTMO `terminal64.exe` localmente durante tests.
-   * Consolidados los scripts en `scripts/deploy/` leyendo `SLINGSHOT_VPS_PASS` desde `.env`/entorno sin contraseñas en texto plano.
+   * **Consolidación de scripts:** Consolidados los scripts en `scripts/deploy/` leyendo `SLINGSHOT_VPS_PASS` desde `.env`/entorno sin contraseñas en texto plano.
+
+---
+
+## 40. SOP-132: PRIVACIDAD FINANCIERA, EMISOR ÚNICO Y GATE DE SANIDAD EN TELEGRAM
+
+1. **Emisor Único Autorizado desde `NexusNode`:**
+   * Las alertas públicas de señales operativas en Telegram se emiten únicamente tras confirmarse la colocación real de la orden límite en Bitunix, eliminando emisiones prematuras desde la capa de escaneo/WebSocket.
+2. **Paridad Exacta de Niveles y Gate de Sanidad (`telegram_dispatcher.py`):**
+   * Preservación estricta de Stop Loss y Take Profits reales enviados al exchange sin recálculo estándar.
+   * Bloqueo explícito de señales `1d` sin confirmación intradiaria y rechazo de señales con deriva o geometría inconsistente.
+3. **Privacidad Estricta y Plantilla Minimalista:**
+   * Eliminación total de balances en USD, tamaños de posición, apalancamientos o identificadores de cuenta en alertas de señal, ciclo de vida y heartbeat.
+
+---
+
+## 41. SOP-133: BUCLE CERRADO WALK-FORWARD ML, BANDIT ACOTADO Y CENTINELAS EN VIVO
+
+1. **Bucle Cerrado Walk-Forward ML (`SlingshotML` + `DriftMonitor` + `RollingWalkForwardTrainer`):**
+   * `SlingshotML.predict_live()` en `engine/ml/inference.py` auto-inicializa `drift_monitor.set_reference()` cuando no existe distribución base cargada.
+   * `RollingWalkForwardTrainer` en `engine/ml/train_rolling.py` prioriza velas en vivo desde `MemoryStore._candle_history` (`load_recent_candles_from_store()`), aplica embargo temporal de 16 velas (`embargo_bars = 16`) y valida Champion-Challenger en `train_and_atomic_hot_reload()` antes de promover modelos.
+   * `_regime_agent_worker` en `engine/workers/orchestrator.py` invoca `regime_agent.check_ml_health_and_trigger_retrain(drift_monitor._last_report)`.
+2. **Bandit Bayesiano Acotado (`[-8, +8]` pts):**
+   * `BlackBox.get_adaptive_factor_bonus()` en `engine/core/memory.py` evalúa desempeño real tras un mínimo de 15 trades cerrados (`min_samples=15`) y entrega un ajuste acotado `[-8, +8]` pts integrado al cierre de `ConfluenceManager.evaluate_signal()` en `engine/core/confluence.py`.
+3. **Centinelas en Vivo L2 (`SOP-108`) y Funding Drag (`SOP-109`):**
+   * `BitunixExecutor.get_orderbook_depth(symbol, limit=20)` alimenta `OrderBookMicrostructureSentinel().audit_l2_book()` dentro de `NexusNode.process_limit_setup()` (política Fail-Open si no hay snapshot disponible).
+   * `TradeManager._calculate_runner_ratchet_sl()` consulta `FundingRateDragSentinel().audit_position_carry()` sobre `MemoryStore._market_states` y ajusta el Chandelier Exit de `1.5x` a `1.0x ATR` cuando el APR de funding alcanza el 50%.
+   * La visualización en Frontend reutiliza el panel existente `SystemDiagnosticsWidget` (`src/features/system-diagnostics/ui/SystemDiagnosticsWidget.tsx`) sin duplicar vistas.

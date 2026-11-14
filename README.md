@@ -1,17 +1,17 @@
-# 🛡️ SLINGSHOT v60.0 APEX QUANTUM FORTRESS — Autonomous Dual Terminal
-## High-Availability Edge, 24/7 Sovereign VPS Execution & Fortress Risk Architecture
+# 🛡️ SLINGSHOT v10.0.0 — Autonomous Dual Terminal
+## High-Availability Edge (FSD `src/`), 24/7 Sovereign VPS Execution & Institutional Risk Architecture
 
-> **"Terminal Cuantitativa Autónoma de Grado Institucional. Slingshot v60.0 APEX QUANTUM FORTRESS: Desacoplamiento Soberano de Alta Disponibilidad entre la Retina Edge (Vercel CDN / Next.js 15) y el Núcleo Cuantitativo de Ejecución (Windows Server VPS 24/7 en Frankfurt). Integra la canonización de los Protocolos SOP-94 (Progressive Exposure Sizing & Asymmetric Drawdown Protection), SOP-95 (Session-Anchored AVWAP), SOP-96 (TradeZella Playbook Taxonomy), SOP-97 (Multi-Asset Dynamic Heat & Slot Allocation), SOP-98 (Dynamic Screener Hardening), SOP-99 (Dynamic Slot Elasticity & Macro Decoupled Expansion), SOP-100 (Two-Stage Meta-Labeling Gatekeeper & Playbook-Aware Fractional Kelly Allocation), SOP-101 (Dual-Timeframe Specialization & Timeframe-Aware Meta-Labeling 15m Scalp + 1h Swing Synergy) y SOP-102 (Absolute 1:1 Live-to-Backtest Execution Parity & Direction-Aware Meta-Labeling), consolidando el Blindaje OpenAPI Dual-Protocol TPSL de Bitunix y los protocolos SOP-47 (Trinity Boost), SOP-48 (Adaptive Structural Runner), SOP-49 (Golden Hours) y SOP-42 (Pre-Flight Dollar Risk Hard-Clamp). Documentación canónica completa en [SLINGSHOT_BIBLE_V60.md](docs/SLINGSHOT_BIBLE_V60.md)."**
+> **"Terminal Cuantitativa Autónoma de Grado Institucional (`v10.0.0`). Desacoplamiento soberano entre el Frontend Reactivo Next.js 15 + FSD (`src/`) y el Núcleo Cuantitativo de Ejecución (FastAPI `:8000` + Sidecar HFT Node.js `:8080` + MetaTrader 5 en Windows Server VPS `80.65.211.99`). Integra el canon completo de protocolos hasta SOP-133 (bucle cerrado Walk-Forward ML, bandit bayesiano acotado `[-8, +8]` pts, centinelas en vivo de microestructura L2 SOP-108 y funding drag SOP-109, privacidad minimalista Telegram SOP-132 y blindaje pre-flight SOP-131). Gobernanza y especificaciones canónicas en [`AGENTS.md`](AGENTS.md), [`BLUEPRINT_2026.md`](docs/architecture/BLUEPRINT_2026.md) y [`ESTRUCTURA_PROYECTO.md`](docs/ESTRUCTURA_PROYECTO.md)."**
 
 ![Status](https://img.shields.io/badge/Status-100%25_AUTONOMOUS_&_SSOT_VERIFIED-0d2a1a?style=for-the-badge&logo=codeproject&logoColor=fff)
-![Version](https://img.shields.io/badge/Version-60.0_Quantum_Fortress-1a3a6e?style=for-the-badge)
+![Version](https://img.shields.io/badge/Version-10.0.0_FSD_Dual--Engine-1a3a6e?style=for-the-badge)
 ![NVIDIA AI-Q](https://img.shields.io/badge/AI_Engine-NVIDIA_AI--Q_Blueprint_&_NIM-76b900?style=for-the-badge&logo=nvidia&logoColor=fff)
-![Adaptive System](https://img.shields.io/badge/Adaptive_Engine-Tri--Loop_Bayes_HMM_NIM-9b59b6?style=for-the-badge)
+![Adaptive System](https://img.shields.io/badge/Adaptive_Engine-Closed--Loop_ML_Bandit_HMM-9b59b6?style=for-the-badge)
 ![Crypto Engine](https://img.shields.io/badge/Bitunix_Crypto-2.5%25_Compounded_Live-f39c12?style=for-the-badge&logo=bitcoin&logoColor=fff)
 ![MetaTrader 5](https://img.shields.io/badge/MetaTrader_5-FTMO_Institutional_Live-2980b9?style=for-the-badge&logo=windows&logoColor=fff)
 ![Execution Engine](https://img.shields.io/badge/Execution-SOP--64_Auto--Dispatcher_≥75%25-green?style=for-the-badge)
-![Security](https://img.shields.io/badge/Security_Protocols-SOP--01%20to%20SOP--105-emerald?style=for-the-badge)
-![QA Suite](https://img.shields.io/badge/QA_Suite-500%2B_Tests_100%25_Passed-success?style=for-the-badge)
+![Security](https://img.shields.io/badge/Security_Protocols-SOP--01%20to%20SOP--133-emerald?style=for-the-badge)
+![QA Suite](https://img.shields.io/badge/QA_Suite-66_Vitest_%2B_513_Pytest-success?style=for-the-badge)
 ![Crypto Return](https://img.shields.io/badge/Crypto_Compounded_ROI-%2B4820%25_Proyectado-gold?style=for-the-badge)
 ![Total Alpha](https://img.shields.io/badge/Total_Alpha-%2B97.98_R_Base_%7C_%2B221.38_R_Optimizada-gold?style=for-the-badge)
 ![Profit Factor](https://img.shields.io/badge/Profit_Factor-2.35_Alpha--Tier-blue?style=for-the-badge)
@@ -80,50 +80,44 @@ Slingshot es una **Terminal de Inteligencia y Ejecución Cuantitativa Institucio
 
 ---
 
-## 🏛️ Arquitectura Global del Sistema Slingshot v52.0 Adaptive Titanium
+## 🏛️ Arquitectura Global del Sistema Slingshot v10.0.0 (FSD Dual-Engine)
 
 ```mermaid
 graph TB
-    subgraph "FRONTEND — Next.js 15 & Zustand 5 (Terminal Reactiva)"
-        A["Dashboard & Multi-Asset Radar"] --> B["TelemetryStore (Zustand 5)"]
-        B --> C["WebSocket Client MasterSync (60 FPS)"]
-        A --> D["Escáner SMC en Vivo (Cripto 24/7 + TradFi Tier A)"]
-        A --> E["Auditor de Posiciones y Órdenes en Tiempo Real"]
-        A --> OB["OnboardingModal (Validación de Claves Cifradas)"]
+    subgraph "FRONTEND — Next.js 15 & FSD en src/ (app -> features -> entities -> shared)"
+        A["src/app/(dashboard) & Components"] --> B["src/features/* (Zod Server Actions & Anti-IDOR)"]
+        B --> C["src/entities/* & src/shared/* (Turso Drizzle DB / WS Client)"]
+        A --> D["SystemDiagnosticsWidget (L2, Funding, Monte Carlo)"]
+        A --> E["MultiAccountDashboardCard & BacktestAuditWidget"]
     end
 
-    subgraph "SIGMA — Cerebro Algorítmico & AI (Python 3.12 / Rust Polars)"
-        J["FastAPI Lifespan Engine"] --> K["SlingshotOrchestrator"]
-        K --> L1["MarketScanner (Cripto Bitunix 24/7)"]
+    subgraph "SIGMA — Cerebro Algorítmico & AI (Python 3.12 / FastAPI :8000 + Sidecar :8080)"
+        J["FastAPI Lifespan (:8000)"] --> K["SlingshotOrchestrator"]
+        SIDE["Sidecar HFT Node.js (:8080)"] --> J
+        K --> L1["MarketScanner (13 Activos Canónicos SSoT)"]
         K --> L2["TradFiScanner (Sesiones TradFi MT5)"]
-        L1 --> MTF["Strict MTF Alignment Gate SOP-37"]
-        L2 --> TIER["Tier A Gating SOP-67 & Gold Long-Only SOP-68"]
-        MTF --> M["ConfluenceManager (14 Factores SMC / OTE 61.8-78.6%)"]
-        TIER --> M
-        ML["SlingshotML (XGBoost / ONNX Meta-Labeling)"] -->|+10pts Confianza| M
+        L1 --> M["ConfluenceManager + BlackBox Bandit [-8,+8] (SOP-133)"]
+        L2 --> M
+        ML["SlingshotML + DriftMonitor + RollingTrainer (SOP-133)"] -->|+10pts Confianza| M
         REG["SlingshotRegimeAgent SOP-63"] -->|0.65x - 1.30x| M
-        M --> POLARS["Polars Rust Kernel (Sub-2.5ms)"]
-        M --> V["SQLite WAL Vault (vault.py ACID)<br/>• Telegram Anti-Spam<br/>• Session SSoT<br/>• Audit Trail Log"]
+        M --> V["SQLite WAL Vault + Turso Sync"]
     end
 
-    subgraph "OMEGA — Enrutamiento, Multi-Cuenta & Guardianes de Riesgo"
-        M --> GATES["Pre-Flight Gates:<br/>• SOP-50 Atomic Lock Dedup<br/>• SOP-51 Frozen Margin Guard<br/>• Slot Fortress & Correlation SOP-13/30<br/>• Midnight Rollover Shield SOP-24"]
-        GATES --> NX["NexusNode Multi-Market Router"]
-        NX --> MACC["AccountManager (AES-256 Fernet Multi-Tenant SOP-57)"]
-        MACC --> BX["BitunixExecutor (Modo Crecimiento Cripto 2.5% Compuesto)"]
-        MACC --> FG["FTMO Guardian Shield (Modo Prop Firm 0.75% / Kill-Switch -3.5%)"]
-        FG --> MT5["MT5Bridge Institutional (SOP-65 Dynamic FOK/IOC & Digits Precision)"]
-        MT5 --> DEAL["close_partial_position (SOP-66 Cierres Parciales Nativos DEAL)"]
-        TM["TradeManager Centinel (Polling 5s/30s)"] --> |"SOP-22/52 Orphan Purge, SOP-26/102 Grid 50/30/20 & SOP-59 Client Exit"| BX
-        TM --> |"SOP-25 Early Invalidation (-0.65R) & SOP-26 Cosecha 50/30/20"| MT5
+    subgraph "OMEGA — Enrutamiento, Centinelas en Vivo & Multi-Cuenta"
+        M --> GATES["Pre-Flight Gates:<br/>• SOP-131 Live Distance & Buffer TTL 45m<br/>• SOP-108 L2 OrderBook Sentinel<br/>• SOP-50 Atomic Lock & SOP-13/30"]
+        GATES --> NX["NexusNode (Emisor Único Telegram SOP-132)"]
+        NX --> BX["BitunixExecutor (Cripto 2.5% + L2 Depth)"]
+        NX --> MT5["MT5Bridge Institutional (FTMO TradFi)"]
+        TM["TradeManager (Polling 10s)"] --> |"SOP-109 Funding Ratchet, SOP-104/117/118"| BX
+        TM --> |"SOP-25 Early Invalidation (-0.65R) & SOP-26 50/30/20"| MT5
     end
 
-    C <--> |"WebSockets"| J
+    C <--> |"WebSockets / REST"| J
 ```
 
 ---
 
-## 🛡️ Tabla Maestra: El Canon de los Protocolos SOP (SOP-01 a SOP-102)
+## 🛡️ Tabla Maestra: El Canon de los Protocolos SOP (SOP-01 a SOP-133)
 
 | Protocolo | Nombre Técnico | Especificación Matemática & Blindaje de Mercado |
 | :--- | :--- | :--- |
@@ -220,6 +214,13 @@ graph TB
 | **SOP-100** | Two-Stage Meta-Labeling & Playbook Kelly | Gatekeeper de 2 etapas (López de Prado) y Kelly Fraccional por Playbook (`1.18x-1.32x` en `OB_DISCOUNT_RETEST`, amortiguación `0.69x-0.92x` en `LIQUIDITY_SWEEP_FVG` 15m). |
 | **SOP-101** | Dual-Timeframe Synergy & 1h Sweep Boost | Especialización Dual-TF (`15m` Crypto Scalp + `1h` Swing en `XAUUSDT` y 7 Campeones Duales con `Score >= 75%`, poda de `AVAXUSDT`, y Boost `1.15x` para `LIQUIDITY_SWEEP_FVG` en `1h`). |
 | **SOP-102** | Absolute 1:1 Live-to-Backtest Parity & Dir Kelly | Reconciliador TP 50/30/20 (1.2R/2.0R/3.5R), Killzones estrictas (veto 10h/14h UTC), Veto Duro BTC Macro & AVWAP $\pm 0.40\%$, OTE $0.35\times\text{ATR}$, Clamps Compuestos, Kelly Direccional y fijación estricta del Universo Canónico SSoT (13 activos VIP, exclusión/poda total de `AVAXUSDT` y `RENDERUSDT` a nivel de escáner, contratos Zod y UI). |
+| **SOP-103 a SOP-105** | Mega-Kelly Trinity, Runner Ratchet & Incubator | Aceleración en `BNB`/`SOL`/`FET` (`1.35x`–`1.50x` sin racha de pérdidas), blindaje post-TP3 con piso en TP2 (`SOP-104`) y auditoría rodante de 60 días (`AssetIncubator`). |
+| **SOP-106 a SOP-110** | Escenarios, Monte Carlo, L2, Funding & HA | Análogos históricos (`SOP-106`), Monte Carlo 10k caminos (`SOP-107`), auditoría L2 OBI (`SOP-108`), ajuste de Chandelier por funding (`SOP-109`) y failover activo-pasivo (`SOP-110`). |
+| **SOP-111 a SOP-120** | Ciclo de Vida, TP Nativo, Paridad & VPS KRONOS | Despacho de hitos Telegram (`SOP-111`), OrderBlocks graduados (`SOP-112`), bloqueo de adopción no canónica (`SOP-113`), sesgo RANGING (`SOP-114`), TP nativo inmediato y `positionId` Bitunix (`SOP-117`/`118`), Haircut empírico (`SOP-119`) y tríada VPS (`SOP-120`). |
+| **SOP-121 a SOP-126** | Sesiones SSoT, 1D Gating, Triple Screen & Multi-Cuenta | Reloj de pared `zoneinfo` (`SOP-121`), desacoplamiento 1D (`SOP-122`), Triple Screen + volatilidad escalar + CVD (`SOP-123`), higiene de logs 15MB (`SOP-124`), matriz Dual-TF (`SOP-125`) e aislamiento multi-cuenta (`SOP-126`). |
+| **SOP-131** | Pre-Flight Live Distance, Buffer TTL & Secrets | Validación contra ticker real (`1.5%` 1h / `1.2%` 15m), TTL 45m persistente en `_high_confluence_buffer`, aislamiento MT5 en tests y cero secretos en scripts `.ps1`. |
+| **SOP-132** | Telegram Privacy, Single Emitter & Sanity Gate | Emisor único desde `NexusNode`, paridad exacta SL/TP con Bitunix, bloqueo de `1d` sin gatillo y eliminación de balances/USD en alertas públicas. |
+| **SOP-133** | Closed-Loop ML, Bounded Bandit & Live Sentinels | Auto-init de `DriftMonitor`, embargo 16 velas y Champion-Challenger en `RollingWalkForwardTrainer`, bandit `BlackBox` acotado `[-8, +8]` pts (`>= 15` trades) y ejecución en vivo de `SOP-108` (L2) y `SOP-109` (Funding Drag). |
 
 ---
 
@@ -292,30 +293,23 @@ Simulación Event-Driven Oficial sobre la cartera Tier A (`XAUUSD`, `US100`, `GB
 
 ---
 
-## 🧪 Certificación QA Oficial (402 Tests 100% Passed)
+## 🧪 Certificación QA Oficial (66 Vitest + 513 Pytest Recolectados)
 
-Para certificar la integridad del sistema en el VPS de producción o local:
+Para certificar la integridad del sistema en local:
 
 ```powershell
-# Certificación SSoT Paridad de Backtest y Elasticidad Dinámica (SOP-97, SOP-98, SOP-99) [17 Tests]
-pytest engine\tests\test_chronological_backtest_parity.py engine\tests\test_dynamic_slot_elasticity.py engine\tests\test_dynamic_heat_and_slot_allocation.py -v
+# 1. Verificación estricta de tipos TypeScript
+npm run typecheck
 
-# Certificación Drawdown Fortress & Session AVWAP (SOP-94 y SOP-95) [9 Tests]
-pytest engine\tests\test_progressive_exposure_and_streak_sizing.py engine\tests\test_session_anchored_vwap.py -v
+# 2. Suite Frontend & FSD (66 tests Vitest)
+npm test
 
-# Certificación Bitunix Dual-Protocol TPSL & 1R Cache Invariance [12 Tests]
-pytest engine\tests\test_bitunix_tpsl_modify_and_id_resolution.py engine\tests\test_live_trade_management.py -v
+# 3. Suite Cuantitativa de Motor Python (SOP-131 / SOP-132 / SOP-133 y regresión)
+.venv\Scripts\python.exe -m pytest engine/tests/test_sop133_autonomous_learning_and_live_sentinels.py engine/tests/test_sop132_telegram_minimalist_privacy.py engine/tests/test_sop131_limit_distance_and_buffer_ttl.py -v
 
-# Certificación Multi-Cuenta Bitunix Parallel Dispatch & Trailing Isolation [4 Tests]
-pytest engine\tests\test_multi_account_execution_audit.py -v
-
-# Certificación TradFi / FTMO Titanium (21 Tests)
-pytest engine\tests\test_ftmo_titanium_strategy.py engine\tests\test_tradfi_scanner_and_risk.py -v
-
-# Certificación Suite Completa (402 Tests)
-pytest engine\tests -q
+# 4. Suite Completa de Motor Python (513 tests recolectados)
+.venv\Scripts\python.exe -m pytest engine/tests -q
 ```
-*(Resultado global certificado: **435 pytest + 55 vitest = 490 tests — 100% PASSED**).*
 
 ---
 
