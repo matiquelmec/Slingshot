@@ -19,17 +19,22 @@ import { fetchDatabaseHealthAction, DatabaseHealthMetrics } from '@/features/pos
 export function DatabaseHealthWidget() {
   const [metrics, setMetrics] = useState<DatabaseHealthMetrics | null>(null);
   const [loading, setLoading] = useState(true);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [lastRefreshed, setLastRefreshed] = useState<Date>(new Date());
 
   const loadMetrics = async () => {
     setLoading(true);
+    setErrorMsg(null);
     try {
       const res = await fetchDatabaseHealthAction();
       if (res.success && res.data) {
         setMetrics(res.data);
+      } else {
+        setErrorMsg(res.error || 'No se pudieron obtener las métricas de Turso Cloud.');
       }
     } catch (e) {
       console.error('Failed to load database health metrics:', e);
+      setErrorMsg(e instanceof Error ? e.message : 'Error consultando salud de Turso Cloud.');
     } finally {
       setLoading(false);
       setLastRefreshed(new Date());
@@ -100,7 +105,11 @@ export function DatabaseHealthWidget() {
             />
           </div>
           <span className="text-[10px] text-slate-300">
-            {metrics ? `${metrics.usagePercentage}% de cuota consumida (< 0.01% virtual)` : 'Calculando...'}
+            {metrics
+              ? `${metrics.usagePercentage}% de cuota consumida (< 0.01% virtual)`
+              : loading
+              ? 'Calculando...'
+              : errorMsg || 'Sin conexión temporal'}
           </span>
         </div>
 

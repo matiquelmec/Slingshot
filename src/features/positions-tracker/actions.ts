@@ -1,6 +1,7 @@
 'use server';
 
-import { db, client, trades, requireUserSession, UserSession } from '@/shared';
+import { db, client, trades } from '@/shared/db';
+import { requireUserSession, UserSession } from '@/shared/auth';
 import { eq, and, desc, sql } from 'drizzle-orm';
 import { Trade } from '@/entities';
 import {

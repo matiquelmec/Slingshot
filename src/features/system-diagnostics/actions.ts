@@ -1,20 +1,29 @@
 'use server';
 
-import { z } from 'zod';
-import { requireUserSession, UserSession, client } from '@/shared';
+import { requireUserSession, UserSession } from '@/shared/auth';
+import { client } from '@/shared/db';
 import {
   CANONICAL_ASSET_PROFILES,
   AssetQuantitativeProfile,
   ObLiquidityAuditReport,
-  obLiquidityAuditReportSchema,
 } from '@/entities/signal';
+import {
+  systemDiagnosticsQuerySchema,
+  multiYearCycleQuerySchema,
+  monteCarloQuerySchema,
+  fullStackSyncQuerySchema,
+  type SystemDiagnosticsQueryParams,
+  type MultiYearCycleQueryParams,
+  type MonteCarloQueryParams,
+  type FullStackSyncQueryParams,
+} from './schemas';
 
-export const systemDiagnosticsQuerySchema = z.object({
-  includeDatabaseCheck: z.boolean().default(true),
-  assetFilter: z.string().max(20).optional().default('ALL'),
-});
-
-export type SystemDiagnosticsQueryParams = z.infer<typeof systemDiagnosticsQuerySchema>;
+export type {
+  SystemDiagnosticsQueryParams,
+  MultiYearCycleQueryParams,
+  MonteCarloQueryParams,
+  FullStackSyncQueryParams,
+};
 
 export interface ActiveVetoStatus {
   code: string;
@@ -104,14 +113,6 @@ export interface MultiYearComparativeAnalysis {
   }[];
 }
 
-export const multiYearCycleQuerySchema = z.object({
-  targetBtcPrice: z.number().positive().optional().default(84600.0),
-  includeDetailedPhases: z.boolean().optional().default(true),
-});
-
-export type MultiYearCycleQueryParams = z.infer<typeof multiYearCycleQuerySchema>;
-
-
 export interface MonteCarloEquityCones {
   steps: number[];
   p5: number[];
@@ -142,14 +143,6 @@ export interface MonteCarloResilienceMetrics {
   equityCones: MonteCarloEquityCones;
   summaryReport: string;
 }
-
-export const monteCarloQuerySchema = z.object({
-  iterations: z.number().int().min(1000).max(50000).optional().default(10000),
-  horizonTrades: z.number().int().min(20).max(500).optional().default(100),
-});
-
-export type MonteCarloQueryParams = z.infer<typeof monteCarloQuerySchema>;
-
 
 export interface L2MicrostructureAudit {
   asset: string;
@@ -813,12 +806,6 @@ export async function fetchSystemDiagnosticsAction(
     };
   }
 }
-
-export const fullStackSyncQuerySchema = z.object({
-  targetVpsUrl: z.string().url().optional().default('http://80.65.211.99:8000'),
-});
-
-export type FullStackSyncQueryParams = z.input<typeof fullStackSyncQuerySchema>;
 
 export interface FullStackSyncReport {
   timestamp: string;

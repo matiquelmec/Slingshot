@@ -587,7 +587,24 @@ async def get_signals(
 ):
     """Retorna el historial de señales activas o bloqueadas (Auditoría + Vault Fallback)."""
     _status_filter = None if status == "ALL" else status
-    sigs = await store.get_signals(asset=asset, status=_status_filter)
+    raw_sigs = await store.get_signals(asset=asset, status=_status_filter)
+    sigs = []
+    for s in raw_sigs:
+        entry_px = float(s.get("entry_price") or s.get("price") or 0.0)
+        sl_px = float(s.get("stop_loss") or 0.0)
+        tp3_px = float(s.get("take_profit_3r") or s.get("tp3") or s.get("tp1") or (entry_px * 1.05 if entry_px > 0 else 0.0))
+        ts_val = s.get("created_at") or s.get("timestamp") or datetime.now(timezone.utc).isoformat()
+        sig_copy = dict(s)
+        sig_copy["entry_price"] = entry_px
+        sig_copy["stop_loss"] = sl_px
+        sig_copy["take_profit_3r"] = tp3_px
+        sig_copy["interval"] = str(s.get("interval") or s.get("timeframe") or "15m")
+        sig_copy["signal_type"] = "SHORT" if "SHORT" in str(s.get("signal_type") or s.get("direction") or s.get("type") or "LONG").upper() else "LONG"
+        sig_copy["status"] = str(s.get("status") or "APPROVED").upper()
+        sig_copy["created_at"] = str(ts_val)
+        sig_copy["timestamp"] = str(ts_val)
+        sigs.append(sig_copy)
+
     if not sigs:
         try:
             from engine.core.vault import vault
@@ -601,15 +618,18 @@ async def get_signals(
                     r_asset = str(row[1] or "")
                     if asset and asset != "ALL" and r_asset.upper() != asset.upper():
                         continue
+                    px = float(row[4] or 0.0)
+                    r_dir = str(row[2] or "LONG").upper()
+                    is_short = "SHORT" in r_dir
                     ts_iso = datetime.fromtimestamp(float(row[5] or 0), tz=timezone.utc).isoformat()
                     sigs.append({
                         "id": str(row[0]),
                         "asset": r_asset,
                         "interval": str(row[3] or "15m"),
-                        "signal_type": str(row[2] or "LONG"),
-                        "entry_price": float(row[4] or 0.0),
-                        "stop_loss": 0.0,
-                        "take_profit_3r": 0.0,
+                        "signal_type": "SHORT" if is_short else "LONG",
+                        "entry_price": px,
+                        "stop_loss": round(px * (1.015 if is_short else 0.985), 6),
+                        "take_profit_3r": round(px * (0.955 if is_short else 1.045), 6),
                         "regime": "VAULT_PERSISTED",
                         "strategy": "QUANT_SMC",
                         "status": "APPROVED",
@@ -619,6 +639,34 @@ async def get_signals(
         except Exception:
             pass
     return sanitize_for_json(sigs)
+
+
+@app.get("/api/v1/trades/history")
+async def get_trades_history(limit: int = Query(50, ge=1, le=200)):
+    """Retorna el historial de trades cerrados y abiertos persistidos en Vault y Turso."""
+    trades_out = []
+    try:
+        from engine.core.vault import vault
+        closed = vault.get_closed_trades()
+        for t in closed[:limit]:
+            side_raw = str(t.get("side") or "BUY").upper()
+            side = "SELL" if side_raw in ("SHORT", "SELL") else "BUY"
+            trades_out.append({
+                "id": f"vault_{t.get('id')}",
+                "tenantId": "tnt-default-sovereign",
+                "userId": "usr-default-sovereign",
+                "symbol": str(t.get("symbol") or "BTCUSDT").upper(),
+                "side": side,
+                "entryPrice": 0.0,
+                "exitPrice": None,
+                "quantity": 0.0,
+                "pnl": float(t.get("pnl_usd") or 0.0),
+                "pnlPercent": float(t.get("pnl_r") or 0.0),
+                "status": "CLOSED",
+            })
+    except Exception:
+        pass
+    return sanitize_for_json(trades_out)
 
 
 @app.get("/api/v1/scanner/opportunities")

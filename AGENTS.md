@@ -335,6 +335,16 @@ Todos los mensajes de commit deben seguir estrictamente el estándar de Conventi
 3. **Relojes Vivos IANA en Cliente y Aislamiento de Activo (`SessionClock.tsx`):**
    * `SessionClock.tsx` debe calcular `NY`, `LON`, `UTC` y `Chile` cada segundo en el cliente vía `Intl.DateTimeFormat` DST-aware y validar coincidencia de `sessionData.asset === activeSymbol` antes de renderizar niveles `HIGH/LOW/PDH/PDL`.
 
+---
 
+## 20. Regla 30: Gobernanza Serverless LibSQL Web, Aislamiento de Server Actions Next.js 15 y Sincronización Bidireccional en Session Log (SOP-135)
 
+1. **Driver HTTP Puro en Entornos Serverless (`drizzle-orm/libsql/web` + `@libsql/client/web`):**
+   * `src/shared/db/index.ts` debe importar `drizzle` desde `drizzle-orm/libsql/web` y `createClient` desde `@libsql/client/web`. Queda terminantemente prohibido usar `drizzle-orm/libsql` o `@libsql/client` en rutas de Next.js App Router, ya que inyectan dependencias de binarios nativos C++ (`libsql` / `@neon-rs/load`) que provocan excepciones `HTTP 500` en el arranque de funciones Serverless en Vercel.
+2. **Aislamiento de Exports en Módulos `'use server'` (`actions.ts` vs `schemas.ts`):**
+   * Ningún archivo con directiva `'use server'` (`src/features/*/actions.ts`) puede exportar constantes, objetos ni esquemas Zod (`export const ...Schema = z.object(...)`). Todos los esquemas de validación deben residir en `schemas.ts` y las acciones deben importar `requireUserSession` directamente desde `@/shared/auth`.
+3. **Paridad de Timestamps UNIX en Segundos y Guardarraíl Anti-Contaminación en Pytest (`turso_sync.py`):**
+   * `TursoSyncManager` debe almacenar todos los campos `created_at`, `updated_at` y `closed_at` en segundos UNIX (`int(time.time())`) para coincidir 1:1 con Drizzle `{ mode: 'timestamp' }`, y bloquear cualquier escritura remota hacia Turso Cloud cuando `PYTEST_CURRENT_TEST` esté activo.
+4. **Resiliencia Dual-Engine en `SESSION LOG` (`/history`):**
+   * Todas las llamadas a Server Actions dentro de `startTransition` o `useEffect` en `/history`, `SystemDiagnosticsWidget`, `BacktestAuditWidget` y `DatabaseHealthWidget` deben contar con bloques `try/catch` independientes, estados de reintento explícitos y fallback hacia los endpoints REST del VPS (`/api/v1/signals` y `/api/v1/trades/history`).
 

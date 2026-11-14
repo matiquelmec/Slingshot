@@ -88,11 +88,31 @@ export default function HistoryPage() {
         // Fallback a FastAPI si Turso aún no tiene señales o falló el Server Action
         try {
           const BASE_URL = getApiBaseUrl();
-          const res = await fetch(`${BASE_URL}/api/v1/signals`, { signal: AbortSignal.timeout(2500) });
+          const res = await fetch(`${BASE_URL}/api/v1/signals`, { signal: AbortSignal.timeout(3000) });
           if (res.ok) {
             const data = await res.json();
             if (Array.isArray(data)) {
-              setSignals(data as SignalEvent[]);
+              const normalized: SignalEvent[] = data.map((raw: Record<string, unknown>, idx: number) => {
+                const entryPx = Number(raw.entry_price ?? raw.price ?? 0);
+                const slPx = Number(raw.stop_loss ?? 0);
+                const tp3Px = Number(raw.take_profit_3r ?? raw.tp3 ?? raw.take_profit_1 ?? raw.tp1 ?? (entryPx > 0 ? entryPx * 1.05 : 0));
+                const ts = String(raw.created_at ?? raw.timestamp ?? new Date().toISOString());
+                return {
+                  id: String(raw.id ?? `sig_${idx}`),
+                  asset: String(raw.asset ?? raw.symbol ?? 'BTCUSDT').toUpperCase(),
+                  interval: String(raw.interval ?? raw.timeframe ?? '15m'),
+                  signal_type: String(raw.signal_type ?? raw.direction ?? raw.type ?? 'LONG').toUpperCase().includes('SHORT') ? 'SHORT' : 'LONG',
+                  entry_price: entryPx,
+                  stop_loss: slPx,
+                  take_profit_3r: tp3Px,
+                  regime: String(raw.regime ?? 'QUANT_ENGINE'),
+                  strategy: String(raw.strategy ?? 'QUANT_SMC'),
+                  status: String(raw.status ?? 'APPROVED').toUpperCase(),
+                  created_at: ts,
+                  timestamp: ts,
+                };
+              });
+              setSignals(normalized);
             }
           }
         } catch {
@@ -100,7 +120,8 @@ export default function HistoryPage() {
         }
       }
 
-      // 2. Cargar Trades desde Turso Cloud vía Server Action (aislado)
+      // 2. Cargar Trades desde Turso Cloud vía Server Action (aislado) + Fallback REST VPS
+      let tradesLoaded = false;
       try {
         const tursoTradesRes = await fetchTradesAction({
           status: 'ALL',
@@ -108,14 +129,32 @@ export default function HistoryPage() {
         });
 
         if (tursoTradesRes.success && tursoTradesRes.data) {
-          setTrades(tursoTradesRes.data);
           tursoOk = true;
+          if (tursoTradesRes.data.length > 0) {
+            setTrades(tursoTradesRes.data);
+            tradesLoaded = true;
+          }
         } else if (!tursoTradesRes.success && tursoTradesRes.error) {
           setSyncError(tursoTradesRes.error);
         }
       } catch (trdErr) {
         console.warn('Error en fetchTradesAction:', trdErr);
         setSyncError(trdErr instanceof Error ? trdErr.message : 'Error consultando trades');
+      }
+
+      if (!tradesLoaded) {
+        try {
+          const BASE_URL = getApiBaseUrl();
+          const res = await fetch(`${BASE_URL}/api/v1/trades/history`, { signal: AbortSignal.timeout(3000) });
+          if (res.ok) {
+            const data = await res.json();
+            if (Array.isArray(data) && data.length > 0) {
+              setTrades(data as Trade[]);
+            }
+          }
+        } catch {
+          // Ignorado si FastAPI no responde
+        }
       }
 
       setIsTursoSynced(tursoOk);
@@ -131,40 +170,40 @@ export default function HistoryPage() {
   }, [loadData]);
 
   const StatusBadge = ({ status }: { status: string }) => {
-    switch (status) {
-      case 'ACTIVE':
-      case 'APPROVED':
-      case 'OPEN':
-        return (
-          <span className="px-2 py-1 rounded border border-cyan-500/30 bg-cyan-500/10 text-cyan-300 text-[10px] font-bold tracking-widest flex items-center gap-1">
-            <Clock size={12} /> {status}
-          </span>
-        );
-      case 'FILLED':
-      case 'HIT_TP':
-      case 'CLOSED':
-        return (
-          <span className="px-2 py-1 rounded border border-emerald-500/30 bg-emerald-500/20 text-emerald-300 text-[10px] font-bold tracking-widest flex items-center gap-1">
-            <CheckCircle2 size={12} /> {status}
-          </span>
-        );
-      case 'HIT_SL':
-      case 'STOPPED_OUT':
-      case 'CANCELLED':
-        return (
-          <span className="px-2 py-1 rounded border border-rose-500/30 bg-rose-500/10 text-rose-300 text-[10px] font-bold tracking-widest flex items-center gap-1">
-            <XCircle size={12} /> {status}
-          </span>
-        );
-      case 'EXPIRED':
-        return (
-          <span className="px-2 py-1 rounded border border-amber-500/30 bg-amber-500/10 text-amber-300 text-[10px] font-bold tracking-widest flex items-center gap-1">
-            <AlertTriangle size={12} /> EXPIRED
-          </span>
-        );
-      default:
-        return <span className="text-slate-300 text-[10px]">{status}</span>;
+    const norm = (status || 'PENDING').toUpperCase();
+    if (norm === 'ACTIVE' || norm === 'APPROVED' || norm === 'OPEN' || norm === 'PENDING' || norm === 'TRIGGERED') {
+      return (
+        <span className="px-2 py-1 rounded border border-cyan-500/30 bg-cyan-500/10 text-cyan-300 text-[10px] font-bold tracking-widest inline-flex items-center gap-1">
+          <Clock size={12} /> {norm}
+        </span>
+      );
     }
+    if (norm === 'FILLED' || norm === 'HIT_TP' || norm === 'TAKE_PROFIT' || norm === 'CLOSED') {
+      return (
+        <span className="px-2 py-1 rounded border border-emerald-500/30 bg-emerald-500/20 text-emerald-300 text-[10px] font-bold tracking-widest inline-flex items-center gap-1">
+          <CheckCircle2 size={12} /> {norm}
+        </span>
+      );
+    }
+    if (norm === 'HIT_SL' || norm === 'STOP_LOSS' || norm === 'STOPPED_OUT' || norm === 'CANCELLED' || norm === 'REJECTED_EXCHANGE') {
+      return (
+        <span className="px-2 py-1 rounded border border-rose-500/30 bg-rose-500/10 text-rose-300 text-[10px] font-bold tracking-widest inline-flex items-center gap-1">
+          <XCircle size={12} /> {norm}
+        </span>
+      );
+    }
+    if (norm === 'EXPIRED' || norm.startsWith('BLOCKED') || norm.includes('VETO')) {
+      return (
+        <span className="px-2 py-1 rounded border border-amber-500/30 bg-amber-500/10 text-amber-300 text-[10px] font-bold tracking-widest inline-flex items-center gap-1">
+          <AlertTriangle size={12} /> {norm}
+        </span>
+      );
+    }
+    return (
+      <span className="px-2 py-1 rounded border border-slate-500/30 bg-slate-500/10 text-slate-200 text-[10px] font-bold tracking-widest inline-flex items-center gap-1">
+        {norm}
+      </span>
+    );
   };
 
   const SignalTypeBadge = ({ type }: { type: string }) => {
@@ -215,9 +254,15 @@ export default function HistoryPage() {
           </div>
 
           {/* Turso Cloud Badge */}
-          <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-xs font-bold tracking-wider">
-            <ShieldCheck size={16} className="text-emerald-400" />
-            <span>TURSO CLOUD SYNCHRONIZED</span>
+          <div
+            className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-bold tracking-wider ${
+              isTursoSynced
+                ? 'bg-emerald-500/10 border border-emerald-500/30 text-emerald-300'
+                : 'bg-cyan-500/10 border border-cyan-500/30 text-cyan-300'
+            }`}
+          >
+            <ShieldCheck size={16} className={isTursoSynced ? 'text-emerald-400' : 'text-cyan-400'} />
+            <span>{isTursoSynced ? 'TURSO CLOUD SYNCHRONIZED' : 'VPS DUAL-ENGINE ACTIVE'}</span>
           </div>
         </div>
       </div>

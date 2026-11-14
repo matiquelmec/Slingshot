@@ -1,6 +1,6 @@
 'use server';
 
-import { requireUserSession, UserSession } from '@/shared';
+import { requireUserSession, UserSession } from '@/shared/auth';
 import {
   backtestAuditQuerySchema,
   theoryVsPracticeQuerySchema,

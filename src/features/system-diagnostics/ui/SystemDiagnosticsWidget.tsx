@@ -36,11 +36,17 @@ export function SystemDiagnosticsWidget() {
   const loadDiagnostics = () => {
     startTransition(async () => {
       setErrorMsg(null);
-      const res = await fetchSystemDiagnosticsAction({ includeDatabaseCheck: true });
-      if (res.success && res.data) {
-        setReport(res.data);
-      } else {
-        setErrorMsg(res.error || 'Error al conectar con la telemetría del sistema');
+      try {
+        const res = await fetchSystemDiagnosticsAction({ includeDatabaseCheck: true });
+        if (res.success && res.data) {
+          setReport(res.data);
+        } else {
+          setErrorMsg(res.error || 'Error al conectar con la telemetría del sistema');
+        }
+      } catch (err) {
+        setErrorMsg(
+          err instanceof Error ? err.message : 'Excepción al consultar diagnóstico del sistema'
+        );
       }
     });
   };

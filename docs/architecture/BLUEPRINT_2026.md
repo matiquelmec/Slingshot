@@ -981,3 +981,17 @@ Sometidas las 3 optimizaciones a la matriz experimental de 180 días en los 13 a
 3. **Frescura en `/api/v1/diagnostic/{asset}` y Cliente Reactivo (`SessionClock.tsx`):**
    * `get_diagnostic_state()` en `engine/api/main.py` ejecuta `bootstrap()` cuando `pdh` es nulo y evalúa siempre `get_current_state()` con reloj de pared vivo.
    * `SessionClock.tsx` y `connection.ts` calculan `NY`, `LON`, `UTC` y `Chile` cada segundo en el navegador con `Intl.DateTimeFormat` DST-aware y aíslan los niveles por `activeSymbol`.
+
+---
+
+## 43. SOP-135: ARQUITECTURA SERVERLESS LIBSQL WEB, AISLAMIENTO NEXT.JS 15 Y CONEXIÓN INTEGRAL EN SESSION LOG (`/history`)
+
+1. **Eliminación de Binarios Nativos C++ en Vercel Serverless (`src/shared/db/index.ts`):**
+   * Migración de `drizzle-orm/libsql` a `drizzle-orm/libsql/web` junto con `@libsql/client/web`, erradicando la inclusión de `node_modules/libsql` y `@neon-rs/load` en el artefacto `.nft.json` de Next.js 15.
+   * Desacoplamiento de imports en `src/features/*/actions.ts` hacia `@/shared/auth` y `@/shared/db`, y extracción de todos los esquemas Zod a archivos `schemas.ts` dedicados en las 6 slices de `src/features/`.
+2. **Paridad de Timestamps y Guardarraíl en `TursoSyncManager` (`engine/execution/turso_sync.py`):**
+   * Estandarización de timestamps en segundos UNIX (`int(time.time())`) compatibles con Drizzle `{ mode: 'timestamp' }` y normalización defensiva en `safeDate` / `safeDateIso`.
+   * Bloqueo automático de escrituras remotas durante la ejecución de suites de pruebas (`PYTEST_CURRENT_TEST`) y conexión asíncrona en vivo de `dispatch_signal_async()` en `MemoryStore.save_signal()` y `dispatch_close_trade_async()` en `TradeManager`.
+3. **Blindaje de las 5 Pestañas de `SESSION LOG` (`src/app/(dashboard)/history/page.tsx`):**
+   * Protección `try/catch` en todas las transiciones React 19 de `SystemDiagnosticsWidget.tsx`, estados de reintento en `BacktestAuditWidget.tsx` y `DatabaseHealthWidget.tsx`, normalización semántica en `StatusBadge` y respaldo híbrido con `/api/v1/signals` y `/api/v1/trades/history` en `engine/api/main.py`.
+

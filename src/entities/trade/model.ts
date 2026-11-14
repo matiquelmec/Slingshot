@@ -16,8 +16,8 @@ export const tradeSchema = z.object({
   pnl: z.number().default(0),
   pnlPercent: z.number().default(0),
   status: tradeStatusSchema.default('OPEN'),
-  createdAt: z.date().optional(),
-  closedAt: z.date().nullable().optional(),
+  createdAt: z.union([z.date(), z.string()]).optional(),
+  closedAt: z.union([z.date(), z.string()]).nullable().optional(),
 });
 
 export type Trade = z.infer<typeof tradeSchema>;

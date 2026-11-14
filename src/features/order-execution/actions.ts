@@ -1,20 +1,11 @@
 'use server';
 
-import { z } from 'zod';
-import { requireUserSession, assertTenantOwnership, UserSession } from '@/shared';
+import { requireUserSession, UserSession } from '@/shared/auth';
+import { assertTenantOwnership } from '@/shared/db/tenantGuard';
 import { QuantitativeSignal } from '@/entities';
+import { createOrderInputSchema, type CreateOrderInput } from './schemas';
 
-export const createOrderInputSchema = z.object({
-  signalId: z.string().min(1),
-  asset: z.string().min(2),
-  direction: z.enum(['LONG', 'SHORT']),
-  orderType: z.enum(['LIMIT', 'MARKET']).default('LIMIT'),
-  price: z.number().positive(),
-  stopLoss: z.number().positive(),
-  positionSizeUsdt: z.number().positive(),
-});
-
-export type CreateOrderInput = z.infer<typeof createOrderInputSchema>;
+export type { CreateOrderInput };
 
 export interface ExecutionResult {
   success: boolean;

@@ -24,27 +24,37 @@ export function BacktestAuditWidget() {
   const [metrics, setMetrics] = useState<BacktestAuditMetrics | null>(null);
   const [parityReport, setParityReport] = useState<TheoryVsPracticeParityReport | null>(null);
   const [loading, setLoading] = useState(true);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [selectedPlaybook, setSelectedPlaybook] = useState<'ALL' | 'LIQUIDITY_SWEEP_FVG' | 'OB_DISCOUNT_RETEST'>('ALL');
   const [parityScope, setParityScope] = useState<'FULL_SPECTRUM' | 'SL_TP_RELIABILITY' | 'EXECUTION_FRICTION' | 'CAPITAL_PRESERVATION'>('FULL_SPECTRUM');
+  const [retryCount, setRetryCount] = useState(0);
 
   useEffect(() => {
     let isMounted = true;
     async function loadData() {
       setLoading(true);
+      setErrorMsg(null);
       try {
         if (activeTab === 'SSOT_BACKTEST') {
           const res = await fetchBacktestAuditMetricsAction({ playbook: selectedPlaybook });
           if (res.success && res.data && isMounted) {
             setMetrics(res.data);
+          } else if (isMounted && !res.success) {
+            setErrorMsg(res.error || 'No se pudo cargar la auditoría cuantitativa.');
           }
         } else {
           const res = await fetchTheoryVsPracticeParityAction({ comparisonScope: parityScope });
           if (res.success && res.data && isMounted) {
             setParityReport(res.data);
+          } else if (isMounted && !res.success) {
+            setErrorMsg(res.error || 'No se pudo cargar el reporte de paridad.');
           }
         }
       } catch (e) {
         console.error('Error cargando auditoría cuantitativa:', e);
+        if (isMounted) {
+          setErrorMsg(e instanceof Error ? e.message : 'Error de comunicación con el servidor.');
+        }
       } finally {
         if (isMounted) setLoading(false);
       }
@@ -53,7 +63,7 @@ export function BacktestAuditWidget() {
     return () => {
       isMounted = false;
     };
-  }, [activeTab, selectedPlaybook, parityScope]);
+  }, [activeTab, selectedPlaybook, parityScope, retryCount]);
 
   return (
     <div className="w-full bg-[#050B14]/90 border border-slate-700/60 rounded-2xl p-4 sm:p-6 shadow-2xl backdrop-blur-xl flex flex-col gap-6">
@@ -368,7 +378,20 @@ export function BacktestAuditWidget() {
                 </div>
               </div>
             </>
-          ) : null}
+          ) : (
+            <div className="min-h-[160px] p-6 rounded-xl border border-rose-500/30 bg-rose-950/20 flex flex-col items-center justify-center gap-3 text-center">
+              <AlertTriangle size={24} className="text-rose-400" />
+              <p className="text-xs text-rose-200 font-semibold">
+                {errorMsg || 'No se recibieron métricas del servidor.'}
+              </p>
+              <button
+                onClick={() => setRetryCount((c) => c + 1)}
+                className="min-h-[44px] px-4 py-2 rounded-lg bg-rose-500/20 hover:bg-rose-500/30 border border-rose-500/40 text-xs font-bold text-rose-200 transition-colors"
+              >
+                REINTENTAR CARGA
+              </button>
+            </div>
+          )}
         </>
       )}
 
@@ -657,7 +680,20 @@ export function BacktestAuditWidget() {
                 ))}
               </div>
             </>
-          ) : null}
+          ) : (
+            <div className="min-h-[160px] p-6 rounded-xl border border-rose-500/30 bg-rose-950/20 flex flex-col items-center justify-center gap-3 text-center">
+              <AlertTriangle size={24} className="text-rose-400" />
+              <p className="text-xs text-rose-200 font-semibold">
+                {errorMsg || 'No se recibió el reporte de paridad del servidor.'}
+              </p>
+              <button
+                onClick={() => setRetryCount((c) => c + 1)}
+                className="min-h-[44px] px-4 py-2 rounded-lg bg-rose-500/20 hover:bg-rose-500/30 border border-rose-500/40 text-xs font-bold text-rose-200 transition-colors"
+              >
+                REINTENTAR CARGA
+              </button>
+            </div>
+          )}
         </>
       )}
     </div>

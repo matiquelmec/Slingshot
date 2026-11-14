@@ -1,6 +1,7 @@
 'use server';
 
-import { db, signals, requireUserSession, UserSession } from '@/shared';
+import { db, signals } from '@/shared/db';
+import { requireUserSession, UserSession } from '@/shared/auth';
 import { eq, and, desc } from 'drizzle-orm';
 import { QuantitativeSignal } from '@/entities';
 import {
