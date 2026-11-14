@@ -76,12 +76,15 @@ try {
             Stop-Process -Id $s.ProcessId -Force -ErrorAction SilentlyContinue
         }
 
+        Start-Sleep -Seconds 2
+        Start-ScheduledTask -TaskName "SlingshotBot" -ErrorAction SilentlyContinue
         Start-Sleep -Seconds 4
 
-        # Si por alguna razon SlingshotBot no estaba corriendo, asegurar 1 instancia de Uvicorn via WMI
+        # Si por alguna razon SlingshotBot no estaba corriendo, asegurar 1 instancia de Uvicorn via WMI usando .venv
         $checkUv = Get-CimInstance Win32_Process | Where-Object { $_.Name -match "python" -and $_.CommandLine -match "uvicorn|engine\.api\.main" }
         if (-not $checkUv) {
-            $pythonExe = "C:\Program Files\Python312\python.exe"
+            $pythonExe = "C:\Slingshot\.venv\Scripts\python.exe"
+            if (-not (Test-Path $pythonExe)) { $pythonExe = "C:\Program Files\Python312\python.exe" }
             if (-not (Test-Path $pythonExe)) { $pythonExe = "python" }
             $null = Invoke-CimMethod -ClassName Win32_Process -MethodName Create -Arguments @{
                 CommandLine = "`"$pythonExe`" -m uvicorn engine.api.main:app --host 0.0.0.0 --port 8000"
