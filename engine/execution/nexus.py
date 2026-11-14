@@ -2234,6 +2234,25 @@ class NexusNode:
                 logger.warning(f"🛑 [NEXUS AUTO-LIMIT SOP-131] [{account.label}] Rechazada orden límite en {asset}: {dist_reason}")
                 return {"status": "blocked_stale_distance", "message": dist_reason}
 
+        # SOP-133 / SOP-108: Auditoría L2 en vivo antes de enviar orden límite (Fail-Open si no hay snapshot)
+        if hasattr(executor, "get_orderbook_depth"):
+            try:
+                l2_book = await executor.get_orderbook_depth(asset, limit=20)
+                if l2_book and l2_book.get("bids") and l2_book.get("asks"):
+                    from engine.analytics.order_book_microstructure_sentinel import OrderBookMicrostructureSentinel
+                    l2_sentinel = OrderBookMicrostructureSentinel()
+                    l2_res = l2_sentinel.audit_l2_book(
+                        asset=asset,
+                        direction=sig_dir_l,
+                        bids=l2_book["bids"],
+                        asks=l2_book["asks"],
+                    )
+                    if not l2_res.is_approved:
+                        logger.warning(f"🛑 [NEXUS L2 SOP-108] [{account.label}] Orden bloqueada en {asset}: {l2_res.veto_reason}")
+                        return {"status": "blocked_l2_microstructure", "message": l2_res.veto_reason}
+            except Exception as l2_err:
+                logger.debug(f"[NEXUS L2] Snapshot omitido para {asset}: {l2_err}")
+
         logger.info(f"🎯 [NEXUS AUTO-LIMIT] [{account.label}] Enviando orden límite a Bitunix para {asset} @ ${entry_p:.2f} (Qty: {risk_calc['qty']} | Margen: ${req_margin} USDT @ {safe_lev}x | Riesgo Max: ${risk_calc['projected_loss']:.2f} USDT)")
         res = await executor.place_limit_signal(acc_signal)
         if res.get("status") == "success":

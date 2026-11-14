@@ -446,6 +446,17 @@ class SlingshotOrchestrator:
                         last_regime = assessment.regime.value
                         logger.info(f"🧭 [REGIME WORKER] Transición de régimen notificada a Telegram: {assessment.regime.value}")
 
+                    # SOP-133: Supervisión autónoma de Drift ML y disparo de Walk-Forward Retrain
+                    try:
+                        from engine.ml.drift_monitor import drift_monitor
+                        if drift_monitor._last_report is not None:
+                            await asyncio.to_thread(
+                                regime_agent.check_ml_health_and_trigger_retrain,
+                                drift_monitor._last_report
+                            )
+                    except Exception as ml_chk_err:
+                        logger.debug(f"[REGIME WORKER] Revisión ML omitida: {ml_chk_err}")
+
             except Exception as reg_err:
                 logger.debug(f"[REGIME WORKER] Error evaluando régimen de mercado: {reg_err}")
 

@@ -39,7 +39,22 @@ class RollingWalkForwardTrainer:
         self.min_accuracy = min_accuracy
         self.window_candles = window_candles
         self.n_splits = n_splits
+        self.embargo_bars = 16  # SOP-133: Embargo temporal igual al horizonte Triple Barrier
         self.engineer = FeatureEngineer(target_horizon=target_horizon)
+
+    def load_recent_candles_from_store(self, symbol: str = "BTCUSDT") -> Optional[pd.DataFrame]:
+        """Extrae velas vivas acumuladas en MemoryStore antes de recurrir a disco."""
+        try:
+            from engine.core.store import store
+            hist_map = getattr(store, "_candle_history", {})
+            raw_candles = list(hist_map.get(f"{symbol.upper()}_15m", []))
+            if len(raw_candles) >= 500:
+                df = pd.DataFrame(raw_candles)
+                logger.info(f"⚡ [ROLLING TRAIN] {len(df)} velas vivas cargadas desde MemoryStore ({symbol}).")
+                return df.tail(self.window_candles).copy()
+        except Exception as err:
+            logger.debug(f"[ROLLING TRAIN] MemoryStore omitido: {err}")
+        return None
 
     def load_recent_candles_from_sqlite(self, db_path: Optional[Path] = None, symbol: str = "BTCUSDT") -> Optional[pd.DataFrame]:
         """
@@ -116,10 +131,11 @@ class RollingWalkForwardTrainer:
 
         for fold in range(1, self.n_splits + 1):
             train_end = fold * fold_size
-            test_end = min(train_end + fold_size, n_samples)
+            test_start = train_end + self.embargo_bars
+            test_end = min(test_start + fold_size, n_samples)
 
             X_tr, y_tr = X.iloc[:train_end], y.iloc[:train_end]
-            X_te, y_te = X.iloc[train_end:test_end], y.iloc[train_end:test_end]
+            X_te, y_te = X.iloc[test_start:test_end], y.iloc[test_start:test_end]
 
             if len(X_te) < 50:
                 continue
@@ -154,8 +170,10 @@ class RollingWalkForwardTrainer:
         el modelo en disco y notifica al SlingshotML en memoria para Hot-Reload.
         """
         start_t = time.time()
-        # 1. Cargar velas
-        df = self.load_recent_candles_from_sqlite()
+        # 1. Cargar velas (Prioridad: MemoryStore vivo -> SQLite -> Parquet)
+        df = self.load_recent_candles_from_store()
+        if df is None:
+            df = self.load_recent_candles_from_sqlite()
         if df is None:
             df = self.load_fallback_parquet()
 
@@ -178,11 +196,25 @@ class RollingWalkForwardTrainer:
         elapsed = round(time.time() - start_t, 2)
         logger.info(f"🧪 [ROLLING TRAIN] Walk-Forward completado en {elapsed}s | OOS Accuracy: {mean_acc:.2%} | OOS Precision: {mean_prec:.2%}")
 
-        # 4. Decisión de Promoción Fail-Safe
-        is_promoted = (mean_acc >= self.min_accuracy) or force
+        # 4. Decisión de Promoción Fail-Safe (Champion-Challenger SOP-133)
         models_dir = Path(__file__).parent / "models"
         models_dir.mkdir(parents=True, exist_ok=True)
         prod_model_path = models_dir / "slingshot_xgb_15m_v2.json"
+
+        champion_acc = 0.0
+        if prod_model_path.exists() and not force and len(X) >= 100:
+            try:
+                champ_model = xgb.XGBClassifier()
+                champ_model.load_model(str(prod_model_path))
+                eval_slice = X.tail(max(50, len(X) // 5))
+                eval_y = y.loc[eval_slice.index]
+                expected_cols = [c for c in champ_model.feature_names_in_ if c in eval_slice.columns]
+                if len(expected_cols) == len(champ_model.feature_names_in_):
+                    champion_acc = float(accuracy_score(eval_y, champ_model.predict(eval_slice[expected_cols])))
+            except Exception:
+                champion_acc = 0.0
+
+        is_promoted = (mean_acc >= self.min_accuracy and mean_acc >= champion_acc) or force
 
         if is_promoted and candidate_model is not None:
             temp_model_path = models_dir / f"candidate_{int(time.time())}.json"

@@ -92,6 +92,14 @@ class SlingshotML:
             
             if features_df.empty:
                 return {"direction": "ANALIZANDO", "probability": 50, "status": "insufficient_data"}
+
+            # SOP-133: Inicializar referencia de DriftMonitor automáticamente al primer flujo vivo
+            try:
+                from engine.ml.drift_monitor import drift_monitor
+                if drift_monitor._reference_df is None and len(features_df) >= 30:
+                    drift_monitor.set_reference(features_df)
+            except Exception:
+                pass
                 
             # Extraer solo la ÚLTIMA fila (la vela actual/viva)
             latest_features = features_df.iloc[[-1]].copy()

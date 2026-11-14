@@ -151,5 +151,57 @@ class BlackBox:
 
         return score / total_weight
 
+    def get_adaptive_factor_bonus(
+        self,
+        current_signal: dict,
+        min_samples: int = 15,
+        max_bonus: int = 8,
+    ) -> tuple[int, str]:
+        """
+        SOP-133: Calibración Bayesiana Acotada por Factor (Bounded Thompson Bandit).
+        Modula el score de confluencia en [-max_bonus, +max_bonus] según el Win Rate
+        empírico reciente de los factores activos (has_ob, has_sweep, is_in_ote, rvol >= 1.5).
+        Requiere mínimo `min_samples` trades cerrados para evitar overfitting.
+        """
+        if len(self.memory) < min_samples:
+            return 0, f"Calibración en espera ({len(self.memory)}/{min_samples} trades)"
+
+        total_wins = sum(1 for m in self.memory if m.get("result") == "TAKE_PROFIT")
+        base_wr = (total_wins + 1.0) / (len(self.memory) + 2.0)
+
+        fp = self.extract_fingerprint(current_signal)
+        active_checks = {
+            "has_ob": bool(fp.get("has_ob")),
+            "has_sweep": bool(fp.get("has_sweep")),
+            "is_in_ote": bool(fp.get("is_in_ote")),
+            "high_rvol": float(fp.get("rvol", 1.0)) >= 1.5,
+        }
+
+        edge_sum = 0.0
+        matched_factors = []
+        for fname, is_active in active_checks.items():
+            if not is_active:
+                continue
+            if fname == "high_rvol":
+                subset = [m for m in self.memory if float(m.get("fingerprint", {}).get("rvol", 1.0)) >= 1.5]
+            else:
+                subset = [m for m in self.memory if bool(m.get("fingerprint", {}).get(fname))]
+
+            if len(subset) < 5:
+                continue
+            wins = sum(1 for m in subset if m.get("result") == "TAKE_PROFIT")
+            factor_wr = (wins + 1.0) / (len(subset) + 2.0)
+            edge = factor_wr - base_wr
+            edge_sum += edge
+            matched_factors.append(f"{fname}:{edge:+.0%}")
+
+        if not matched_factors:
+            return 0, "Sin muestra suficiente por factor"
+
+        raw_bonus = int(round(edge_sum * 25.0))
+        bounded = max(-max_bonus, min(max_bonus, raw_bonus))
+        detail = f"Bandit Bayesiano ({', '.join(matched_factors)}) -> {bounded:+d} pts"
+        return bounded, detail
+
 # Instancia global
 blackbox = BlackBox()

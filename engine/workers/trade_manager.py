@@ -707,8 +707,31 @@ class TradeManager:
                 elif current_r >= 4.0:
                     ratchet_floor = min(ratchet_floor, tp3 if tp3 > 0 else entry - (3.0 * r_dist))
 
-            # 2. Chandelier Exit (1.5x ATR)
-            chandelier_sl = round(current_price - (atr_val * 1.5), 8) if is_long else round(current_price + (atr_val * 1.5), 8)
+            # 2. Chandelier Exit (1.5x ATR estándar; 1.0x ATR si SOP-109 detecta Carry Drag elevado)
+            chandelier_mult = 1.5
+            try:
+                from engine.core.store import store
+                from engine.analytics.funding_rate_drag_sentinel import FundingRateDragSentinel
+                asset_sym = str(signal.get("asset") or signal.get("symbol") or "").upper()
+                m_state = getattr(store, "_market_states", {}).get(asset_sym) if asset_sym else None
+                raw_fr = float(m_state.get("funding_rate", 0.0)) if isinstance(m_state, dict) else 0.0
+                if raw_fr != 0.0:
+                    # funding_rate en store puede venir en % (ej. 0.05) o decimal (0.0005); normalizamos a decimal 8h
+                    fr_decimal = raw_fr / 100.0 if abs(raw_fr) > 0.005 else raw_fr
+                    drag_res = FundingRateDragSentinel().audit_position_carry(
+                        asset=asset_sym,
+                        direction="LONG" if is_long else "SHORT",
+                        funding_rate_8h=fr_decimal,
+                        duration_days=max(0.5, float(signal.get("days_open", 1.0))),
+                        position_notional_usd=float(signal.get("position_size_usdt") or 1000.0),
+                        initial_dollar_risk=float(signal.get("risk_amount_usdt") or 25.0),
+                    )
+                    if drag_res.status in ("WARNING_TIGHTEN", "CRITICAL_HARVEST"):
+                        chandelier_mult = 1.0
+            except Exception:
+                chandelier_mult = 1.5
+
+            chandelier_sl = round(current_price - (atr_val * chandelier_mult), 8) if is_long else round(current_price + (atr_val * chandelier_mult), 8)
 
             # 3. Swing estructural opcional
             structural_sl = None

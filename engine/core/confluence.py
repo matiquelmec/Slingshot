@@ -1041,6 +1041,27 @@ class ConfluenceManager:
         import math
         base_score = int((score / total_weight) * 100) if total_weight > 0 else 0
         final_score = min(100, max(0, int(base_score * multiplier)))
+
+        # SOP-133: Modulación adaptativa acotada (±8 pts máx) desde BlackBox
+        if multiplier > 0 and final_score > 0:
+            try:
+                from engine.core.memory import blackbox
+                adaptive_bonus, adaptive_detail = blackbox.get_adaptive_factor_bonus({
+                    "asset": signal.get("asset", "UNKNOWN"),
+                    "regime": regime,
+                    "confluence": {"checklist": checklist, "rvol": rvol},
+                    "fib_ote": signal.get("fib_ote", {}),
+                    "absorption_score": absorption_score,
+                })
+                if adaptive_bonus != 0:
+                    final_score = min(100, max(0, final_score + adaptive_bonus))
+                    checklist.append({
+                        "factor": "Bandit Bayesiano (SOP-133)",
+                        "status": "CONFIRMADO" if adaptive_bonus > 0 else "PENALIZADO",
+                        "detail": adaptive_detail,
+                    })
+            except Exception:
+                pass
         
         conviction = "ALTA CONVICCIÓN" if final_score >= 70 else "SÓLIDA" if final_score >= 50 else "ESPECULATIVA"
         
