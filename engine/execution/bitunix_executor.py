@@ -791,29 +791,6 @@ class BitunixExecutor:
             logger.info(f"🧪 [BITUNIX DRY RUN] Colocando TP/SL de posicion para {sym} (PosId: {position_id}) -> TP: {tp_price}, SL: {sl_price}")
             return f"dry_tpsl_{uuid.uuid4().hex[:8]}"
 
-        # 0. Pre-validación inmediata de SL perforado contra precio de mercado actual (SOP-58 / SOP-25)
-        if sl_price is not None:
-            try:
-                positions = await self.get_pending_positions()
-                cur_price = await self.get_ticker_price(sym)
-                if positions and cur_price > 0:
-                    target_pos = None
-                    for p in positions:
-                        if p.get("symbol") == sym:
-                            if position_id and str(p.get("positionId") or p.get("id")) != str(position_id):
-                                continue
-                            target_pos = p
-                            break
-                    if target_pos:
-                        pos_side = str(target_pos.get("side", "BUY")).upper()
-                        is_long = pos_side in ("BUY", "LONG", "1")
-                        if (is_long and sl_price >= cur_price) or (not is_long and sl_price <= cur_price):
-                            logger.critical(f"🚨 [SOP-58 PRE-VALIDATION] SL perforado en {sym} ({pos_side}): target SL ${sl_price} vs mercado ${cur_price}. Disparando CIERRE A MERCADO DE EMERGENCIA...")
-                            await self.close_position_market(symbol=sym, position_id=position_id)
-                            return None
-            except Exception as e:
-                logger.debug(f"[BITUNIX] Error en pre-validación de Stop Loss perforado: {e}")
-
         _, decimals = await self.get_symbol_precision(sym)
         formatted_sl = f"{float(sl_price):.{decimals}f}" if sl_price is not None else None
         formatted_tp = f"{float(tp_price):.{decimals}f}" if tp_price is not None else None
@@ -873,6 +850,29 @@ class BitunixExecutor:
                                 pass
         except Exception as e:
             logger.debug(f"[BITUNIX] Error verificando TPSL previos: {e}")
+
+        # 1.5 Pre-validación inmediata de SL perforado contra precio de mercado actual (SOP-58 / SOP-25)
+        if sl_price is not None:
+            try:
+                positions = await self.get_pending_positions()
+                cur_price = await self.get_ticker_price(sym)
+                if positions and cur_price > 0:
+                    target_pos = None
+                    for p in positions:
+                        if p.get("symbol") == sym:
+                            if position_id and str(p.get("positionId") or p.get("id")) != str(position_id):
+                                continue
+                            target_pos = p
+                            break
+                    if target_pos:
+                        pos_side = str(target_pos.get("side", "BUY")).upper()
+                        is_long = pos_side in ("BUY", "LONG", "1")
+                        if (is_long and sl_price >= cur_price) or (not is_long and sl_price <= cur_price):
+                            logger.critical(f"🚨 [SOP-58 PRE-VALIDATION] SL perforado en {sym} ({pos_side}): target SL ${sl_price} vs mercado ${cur_price}. Disparando CIERRE A MERCADO DE EMERGENCIA...")
+                            await self.close_position_market(symbol=sym, position_id=position_id)
+                            return None
+            except Exception as e:
+                logger.debug(f"[BITUNIX] Error en pre-validación de Stop Loss perforado: {e}")
 
         # 2. Emitir o modificar la orden de Stop Loss / Take Profit (Dual Protocol)
         payload = {

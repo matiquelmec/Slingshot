@@ -1087,13 +1087,17 @@ class TradeManager:
                             if not vault_risk or vault_risk <= 0:
                                 rec = vault.get_position_risk_record(cached_key, symbol=sym, side=side)
                                 if rec and rec.get("sl_dist", 0) > 0:
-                                    vault_risk = float(rec["sl_dist"])
+                                    rec_ep = float(rec.get("entry_price") or 0.0)
+                                    if rec.get("pos_key") == cached_key or (rec_ep > 0 and entry_price > 0 and abs(rec_ep - entry_price) / entry_price <= 0.02):
+                                        vault_risk = float(rec["sl_dist"])
                             if (not vault_risk or vault_risk <= 0):
                                 plan = vault.get_system_order_plan(acc_id, sym, side)
                                 if plan and float(plan.get("initial_sl", 0)) > 0:
+                                    plan_ep = float(plan.get("entry_price") or 0.0)
                                     plan_isl = float(plan["initial_sl"])
-                                    if (side == "LONG" and plan_isl < entry_price) or (side == "SHORT" and plan_isl > entry_price):
-                                        vault_risk = abs(entry_price - plan_isl)
+                                    if plan_ep > 0 and entry_price > 0 and abs(plan_ep - entry_price) / entry_price <= 0.02:
+                                        if (side == "LONG" and plan_isl < entry_price) or (side == "SHORT" and plan_isl > entry_price):
+                                            vault_risk = abs(entry_price - plan_isl)
                             if vault_risk and vault_risk > 0:
                                 cached_risk = vault_risk
                                 self._initial_risk_cache[cached_key] = cached_risk
