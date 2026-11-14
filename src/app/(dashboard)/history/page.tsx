@@ -44,62 +44,81 @@ export default function HistoryPage() {
   const [loading, setLoading] = useState(true);
   const [isTursoSynced, setIsTursoSynced] = useState(false);
   const [filterAsset, setFilterAsset] = useState('ALL');
+  const [syncError, setSyncError] = useState<string | null>(null);
 
   const loadData = useCallback(async (showLoading = false) => {
     if (showLoading) setLoading(true);
+    setSyncError(null);
 
     try {
-      // 1. Cargar Señales desde Turso Cloud vía Server Action
-      const tursoSignalsRes = await fetchSignalsAction({
-        status: 'ALL',
-        limit: 50,
-      });
+      let tursoOk = false;
 
-      if (tursoSignalsRes.success && tursoSignalsRes.data && tursoSignalsRes.data.length > 0) {
-        const formatted: SignalEvent[] = tursoSignalsRes.data.map((s) => ({
-          id: s.id,
-          asset: s.asset,
-          interval: s.timeframe || '15m',
-          signal_type: s.direction,
-          entry_price: s.entryPrice,
-          stop_loss: s.stopLoss,
-          take_profit_3r: s.takeProfit3 || s.entryPrice * 1.05,
-          regime: 'TURSO_ACID',
-          strategy: 'QUANT_SMC',
-          status: s.status,
-          created_at: s.createdAt,
-          timestamp: s.createdAt || new Date().toISOString(),
-        }));
-        setSignals(formatted);
-        setIsTursoSynced(true);
-      } else {
-        // Fallback a FastAPI si Turso aún no tiene señales cargadas (con timeout seguro en Vercel)
+      // 1. Cargar Señales desde Turso Cloud vía Server Action (aislado)
+      let signalsLoaded = false;
+      try {
+        const tursoSignalsRes = await fetchSignalsAction({
+          status: 'ALL',
+          limit: 50,
+        });
+
+        if (tursoSignalsRes.success && tursoSignalsRes.data && tursoSignalsRes.data.length > 0) {
+          const formatted: SignalEvent[] = tursoSignalsRes.data.map((s) => ({
+            id: s.id,
+            asset: s.asset,
+            interval: s.timeframe || '15m',
+            signal_type: s.direction,
+            entry_price: s.entryPrice,
+            stop_loss: s.stopLoss,
+            take_profit_3r: s.takeProfit3 || s.entryPrice * 1.05,
+            regime: 'TURSO_ACID',
+            strategy: 'QUANT_SMC',
+            status: s.status,
+            created_at: s.createdAt,
+            timestamp: s.createdAt || new Date().toISOString(),
+          }));
+          setSignals(formatted);
+          signalsLoaded = true;
+          tursoOk = true;
+        }
+      } catch (sigErr) {
+        console.warn('Error en fetchSignalsAction:', sigErr);
+      }
+
+      if (!signalsLoaded) {
+        // Fallback a FastAPI si Turso aún no tiene señales o falló el Server Action
         try {
           const BASE_URL = getApiBaseUrl();
-          const res = await fetch(`${BASE_URL}/api/v1/signals`, { signal: AbortSignal.timeout(2000) });
+          const res = await fetch(`${BASE_URL}/api/v1/signals`, { signal: AbortSignal.timeout(2500) });
           if (res.ok) {
             const data = await res.json();
-            setSignals(data as SignalEvent[]);
+            if (Array.isArray(data)) {
+              setSignals(data as SignalEvent[]);
+            }
           }
         } catch {
-          // Ignorado en Vercel si FastAPI corre en VPS/localhost
+          // Ignorado en Vercel si FastAPI no responde
         }
       }
 
-      // 2. Cargar Trades desde Turso Cloud vía Server Action
-      const tursoTradesRes = await fetchTradesAction({
-        status: 'ALL',
-        limit: 50,
-      });
+      // 2. Cargar Trades desde Turso Cloud vía Server Action (aislado)
+      try {
+        const tursoTradesRes = await fetchTradesAction({
+          status: 'ALL',
+          limit: 50,
+        });
 
-      if (tursoTradesRes.success && tursoTradesRes.data) {
-        setTrades(tursoTradesRes.data);
-        if (tursoTradesRes.data.length > 0) {
-          setIsTursoSynced(true);
+        if (tursoTradesRes.success && tursoTradesRes.data) {
+          setTrades(tursoTradesRes.data);
+          tursoOk = true;
+        } else if (!tursoTradesRes.success && tursoTradesRes.error) {
+          setSyncError(tursoTradesRes.error);
         }
+      } catch (trdErr) {
+        console.warn('Error en fetchTradesAction:', trdErr);
+        setSyncError(trdErr instanceof Error ? trdErr.message : 'Error consultando trades');
       }
-    } catch (e) {
-      console.error('Error fetching history data:', e);
+
+      setIsTursoSynced(tursoOk);
     } finally {
       if (showLoading) setLoading(false);
     }

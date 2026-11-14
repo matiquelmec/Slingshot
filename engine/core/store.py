@@ -140,11 +140,23 @@ class MemoryStore:
                     break
             
             if existing:
+                prev_status = existing.get("status")
                 existing.update(signal_data)
-                return existing
+                target_sig = existing
+                should_sync = prev_status != target_sig.get("status")
             else:
                 self._signal_events.append(signal_data)
-                return signal_data
+                target_sig = signal_data
+                should_sync = True
+
+        # Sincronización asíncrona no-bloqueante hacia Turso Cloud (SOP-135)
+        if should_sync:
+            try:
+                from engine.execution.turso_sync import turso_sync
+                turso_sync.dispatch_signal_async(dict(target_sig))
+            except Exception:
+                pass
+        return target_sig
 
     async def get_signals(self, asset: Optional[str] = None, status: Optional[str] = None, limit: Optional[int] = None) -> List[Dict[str, Any]]:
         """Busca señales en el buffer circular con filtros."""

@@ -117,7 +117,7 @@ def test_sop133_drift_monitor_auto_initializes_on_predict_live():
 
 
 @pytest.mark.asyncio
-async def test_sop133_nexus_l2_microstructure_blocks_heavy_ask_wall(caplog):
+async def test_sop133_nexus_l2_microstructure_blocks_heavy_ask_wall():
     nexus = NexusNode(dry_run=False)
     mock_executor = MagicMock()
     mock_executor.dry_run = False
@@ -164,11 +164,13 @@ async def test_sop133_nexus_l2_microstructure_blocks_heavy_ask_wall(caplog):
         "asset_health": {"ker": 0.45, "adx": 30.0},
     }
 
-    res = await nexus.process_limit_setup(signal)
+    with patch("engine.execution.nexus.logger.warning") as mock_warn:
+        res = await nexus.process_limit_setup(signal)
 
     assert res["placed"] is False
     assert res["status"] == "REJECTED_EXCHANGE"
-    assert "OBI_VENTA_DOMINANTE" in caplog.text
+    warn_msgs = " ".join(str(call.args[0]) for call in mock_warn.call_args_list if call.args)
+    assert "OBI_VENTA_DOMINANTE" in warn_msgs
     mock_executor.get_orderbook_depth.assert_awaited_once()
     mock_executor.place_limit_signal.assert_not_awaited()
 

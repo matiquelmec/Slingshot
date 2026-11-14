@@ -1591,13 +1591,27 @@ class TradeManager:
                             )
 
                             # 📡 [TELEGRAM TRADE CLOSED ALERT]
+                            exit_px = float(filled_order.get("avgPrice") or filled_order.get("price") or 0.0)
+                            try:
+                                from engine.execution.turso_sync import turso_sync
+                                if acc_id == "primary":
+                                    turso_sync.dispatch_close_trade_async(
+                                        trade_id=str(closed_id),
+                                        exit_price=exit_px,
+                                        pnl=float(real_pnl_usd),
+                                        pnl_percent=float(est_r),
+                                        symbol=csym,
+                                    )
+                            except Exception:
+                                pass
+
                             try:
                                 from engine.router.telegram_dispatcher import telegram_dispatcher
                                 if acc_id == "primary":
                                     asyncio.create_task(telegram_dispatcher.send_trade_closed_alert(
                                         symbol=csym,
                                         reason=exit_label,
-                                        exit_price=float(filled_order.get("avgPrice") or filled_order.get("price") or 0.0),
+                                        exit_price=exit_px,
                                         pnl_usd=real_pnl_usd,
                                         pnl_r=est_r
                                     ))

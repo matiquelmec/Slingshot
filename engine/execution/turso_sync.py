@@ -75,6 +75,10 @@ class TursoSyncManager:
         if not self.is_enabled:
             return {"success": False, "error": "Turso sync disabled"}
 
+        # Guardarraíl anti-contaminación: jamás escribir a Turso Cloud desde pytest salvo opt-in explícito
+        if os.environ.get("PYTEST_CURRENT_TEST") and os.environ.get("TURSO_ALLOW_TEST_WRITE") != "1":
+            return {"success": False, "error": "Blocked remote Turso write under pytest"}
+
         args = []
         if params:
             for p in params:
@@ -133,7 +137,7 @@ class TursoSyncManager:
 
         t_id = tenant_id or self.DEFAULT_TENANT_ID
         u_id = user_id or self.DEFAULT_USER_ID
-        now_ts = int(time.time() * 1000)
+        now_ts = int(time.time())
 
         # 1. Upsert Tenant
         sql_tenant = (
@@ -179,10 +183,10 @@ class TursoSyncManager:
         score = float(signal.get("confluence_score") or signal.get("score") or 0.0)
         ker = float(signal.get("ker_value") or signal.get("ker") or 0.0)
         status = str(signal.get("status") or "PENDING").upper()
-        now_ts = int(time.time() * 1000)
+        now_ts = int(time.time())
 
         sql = (
-            "INSERT INTO signals (id, tenant_id, user_id, asset, direction, timeframe, "
+            "INSERT OR REPLACE INTO signals (id, tenant_id, user_id, asset, direction, timeframe, "
             "entry_price, stop_loss, take_profit_1, take_profit_2, take_profit_3, "
             "confluence_score, ker_value, status, created_at) "
             "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);"
@@ -228,7 +232,7 @@ class TursoSyncManager:
         pnl = float(trade.get("pnl") or trade.get("unrealized_pnl") or 0.0)
         pnl_pct = float(trade.get("pnl_percent") or trade.get("unrealized_pnl_pct") or 0.0)
         status = str(trade.get("status") or "OPEN").upper()
-        now_ts = int(time.time() * 1000)
+        now_ts = int(time.time())
 
         sql = (
             "INSERT OR REPLACE INTO trades (id, tenant_id, user_id, symbol, side, entry_price, "
@@ -252,26 +256,46 @@ class TursoSyncManager:
         exit_price: float,
         pnl: float,
         pnl_percent: float,
-        tenant_id: Optional[str] = None
+        tenant_id: Optional[str] = None,
+        symbol: Optional[str] = None
     ) -> bool:
         """Marca un trade como cerrado en Turso con sus métricas finales de PnL."""
         if not self.is_enabled:
             return False
 
         t_id = tenant_id or self.DEFAULT_TENANT_ID
-        now_ts = int(time.time() * 1000)
+        now_ts = int(time.time())
 
-        sql = (
-            "UPDATE trades SET exit_price = ?, pnl = ?, pnl_percent = ?, "
-            "status = 'CLOSED', closed_at = ? WHERE id = ? AND tenant_id = ?;"
-        )
+        if symbol:
+            sql = (
+                "UPDATE trades SET exit_price = ?, pnl = ?, pnl_percent = ?, "
+                "status = 'CLOSED', closed_at = ? "
+                "WHERE (id = ? OR (symbol = ? AND status = 'OPEN')) AND tenant_id = ?;"
+            )
+            params = [exit_price, pnl, pnl_percent, now_ts, trade_id, symbol.upper(), t_id]
+        else:
+            sql = (
+                "UPDATE trades SET exit_price = ?, pnl = ?, pnl_percent = ?, "
+                "status = 'CLOSED', closed_at = ? WHERE id = ? AND tenant_id = ?;"
+            )
+            params = [exit_price, pnl, pnl_percent, now_ts, trade_id, t_id]
 
-        res = self.execute_sql(sql, [exit_price, pnl, pnl_percent, now_ts, trade_id, t_id])
+        res = self.execute_sql(sql, params)
         return bool(res.get("success"))
+
+    def dispatch_signal_async(self, signal: Dict[str, Any]):
+        """Envía el registro de una señal cuantitativa a Turso en segundo plano."""
+        if not self.is_enabled or os.environ.get("PYTEST_CURRENT_TEST"):
+            return
+        try:
+            loop = asyncio.get_running_loop()
+            loop.create_task(asyncio.to_thread(self.record_signal, signal))
+        except RuntimeError:
+            self.record_signal(signal)
 
     def dispatch_trade_async(self, trade: Dict[str, Any]):
         """Envía el registro del trade a Turso en segundo plano sin esperar respuesta."""
-        if not self.is_enabled:
+        if not self.is_enabled or os.environ.get("PYTEST_CURRENT_TEST"):
             return
         try:
             loop = asyncio.get_running_loop()
@@ -279,6 +303,23 @@ class TursoSyncManager:
         except RuntimeError:
             # Si no hay loop en ejecución, invocar síncrono
             self.record_trade(trade)
+
+    def dispatch_close_trade_async(
+        self,
+        trade_id: str,
+        exit_price: float,
+        pnl: float,
+        pnl_percent: float,
+        symbol: Optional[str] = None
+    ):
+        """Envía el cierre de un trade a Turso en segundo plano."""
+        if not self.is_enabled or os.environ.get("PYTEST_CURRENT_TEST"):
+            return
+        try:
+            loop = asyncio.get_running_loop()
+            loop.create_task(asyncio.to_thread(self.close_trade, trade_id, exit_price, pnl, pnl_percent, None, symbol))
+        except RuntimeError:
+            self.close_trade(trade_id, exit_price, pnl, pnl_percent, None, symbol)
 
 # Instancia global singleton para exportación directa
 turso_sync = TursoSyncManager()

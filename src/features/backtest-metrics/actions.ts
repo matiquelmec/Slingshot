@@ -1,14 +1,12 @@
 'use server';
 
-import { z } from 'zod';
 import { requireUserSession, UserSession } from '@/shared';
+import {
+  backtestAuditQuerySchema,
+  theoryVsPracticeQuerySchema,
+} from './schemas';
 
-export const backtestAuditQuerySchema = z.object({
-  playbook: z.enum(['ALL', 'LIQUIDITY_SWEEP_FVG', 'OB_DISCOUNT_RETEST']).default('ALL'),
-  includeTearSheet: z.boolean().default(true),
-});
-
-export type BacktestAuditQueryParams = z.infer<typeof backtestAuditQuerySchema>;
+export type { BacktestAuditQueryParams, TheoryVsPracticeQueryParams } from './schemas';
 
 export interface PlaybookMetrics {
   name: string;
@@ -151,13 +149,6 @@ export async function fetchBacktestAuditMetricsAction(
     };
   }
 }
-
-export const theoryVsPracticeQuerySchema = z.object({
-  comparisonScope: z.enum(['FULL_SPECTRUM', 'SL_TP_RELIABILITY', 'EXECUTION_FRICTION', 'CAPITAL_PRESERVATION']).default('FULL_SPECTRUM'),
-  assetFilter: z.string().default('ALL'),
-});
-
-export type TheoryVsPracticeQueryParams = z.infer<typeof theoryVsPracticeQuerySchema>;
 
 export interface ParityDimensionComparison {
   dimension: string;

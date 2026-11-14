@@ -1,47 +1,23 @@
 'use server';
 
-import { z } from 'zod';
 import { db, client, trades, requireUserSession, UserSession } from '@/shared';
 import { eq, and, desc, sql } from 'drizzle-orm';
-import { tradeSchema, Trade } from '@/entities';
+import { Trade } from '@/entities';
+import {
+  fetchTradesQuerySchema,
+  createTradeInputSchema,
+  closeTradeInputSchema,
+  type TradeActionResult,
+  type DatabaseHealthMetrics,
+} from './schemas';
 
-export const fetchTradesQuerySchema = z.object({
-  status: z.enum(['ALL', 'OPEN', 'CLOSED', 'CANCELLED']).default('ALL'),
-  symbol: z.string().optional(),
-  limit: z.number().int().min(1).max(100).default(50),
-});
-
-export type FetchTradesQueryParams = z.infer<typeof fetchTradesQuerySchema>;
-
-export const createTradeInputSchema = z.object({
-  symbol: z.string().min(2).max(20),
-  side: z.enum(['BUY', 'SELL']),
-  entryPrice: z.number().positive(),
-  exitPrice: z.number().positive().optional(),
-  quantity: z.number().nonnegative().default(0),
-  signalId: z.string().optional(),
-  pnl: z.number().default(0),
-  pnlPercent: z.number().default(0),
-  status: z.enum(['OPEN', 'CLOSED', 'CANCELLED']).default('OPEN'),
-});
-
-export type CreateTradeInput = z.infer<typeof createTradeInputSchema>;
-
-export const closeTradeInputSchema = z.object({
-  tradeId: z.string().min(1),
-  exitPrice: z.number().positive(),
-  pnl: z.number(),
-  pnlPercent: z.number(),
-});
-
-export type CloseTradeInput = z.infer<typeof closeTradeInputSchema>;
-
-export interface TradeActionResult<T = unknown> {
-  success: boolean;
-  data?: T;
-  error?: string;
-  count?: number;
-}
+export type {
+  FetchTradesQueryParams,
+  CreateTradeInput,
+  CloseTradeInput,
+  TradeActionResult,
+  DatabaseHealthMetrics,
+} from './schemas';
 
 /**
  * Fetch Trades from Turso with Multi-Tenant Anti-IDOR scoping.
@@ -73,7 +49,10 @@ export async function fetchTradesAction(
 
     const safeDate = (val: unknown): Date | undefined => {
       if (!val) return undefined;
-      if (val instanceof Date) return isNaN(val.getTime()) ? undefined : val;
+      if (val instanceof Date) {
+        if (isNaN(val.getTime())) return undefined;
+        return val.getUTCFullYear() > 2100 ? new Date(Math.floor(val.getTime() / 1000)) : val;
+      }
       if (typeof val === 'number') {
         const ms = val < 10000000000 ? val * 1000 : val;
         const d = new Date(ms);
@@ -219,19 +198,6 @@ export async function closeTradeAction(
       error: err instanceof Error ? err.message : 'Failed to close trade',
     };
   }
-}
-
-export interface DatabaseHealthMetrics {
-  storageType: 'TURSO_LIBSQL_CLOUD';
-  tierLimitMb: number;
-  estimatedUsedKb: number;
-  pageCount: number;
-  pageSizeBytes: number;
-  usagePercentage: number;
-  tableCounts: Record<string, number>;
-  activeIndexes: string[];
-  isHealthy: boolean;
-  status: 'EXCELLENT' | 'WARNING' | 'CRITICAL';
 }
 
 /**

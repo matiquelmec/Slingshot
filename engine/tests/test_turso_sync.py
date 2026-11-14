@@ -54,7 +54,7 @@ def test_record_signal_payload_structure(mock_turso_manager):
         sql_call = mock_exec.call_args[0][0]
         params = mock_exec.call_args[0][1]
 
-        assert "INSERT INTO signals" in sql_call
+        assert "INSERT OR REPLACE INTO signals" in sql_call
         assert params[3] == "BTCUSDT"
         assert params[4] == "LONG"
         assert params[6] == 64500.0
@@ -98,3 +98,27 @@ def test_close_trade_execution(mock_turso_manager):
         mock_exec.assert_called_once()
         sql_call = mock_exec.call_args[0][0]
         assert "UPDATE trades SET exit_price =" in sql_call
+
+
+def test_pytest_guardrail_blocks_real_turso_writes(mock_turso_manager, monkeypatch):
+    monkeypatch.setenv("PYTEST_CURRENT_TEST", "test_pytest_guardrail")
+    monkeypatch.delenv("TURSO_ALLOW_TEST_WRITE", raising=False)
+    res = mock_turso_manager.execute_sql("SELECT 1")
+    assert res["success"] is False
+    assert "Blocked remote Turso write under pytest" in res["error"]
+
+
+def test_signal_and_trade_timestamps_are_unix_seconds(mock_turso_manager):
+    with patch.object(mock_turso_manager, "execute_sql") as mock_exec:
+        mock_exec.return_value = {"success": True}
+        mock_turso_manager._initialized = True
+
+        mock_turso_manager.record_signal({
+            "asset": "ETHUSDT",
+            "direction": "LONG",
+            "entry_price": 3100.0,
+            "stop_loss": 3000.0,
+        })
+        sig_params = mock_exec.call_args[0][1]
+        assert sig_params[-1] < 10_000_000_000
+        assert "INSERT OR REPLACE INTO signals" in mock_exec.call_args[0][0]

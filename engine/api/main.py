@@ -585,9 +585,40 @@ async def get_signals(
     asset: Optional[str] = Query(None),
     status: Optional[str] = Query("ALL")
 ):
-    """Retorna el historial de señales activas o bloqueadas (Auditoría)."""
+    """Retorna el historial de señales activas o bloqueadas (Auditoría + Vault Fallback)."""
     _status_filter = None if status == "ALL" else status
-    return await store.get_signals(asset=asset, status=_status_filter)
+    sigs = await store.get_signals(asset=asset, status=_status_filter)
+    if not sigs:
+        try:
+            from engine.core.vault import vault
+            with vault._get_conn() as conn:
+                cur = conn.cursor()
+                cur.execute(
+                    "SELECT dedup_key, asset, direction, timeframe, price, timestamp "
+                    "FROM telegram_dispatches ORDER BY timestamp DESC LIMIT 50"
+                )
+                for row in cur.fetchall():
+                    r_asset = str(row[1] or "")
+                    if asset and asset != "ALL" and r_asset.upper() != asset.upper():
+                        continue
+                    ts_iso = datetime.fromtimestamp(float(row[5] or 0), tz=timezone.utc).isoformat()
+                    sigs.append({
+                        "id": str(row[0]),
+                        "asset": r_asset,
+                        "interval": str(row[3] or "15m"),
+                        "signal_type": str(row[2] or "LONG"),
+                        "entry_price": float(row[4] or 0.0),
+                        "stop_loss": 0.0,
+                        "take_profit_3r": 0.0,
+                        "regime": "VAULT_PERSISTED",
+                        "strategy": "QUANT_SMC",
+                        "status": "APPROVED",
+                        "created_at": ts_iso,
+                        "timestamp": ts_iso,
+                    })
+        except Exception:
+            pass
+    return sanitize_for_json(sigs)
 
 
 @app.get("/api/v1/scanner/opportunities")

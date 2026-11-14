@@ -1,14 +1,13 @@
-import { createClient } from '@libsql/client';
+import { createClient } from '@libsql/client/web';
 import { drizzle } from 'drizzle-orm/libsql';
 import * as schema from './schema';
 
 const DEFAULT_TURSO_URL = 'libsql://slingshot-slingshotagente.aws-ap-northeast-1.turso.io';
 const DEFAULT_TURSO_TOKEN = 'eyJhbGciOiJFZERTQSIsInR5cCI6IkpXVCJ9.eyJhIjoicnciLCJpYXQiOjE3OTA5NTQwNDEsImlkIjoiMDFhMGZkMmQtY2EwMS03NTNiLTliNWMtMGE2MGQzYTM4NWJiIiwia2lkIjoicUMwQ0plVkY2amwzUkE1dlNjbEJXbG5XRXNoNHpyZURUbUE0bDBqUm1NQSIsInJpZCI6IjM5NzMxMDAyLTg3YzYtNGUyOS05NDc2LTZjZDZmM2VkNTViNSJ9.vvPQtU5zulZzdYMY2G70VyOoyKDvGrVXpbp2QiPhPJHp2Y5oVTN1XNhE0vRn8qzD4UrLhr2OR1TpLqHs_i59Dg';
 
-// En Vercel / Web standard APIs, 'file:' no está soportado. Usamos siempre el endpoint institucional de Turso Cloud.
+// En Vercel / @libsql/client/web, 'file:' no está soportado. Usamos siempre el endpoint HTTP de Turso Cloud.
 const rawUrl = (process.env.TURSO_DATABASE_URL || DEFAULT_TURSO_URL).trim();
-const isWebOrVercel = typeof window !== 'undefined' || !!process.env.VERCEL || !rawUrl.startsWith('file:');
-const url = isWebOrVercel && rawUrl.startsWith('file:') ? DEFAULT_TURSO_URL : rawUrl;
+const url = rawUrl.startsWith('file:') ? DEFAULT_TURSO_URL : rawUrl;
 
 // Fallback robusto: si no hay TURSO_AUTH_TOKEN explícito en el entorno pero la URL apunta a Turso Cloud (o es la default),
 // se inyecta siempre el DEFAULT_TURSO_TOKEN institucional garantizando que Vercel nunca falle con 401.

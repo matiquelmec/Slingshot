@@ -2238,7 +2238,13 @@ class NexusNode:
         if hasattr(executor, "get_orderbook_depth"):
             try:
                 l2_book = await executor.get_orderbook_depth(asset, limit=20)
-                if l2_book and l2_book.get("bids") and l2_book.get("asks"):
+                if (
+                    isinstance(l2_book, dict)
+                    and isinstance(l2_book.get("bids"), list)
+                    and isinstance(l2_book.get("asks"), list)
+                    and l2_book["bids"]
+                    and l2_book["asks"]
+                ):
                     from engine.analytics.order_book_microstructure_sentinel import OrderBookMicrostructureSentinel
                     l2_sentinel = OrderBookMicrostructureSentinel()
                     l2_res = l2_sentinel.audit_l2_book(
