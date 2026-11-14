@@ -338,15 +338,16 @@ class MarketScanner:
                 df["market_regime"] = detected_regime
 
                 # [RADAR & LATTICE DYNAMIC HYDRATION — SIEMPRE ACTIVO]
+                is_bull_reg = detected_regime in ("MARKUP", "ACCUMULATION")
                 await store.update_market_state(symbol, {
-                    "ml_dir": "ALCISTA" if (locals().get("direction") == "LONG" or locals().get("detected_regime") in ("MARKUP", "ACCUMULATION")) else "BAJISTA",
-                    "ml_prob": round(float(locals().get("base_score") or 64.0), 1),
-                    "sentiment": "BULLISH" if (locals().get("direction") == "LONG" or locals().get("detected_regime") in ("MARKUP", "ACCUMULATION")) else "BEARISH",
+                    "ml_dir": "ALCISTA" if is_bull_reg else "BAJISTA",
+                    "ml_prob": 64.0,
+                    "sentiment": "BULLISH" if is_bull_reg else "BEARISH",
                     "asset": symbol,
                     "price": current_price,
                     "current_price": current_price,
                     "regime": detected_regime,
-                    "bias": "LONG" if detected_regime in ("MARKUP", "ACCUMULATION") else ("SHORT" if detected_regime in ("MARKDOWN", "DISTRIBUTION") else "NEUTRAL"),
+                    "bias": "LONG" if is_bull_reg else ("SHORT" if detected_regime in ("MARKDOWN", "DISTRIBUTION") else "NEUTRAL"),
                     "session": session_data.get("current_session", "UNKNOWN"),
                     "last_updated": datetime.now(timezone.utc).isoformat()
                 })
@@ -702,11 +703,12 @@ class MarketScanner:
                     candidates.append(cand)
 
                     # [RADAR & LATTICE DYNAMIC HYDRATION]
+                    is_bull_dir = direction == "LONG" or detected_regime in ("MARKUP", "ACCUMULATION")
                     await store.update_market_state(symbol, {
-                    "ml_dir": "ALCISTA" if (locals().get("direction") == "LONG" or locals().get("detected_regime") in ("MARKUP", "ACCUMULATION")) else "BAJISTA",
-                    "ml_prob": round(float(locals().get("base_score") or 64.0), 1),
-                    "sentiment": "BULLISH" if (locals().get("direction") == "LONG" or locals().get("detected_regime") in ("MARKUP", "ACCUMULATION")) else "BEARISH",
-                    "asset": symbol,
+                        "ml_dir": "ALCISTA" if is_bull_dir else "BAJISTA",
+                        "ml_prob": round(float(base_score or 64.0), 1),
+                        "sentiment": "BULLISH" if is_bull_dir else "BEARISH",
+                        "asset": symbol,
                         "price": current_price,
                         "current_price": current_price,
                         "regime": detected_regime,
@@ -905,6 +907,12 @@ class MarketScanner:
             except Exception:
                 pass
 
+        is_chasing = False
+        if df is not None and not df.empty:
+            fib_data = self._calculate_ote(df)
+            cur_p_ote = float(df["close"].iloc[-1])
+            is_chasing, _ = self._ote_watchdog(clean_dir, cur_p_ote, fib_data)
+
         return {
             "asset":             sym,
             "interval":          sig.get("interval", interval),
@@ -920,7 +928,7 @@ class MarketScanner:
             "confluence_score":  int(sig.get("confluence", {}).get("score", 70)),
             "checklist":         sig.get("confluence", {}).get("checklist", []),
             "is_active_trigger": is_active,
-            "ote_chasing":       False,
+            "ote_chasing":       is_chasing,
             "is_cluster_blocked": not can_open_cluster,
             "cluster_reason":    cluster_msg,
             "is_time_blocked":   not is_time_ok,

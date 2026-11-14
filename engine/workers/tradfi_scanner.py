@@ -27,11 +27,11 @@ class TradFiScanner:
         self.interval = "15m"
         
     def start(self):
-        logger.info("dY?>,? [TRADFI_SCANNER] Iniciando escAner institucional TradFi (XAUUSD, US100, US30, GBPUSD)...")
+        logger.info("📡 [TRADFI_SCANNER] Iniciando escáner institucional TradFi (XAUUSD, US100, US30, GBPUSD)...")
         self._task = asyncio.create_task(self._scan_loop())
         
     def stop(self):
-        logger.info("dY?>,? [TRADFI_SCANNER] Deteniendo escAner TradFi...")
+        logger.info("📡 [TRADFI_SCANNER] Deteniendo escáner TradFi...")
         self._stop_event.set()
         
     async def _scan_loop(self):
@@ -39,7 +39,7 @@ class TradFiScanner:
             try:
                 await self._perform_scan()
             except Exception as e:
-                logger.error(f"?O [TRADFI_SCANNER] Error en ciclo de escaneo: {e}")
+                logger.error(f"❌ [TRADFI_SCANNER] Error en ciclo de escaneo: {e}")
             await asyncio.sleep(45) # Escaneo cada 45 segundos
             
     async def _perform_scan(self):

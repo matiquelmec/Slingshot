@@ -370,6 +370,8 @@ A partir de la versión 10.0.0, la plataforma incorpora el rol del **Agente KRON
   - **Terminal TradFi:** `terminal64.exe` (MetaTrader 5) con ejecución algorítmica para divisas e índices.
 * **Workflow Institucional Prompt-to-Push:**
   Invocable mediante `/prompt_to_push`. Ejecuta automáticamente el ciclo completo: Diagnóstico Pre-flight ➔ Validación FSD/Zod/Multi-tenant ➔ Dual-Engine Quality Gate (`typecheck` + `vitest` + `pytest`) ➔ Doc-as-Code en cascada ➔ Commit semántico & Push ➔ **Despliegue y Healthcheck en vivo en el VPS**.
+* **Seguridad de Credenciales WinRM (`SOP-131`):**
+  Los scripts canónicos (`sync_and_audit_vps.ps1`, `deploy_and_verify_vps.ps1`, `inspect_service_log.ps1`) leen `SLINGSHOT_VPS_IP`, `SLINGSHOT_VPS_USER` y `SLINGSHOT_VPS_PASS` desde variables de entorno o `.env`, sin contraseñas en texto plano en el repositorio.
 
 
 

@@ -1,14 +1,33 @@
-<#
+﻿<#
 .SYNOPSIS
     Script de Despliegue y Certificacion en Vivo para el VPS de Produccion Slingshot (SOP-125/126).
 #>
 
 $ErrorActionPreference = "Stop"
 
+# Cargar variables desde .env si no están definidas en el entorno
+$repoRoot = Resolve-Path (Join-Path $PSScriptRoot "..\..")
+$envFile = Join-Path $repoRoot ".env"
+if (Test-Path $envFile) {
+    Get-Content $envFile | ForEach-Object {
+        if ($_ -match '^\s*([^#][^=]+?)\s*=\s*(.*)\s*$') {
+            $k = $matches[1].Trim()
+            $v = $matches[2].Trim().Trim('"').Trim("'")
+            if (-not [Environment]::GetEnvironmentVariable($k)) {
+                [Environment]::SetEnvironmentVariable($k, $v, "Process")
+            }
+        }
+    }
+}
+
 $vpsIp   = if ($env:SLINGSHOT_VPS_IP)   { $env:SLINGSHOT_VPS_IP }   else { "80.65.211.99" }
 $vpsPort = if ($env:SLINGSHOT_VPS_PORT) { [int]$env:SLINGSHOT_VPS_PORT } else { 5986 }
 $vpsUser = if ($env:SLINGSHOT_VPS_USER) { $env:SLINGSHOT_VPS_USER } else { "Administrator" }
-$vpsPass = if ($env:SLINGSHOT_VPS_PASS) { $env:SLINGSHOT_VPS_PASS } else { "matigol1" }
+$vpsPass = $env:SLINGSHOT_VPS_PASS
+if (-not $vpsPass) {
+    Write-Error "Falta SLINGSHOT_VPS_PASS en variables de entorno o .env. Operación abortada por seguridad."
+    exit 1
+}
 
 Write-Host "`n>>> [KRONOS] Conectando al VPS de Produccion ($vpsIp`:$vpsPort)..." -ForegroundColor Cyan
 

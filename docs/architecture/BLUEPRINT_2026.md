@@ -926,3 +926,17 @@ Sometidas las 3 optimizaciones a la matriz experimental de 180 días en los 13 a
 6. **Hidratación Paralela en el Frontend y Paridad Visual `SOP-125`**:
    * `connection.ts` ejecuta `hydrateMarketStates()` y `hydrateDiagnostic()` en paralelo (`Promise.allSettled`) al conectar o cambiar de activo/temporalidad, y refresca `/api/v1/market-states` cada 3 segundos dentro del ciclo de polling REST.
    * `constants.ts`, `page.tsx` y `LatticeScanner.tsx` migran `PAXGUSDT` a `XAUUSDT` y muestran insignias institucionales (`DUAL 15M/1H`, `EXEC 15M`, `EXEC 1H`, `RADAR`) en el escáner.
+
+---
+
+## 39. SOP-131: BLINDAJE DE ORDEN LÍMITE EN VIVO, TTL DE BUFFER E HIGIENE DE REPOSITORIO
+
+1. **Pre-Flight Live Distance Guard (`NexusNode.validate_limit_distance`):**
+   * Validación obligatoria frente al precio real en Bitunix (`executor.get_ticker_price(asset)`) antes de emitir `place_limit_signal()`, bloqueando (`BLOCKED_STALE_DISTANCE`) entradas con deriva `>1.5%` (`1h`) / `>1.2%` (`15m`) o órdenes que crucen el libro.
+   * `TradeManager` (`Limit Sentinel`) endurece el monitoreo de deriva pendiente a `1.5%`/`3600s` (swing) y `1.2%`/`1800s` (scalp).
+2. **Buffer TTL (`45 min`) y Persistencia Inmediata:**
+   * `_high_confluence_buffer` registra `queued_at`, descarta señales con antigüedad `>2700s` y persiste cada extracción en `slingshot.db`.
+3. **Cierre de Cabos Sueltos e Higiene Institucional:**
+   * Eliminada telemetría hardcodeada (`BNBUSDT`) en arranque frío de `/api/v1/bitunix/telemetry`, ruta duplicada `/api/v1/system/deploy-update`, `await` faltante en `/api/v1/analyze/{symbol}` y bloque muerto en `trade_manager.py`.
+   * `MT5Bridge` respeta `PYTEST_CURRENT_TEST` y `SLINGSHOT_DISABLE_MT5` para no abrir FTMO `terminal64.exe` localmente durante tests.
+   * Consolidados los scripts en `scripts/deploy/` leyendo `SLINGSHOT_VPS_PASS` desde `.env`/entorno sin contraseñas en texto plano.

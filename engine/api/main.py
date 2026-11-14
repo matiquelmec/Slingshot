@@ -850,44 +850,28 @@ async def get_bitunix_telemetry(account_id: str = "primary"):
             if target_acc_id == "primary" and _last_bitunix_telemetry_cache:
                 return _last_bitunix_telemetry_cache
 
-    # Fallback canónico si es durante los primeros instantes del arranque en frío
+    # Fallback canónico transparente durante arranque en frío (SOP-115: Cero posiciones fantasma)
     return {
         "account_label": "Cuenta Principal (.env)",
-        "connected": True,
+        "account_id": "primary",
+        "privacy_shield": "STRICT_PRIMARY_ONLY",
+        "connected": False,
         "is_stabilizing": True,
-        "equity": 783.34,
-        "available_balance": 746.38,
-        "net_available_balance": 746.38,
-        "used_margin": 42.17,
+        "equity": 0.0,
+        "available_balance": 0.0,
+        "net_available_balance": 0.0,
+        "used_margin": 0.0,
         "frozen_margin": 0.0,
         "total_floating_pnl": 0.0,
         "risk_config": {
             "risk_pct": 0.025,
             "risk_pct_display": "2.50%",
-            "risk_usd_per_trade": 19.58,
+            "risk_usd_per_trade": 0.0,
             "max_notional_mult": 5.0,
             "sop_protocol": "SOP-41 Dollar Risk Shield & SOP-58 Never-Naked"
         },
-        "positions_count": 1,
-        "positions": [
-            {
-                "symbol": "BNBUSDT",
-                "side": "LONG",
-                "qty": 1.14,
-                "entry_price": 730.99,
-                "mark_price": 730.99,
-                "leverage": 18,
-                "isolated_margin": 42.17,
-                "unrealized_pnl": 0.0,
-                "unrealized_pnl_pct": 0.0,
-                "active_sl": {
-                    "price": 717.83,
-                    "order_id": "2095690410826753314",
-                    "is_protected": True
-                },
-                "take_profits": []
-            }
-        ],
+        "positions_count": 0,
+        "positions": [],
         "pending_orders_count": 0,
         "pending_orders": []
     }
@@ -990,42 +974,6 @@ async def inject_test_signal(
     return {"success": True, "message": f"Test signal for {symbol.upper()} ({direction.upper()}) injected safely (No trade executed)"}
 
 
-@app.post("/api/v1/system/deploy-update")
-async def trigger_remote_deploy_update(api_key: str = Query(...)):
-    """
-    Despliegue Remoto Seguro Institucional:
-    Descarga los últimos commits de origin/main y actualiza el código en disco.
-    """
-    if api_key != settings.SECURITY_API_KEY:
-        raise HTTPException(status_code=401, detail="API Key de seguridad inválida")
-
-    import subprocess
-    try:
-        cmd_fetch = ["git", "fetch", "origin", "main"]
-        res_fetch = subprocess.run(cmd_fetch, capture_output=True, text=True, timeout=30)
-
-        cmd_reset = ["git", "reset", "--hard", "origin/main"]
-        res_reset = subprocess.run(cmd_reset, capture_output=True, text=True, timeout=30)
-
-        res_head = subprocess.run(["git", "rev-parse", "--short", "HEAD"], capture_output=True, text=True)
-        head_commit = res_head.stdout.strip()
-
-        return {
-            "status": "success",
-            "message": "Repositorio actualizado a origin/main con éxito",
-            "current_commit": head_commit,
-            "git_fetch": res_fetch.stdout or res_fetch.stderr,
-            "git_reset": res_reset.stdout or res_reset.stderr,
-            "restart_required": True,
-            "instruction": "Código sincronizado. Para recargar en memoria RAM se reinicia el worker."
-        }
-    except Exception as e:
-        logger.error(f"Error en auto-deploy remoto: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-
-
 # ── REST One-Shot Analysis ────────────────────────────────────────────────────
 
 @app.get("/api/v1/analyze/{symbol}")
@@ -1046,7 +994,7 @@ async def analyze_symbol(symbol: str, timeframe: str = "15m"):
         else:
             df = pd.read_parquet(file_path)
 
-        result = _one_shot_router.process_market_data(df, asset=symbol.upper(), interval=timeframe)
+        result = await _one_shot_router.process_market_data(df, asset=symbol.upper(), interval=timeframe)
         return {"success": True, "data": sanitize_for_json(result)}
 
     except Exception as e:

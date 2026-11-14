@@ -1574,14 +1574,6 @@ class TradeManager:
                                         pnl_usd=real_pnl_usd,
                                         pnl_r=est_r
                                     ))
-                                if False:
-                                    asyncio.create_task(telegram_dispatcher.send_trade_closed_alert(
-                                    symbol=csym,
-                                    reason=exit_label,
-                                    exit_price=float(filled_order.get("avgPrice") or filled_order.get("price") or 0.0),
-                                    pnl_usd=real_pnl_usd,
-                                    pnl_r=est_r
-                                ))
                             except Exception:
                                 pass
 
@@ -1722,15 +1714,15 @@ class TradeManager:
 
 
 
-                    # Chequeo 3: Expiración TTL Adaptativa Institucional (SOP-40 / OTE Scalp 3h vs Swing 8h)
+                    # Chequeo 3: Expiración TTL Adaptativa Institucional (SOP-40 / SOP-131: Scalp 3h/1.2% vs Swing 8h/1.5%)
                     if not cancel_reason:
                         age_seconds = (now_ms - ctime) / 1000
                         tf_setup = matching_setup.get("interval", matching_setup.get("timeframe", "15m")) if matching_setup else "15m"
                         is_swing = "1H" in str(tf_setup).upper() or "SWING" in str(tf_setup).upper()
 
                         max_ttl_strict = 28800 if is_swing else 10800  # 8 horas en 1h swing / 3 horas en 15m scalp
-                        drift_ttl_start = 14400 if is_swing else 5400  # 4 horas swing / 90 min scalp
-                        max_drift_pct = 0.045 if is_swing else 0.035   # 4.5% swing / 3.5% scalp
+                        drift_ttl_start = 3600 if is_swing else 1800   # 1 hora swing / 30 min scalp
+                        max_drift_pct = 0.015 if is_swing else 0.012   # 1.5% swing / 1.2% scalp
 
                         if age_seconds > max_ttl_strict:
                             cancel_reason = f"TTL_EXPIRED_STRICT (Orden límite expiró tras {age_seconds/3600:.1f}h sin llenar [{tf_setup}])"

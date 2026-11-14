@@ -287,5 +287,18 @@ Todos los mensajes de commit deben seguir estrictamente el estándar de Conventi
 3. **Auto-Healing Activo en CI/CD Sentinel:**
    * La tarea del centinela (`ci_cd_sentinel.py`), ejecutada periódicamente por el programador de tareas de Windows, debe auditar en cada ciclo la respuesta HTTP 200 de los endpoints de salud de FastAPI (`:8000/api/v1/health`) y del Sidecar HFT (`:8080/health`). Si se detecta caída o congelamiento, debe disparar la auto-recuperación y reinicio inmediato de la tríada operativa.
 
+---
+
+## 16. Regla 26: Blindaje de Distancia Límite en Vivo, Expiración de Buffer y Cero Credenciales en Código (SOP-131)
+
+1. **Pre-Flight Live Distance Guard en Órdenes Límite (`NexusNode.validate_limit_distance`):**
+   * Toda orden límite en Bitunix debe validarse contra el precio ticker real del exchange inmediatamente antes de `place_limit_signal()`, rechazando (`BLOCKED_STALE_DISTANCE`) entradas con deriva excesiva (`>1.5%` en `1h` swing o `>1.2%` en `15m` scalp) o que crucen el libro (LONG por encima del precio actual o SHORT por debajo), previniendo desfases de oráculo (ej. `PAXGUSDT` Spot vs `XAUUSDT` Perp) y fills instantáneos no deseados.
+2. **Expiración TTL y Persistencia Atómica del Buffer de Confluencia:**
+   * Toda señal encolada en `_high_confluence_buffer` debe incluir `queued_at` y caducar estrictamente tras `2700s` (45 minutos). Al extraer una señal en `on_risk_released()`, `NexusNode` debe invocar inmediatamente `_persist_buffer_to_disk()`.
+3. **Aislamiento de MT5 en Tests Locales y Cero Secretos en Scripts de Despliegue:**
+   * `MT5Bridge` debe omitir la conexión automática a `terminal64.exe` cuando `PYTEST_CURRENT_TEST` o `SLINGSHOT_DISABLE_MT5` estén activos.
+   * Queda prohibido almacenar contraseñas WinRM en texto plano dentro de `scripts/deploy/*.ps1`; los scripts deben leer `SLINGSHOT_VPS_PASS` desde el entorno o `.env`.
+
+
 
 

@@ -46,12 +46,15 @@ class MT5Bridge:
     ]
 
     def __init__(self, dry_run: bool = True):
+        import os
         self.dry_run = dry_run
         self.connected = False
         self._last_connect_attempt = 0.0
         self._connect_cooldown = 120.0  # 120s cooldown institucional
         self._connecting_thread: Optional[threading.Thread] = None
-        if not self.dry_run and MT5_AVAILABLE:
+        is_pytest = bool(os.getenv("PYTEST_CURRENT_TEST"))
+        is_disabled = os.getenv("SLINGSHOT_DISABLE_MT5", "").lower() in ("1", "true", "yes")
+        if not self.dry_run and MT5_AVAILABLE and not is_pytest and not is_disabled:
             self._start_background_connect()
 
     def _start_background_connect(self):

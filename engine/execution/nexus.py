@@ -119,6 +119,42 @@ class NexusNode:
 
         return dist, be_price, canon_tp1, canon_tp2, canon_tp3
 
+    @staticmethod
+    def validate_limit_distance(
+        entry_price: float,
+        live_price: float,
+        side: str,
+        interval: str = "15m",
+        atr_val: float = 0.0
+    ) -> Tuple[bool, str, float]:
+        """
+        [SOP-131 LIVE LIMIT DISTANCE GUARD]
+        Valida que una orden límite antes de enviarse al exchange no esté obsoleta ni
+        demasiado alejada del precio real en Bitunix (ej. desfase PAXG/XAU o buffer viejo).
+        """
+        if entry_price <= 0 or live_price <= 0:
+            return True, "NO_LIVE_PRICE", 0.0
+
+        dist_pct = abs(live_price - entry_price) / live_price
+        is_swing = "1H" in str(interval).upper() or "SWING" in str(interval).upper()
+        max_dist_pct = 0.015 if is_swing else 0.012  # 1.5% máx en 1h swing, 1.2% máx en 15m scalp
+
+        if atr_val > 0 and live_price > 0:
+            atr_cap = (atr_val * 2.5) / live_price
+            max_dist_pct = min(max_dist_pct, max(0.008, atr_cap))
+
+        is_long = "SHORT" not in str(side).upper() and "SELL" not in str(side).upper()
+        # Una limit LONG no debe enviarse muy por encima del precio actual (cruzaria el libro a mercado)
+        if is_long and entry_price > live_price * 1.002:
+            return False, f"Entrada LONG límite (${entry_price:.4f}) por encima del mercado (${live_price:.4f})", dist_pct
+        if not is_long and entry_price < live_price * 0.998:
+            return False, f"Entrada SHORT límite (${entry_price:.4f}) por debajo del mercado (${live_price:.4f})", dist_pct
+
+        if dist_pct > max_dist_pct:
+            return False, f"Desfase límite {dist_pct*100:.2f}% > {max_dist_pct*100:.2f}% (Entry ${entry_price:.4f} vs Live ${live_price:.4f})", dist_pct
+
+        return True, "DISTANCE_OK", dist_pct
+
     def start_centinels(self):
         """Inicia los procesos de monitoreo y gestión de riesgo."""
         loop = asyncio.get_event_loop()
@@ -1563,18 +1599,27 @@ class NexusNode:
             return
         try:
             self._init_buffer_db()
+            now_ts = time.time()
             with sqlite3.connect(self.DB_PATH) as conn:
-                cursor = conn.execute("SELECT account_id, signal_json FROM high_confluence_buffer ORDER BY score DESC")
+                cursor = conn.execute("SELECT account_id, signal_json, timestamp FROM high_confluence_buffer ORDER BY score DESC")
                 rows = cursor.fetchall()
                 loaded_cnt = 0
-                for acc_id, s_json in rows:
+                expired_cnt = 0
+                for acc_id, s_json, row_ts in rows:
                     sig = json.loads(s_json)
+                    queued_at = float(sig.get("queued_at") or row_ts or 0.0)
+                    if queued_at <= 0 or (now_ts - queued_at) > 2700:
+                        expired_cnt += 1
+                        continue
+                    sig["queued_at"] = queued_at
                     q = self._high_confluence_buffer.setdefault(acc_id, [])
                     if not any(x.get("asset") == sig.get("asset") for x in q):
                         q.append(sig)
                         loaded_cnt += 1
+                if expired_cnt > 0:
+                    self._persist_buffer_to_disk()
                 if loaded_cnt > 0:
-                    logger.info(f"💾 [NEXUS BUFFER DB] Restauradas {loaded_cnt} oportunidades institucionales desde base de datos.")
+                    logger.info(f"💾 [NEXUS BUFFER DB] Restauradas {loaded_cnt} oportunidades institucionales vigentes desde base de datos.")
         except Exception as load_err:
             logger.debug(f"[NEXUS BUFFER DB] Error cargando buffer: {load_err}")
 
@@ -1588,11 +1633,13 @@ class NexusNode:
             return
         score = float(signal.get("confluence_score", signal.get("score", 0)))
         logger.info(f"📥 [NEXUS BUFFER] Guardando oportunidad institucional en buffer para [{account_id}]: {asset} ({score:.0f}%)")
-        queue.append(dict(signal))
+        queued_sig = dict(signal)
+        queued_sig["queued_at"] = float(queued_sig.get("queued_at") or time.time())
+        queue.append(queued_sig)
         queue.sort(key=lambda s: self.calculate_priority_score(s), reverse=True)
-        self._persist_buffer_to_disk()
         if len(queue) > 5:
             queue.pop()
+        self._persist_buffer_to_disk()
 
     async def on_risk_released(self, account_id: str, reason: str = ""):
         """
@@ -1636,9 +1683,15 @@ class NexusNode:
 
             if hasattr(self, "_high_confluence_buffer") and isinstance(self._high_confluence_buffer, dict):
                 queue = self._high_confluence_buffer.get(account_id, [])
+                now_buf = time.time()
                 while queue:
                     top_cand = queue.pop(0)
+                    self._persist_buffer_to_disk()
                     sym_c = top_cand.get("asset", top_cand.get("symbol", "")).upper()
+                    queued_at = float(top_cand.get("queued_at") or 0.0)
+                    if queued_at > 0 and (now_buf - queued_at) > 2700:
+                        logger.info(f"⏳ [SLOT RECYCLER] Descartando señal expirada de buffer para {sym_c} (>45 min).")
+                        continue
                     if self.is_asset_in_cooldown(sym_c, account_id=account_id):
                         logger.info(f"❄️ [SLOT RECYCLER] Omitiendo {sym_c} por período de enfriamiento/cuarentena activo (SOP-52).")
                         continue
@@ -1929,7 +1982,7 @@ class NexusNode:
                         "order_id": res_item.get("order_id")
                     }
             for res_item in results:
-                if isinstance(res_item, dict) and res_item.get("status") in ("buffered", "already_active"):
+                if isinstance(res_item, dict) and res_item.get("status") in ("buffered", "already_active", "blocked_stale_distance"):
                     return {
                         "placed": False,
                         "status": res_item.get("status").upper(),
@@ -2156,6 +2209,25 @@ class NexusNode:
             if (avail_margin - req_margin) < min_buffer:
                 logger.info(f"🛑 [NEXUS AUTO-LIMIT BUFFER GUARD] [{account.label}] Buffer insuficiente para {asset}: Remanente ${avail_margin - req_margin:.2f} < Min ${min_buffer:.2f} USDT.")
                 return None
+
+        # ── SOP-131: LIVE EXCHANGE DISTANCE GUARD (PRE-FLIGHT ANTI-STALE/ORACLE DRIFT) ──
+        live_price = float(acc_signal.get("live_price") or 0.0)
+        if live_price <= 0 and not executor.dry_run:
+            try:
+                live_price = float(await executor.get_ticker_price(asset) or 0.0)
+            except Exception:
+                live_price = 0.0
+        if live_price > 0:
+            dist_ok, dist_reason, _ = self.validate_limit_distance(
+                entry_price=entry_p,
+                live_price=live_price,
+                side=sig_dir_l,
+                interval=str(acc_signal.get("interval") or acc_signal.get("timeframe") or "15m"),
+                atr_val=float(acc_signal.get("atr_value") or 0.0)
+            )
+            if not dist_ok:
+                logger.warning(f"🛑 [NEXUS AUTO-LIMIT SOP-131] [{account.label}] Rechazada orden límite en {asset}: {dist_reason}")
+                return {"status": "blocked_stale_distance", "message": dist_reason}
 
         logger.info(f"🎯 [NEXUS AUTO-LIMIT] [{account.label}] Enviando orden límite a Bitunix para {asset} @ ${entry_p:.2f} (Qty: {risk_calc['qty']} | Margen: ${req_margin} USDT @ {safe_lev}x | Riesgo Max: ${risk_calc['projected_loss']:.2f} USDT)")
         res = await executor.place_limit_signal(acc_signal)
