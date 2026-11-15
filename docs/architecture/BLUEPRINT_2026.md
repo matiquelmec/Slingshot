@@ -1029,6 +1029,16 @@ Sometidas las 3 optimizaciones a la matriz experimental de 180 días en los 13 a
    * `APPROVED_SWING_1H_EXECUTION` incorpora `ETHUSDT` (`22 ops`, `WR 45.5%`, `PF 1.70`, `+5.58R`, `MC 99.0%`) y `LINKUSDT` (`PF 3.01`, `+5.31R`, `MC 100.0%` protegido por `SOP-137` para operar únicamente `SHORT`).
    * Se preserva intacto el Universo Canónico SSoT de 13 activos VIP; cualquier promoción de candidatas externas (`OPUSDT`, `APTUSDT`) queda sujeta a rotación formal mediante `AssetIncubator` (`SOP-105`).
 
+---
+
+## 47. SOP-140: SINCRONIZACIÓN DE SNAPSHOTS SSoT EN UI Y SONDA DE LATENCIA/SLIPPAGE L2 EN VPS
+
+1. **Paridad Exacta de Tableros en `SESSION LOG` (`src/features/backtest-metrics/actions.ts` & `BacktestAuditWidget.tsx`):**
+   * Sincroniza la vista `PANORAMA QUANT (BACKTEST SSoT)` con el reporte cronológico oficial `SOP-136/137/139`: `343` trades, `49.0%` Win Rate, `PF Base 1.93`, `PF Alpha 2.11`, `+105.94R` Base, `+138.01R` Alpha, `MaxDD Alpha -3.99%`, `Sharpe 4.88` y capital compuesto de `$25,949.22 USD`.
+2. **Sonda en Vivo de Latencia y Slippage L2 (`scripts/deploy/deploy_and_verify_vps.ps1`):**
+   * Verifica tras cada despliegue en el VPS la latencia REST de Bitunix (`ms`), el spread efectivo (`bps`) y el Order Book Imbalance (`OBI`) mediante `OrderBookMicrostructureSentinel` sobre `BTCUSDT`, `ETHUSDT`, `XRPUSDT` y `LINKUSDT`.
+
+
 
 
 

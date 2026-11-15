@@ -226,6 +226,7 @@ graph TB
 | **SOP-136** | Adaptive Post-TP1 Breakeven (+1.2R), SOP-125 Slot Recycler & TP Auto-Healing | `TradeManager.get_optimal_be_threshold` (`+1.2R` post-TP1 en `NEAR/ATOM/SUI/Swing`, `+1.0R` en `FET/INJ 15m`), filtro `SOP-125` en `on_risk_released` y auto-healing 50/30/20 pre-TP1. |
 | **SOP-137** | Directional Asymmetry Guard, Extended Toxic Hours `[7,10,14,21,22]`, Priority Champions & Regime Agent | Veto de lados perdedores (`INJ/LINK` Short-Only, `XAU/SOL/SUI` Long-Only), veto de `07h` Pre-Londres y `21-22h` NY Close, `FET/XAU` a `1.25x` en `calculate_priority_score` y `Regime Agent` activo (`+138.32R Alpha`, `$26,143.96 USD` compuesto, `MaxDD 3.99%`). |
 | **SOP-139** | Dual-TF Live Execution Parity (`XRP:15m`, `ETH:1h`, `LINK:1h SHORT`) | Habilitación en `MarketScanner` de `XRPUSDT:15m` (`PF 1.72`, `MC 99.4%`), `ETHUSDT:1h` (`PF 1.70`, `MC 99.0%`) y `LINKUSDT:1h` (`SHORT-only`, `PF 3.01`, `MC 100.0%`), manteniendo el Universo Canónico de 13 activos SSoT. |
+| **SOP-140** | UI SSoT Snapshot Sync & Live VPS L2 Latency/Slippage Probe | Sincronización de `BacktestAuditWidget` con las métricas `SOP-136/137/139` (`343` trades, `PF Alpha 2.11`, `$25,949.22 USD`) y sonda en vivo de latencia REST + spread L2 en `deploy_and_verify_vps.ps1` para `BTC/ETH/XRP/LINK`. |
 
 ---
 

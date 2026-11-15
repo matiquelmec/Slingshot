@@ -144,6 +144,36 @@ try {
         }
 
         Write-Host "`n=======================================================" -ForegroundColor Cyan
+        Write-Host "[3.5/4] AUDITORIA DE LATENCIA Y SLIPPAGE L2 EN VIVO (BITUNIX)..." -ForegroundColor Cyan
+        Write-Host "=======================================================" -ForegroundColor Cyan
+        $pyProbe = if (Test-Path "C:\Slingshot\.venv\Scripts\python.exe") { "C:\Slingshot\.venv\Scripts\python.exe" } elseif (Test-Path "C:\Program Files\Python312\python.exe") { "C:\Program Files\Python312\python.exe" } else { "python" }
+        $probeScript = @"
+import asyncio, time
+from engine.execution.bitunix_executor import BitunixExecutor
+from engine.risk.order_book_microstructure_sentinel import OrderBookMicrostructureSentinel
+
+async def main():
+    ex = BitunixExecutor()
+    sentinel = OrderBookMicrostructureSentinel()
+    for sym in ("BTCUSDT", "ETHUSDT", "XRPUSDT", "LINKUSDT"):
+        t0 = time.perf_counter()
+        book = await ex.get_orderbook_depth(sym, limit=20)
+        lat_ms = (time.perf_counter() - t0) * 1000.0
+        if not book or not book.get("bids") or not book.get("asks"):
+            print(f"[WARN] {sym}: Sin snapshot L2 (lat={lat_ms:.1f}ms)")
+            continue
+        res = sentinel.audit_l2_book(asset=sym, direction="LONG", bids=book["bids"], asks=book["asks"])
+        print(f"[OK] {sym:8s} | Latencia={lat_ms:5.1f}ms | Spread={res.effective_spread_bps:4.2f} bps | OBI={res.obi_score:+.3f} | Aprobado={res.is_approved}")
+
+asyncio.run(main())
+"@
+        try {
+            & $pyProbe -c $probeScript 2>&1 | Out-String | Write-Host
+        } catch {
+            Write-Host "[WARN] Probe L2 fallo: $($_.Exception.Message)" -ForegroundColor Yellow
+        }
+
+        Write-Host "`n=======================================================" -ForegroundColor Cyan
         Write-Host "[4/4] ESTADO DE LA TRIADA OPERATIVA..." -ForegroundColor Cyan
         Write-Host "=======================================================" -ForegroundColor Cyan
         Get-Process -Name "python", "node", "terminal64" -ErrorAction SilentlyContinue | Select-Object Id, ProcessName, WorkingSet64, StartTime | Format-Table -AutoSize

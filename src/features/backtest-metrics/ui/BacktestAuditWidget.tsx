@@ -155,7 +155,7 @@ export function BacktestAuditWidget() {
               Panorama Cuantitativo & Paridad Real en Vivo
             </h2>
             <p className="text-sm text-slate-300">
-              Auditoría de 437 trades con reconciliación de órdenes límite y cero sesgo de ganancia fantasma.
+              Auditoría de {metrics?.totalTrades ?? 343} trades (SOP-136/137/139) con reconciliación de órdenes límite y cero sesgo de ganancia fantasma.
             </p>
           </div>
 

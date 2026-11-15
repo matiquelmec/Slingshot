@@ -380,6 +380,10 @@ Todos los mensajes de commit deben seguir estrictamente el estándar de Conventi
 1. **Matriz de Ejecución Dual-TF (`MarketScanner.APPROVED_SCALP_15M_EXECUTION` y `APPROVED_SWING_1H_EXECUTION`):**
    * Se habilita `XRPUSDT:15m` (`PF 1.72`, `+17.65R`, `MC 99.4%`), `ETHUSDT:1h` (`PF 1.70`, `+5.58R`, `MC 99.0%`) y `LINKUSDT:1h` (`PF 3.01`, `+5.31R`, `MC 100.0%` operando exclusivamente `SHORT` bajo la guardia `SOP-137`) para restaurar la paridad 1:1 entre el simulador cronológico y el motor de ejecución en vivo.
    * La expansión de nuevas monedas externas al Universo Canónico de 13 activos (`OPUSDT`, `APTUSDT`) permanece bloqueada en producción hasta completar la rotación formal vía `AssetIncubator` (`SOP-105`), manteniendo `ENABLE_DYNAMIC_WATCHLIST = False` (Regla 8).
+2. **Sincronización SSoT de UI y Auditoría L2 en VPS (`SOP-140`):**
+   * `src/features/backtest-metrics/actions.ts` y `BacktestAuditWidget.tsx` reflejan exactamente la auditoría post-`SOP-136/137/139` (`343` trades, `49.0%` WR, `PF Base 1.93`, `PF Alpha 2.11`, `+105.94R` Base, `+138.01R` Alpha, `$25,949.22 USD` compuesto, `MaxDD Alpha -3.99%`).
+   * `scripts/deploy/deploy_and_verify_vps.ps1` ejecuta en cada despliegue una sonda en vivo de latencia REST y spread/OBI L2 (`OrderBookMicrostructureSentinel`) sobre `BTCUSDT`, `ETHUSDT`, `XRPUSDT` y `LINKUSDT`.
+
 
 
 

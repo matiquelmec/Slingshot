@@ -47,17 +47,17 @@ describe('Features: Backtest Metrics Audit Slice (FSD & Zero Trust)', () => {
 
     const data = result.data!;
     expect(data.auditStatus).toBe('VERIFIED_SSOT_PARITY');
-    expect(data.totalTrades).toBe(437);
-    expect(data.winRatePct).toBe(44.9);
+    expect(data.totalTrades).toBe(343);
+    expect(data.winRatePct).toBe(49.0);
     expect(data.liveParityVerified).toBe(true);
     expect(data.phantomProfitCleared).toBe(true);
 
-    // Paridad matemática estricta: órdenes límite TP1 @ 1.2R y TP2 @ 2.0R
-    expect(data.profitFactorBase).toBe(1.62);
-    expect(data.profitFactorAlphaTier).toBe(1.79);
-    expect(data.totalNetRBase).toBe(97.98);
-    expect(data.maxDrawdownAlphaTierPct).toBe(-4.76); // < 5.0% Blindaje FTMO
-    expect(data.asymmetryRatio).toBe(2.2);
+    // Paridad matemática estricta (SOP-136/137/139): órdenes límite TP1 @ 1.2R y TP2 @ 2.0R
+    expect(data.profitFactorBase).toBe(1.93);
+    expect(data.profitFactorAlphaTier).toBe(2.11);
+    expect(data.totalNetRBase).toBe(105.94);
+    expect(data.maxDrawdownAlphaTierPct).toBe(-3.99); // < 5.0% Blindaje FTMO
+    expect(data.asymmetryRatio).toBe(2.17);
 
     expect(data.playbooks.length).toBe(2);
 
@@ -89,7 +89,7 @@ describe('Features: Backtest Metrics Audit Slice (FSD & Zero Trust)', () => {
     expect(result.data).toBeDefined();
     expect(result.data!.playbooks.length).toBe(1);
     expect(result.data!.playbooks[0].name).toBe('OB_DISCOUNT_RETEST');
-    expect(result.data!.playbooks[0].profitFactor).toBe(1.91);
+    expect(result.data!.playbooks[0].profitFactor).toBe(2.25);
   });
 
   it('debe validar el esquema Zod de Paridad Teoría vs Práctica (SOP-119)', () => {
