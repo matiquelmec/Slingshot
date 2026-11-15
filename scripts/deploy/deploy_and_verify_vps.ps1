@@ -168,7 +168,7 @@ async def main():
 asyncio.run(main())
 "@
         try {
-            & $pyProbe -c $probeScript 2>&1 | Out-String | Write-Host
+            $probeScript | & $pyProbe - 2>&1 | Out-String | Write-Host
         } catch {
             Write-Host "[WARN] Probe L2 fallo: $($_.Exception.Message)" -ForegroundColor Yellow
         }
