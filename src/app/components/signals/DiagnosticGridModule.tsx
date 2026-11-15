@@ -9,11 +9,13 @@ interface DiagnosticGridProps {
     activeTimeframe: string;
     mlProjection: MLProjection | null;
     sessionData: SessionData | null;
+    htfBias?: TacticalDecision['htf_bias'] | null;
 }
 
 const DiagnosticGridModule: React.FC<DiagnosticGridProps> = ({
-    tacticalDecision, activeTimeframe, mlProjection, sessionData
+    tacticalDecision, activeTimeframe, mlProjection, sessionData, htfBias
 }) => {
+    const resolvedHtfBias = tacticalDecision?.htf_bias || tacticalDecision?.htfBias || htfBias;
 
     // SMC Data extraída del payload táctico
     const smc = tacticalDecision?.smc || { order_blocks: { bullish: [], bearish: [] }, fvgs: { bullish: [], bearish: [] } };
@@ -41,7 +43,7 @@ const DiagnosticGridModule: React.FC<DiagnosticGridProps> = ({
                 </div>
                 <div className="flex items-center gap-2 mb-2">
                     <span className="px-2 py-1 rounded border border-white/10 bg-white/5 text-[10px] font-bold tracking-widest text-white/80">
-                        {tacticalDecision?.regime || 'CALIBRATING'}
+                        {tacticalDecision?.market_regime || tacticalDecision?.regime || 'CALIBRATING'}
                     </span>
                     <span className="px-2 py-1 rounded border border-blue-500/20 bg-blue-500/10 text-[10px] font-bold tracking-widest text-blue-400">
                         {activeTimeframe}
@@ -123,15 +125,15 @@ const DiagnosticGridModule: React.FC<DiagnosticGridProps> = ({
                 <div className="flex flex-col gap-1">
                     <div className="flex items-center justify-between mb-1">
                         <span className={`text-[11px] font-black tracking-tighter ${
-                            (tacticalDecision?.htf_bias?.direction || tacticalDecision?.htfBias?.direction) === 'BULLISH' ? 'text-neon-green' : 
-                            (tacticalDecision?.htf_bias?.direction || tacticalDecision?.htfBias?.direction) === 'BEARISH' ? 'text-neon-red' : 'text-white/40'
+                            resolvedHtfBias?.direction === 'BULLISH' ? 'text-neon-green' : 
+                            resolvedHtfBias?.direction === 'BEARISH' ? 'text-neon-red' : 'text-white/40'
                         }`}>
-                            {tacticalDecision?.htf_bias?.direction || tacticalDecision?.htfBias?.direction || 'ANALIZANDO...'}
+                            {resolvedHtfBias?.direction || 'ANALIZANDO...'}
                         </span>
                         <span className="text-[9px] font-mono text-white/30">H4+H1</span>
                     </div>
                     <div className="text-[8px] leading-tight text-white/50 italic opacity-80 line-clamp-2">
-                         {tacticalDecision?.htf_bias?.reason || tacticalDecision?.htfBias?.reason || "Esperando confirmación de temporalidades mayores..."}
+                         {resolvedHtfBias?.reason || "Esperando confirmación de temporalidades mayores..."}
                     </div>
                 </div>
             </div>

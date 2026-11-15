@@ -73,6 +73,17 @@ export const createConnectionManager = (set: any, get: any) => {
                         }
                     });
                     const activeState = newSummary[clean];
+                    const activeOnchain = activeState && (
+                        activeState.onchain_bias !== undefined ||
+                        activeState.oi_delta_pct !== undefined ||
+                        activeState.funding_rate !== undefined
+                    ) ? {
+                        oi_delta_pct: Number(activeState.oi_delta_pct ?? 0),
+                        funding_rate: Number(activeState.funding_rate ?? 0),
+                        whale_alerts_count: Number(activeState.whale_alerts_count ?? 0),
+                        onchain_bias: activeState.onchain_bias || 'NEUTRAL',
+                        is_spot_only: Boolean(activeState.is_spot_only),
+                    } : null;
                     set((state: any) => ({
                         isConnected: true,
                         isCalibrating: false,
@@ -80,6 +91,7 @@ export const createConnectionManager = (set: any, get: any) => {
                         marketSummary: { ...state.marketSummary, ...newSummary },
                         latestPrices: { ...state.latestPrices, ...newPrices },
                         latestPrice: newPrices[clean] ?? state.latestPrice,
+                        ...(activeOnchain ? { onchainMetrics: activeOnchain } : {}),
                         ...(activeState?.session_state && (!state.sessionData || state.sessionData.asset !== clean) ? {
                             sessionData: { ...activeState.session_state, asset: clean }
                         } : {}),
@@ -123,6 +135,7 @@ export const createConnectionManager = (set: any, get: any) => {
                             reasoning: `Régimen: ${diag.tactical.market_regime || 'NEUTRAL'}. Soportes mapeados.`,
                             current_price: diag.tactical.current_price ?? latestCandlePrice ?? state.latestPrice,
                             signal_history: diag.tactical.signals ?? [],
+                            htf_bias: diag.tactical.htf_bias ?? diag.htf_bias ?? state.tacticalDecision?.htf_bias ?? state.htfBias,
                             ...diag.tactical
                         } : state.tacticalDecision,
                         smcData: diag.smc ?? state.smcData,

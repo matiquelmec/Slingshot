@@ -64,6 +64,21 @@ const REGIME_META: Record<string, { color: string; border: string; icon: React.R
     },
 };
 
+const REGIME_ALIASES: Record<string, string> = {
+    STRONG_BEAR: 'MARKDOWN',
+    WEAK_BEAR: 'MARKDOWN',
+    BEAR_EXPANSION: 'MARKDOWN',
+    BEARISH: 'MARKDOWN',
+    STRONG_BULL: 'MARKUP',
+    WEAK_BULL: 'MARKUP',
+    BULL_EXPANSION: 'MARKUP',
+    BULLISH: 'MARKUP',
+    HIGH_VOLATILITY_STRESS: 'CHOPPY',
+    VOLATILE: 'CHOPPY',
+    SIDEWAYS: 'RANGING',
+    CONSOLIDATION: 'RANGING',
+};
+
 const STATUS_STYLES = {
     MET: 'border-neon-green/60 bg-neon-green/20 text-neon-green shadow-[0_0_6px_rgba(0,255,65,0.4)]',
     PARTIAL: 'border-yellow-400/60 bg-yellow-400/20 text-yellow-400',
@@ -95,7 +110,8 @@ const MarketContextPanel: React.FC<MarketContextPanelProps> = ({
 
     // Memoizamos el render para evitar cálculos intensivos inútiles
     const { key, meta, conditions, d } = useMemo(() => {
-        const k = (regime ?? 'UNKNOWN').toUpperCase();
+        const rawKey = (regime ?? 'UNKNOWN').toUpperCase();
+        const k = REGIME_ALIASES[rawKey] ?? rawKey;
         const m = REGIME_META[k] ?? REGIME_META['UNKNOWN'];
         const conds = buildConditions(
             k, diagnostic, currentPrice ?? null, nearestSupport ?? null, nearestResistance ?? null, sessionData ?? null, fibonacci

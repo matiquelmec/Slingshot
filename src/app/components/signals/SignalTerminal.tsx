@@ -33,6 +33,7 @@ export default function SignalTerminal() {
     const tacticalDecision = useTelemetryStore(state => state.tacticalDecision as TacticalDecision);
     const mlProjection = useTelemetryStore(state => state.mlProjection as MLProjection);
     const sessionData = useTelemetryStore(state => state.sessionData as SessionData);
+    const htfBias = useTelemetryStore(state => state.htfBias);
     const activeTimeframe = useTelemetryStore(state => state.activeTimeframe);
     const advisorLogs = useTelemetryStore(state => state.advisorLogs);
     const advisorLog = advisorLogs[activeSymbol] || null;
@@ -233,6 +234,7 @@ export default function SignalTerminal() {
                     activeTimeframe={activeTimeframe}
                     mlProjection={mlProjection}
                     sessionData={sessionData}
+                    htfBias={htfBias}
                 />
 
                 <div className="flex-none px-4 pb-3 border-b border-white/5 grid grid-cols-1 lg:grid-cols-4 gap-4">
