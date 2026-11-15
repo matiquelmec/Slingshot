@@ -367,8 +367,18 @@ class MT5Bridge:
         target_symbols = symbols or ["GBPUSD", "US100.cash", "US30.cash", "XAUUSD"]
         spread_data = {}
         if not MT5_AVAILABLE or self.dry_run or not self.ensure_connected():
+            status_label = "SIMULATED" if self.dry_run else "OFFLINE"
             for s in target_symbols:
-                spread_data[s] = {"bid": 0.0, "ask": 0.0, "spread": 0.0, "status": "SIMULATED"}
+                spread_data[s] = {
+                    "symbol": s,
+                    "bid": 0.0,
+                    "ask": 0.0,
+                    "spread_raw": 0.0,
+                    "spread_points": 0.0,
+                    "digits": 2,
+                    "is_spike": False,
+                    "status": status_label,
+                }
             return spread_data
 
         try:

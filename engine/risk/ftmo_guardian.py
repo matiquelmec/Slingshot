@@ -205,15 +205,18 @@ class FtmoGuardianShield:
         profit_usd = current_equity - self.account_size
         progress_pct = (profit_usd / (self.account_size * (target_pct / 100.0)) * 100.0) if target_pct > 0 else 100.0
         
+        effective_daily_dd_pct = max(0.0, daily_dd_pct)
+        effective_total_dd_pct = max(0.0, total_dd_pct)
+
         return {
             "account_size": self.account_size,
             "account_type": self.account_type,
             "current_equity": self.current_equity,
             "daily_starting_equity": self.daily_starting_equity,
             "daily_loss_usd": max(0.0, daily_loss_usd),
-            "daily_dd_pct": max(0.0, daily_dd_pct),
-            "total_dd_pct": max(0.0, total_dd_pct),
-            "daily_safe_margin_left_pct": max(0.0, daily_limit - daily_dd_pct),
+            "daily_dd_pct": effective_daily_dd_pct,
+            "total_dd_pct": effective_total_dd_pct,
+            "daily_safe_margin_left_pct": max(0.0, daily_limit - effective_daily_dd_pct),
             "is_daily_lockout": self.is_daily_lockout,
             "lockout_reason": self.lockout_reason,
             "phase": self.phase,

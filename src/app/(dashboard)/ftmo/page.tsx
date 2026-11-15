@@ -72,11 +72,11 @@ interface Mt5SpreadItem {
     symbol: string;
     bid: number;
     ask: number;
-    spread_raw: number;
-    spread_points: number;
-    digits: number;
-    is_spike: boolean;
-    status: 'NORMAL' | 'ELEVATED';
+    spread_raw?: number;
+    spread_points?: number;
+    digits?: number;
+    is_spike?: boolean;
+    status: 'NORMAL' | 'ELEVATED' | 'OFFLINE' | 'SIMULATED';
 }
 
 interface Mt5TelemetryData {
@@ -110,9 +110,9 @@ export default function FtmoPage() {
         try {
             const apiHost = getApiBaseUrl();
             const [oppsRes, statusRes, mt5Res] = await Promise.all([
-                fetch(`${apiHost}/api/v1/tradfi/opportunities`),
-                fetch(`${apiHost}/api/v1/ftmo/guardian`),
-                fetch(`${apiHost}/api/v1/ftmo/positions`)
+                fetch(`${apiHost}/api/v1/tradfi/opportunities`, { cache: 'no-store' }),
+                fetch(`${apiHost}/api/v1/ftmo/guardian`, { cache: 'no-store' }),
+                fetch(`${apiHost}/api/v1/ftmo/positions`, { cache: 'no-store' })
             ]);
 
             if (oppsRes.ok) {
@@ -281,28 +281,37 @@ export default function FtmoPage() {
                     </div>
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 font-mono">
                         {Object.entries(mt5Data.spreads).map(([sym, item]) => {
-                            const isElevated = item.is_spike || item.status === 'ELEVATED';
+                            const isOffline = item.status === 'OFFLINE' || item.status === 'SIMULATED' || (!mt5Data.connected && item.bid === 0 && item.ask === 0);
+                            const isElevated = !isOffline && (item.is_spike || item.status === 'ELEVATED');
                             return (
                                 <div key={sym} className={`p-2.5 rounded-xl border transition-all ${
-                                    isElevated ? 'bg-rose-500/10 border-rose-500/30' : 'bg-black/30 border-white/5'
+                                    isElevated
+                                        ? 'bg-rose-500/10 border-rose-500/30'
+                                        : isOffline
+                                            ? 'bg-amber-500/5 border-amber-500/20'
+                                            : 'bg-black/30 border-white/5'
                                 }`}>
                                     <div className="flex justify-between items-center mb-1">
                                         <span className="text-[11px] font-black text-white">{sym.replace('.cash', '')}</span>
                                         <span className={`text-[8px] font-bold px-1.5 py-0.2 rounded ${
-                                            isElevated ? 'bg-rose-500 text-black font-black' : 'text-emerald-400 bg-emerald-500/15'
+                                            isElevated
+                                                ? 'bg-rose-500 text-black font-black'
+                                                : isOffline
+                                                    ? 'text-amber-400 bg-amber-500/15'
+                                                    : 'text-emerald-400 bg-emerald-500/15'
                                         }`}>
-                                            {isElevated ? 'ELEVADO' : 'NORMAL'}
+                                            {isElevated ? 'ELEVADO' : isOffline ? 'OFFLINE' : 'NORMAL'}
                                         </span>
                                     </div>
                                     <div className="flex justify-between items-baseline text-[10px]">
                                         <span className="text-white/40">Spread:</span>
-                                        <span className={`font-black ${isElevated ? 'text-rose-400' : 'text-neon-cyan'}`}>
-                                            {item.spread_raw} ({item.spread_points} pts)
+                                        <span className={`font-black ${isElevated ? 'text-rose-400' : isOffline ? 'text-white/40' : 'text-neon-cyan'}`}>
+                                            {isOffline ? '-- (Sin feed)' : `${item.spread_raw ?? 0} (${item.spread_points ?? 0} pts)`}
                                         </span>
                                     </div>
                                     <div className="flex justify-between items-baseline text-[8.5px] text-white/30 mt-0.5">
-                                        <span>B: {item.bid}</span>
-                                        <span>A: {item.ask}</span>
+                                        <span>B: {isOffline ? '--' : item.bid}</span>
+                                        <span>A: {isOffline ? '--' : item.ask}</span>
                                     </div>
                                 </div>
                             );
