@@ -85,6 +85,13 @@ class MarketScanner:
         "XAUUSDT", "BTCUSDT", "NEARUSDT", "ATOMUSDT"
     }
 
+    # [SOP-137] Guardia Direccional Asimétrica Auditada (Backtest 437 ops + Monte Carlo 10,000 rutas):
+    # - INJUSDT & LINKUSDT presentan expectativa negativa en LONG (PF 0.81 / 0.74, WR 28.6% / 29.6%), pero PF 2.84 / 2.59 en SHORT.
+    # - XAUUSDT, SOLUSDT & SUIUSDT presentan expectativa negativa en SHORT (PF 0.96 / 0.82 / 0.93), pero PF 5.17 / 2.67 / 1.28 en LONG.
+    SHORT_ONLY_ASYMMETRIC_ASSETS_SOP137 = {"INJUSDT", "LINKUSDT"}
+    LONG_ONLY_STRUCTURAL_ASSETS_SOP137 = {"XAUUSDT", "XAUUSD", "SOLUSDT", "SUIUSDT"}
+    TOXIC_UTC_HOURS_SOP137 = {7, 10, 14, 21, 22}
+
     @classmethod
     def is_quant_approved_pair(cls, symbol: str, interval: str) -> bool:
         """Verifica si el par Activo:Timeframe supera los umbrales de Backtest + Monte Carlo (SOP-125)."""
@@ -97,6 +104,34 @@ class MarketScanner:
         if tf == "1h":
             return sym in cls.APPROVED_SWING_1H_EXECUTION
         return True
+
+    @classmethod
+    def is_directional_setup_allowed_sop137(cls, symbol: str, direction: str) -> bool:
+        """
+        [SOP-137] Veta el lado perdedor de activos con asimetría direccional extrema comprobada:
+        - INJUSDT / LINKUSDT: Bloquea LONG (solo permite SHORT).
+        - XAUUSDT / SOLUSDT / SUIUSDT: Bloquea SHORT (solo permite LONG).
+        """
+        sym = (symbol or "").replace("/", "").upper()
+        if not sym.endswith("USDT") and sym not in ("XAUUSD", "XAUUSDT"):
+            sym = f"{sym}USDT"
+        dir_clean = "SHORT" if "SHORT" in str(direction or "LONG").upper() else "LONG"
+        if sym in cls.SHORT_ONLY_ASYMMETRIC_ASSETS_SOP137 and dir_clean == "LONG":
+            return False
+        if sym in cls.LONG_ONLY_STRUCTURAL_ASSETS_SOP137 and dir_clean == "SHORT":
+            return False
+        return True
+
+    @classmethod
+    def is_toxic_hour_sop137(cls, dt: datetime) -> bool:
+        """
+        [SOP-137] Identifica horas intradía con expectativa matemática negativa:
+        - 07:00 UTC: Pre-London Judas Swing Fakeout (WR 28.6%, PF 0.83)
+        - 10:00 UTC: London Trap
+        - 14:00 UTC: NY Open Chop
+        - 21:00-22:00 UTC: NY Close Dead Zone (WR 0.0%)
+        """
+        return int(dt.hour) in cls.TOXIC_UTC_HOURS_SOP137
 
     def __init__(self):
         self.router = SlingshotRouter()
@@ -841,9 +876,15 @@ class MarketScanner:
                     "btc_aligned": top_c.get("btc_aligned")
                 }
 
-                # Secuencia Transaccional SSoT: Primero Bitunix, Luego Telegram (SOP-125 Quant Gatekeeper)
+                # Secuencia Transaccional SSoT: Primero Bitunix, Luego Telegram (SOP-125 & SOP-137 Quant Gatekeeper)
                 if is_intraday_operative and not self.is_quant_approved_pair(sym_upper, interval):
                     logger.info(f"🛡️ [SOP-125 QUANT GATE] {sym_upper}:{interval} omitido de auto-ejecución en Bitunix (PF/Monte Carlo bajo umbral institucional).")
+                    continue
+                if is_intraday_operative and not self.is_directional_setup_allowed_sop137(sym_upper, clean_dir):
+                    logger.info(f"🛡️ [SOP-137 DIRECTIONAL GUARD] {sym_upper}:{interval} ({clean_dir}) omitido por asimetría direccional negativa auditada.")
+                    continue
+                if is_intraday_operative and self.is_toxic_hour_sop137(now_utc_dispatch):
+                    logger.info(f"🛡️ [SOP-137 TOXIC HOUR GUARD] {sym_upper}:{interval} omitido en hora tóxica {now_utc_dispatch.hour:02d}:00 UTC.")
                     continue
                 exec_result = None
                 if settings.ENABLE_LIVE_TRADING and is_intraday_operative:

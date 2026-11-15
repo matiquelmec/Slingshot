@@ -360,4 +360,18 @@ Todos los mensajes de commit deben seguir estrictamente el estándar de Conventi
 3. **Auto-Healing de Grilla 50/30/20 Pre-TP1 Incluso con `FAST_BE` Activo:**
    * Si una posición carece de órdenes límite de cierre (`close_count == 0`) y aún conserva $\ge 90\%$ de su volumen original (`tp1_unfilled_yet`), el reconciliador de `NexusNode` debe colocar la grilla `50% / 30% / 20%` aunque `is_be_active` ya sea `True`.
 
+---
+
+## 22. Regla 32: Guardia Direccional Asimétrica por Activo, Quirófano Horario Extendido `[7, 10, 14, 21, 22] UTC`, Priority Score Champions y Regime Agent Activo (SOP-137)
+
+1. **Guardia Direccional Asimétrica (`MarketScanner.is_directional_setup_allowed_sop137`):**
+   * Queda prohibido despachar en vivo o promover desde el reciclador de cupos (`NexusNode.on_risk_released`) el lado estructuralmente perdedor de activos con asimetría direccional comprobada en Backtest y Monte Carlo:
+     * **Short-Only Asymmetric (`INJUSDT`, `LINKUSDT`):** Se vetan compras (`LONG`, donde presentan `PF 0.81 / 0.74` y `WR < 30%`), permitiendo exclusivamente ventas (`SHORT`, donde registran `PF 2.84 / 2.59`).
+     * **Long-Only Structural (`XAUUSDT`, `SOLUSDT`, `SUIUSDT`):** Se vetan ventas (`SHORT`, donde presentan `PF 0.96 / 0.82 / 0.93`), permitiendo exclusivamente compras (`LONG`, donde registran `PF 5.17 / 2.67 / 1.28`).
+2. **Quirófano Horario Extendido (`[7, 10, 14, 21, 22] UTC`):**
+   * Además de las horas `10:00` y `14:00 UTC`, se vetan las `07:00 UTC` (*Judas Swing* Pre-Londres con `WR 28.6%, PF 0.83`) y las `21:00–22:00 UTC` (zona muerta de cierre NY con `WR 0.0%`).
+3. **Alineación de `calculate_priority_score` y Activación de `Regime Agent (SOP-63)`:**
+   * `FETUSDT` y `XAUUSDT` deben recibir el multiplicador Tier 1 (`1.25x`) junto a `ETH, SOL, BNB, INJ`, y `ATOMUSDT` el multiplicador Tier 2 (`1.00x`), eliminando la penalización de `0.85x` en el desempate de cupos. `UnifiedBacktestEngine.run_chronological_portfolio_replay()` mantiene `enable_regime_agent=True` y `enable_directional_guard_sop137=True` por defecto (`+138.32R Alpha`, `$26,143.96 USD` compuesto, `MaxDD 3.99%` y mediana Monte Carlo `+40.35R/100 ops`).
+
+
 

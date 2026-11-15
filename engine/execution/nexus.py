@@ -943,15 +943,16 @@ class NexusNode:
     @staticmethod
     def calculate_priority_score(opportunity: Dict[str, Any]) -> float:
         """
-        [SOP-97 ALPHA-TIER PRIORITY SCORING]
+        [SOP-97 & SOP-137 ALPHA-TIER PRIORITY SCORING]
         Calcula la puntuación ponderada para desempate y selección en cola.
-        Alpha Trinity (ETH, SOL, BNB, INJ) reciben multiplicador Tier 1 (1.25x).
+        Campeones Tier 1 (ETH, SOL, BNB, INJ, FET, XAU) reciben multiplicador 1.25x;
+        Tier 2 (NEAR, SUI, XRP, BTC, ATOM, AVAX) reciben 1.00x.
         """
         score = float(opportunity.get("confluence_score") or opportunity.get("score", 70.0))
         asset = str(opportunity.get("asset", opportunity.get("symbol", ""))).upper()
-        if any(t1 in asset for t1 in ("ETH", "SOL", "BNB", "INJ")):
+        if any(t1 in asset for t1 in ("ETH", "SOL", "BNB", "INJ", "FET", "XAU")):
             multiplier = 1.25
-        elif any(t2 in asset for t2 in ("AVAX", "NEAR", "SUI", "XRP", "BTC")):
+        elif any(t2 in asset for t2 in ("AVAX", "NEAR", "SUI", "XRP", "BTC", "ATOM")):
             multiplier = 1.00
         else:
             multiplier = 0.85
@@ -1718,7 +1719,10 @@ class NexusNode:
             for c in candidates:
                 sym_cand = c.get("asset", c.get("symbol", "")).upper()
                 tf_cand = str(c.get("interval") or c.get("timeframe") or "15m").lower()
+                dir_cand = str(c.get("direction") or c.get("signal_type") or c.get("type") or "LONG").upper()
                 if not MarketScanner.is_quant_approved_pair(sym_cand, tf_cand):
+                    continue
+                if not MarketScanner.is_directional_setup_allowed_sop137(sym_cand, dir_cand):
                     continue
                 score_cand = float(c.get("confluence_score", c.get("score", 0)))
                 is_chasing = c.get("ote_chasing", False)

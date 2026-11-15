@@ -1007,4 +1007,18 @@ Sometidas las 3 optimizaciones a la matriz experimental de 180 días en los 13 a
 3. **Auto-Healing de Grilla 50/30/20 ante Activación Temprana de Breakeven (`engine/execution/nexus.py`):**
    * `_sync_exchange_positions_loop` verifica `tp1_unfilled_yet` (`pos_qty >= orig_qty_heal * 0.90`) para restaurar siempre las órdenes límite `TP1/TP2/TP3` cuando `close_count == 0`, incluso si `FAST_BE` se activó antes del barrido del reconciliador.
 
+---
+
+## 45. SOP-137: GUARDIA DIRECCIONAL ASIMÉTRICA POR ACTIVO, QUIRÓFANO HORARIO EXTENDIDO, PRIORITY SCORE CHAMPIONS Y ACTIVACIÓN DE REGIME AGENT
+
+1. **Guardia Direccional Asimétrica (`engine/workers/market_scanner.py`, `engine/execution/nexus.py`, `engine/backtest/unified_backtest_engine.py`):**
+   * `MarketScanner.is_directional_setup_allowed_sop137(symbol, direction)` bloquea en ejecución intradía, reciclador de cupos y replay cronológico los lados con expectativa negativa auditada:
+     * `INJUSDT` y `LINKUSDT`: bloquea `LONG` (`PF 0.81 / 0.74`), operando exclusivamente `SHORT` (`PF 2.84 / 2.59`).
+     * `XAUUSDT`, `SOLUSDT` y `SUIUSDT`: bloquea `SHORT` (`PF 0.96 / 0.82 / 0.93`), operando exclusivamente `LONG` (`PF 5.17 / 2.67 / 1.28`).
+2. **Quirófano Horario Extendido (`[7, 10, 14, 21, 22] UTC`):**
+   * `MarketScanner.is_toxic_hour_sop137(dt)` y `UnifiedBacktestEngine.run_chronological_portfolio_replay` vetan la hora `07:00 UTC` (*Pre-London Fakeout*, `WR 28.6%, PF 0.83`) y las horas `21:00–22:00 UTC` (*NY Close Dead Zone*, `WR 0.0%`) además de `10:00` y `14:00 UTC`.
+3. **Promoción de Campeones en `calculate_priority_score` y `Regime Agent (SOP-63)` Activo:**
+   * `FETUSDT` y `XAUUSDT` ascienden al multiplicador Tier 1 (`1.25x`) y `ATOMUSDT` al Tier 2 (`1.00x`). Con `enable_regime_agent=True` y `enable_directional_guard_sop137=True`, la cartera alcanza `49.0% WR`, `PF Base 1.93`, `PF Alpha 2.11`, `+105.94R Base`, `+138.32R Alpha`, `$26,143.96 USD` compuestos desde `$1,000` (`+2,514.4%`), `MaxDD Alpha 3.99%`, `Sharpe 4.89` y mediana Monte Carlo de `+40.35R` cada 100 operaciones.
+
+
 

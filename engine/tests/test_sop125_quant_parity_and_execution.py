@@ -146,3 +146,51 @@ async def test_sop125_dust_balance_guard_in_nexus():
     assert res is None
     assert ex._last_verified_balance == 0.0
     ex.place_limit_signal.assert_not_awaited()
+
+
+def test_sop137_directional_asymmetry_guard_and_toxic_hours():
+    """
+    Certifica la Guardia Direccional Asimétrica (SOP-137) y el Quirófano Horario [7, 10, 14, 21, 22] UTC:
+    - INJUSDT y LINKUSDT solo permiten SHORT (vetan LONG por PF < 0.82).
+    - XAUUSDT, SOLUSDT y SUIUSDT solo permiten LONG (vetan SHORT por PF < 0.96).
+    - BNBUSDT, ETHUSDT, NEARUSDT, FETUSDT y ATOMUSDT permiten ambas direcciones.
+    """
+    from datetime import datetime, timezone
+
+    # Short-Only Asymmetric Assets
+    assert MarketScanner.is_directional_setup_allowed_sop137("INJUSDT", "LONG") is False
+    assert MarketScanner.is_directional_setup_allowed_sop137("INJUSDT", "SHORT") is True
+    assert MarketScanner.is_directional_setup_allowed_sop137("LINKUSDT", "LONG") is False
+    assert MarketScanner.is_directional_setup_allowed_sop137("LINKUSDT", "SHORT") is True
+
+    # Long-Only Structural Bull Assets
+    assert MarketScanner.is_directional_setup_allowed_sop137("XAUUSDT", "SHORT") is False
+    assert MarketScanner.is_directional_setup_allowed_sop137("XAUUSDT", "LONG") is True
+    assert MarketScanner.is_directional_setup_allowed_sop137("SOLUSDT", "SHORT") is False
+    assert MarketScanner.is_directional_setup_allowed_sop137("SOLUSDT", "LONG") is True
+    assert MarketScanner.is_directional_setup_allowed_sop137("SUIUSDT", "SHORT") is False
+    assert MarketScanner.is_directional_setup_allowed_sop137("SUIUSDT", "LONG") is True
+
+    # Balanced Dual-Direction Champions
+    for sym in ("BNBUSDT", "ETHUSDT", "NEARUSDT", "FETUSDT", "ATOMUSDT", "BTCUSDT"):
+        assert MarketScanner.is_directional_setup_allowed_sop137(sym, "LONG") is True
+        assert MarketScanner.is_directional_setup_allowed_sop137(sym, "SHORT") is True
+
+    # Toxic Hours [7, 10, 14, 21, 22] UTC
+    for h in (7, 10, 14, 21, 22):
+        assert MarketScanner.is_toxic_hour_sop137(datetime(2026, 11, 14, h, 15, tzinfo=timezone.utc)) is True
+    for h in (8, 9, 15, 16, 18):
+        assert MarketScanner.is_toxic_hour_sop137(datetime(2026, 11, 14, h, 15, tzinfo=timezone.utc)) is False
+
+
+def test_sop137_priority_score_champions_alignment():
+    """
+    Certifica que FETUSDT y XAUUSDT reciban el multiplicador Tier 1 (1.25x) y ATOMUSDT
+    reciba el multiplicador Tier 2 (1.00x) en NexusNode.calculate_priority_score.
+    """
+    fet_score = NexusNode.calculate_priority_score({"symbol": "FETUSDT", "confluence_score": 80.0})
+    xau_score = NexusNode.calculate_priority_score({"symbol": "XAUUSDT", "confluence_score": 80.0})
+    atom_score = NexusNode.calculate_priority_score({"symbol": "ATOMUSDT", "confluence_score": 80.0})
+    assert fet_score == 100.0
+    assert xau_score == 100.0
+    assert atom_score == 80.0

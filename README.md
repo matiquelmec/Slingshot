@@ -222,6 +222,9 @@ graph TB
 | **SOP-132** | Telegram Privacy, Single Emitter & Sanity Gate | Emisor único desde `NexusNode`, paridad exacta SL/TP con Bitunix, bloqueo de `1d` sin gatillo y eliminación de balances/USD en alertas públicas. |
 | **SOP-133** | Closed-Loop ML, Bounded Bandit & Live Sentinels | Auto-init de `DriftMonitor`, embargo 16 velas y Champion-Challenger en `RollingWalkForwardTrainer`, bandit `BlackBox` acotado `[-8, +8]` pts (`>= 15` trades) y ejecución en vivo de `SOP-108` (L2) y `SOP-109` (Funding Drag). |
 | **SOP-134** | SessionClock Wall-Clock Sync, Sweep Latch & DST Range Parity | Unificación 08:00-16:00 NY en `SessionManager`, latch diario en `swept_high`/`swept_low`/`pdh_swept`/`pdl_swept`, relojes IANA en vivo (`NY`/`LON`/`UTC`/`CL`) y aislamiento por `activeSymbol` en `SessionClock.tsx`. |
+| **SOP-135** | Serverless LibSQL Web, Next.js 15 Action Isolation & Session Log Sync | Driver HTTP `@libsql/client/web` + `drizzle-orm/libsql/web` en Vercel, esquemas Zod en `schemas.ts`, timestamps UNIX en segundos y blindaje de las 5 pestañas de `/history`. |
+| **SOP-136** | Adaptive Post-TP1 Breakeven (+1.2R), SOP-125 Slot Recycler & TP Auto-Healing | `TradeManager.get_optimal_be_threshold` (`+1.2R` post-TP1 en `NEAR/ATOM/SUI/Swing`, `+1.0R` en `FET/INJ 15m`), filtro `SOP-125` en `on_risk_released` y auto-healing 50/30/20 pre-TP1. |
+| **SOP-137** | Directional Asymmetry Guard, Extended Toxic Hours `[7,10,14,21,22]`, Priority Champions & Regime Agent | Veto de lados perdedores (`INJ/LINK` Short-Only, `XAU/SOL/SUI` Long-Only), veto de `07h` Pre-Londres y `21-22h` NY Close, `FET/XAU` a `1.25x` en `calculate_priority_score` y `Regime Agent` activo (`+138.32R Alpha`, `$26,143.96 USD` compuesto, `MaxDD 3.99%`). |
 
 ---
 

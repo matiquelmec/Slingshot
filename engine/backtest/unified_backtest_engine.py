@@ -676,23 +676,25 @@ class UnifiedBacktestEngine:
         enable_trinity_boost: bool = True,
         enable_elastic_runner: bool = False,
         enable_golden_hours: bool = True,
-        enable_regime_agent: bool = False,
+        enable_regime_agent: bool = True,
         enable_meta_labeling: bool = True,
         enable_streak_circuit_breaker: bool = False,
         max_consecutive_losses: int = 3,
         streak_cooldown_trades: int = 1,
         enable_progressive_exposure: bool = True,
-        enable_dual_timeframe_sop101: bool = True
+        enable_dual_timeframe_sop101: bool = True,
+        enable_directional_guard_sop137: bool = True
     ) -> Dict[str, Any]:
         """
-        [EVENT-DRIVEN TIMELINE REPLAY v60.0 SSoT]
+        [EVENT-DRIVEN TIMELINE REPLAY v60.0 SSoT — SOP-137 ALIGNED]
         Simulador Cronológico Unificado de Cartera con Réplica 1-a-1 de Producción:
         - Reloj Global Unificado cruzando todos los activos en el tiempo.
         - Filtro Macro BTC dinámico en tiempo real (btc_aligned).
         - [SOP-97] Separación Estricta: Max Unprotected Risk (2) vs Max Concurrent Physical (4).
-        - [SOP-97] Ponderación y Desempate Concurrente por Alpha Trinity (1.25x en ETH, SOL, BNB, INJ).
+        - [SOP-97 & SOP-137] Ponderación y Desempate Concurrente por Alpha Trinity + Champions (1.25x en ETH, SOL, BNB, INJ, FET, XAU).
         - [SOP-99] Dynamic Slot Elasticity & Macro Decoupled Expansion (Oro ρ < 0.35 -> 3/5 slots).
         - [SOP-101] Dual-Timeframe Specialization (15m Crypto Scalp + 1h Swing Elite & XAUUSDT).
+        - [SOP-137] Guardia Direccional Asimétrica (INJ/LINK Short-Only, XAU/SOL/SUI Long-Only) y Quirófano Horario [7, 10, 14, 21, 22] UTC.
         - Modo Dual: R Base / Alpha-Tier (1% plano) e Interés Compuesto Dinámico (2.5% Bitunix).
         - Embudo de telemetría de señales y tracking de rechazos.
         - Modulación Táctica de Régimen de Mercado SOP-63 (SlingshotRegimeAgent).
@@ -701,7 +703,7 @@ class UnifiedBacktestEngine:
         if max_concurrent_longs is not None and max_concurrent_longs != 2:
             max_unprotected_positions = max_concurrent_longs
 
-        toxic_hours = [10, 14] if toxic_hours is None else toxic_hours
+        toxic_hours = [7, 10, 14, 21, 22] if toxic_hours is None else toxic_hours
         if excluded_assets is None:
             excluded_assets = ["RENDERUSDT", "AVAXUSDT"] if enable_dual_timeframe_sop101 else ["RENDERUSDT"]
 
@@ -763,13 +765,13 @@ class UnifiedBacktestEngine:
             print("⚠️ No se encontraron operaciones para los criterios seleccionados.")
             return {}
 
-        # SOP-97: Ponderación de Prioridad para desempate cronológico (Alpha Trinity 1.25x)
+        # SOP-97 & SOP-137: Ponderación de Prioridad para desempate cronológico (Tier 1 Champions 1.25x, Tier 2 1.00x)
         def calculate_priority_score(row) -> float:
             score = float(row.get("confluence_score", 70.0))
             s = str(row.get("symbol", "")).upper()
-            if any(t1 in s for t1 in ("ETH", "SOL", "BNB", "INJ")):
+            if any(t1 in s for t1 in ("ETH", "SOL", "BNB", "INJ", "FET", "XAU")):
                 multiplier = 1.25
-            elif any(t2 in s for t2 in ("AVAX", "NEAR", "SUI", "XRP", "BTC")):
+            elif any(t2 in s for t2 in ("AVAX", "NEAR", "SUI", "XRP", "BTC", "ATOM")):
                 multiplier = 1.00
             else:
                 multiplier = 0.85
@@ -779,7 +781,8 @@ class UnifiedBacktestEngine:
         df_all = df_all.sort_values(by=["entry_time", "priority_score"], ascending=[True, False]).reset_index(drop=True)
         raw_signal_count = len(df_all)
 
-        # 2. Replay Cronológico con Máquina de Estados (SOP-97 y SOP-99)
+        # 2. Replay Cronológico con Máquina de Estados (SOP-97, SOP-99 y SOP-137)
+        from engine.workers.market_scanner import MarketScanner
         active_unprotected_positions = []
         active_physical_positions = []
         executed_trades = []
@@ -789,6 +792,7 @@ class UnifiedBacktestEngine:
         rejected_physical_cap = 0
         rejected_portfolio_heat = 0
         rejected_toxic_hours = 0
+        rejected_directional_asymmetry = 0
         rejected_streak_breaker = 0
         rejected_already_open = 0
         
@@ -809,6 +813,11 @@ class UnifiedBacktestEngine:
 
             # Poda de activos
             if excluded_assets and sym in excluded_assets:
+                continue
+
+            # Guardia Direccional Asimétrica (SOP-137)
+            if enable_directional_guard_sop137 and not MarketScanner.is_directional_setup_allowed_sop137(sym, direction):
+                rejected_directional_asymmetry += 1
                 continue
 
             # Quirófano Horario
@@ -1090,7 +1099,7 @@ class UnifiedBacktestEngine:
 
         summary_payload = {
             "audit_date": datetime.now().isoformat(),
-            "engine_version": "v60.0 APEX EXPANSION (Event-Driven Timeline SSoT SOP-97, SOP-99, SOP-100 & SOP-101)",
+            "engine_version": "v60.0 APEX EXPANSION (Event-Driven Timeline SSoT SOP-97, SOP-99, SOP-100, SOP-101, SOP-136 & SOP-137)",
             "advanced_protocols": {
                 "alpha_cycle_sop46": enable_alpha_cycle,
                 "trinity_boost_sop47": enable_trinity_boost,
@@ -1098,7 +1107,8 @@ class UnifiedBacktestEngine:
                 "golden_hours_sop49": enable_golden_hours,
                 "regime_agent_sop63": enable_regime_agent,
                 "meta_labeling_sop100": enable_meta_labeling,
-                "dual_timeframe_sop101": enable_dual_timeframe_sop101
+                "dual_timeframe_sop101": enable_dual_timeframe_sop101,
+                "directional_guard_sop137": enable_directional_guard_sop137
             },
             "telemetry_funnel": {
                 "raw_signals": raw_signal_count,
@@ -1109,6 +1119,7 @@ class UnifiedBacktestEngine:
                 "rejected_already_open": rejected_already_open,
                 "rejected_portfolio_heat": rejected_portfolio_heat,
                 "rejected_toxic_hours": rejected_toxic_hours,
+                "rejected_directional_asymmetry": rejected_directional_asymmetry,
                 "rejected_streak_breaker": rejected_streak_breaker,
                 "executed_trades": executed_count
             },

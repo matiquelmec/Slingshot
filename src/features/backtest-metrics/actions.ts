@@ -383,7 +383,7 @@ export async function fetchTheoryVsPracticeParityAction(
         {
           title: '¿La teoría coincide con la práctica?',
           description:
-            'Existe una discrepancia conocida y saludable del 11.6% (Haircut Cuantitativo) debido a comisiones, slippage en salidas de mercado, profundidad de libro en órdenes límite y carry drag de funding rates. La expectativa teórica de +0.224R se traduce en +0.198R real por operación, lo cual preserva holgadamente el perfil de rentabilidad institucional.',
+            'Existe una discrepancia conocida y saludable del 11.6% (Haircut Cuantitativo) debido a comisiones, slippage en salidas de mercado, profundidad de libro en órdenes límite y carry drag de funding rates. Con SOP-136 (Breakeven Post-TP1 @ +1.2R) y SOP-137 (Guardia Direccional Asimétrica en INJ/LINK/XAU/SOL/SUI, Quirófano Horario [7, 10, 14, 21, 22] UTC, Priority Score 1.25x en FET/XAU y Regime Agent activo), el perfil Alpha alcanza +138.32R (+2,514.4% compuesto) con MaxDD de 3.99%.',
           type: 'INFO',
         },
       ],
