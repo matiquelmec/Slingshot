@@ -26,10 +26,10 @@ export default function NewsTerminal() {
             }
         };
 
-        if (news.length === 0) {
-            fetchNewsHistory();
-        }
-    }, [news.length, setNews]);
+        fetchNewsHistory();
+        const interval = setInterval(fetchNewsHistory, 15000);
+        return () => clearInterval(interval);
+    }, [setNews]);
 
     const getSentimentStyles = (sentiment: string) => {
         switch (sentiment) {

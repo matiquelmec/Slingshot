@@ -118,36 +118,55 @@ export const createConnectionManager = (set: any, get: any) => {
                     const newCandles = Array.isArray(diag.candles) && diag.candles.length > 0 ? diag.candles : [];
                     const latestCandlePrice = newCandles.length > 0 ? Number(newCandles[newCandles.length - 1].close) : null;
 
-                    set((state: any) => ({
-                        isCalibrating: false,
-                        isConnected: true,
-                        connectionStatus: 'CONNECTED',
-                        ...(newCandles.length > 0 ? {
-                            candles: newCandles,
-                            latestPrice: latestCandlePrice ?? state.latestPrice,
-                            latestPrices: { ...state.latestPrices, [clean]: latestCandlePrice ?? state.latestPrices[clean] }
-                        } : {}),
-                        tacticalDecision: diag.tactical ? {
-                            ...state.tacticalDecision,
-                            asset: clean,
-                            regime: diag.tactical.market_regime ?? state.tacticalDecision?.regime ?? 'ACTIVE',
-                            strategy: diag.tactical.active_strategy ?? state.tacticalDecision?.strategy ?? 'SMC INSTITUTIONAL',
-                            reasoning: `Régimen: ${diag.tactical.market_regime || 'NEUTRAL'}. Soportes mapeados.`,
-                            current_price: diag.tactical.current_price ?? latestCandlePrice ?? state.latestPrice,
-                            signal_history: diag.tactical.signals ?? [],
-                            htf_bias: diag.tactical.htf_bias ?? diag.htf_bias ?? state.tacticalDecision?.htf_bias ?? state.htfBias,
-                            ...diag.tactical
-                        } : state.tacticalDecision,
-                        smcData: diag.smc ?? state.smcData,
-                        sessionData: diag.sessions ? {
-                            ...diag.sessions,
-                            asset: clean
-                        } : state.sessionData,
-                        mlProjection: diag.ml_projection ?? state.mlProjection,
-                        advisorLogs: diag.advisor_log ? { ...state.advisorLogs, [clean]: diag.advisor_log } : state.advisorLogs,
-                        htfBias: diag.htf_bias ?? state.htfBias,
-                        ...(diag.liquidity_heatmap ? { liquidityHeatmap: diag.liquidity_heatmap } : {})
-                    }));
+                    set((state: any) => {
+                        const regimeLabel = diag.tactical?.market_regime || state.tacticalDecision?.regime;
+                        const htfDir = diag.htf_bias?.direction || diag.tactical?.htf_bias?.direction;
+                        const mlDir = diag.ml_projection?.direction;
+                        const mlProb = diag.ml_projection?.probability;
+                        const summaryMsg = `[${clean} ${timeframe}] Régimen ${regimeLabel || 'ACTIVE'} | HTF ${htfDir || 'NEUTRAL'}${mlDir ? ` | ML ${mlDir} ${Math.round(Number(mlProb || 0))}%` : ''}`;
+                        const existingLogs = Array.isArray(state.neuralLogs) ? state.neuralLogs : [];
+                        const lastMsg = existingLogs[0]?.message;
+                        const nextLogs = lastMsg !== summaryMsg
+                            ? [{
+                                id: `${clean}-${timeframe}-${Date.now()}`,
+                                timestamp: new Date().toLocaleTimeString('en-US', { hour12: false }),
+                                type: 'SYSTEM',
+                                message: summaryMsg,
+                            }, ...existingLogs].slice(0, 12)
+                            : existingLogs;
+
+                        return {
+                            isCalibrating: false,
+                            isConnected: true,
+                            connectionStatus: 'CONNECTED',
+                            neuralLogs: nextLogs,
+                            ...(newCandles.length > 0 ? {
+                                candles: newCandles,
+                                latestPrice: latestCandlePrice ?? state.latestPrice,
+                                latestPrices: { ...state.latestPrices, [clean]: latestCandlePrice ?? state.latestPrices[clean] }
+                            } : {}),
+                            tacticalDecision: diag.tactical ? {
+                                ...state.tacticalDecision,
+                                asset: clean,
+                                regime: diag.tactical.market_regime ?? state.tacticalDecision?.regime ?? 'ACTIVE',
+                                strategy: diag.tactical.active_strategy ?? state.tacticalDecision?.strategy ?? 'SMC INSTITUTIONAL',
+                                reasoning: `Régimen: ${diag.tactical.market_regime || 'NEUTRAL'}. Soportes mapeados.`,
+                                current_price: diag.tactical.current_price ?? latestCandlePrice ?? state.latestPrice,
+                                signal_history: diag.tactical.signals ?? [],
+                                htf_bias: diag.tactical.htf_bias ?? diag.htf_bias ?? state.tacticalDecision?.htf_bias ?? state.htfBias,
+                                ...diag.tactical
+                            } : state.tacticalDecision,
+                            smcData: diag.smc ?? state.smcData,
+                            sessionData: diag.sessions ? {
+                                ...diag.sessions,
+                                asset: clean
+                            } : state.sessionData,
+                            mlProjection: diag.ml_projection ?? state.mlProjection,
+                            advisorLogs: diag.advisor_log ? { ...state.advisorLogs, [clean]: diag.advisor_log } : state.advisorLogs,
+                            htfBias: diag.htf_bias ?? state.htfBias,
+                            ...(diag.liquidity_heatmap ? { liquidityHeatmap: diag.liquidity_heatmap } : {})
+                        };
+                    });
                 }
             } catch (e) {}
         };

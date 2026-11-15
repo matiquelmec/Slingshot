@@ -8,16 +8,6 @@ import { formatCurrency, formatPrice } from '@/app/utils/formatters';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-const REGIME_META: Record<string, { color: string; bg: string; glow: string; label: string }> = {
-    MARKUP: { color: 'text-neon-green', bg: 'bg-neon-green/10 border-neon-green/30', glow: 'rgba(0,255,65,0.3)', label: 'MARKUP ↗' },
-    MARKDOWN: { color: 'text-neon-red', bg: 'bg-neon-red/10 border-neon-red/30', glow: 'rgba(255,0,60,0.3)', label: 'MARKDOWN ↘' },
-    ACCUMULATION: { color: 'text-yellow-400', bg: 'bg-yellow-400/10 border-yellow-400/30', glow: 'rgba(250,204,21,0.3)', label: 'ACUMULACIÓN' },
-    DISTRIBUTION: { color: 'text-orange-400', bg: 'bg-orange-400/10 border-orange-400/30', glow: 'rgba(251,146,60,0.3)', label: 'DISTRIBUCIÓN' },
-    RANGING: { color: 'text-neon-cyan', bg: 'bg-neon-cyan/10 border-neon-cyan/30', glow: 'rgba(0,229,255,0.3)', label: 'RANGING' },
-    CHOPPY: { color: 'text-purple-400', bg: 'bg-purple-400/10 border-purple-400/30', glow: 'rgba(192,132,252,0.3)', label: 'CHOPPY (TRANSICIÓN)' },
-    UNKNOWN: { color: 'text-white/40', bg: 'bg-white/5 border-white/10', glow: 'transparent', label: 'CALIBRANDO' },
-};
-
 // Utilizar formatCurrency/formatPrice de utils/formatters
 
 function pct(val: number | null): string {

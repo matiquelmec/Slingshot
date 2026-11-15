@@ -46,7 +46,28 @@ class NewsWorker:
         self.interval = interval_seconds
         self._stop_event = asyncio.Event()
         self._cache_path = "engine/data/news_seen_cache.json"
+        self._history_path = "engine/data/news_history_cache.json"
         self._seen_urls, self._seen_titles = self._load_seen_cache()
+
+    def _load_history_cache(self) -> list[dict]:
+        import json, os
+        try:
+            if os.path.exists(self._history_path):
+                with open(self._history_path, "r", encoding="utf-8") as f:
+                    items = json.load(f)
+                    return items[-50:] if isinstance(items, list) else []
+        except Exception:
+            pass
+        return []
+
+    def _save_history_cache(self, items: list[dict]):
+        import json, os
+        try:
+            os.makedirs(os.path.dirname(self._history_path), exist_ok=True)
+            with open(self._history_path, "w", encoding="utf-8") as f:
+                json.dump(items[-50:], f, ensure_ascii=False)
+        except Exception:
+            pass
 
     def _load_seen_cache(self):
         import json, os
@@ -81,7 +102,14 @@ class NewsWorker:
         else:
             logger.warning("📰 [NEWS-WORKER] Ollama no detectado tras 15s. Bootstrap sin IA.")
 
-        # 🚀 BOOTSTRAP FETCH: Carga inicial
+        # 🚀 BOOTSTRAP FETCH: Restaurar historial persistido si store en RAM arrancó vacío
+        existing = await store.get_news()
+        if not existing:
+            cached_history = self._load_history_cache()
+            for item in reversed(cached_history):
+                await store.save_news(item)
+            if cached_history:
+                logger.info(f"📰 [NEWS-WORKER] {len(cached_history)} noticias restauradas desde caché local.")
         try:
             await self.fetch_and_process_news()
         except Exception as e:
@@ -107,8 +135,10 @@ class NewsWorker:
         # Obtener noticias existentes para deduplicación simétrica
         existing_news = await store.get_news()
         existing_titles = {elite_normalize(n.get('title', '')) for n in existing_news}
-        existing_urls = {n.get('url', '').lower().rstrip('/').split('?')[0] for n in existing_news} | set(self._seen_urls)
-        existing_titles = existing_titles | set(self._seen_titles)
+        existing_urls = {n.get('url', '').lower().rstrip('/').split('?')[0] for n in existing_news}
+        if existing_news:
+            existing_urls = existing_urls | set(self._seen_urls)
+            existing_titles = existing_titles | set(self._seen_titles)
 
         async with httpx.AsyncClient(timeout=httpx.Timeout(6.0, connect=3.0), headers=headers) as client:
             for url in RSS_FEEDS:
@@ -200,6 +230,7 @@ class NewsWorker:
             if not is_tier_3:
                 to_analyze.append(news_item)
 
+        self._save_history_cache(await store.get_news(limit=50))
         # 🧠 ANÁLISIS POR LOTE (Eficiencia v7.0)
         if to_analyze:
             asyncio.create_task(self._analyze_news_batch(to_analyze))
@@ -226,6 +257,7 @@ class NewsWorker:
                 await store.save_news(item)
                 await registry.broadcast_global({"type": "news_update", "data": item})
                 
+            self._save_history_cache(await store.get_news(limit=50))
             logger.info(f"🧠 [NEWS-BATCH] ✅ {len(news_items)} noticias analizadas eficientemente.")
             
         except Exception as e:
