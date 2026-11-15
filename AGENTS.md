@@ -373,5 +373,14 @@ Todos los mensajes de commit deben seguir estrictamente el estándar de Conventi
 3. **Alineación de `calculate_priority_score` y Activación de `Regime Agent (SOP-63)`:**
    * `FETUSDT` y `XAUUSDT` deben recibir el multiplicador Tier 1 (`1.25x`) junto a `ETH, SOL, BNB, INJ`, y `ATOMUSDT` el multiplicador Tier 2 (`1.00x`), eliminando la penalización de `0.85x` en el desempate de cupos. `UnifiedBacktestEngine.run_chronological_portfolio_replay()` mantiene `enable_regime_agent=True` y `enable_directional_guard_sop137=True` por defecto (`+138.32R Alpha`, `$26,143.96 USD` compuesto, `MaxDD 3.99%` y mediana Monte Carlo `+40.35R/100 ops`).
 
+---
+
+## 23. Regla 33: Restauración de Paridad 1:1 en `XRPUSDT:15m`, `ETHUSDT:1h` y `LINKUSDT:1h SHORT` (SOP-139)
+
+1. **Matriz de Ejecución Dual-TF (`MarketScanner.APPROVED_SCALP_15M_EXECUTION` y `APPROVED_SWING_1H_EXECUTION`):**
+   * Se habilita `XRPUSDT:15m` (`PF 1.72`, `+17.65R`, `MC 99.4%`), `ETHUSDT:1h` (`PF 1.70`, `+5.58R`, `MC 99.0%`) y `LINKUSDT:1h` (`PF 3.01`, `+5.31R`, `MC 100.0%` operando exclusivamente `SHORT` bajo la guardia `SOP-137`) para restaurar la paridad 1:1 entre el simulador cronológico y el motor de ejecución en vivo.
+   * La expansión de nuevas monedas externas al Universo Canónico de 13 activos (`OPUSDT`, `APTUSDT`) permanece bloqueada en producción hasta completar la rotación formal vía `AssetIncubator` (`SOP-105`), manteniendo `ENABLE_DYNAMIC_WATCHLIST = False` (Regla 8).
+
+
 
 

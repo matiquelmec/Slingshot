@@ -77,12 +77,15 @@ class MarketScanner:
     Escáner profesional de mercado en segundo plano.
     Combina Núcleo Fijo Institucional (Tier 1) con Rotación Dinámica por Volumen y KER (Tier 2).
     """
-    # [SOP-125] Matriz Cuantitativa Aprobada por Backtest (437 trades) + Monte Carlo (5,000 rutas, PF >= 1.50, MC >= 80%)
+    # [SOP-125 & SOP-139] Matriz Cuantitativa Aprobada por Backtest + Monte Carlo (PF >= 1.50, MC >= 80%, Paridad 1:1)
+    # - XRPUSDT:15m restaurado (PF 1.72, +17.65R, MC 99.4%)
+    # - ETHUSDT:1h restaurado (PF 1.70, +5.58R, MC 99.0%)
+    # - LINKUSDT:1h restaurado bajo guardia SOP-137 Short-Only (PF 3.01, +5.31R, MC 100.0%)
     APPROVED_SCALP_15M_EXECUTION = {
-        "BNBUSDT", "ETHUSDT", "SOLUSDT", "NEARUSDT", "FETUSDT", "INJUSDT", "ATOMUSDT"
+        "BNBUSDT", "ETHUSDT", "SOLUSDT", "NEARUSDT", "FETUSDT", "INJUSDT", "ATOMUSDT", "XRPUSDT"
     }
     APPROVED_SWING_1H_EXECUTION = {
-        "XAUUSDT", "BTCUSDT", "NEARUSDT", "ATOMUSDT"
+        "XAUUSDT", "BTCUSDT", "NEARUSDT", "ATOMUSDT", "ETHUSDT", "LINKUSDT"
     }
 
     # [SOP-137] Guardia Direccional Asimétrica Auditada (Backtest 437 ops + Monte Carlo 10,000 rutas):

@@ -23,30 +23,38 @@ from engine.api.advisor import get_cached_ollama_status
 
 def test_sop125_quant_approved_pair_matrix():
     """
-    Certifica que únicamente los 11 pares Activo:Timeframe aprobados por Backtest
-    (PF >= 1.50, Exp >= +0.17R) y Monte Carlo (5,000 rutas, Win% >= 80%) pasen el filtro.
+    Certifica que únicamente los pares Activo:Timeframe aprobados por Backtest
+    (PF >= 1.50, Exp >= +0.17R) y Monte Carlo (10,000 rutas, Win% >= 80%) pasen el filtro (SOP-125 + SOP-139).
     """
-    approved_15m = ["BNBUSDT", "ETHUSDT", "SOLUSDT", "NEARUSDT", "FETUSDT", "INJUSDT", "ATOMUSDT"]
+    approved_15m = ["BNBUSDT", "ETHUSDT", "SOLUSDT", "NEARUSDT", "FETUSDT", "INJUSDT", "ATOMUSDT", "XRPUSDT"]
     for sym in approved_15m:
         assert MarketScanner.is_quant_approved_pair(sym, "15m") is True, f"{sym}:15m debe estar aprobado"
 
-    approved_1h = ["XAUUSDT", "BTCUSDT", "NEARUSDT", "ATOMUSDT"]
+    approved_1h = ["XAUUSDT", "BTCUSDT", "NEARUSDT", "ATOMUSDT", "ETHUSDT", "LINKUSDT"]
     for sym in approved_1h:
         assert MarketScanner.is_quant_approved_pair(sym, "1h") is True, f"{sym}:1h debe estar aprobado"
 
     # Pares matemáticamente rechazados por Backtest y Monte Carlo
     rejected_pairs = [
-        ("INJUSDT", "1h"),   # PF 0.80, Exp -0.096R, MC 32.4%
-        ("SUIUSDT", "15m"),  # PF 1.16, Exp +0.058R, MC 62.5%
-        ("LINKUSDT", "15m"), # PF 1.16, Exp +0.064R, MC 61.1%
-        ("LINKUSDT", "1h"),  # PF 1.41, Exp +0.145R, MC 72.2%
-        ("BTCUSDT", "15m"),  # PF 1.10, MaxDD 8.10R, MC 61.3%
-        ("ETHUSDT", "1h"),   # WR 36.4%, MC 69.7%
-        ("SOLUSDT", "1h"),   # WR 35.7%, MC 73.5%
-        ("TIAUSDT", "15m"),  # 0 setups / Quarantined
+        ("INJUSDT", "1h"),   # PF 1.37 global, muestra insuficiente
+        ("SUIUSDT", "15m"),  # PF 1.14 / 1.29, bajo umbral institucional PF >= 1.50
+        ("LINKUSDT", "15m"), # PF 0.97 bajo SOP-137 Short-Only, MC 44.6%
+        ("BTCUSDT", "15m"),  # PF 1.28, MaxDD alto, mejor en 1h (PF 1.50)
+        ("SOLUSDT", "1h"),   # PF 1.10, mejor en 15m (PF 2.10 SOP-137)
+        ("TIAUSDT", "15m"),  # PF 1.07, MC 61.7% / Quarantined
     ]
     for sym, tf in rejected_pairs:
         assert MarketScanner.is_quant_approved_pair(sym, tf) is False, f"{sym}:{tf} debe estar rechazado"
+
+
+def test_sop139_linkusdt_1h_short_only_execution_gate():
+    """
+    Certifica que LINKUSDT:1h esté aprobado en SOP-139 exclusivamente bajo la guardia SOP-137 (SHORT-only),
+    bloqueando cualquier intento de LONG en 1h.
+    """
+    assert MarketScanner.is_quant_approved_pair("LINKUSDT", "1h") is True
+    assert MarketScanner.is_directional_setup_allowed_sop137("LINKUSDT", "SHORT") is True
+    assert MarketScanner.is_directional_setup_allowed_sop137("LINKUSDT", "LONG") is False
 
 
 @pytest.mark.asyncio

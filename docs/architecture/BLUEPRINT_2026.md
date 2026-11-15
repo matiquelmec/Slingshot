@@ -1020,5 +1020,15 @@ Sometidas las 3 optimizaciones a la matriz experimental de 180 días en los 13 a
 3. **Promoción de Campeones en `calculate_priority_score` y `Regime Agent (SOP-63)` Activo:**
    * `FETUSDT` y `XAUUSDT` ascienden al multiplicador Tier 1 (`1.25x`) y `ATOMUSDT` al Tier 2 (`1.00x`). Con `enable_regime_agent=True` y `enable_directional_guard_sop137=True`, la cartera alcanza `49.0% WR`, `PF Base 1.93`, `PF Alpha 2.11`, `+105.94R Base`, `+138.32R Alpha`, `$26,143.96 USD` compuestos desde `$1,000` (`+2,514.4%`), `MaxDD Alpha 3.99%`, `Sharpe 4.89` y mediana Monte Carlo de `+40.35R` cada 100 operaciones.
 
+---
+
+## 46. SOP-139: RESTAURACIÓN DE PARIDAD 1:1 EN EJECUCIÓN DUAL-TF (`XRPUSDT:15m`, `ETHUSDT:1h`, `LINKUSDT:1h SHORT`)
+
+1. **Alineación de `MarketScanner.is_quant_approved_pair()` (`engine/workers/market_scanner.py`):**
+   * `APPROVED_SCALP_15M_EXECUTION` incorpora `XRPUSDT` (`70 ops`, `WR 47.1%`, `PF 1.72`, `+17.65R`, `MC 99.4%`).
+   * `APPROVED_SWING_1H_EXECUTION` incorpora `ETHUSDT` (`22 ops`, `WR 45.5%`, `PF 1.70`, `+5.58R`, `MC 99.0%`) y `LINKUSDT` (`PF 3.01`, `+5.31R`, `MC 100.0%` protegido por `SOP-137` para operar únicamente `SHORT`).
+   * Se preserva intacto el Universo Canónico SSoT de 13 activos VIP; cualquier promoción de candidatas externas (`OPUSDT`, `APTUSDT`) queda sujeta a rotación formal mediante `AssetIncubator` (`SOP-105`).
+
+
 
 
