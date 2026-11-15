@@ -29,35 +29,44 @@ export const createConnectionManager = (set: any, get: any) => {
 
         if (!isRetry) {
             retryCount = 0;
-            set((state: any) => ({
-                activeSymbol: clean,
-                activeTimeframe: timeframe,
-                activeConnectionId: connectionId,
-                isConnected: state.isConnected,
-                connectionStatus: state.isConnected ? 'CONNECTED' : 'CONNECTING',
-                isCalibrating: !state.marketSummary?.[clean],
-                sessionData: state.sessionData?.asset === clean
-                    ? state.sessionData
-                    : (state.marketSummary?.[clean]?.session_state
-                        ? { ...state.marketSummary[clean].session_state, asset: clean }
-                        : null),
-                mlProjection: state.mlProjection?.direction && state.mlProjection.direction !== 'CALIBRANDO'
-                    ? state.mlProjection
-                    : { direction: 'NEUTRAL', probability: 50, reason: `Sincronizando ${clean}...` },
-                tacticalDecision: {
-                    ...state.tacticalDecision,
-                    regime: state.marketSummary?.[clean]?.regime || "SINCRONIZANDO...",
-                    strategy: state.marketSummary?.[clean]?.strategy || "STANDBY",
-                    reasoning: `Cargando telemetría institucional para ${clean} (${timeframe}).`,
-                },
-            }));
+            set((state: any) => {
+                const isContextChange = state.activeSymbol !== clean || state.activeTimeframe !== timeframe;
+                return {
+                    activeSymbol: clean,
+                    activeTimeframe: timeframe,
+                    activeConnectionId: connectionId,
+                    isConnected: state.isConnected,
+                    connectionStatus: state.isConnected ? 'CONNECTED' : 'CONNECTING',
+                    isCalibrating: !state.marketSummary?.[clean],
+                    ...(isContextChange ? {
+                        candles: [],
+                        smcData: null,
+                        liquidations: [],
+                        liquidityHeatmap: null,
+                    } : {}),
+                    sessionData: state.sessionData?.asset === clean
+                        ? state.sessionData
+                        : (state.marketSummary?.[clean]?.session_state
+                            ? { ...state.marketSummary[clean].session_state, asset: clean }
+                            : null),
+                    mlProjection: state.mlProjection?.direction && state.mlProjection.direction !== 'CALIBRANDO'
+                        ? state.mlProjection
+                        : { direction: 'NEUTRAL', probability: 50, reason: `Sincronizando ${clean}...` },
+                    tacticalDecision: {
+                        ...state.tacticalDecision,
+                        regime: state.marketSummary?.[clean]?.regime || "SINCRONIZANDO...",
+                        strategy: state.marketSummary?.[clean]?.strategy || "STANDBY",
+                        reasoning: `Cargando telemetría institucional para ${clean} (${timeframe}).`,
+                    },
+                };
+            });
         } else {
             set({ activeConnectionId: connectionId });
         }
 
         const hydrateMarketStates = async () => {
             try {
-                const res = await fetch(`${BASE_URL}/api/v1/market-states`);
+                const res = await fetch(`${BASE_URL}/api/v1/market-states`, { cache: 'no-store' });
                 if (!res.ok) return;
                 const statesData = await res.json();
                 if (Array.isArray(statesData) && statesData.length > 0) {
@@ -111,7 +120,7 @@ export const createConnectionManager = (set: any, get: any) => {
 
         const hydrateDiagnostic = async () => {
             try {
-                const diagRes = await fetch(`${BASE_URL}/api/v1/diagnostic/${clean}?timeframe=${timeframe}`);
+                const diagRes = await fetch(`${BASE_URL}/api/v1/diagnostic/${clean}?timeframe=${timeframe}`, { cache: 'no-store' });
                 if (!diagRes.ok) return;
                 const diag = await diagRes.json();
                 if (diag && !diag.error) {
@@ -177,11 +186,11 @@ export const createConnectionManager = (set: any, get: any) => {
                 await Promise.allSettled([
                     hydrateMarketStates(),
                     hydrateDiagnostic(),
-                    fetch(`${BASE_URL}/api/v1/ghost`)
+                    fetch(`${BASE_URL}/api/v1/ghost`, { cache: 'no-store' })
                         .then(r => r.json())
                         .then(data => { if (data?.ghost) set({ ghostData: data.ghost }); })
                         .catch(() => {}),
-                    fetch(`${BASE_URL}/api/v1/liquidations/${clean}`)
+                    fetch(`${BASE_URL}/api/v1/liquidations/${clean}`, { cache: 'no-store' })
                         .then(r => r.json())
                         .then(data => {
                             if (Array.isArray(data) && data.length > 0) {
@@ -192,7 +201,7 @@ export const createConnectionManager = (set: any, get: any) => {
                 ]);
 
                 if (!get().liquidityHeatmap) {
-                    fetch(`${BASE_URL}/api/v1/heatmap/${clean}`)
+                    fetch(`${BASE_URL}/api/v1/heatmap/${clean}`, { cache: 'no-store' })
                         .then(r => r.json())
                         .then(data => {
                             if (data && (data.bids || data.hot_bids)) {
@@ -233,12 +242,12 @@ export const createConnectionManager = (set: any, get: any) => {
 
                     // Cada 4 ciclos (~6s): actualizar liquidaciones y ghost
                     if (pollCycle % 4 === 0) {
-                        fetch(`${BASE_URL}/api/v1/liquidations/${clean}`)
+                        fetch(`${BASE_URL}/api/v1/liquidations/${clean}`, { cache: 'no-store' })
                             .then(r => r.json())
                             .then(data => { if (Array.isArray(data) && data.length > 0) set({ liquidations: data }); })
                             .catch(() => {});
 
-                        fetch(`${BASE_URL}/api/v1/ghost`)
+                        fetch(`${BASE_URL}/api/v1/ghost`, { cache: 'no-store' })
                             .then(r => r.json())
                             .then(data => { if (data?.ghost) set({ ghostData: data.ghost }); })
                             .catch(() => {});

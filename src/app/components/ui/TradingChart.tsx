@@ -50,18 +50,6 @@ export default function TradingChart() {
     const { indicators } = useIndicatorsStore();
     const isEnabled = (id: string) => indicators.find(i => i.id === id)?.enabled ?? false;
 
-    const TIMEFRAME_SECONDS: Record<string, number> = {
-        '1m': 60,
-        '3m': 180,
-        '5m': 300,
-        '15m': 900,
-        '30m': 1800,
-        '1h': 3600,
-        '2h': 7200,
-        '4h': 14400,
-        '1d': 86400,
-    };
-
     // ── Chart Init ──
     useEffect(() => {
         if (!chartContainerRef.current) return;
@@ -105,7 +93,15 @@ export default function TradingChart() {
 
     // ── Candles & Volume ──
     useEffect(() => {
-        if (!candleSeriesRef.current || candles.length === 0) return;
+        if (!candleSeriesRef.current) return;
+        if (candles.length === 0) {
+            try {
+                candleSeriesRef.current.setData([]);
+                volumeRef.current?.setData([]);
+                williamsRRef.current?.setData([]);
+            } catch (e) {}
+            return;
+        }
         const sorted = [...candles].sort((a, b) => Number(a.time) - Number(b.time)).filter((c, i, arr) => i === 0 || c.time !== arr[i - 1].time);
         if (sorted.length === 0) return;
         try { candleSeriesRef.current.setData(sorted as any); } catch (e) { console.error("[Chart] setData error:", e); }
