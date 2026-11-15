@@ -157,7 +157,7 @@ async def main():
     sentinel = OrderBookMicrostructureSentinel()
     for sym in ("BTCUSDT", "ETHUSDT", "XRPUSDT", "LINKUSDT"):
         t0 = time.perf_counter()
-        book = await ex.get_orderbook_depth(sym, limit=20)
+        book = await ex.get_orderbook_depth(sym, limit=15)
         lat_ms = (time.perf_counter() - t0) * 1000.0
         if not book or not book.get("bids") or not book.get("asks"):
             print(f"[WARN] {sym}: Sin snapshot L2 (lat={lat_ms:.1f}ms)")

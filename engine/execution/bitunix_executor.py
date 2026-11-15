@@ -301,17 +301,20 @@ class BitunixExecutor:
         # Para tokens micro desconocidos (< $0.10), usar 6 decimales de precio
         return (0, 6) if any(m in sym for m in ["AKE", "PEPE", "SHIB", "FLOKI", "BONK"]) else (2, 2)
 
-    async def get_orderbook_depth(self, symbol: str, limit: int = 20) -> Optional[Dict[str, List[Any]]]:
+    async def get_orderbook_depth(self, symbol: str, limit: int = 15) -> Optional[Dict[str, List[Any]]]:
         """SOP-133/108: Obtiene snapshot L2 (bids/asks) desde Bitunix para auditoría de microestructura."""
         if self.dry_run:
             return None
         sym = symbol.replace('/', '').upper()
+        # Bitunix /api/v1/futures/market/depth solo acepta ["1", "5", "15", "50", "max"]
+        allowed_limits = (1, 5, 15, 50)
+        safe_limit = next((val for val in allowed_limits if val >= int(limit)), 50)
         try:
-            res = await self._request("GET", "/api/v1/futures/market/depth", params={"symbol": sym, "limit": limit})
+            res = await self._request("GET", "/api/v1/futures/market/depth", params={"symbol": sym, "limit": str(safe_limit)})
             if res.get("code") == 0 and isinstance(res.get("data"), dict):
                 data = res["data"]
-                bids = [(float(lvl[0]), float(lvl[1])) for lvl in (data.get("bids") or [])[:limit] if len(lvl) >= 2]
-                asks = [(float(lvl[0]), float(lvl[1])) for lvl in (data.get("asks") or [])[:limit] if len(lvl) >= 2]
+                bids = [(float(lvl[0]), float(lvl[1])) for lvl in (data.get("bids") or [])[:safe_limit] if len(lvl) >= 2]
+                asks = [(float(lvl[0]), float(lvl[1])) for lvl in (data.get("asks") or [])[:safe_limit] if len(lvl) >= 2]
                 if bids and asks:
                     return {"bids": bids, "asks": asks}
         except Exception as e:

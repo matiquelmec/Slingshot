@@ -2247,7 +2247,7 @@ class NexusNode:
         # SOP-133 / SOP-108: Auditoría L2 en vivo antes de enviar orden límite (Fail-Open si no hay snapshot)
         if hasattr(executor, "get_orderbook_depth"):
             try:
-                l2_book = await executor.get_orderbook_depth(asset, limit=20)
+                l2_book = await executor.get_orderbook_depth(asset, limit=15)
                 if (
                     isinstance(l2_book, dict)
                     and isinstance(l2_book.get("bids"), list)
