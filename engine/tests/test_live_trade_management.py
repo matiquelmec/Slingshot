@@ -25,12 +25,13 @@ from engine.execution.bitunix_executor import BitunixExecutor
 
 @pytest.mark.asyncio
 async def test_fast_be_trigger_at_1r():
-    """Valida que una posición ACTIVE que alcance el umbral dispare Fast BE con Fee Absorber."""
+    """Valida que una posición ACTIVE en activo de impulso vertical (FETUSDT) dispare Fast BE al +1.0R con Fee Absorber."""
     tm = TradeManager()
     
     signal = {
-        "asset": "SUIUSDT",
-        "symbol": "SUIUSDT",
+        "asset": "FETUSDT",
+        "symbol": "FETUSDT",
+        "interval": "15m",
         "signal_type": "LONG",
         "price": 2.0000,
         "stop_loss": 1.9000, # Riesgo = $0.10 -> +1.0R es $2.1000
@@ -43,7 +44,7 @@ async def test_fast_be_trigger_at_1r():
         "position_id": "mock_pos_123"
     }
     
-    # Mock de fetch_binance_history devolviendo precio actual $2.1050 (+1.05R en Altcoin)
+    # Mock de fetch_binance_history devolviendo precio actual $2.1050 (+1.05R en FETUSDT 15m)
     mock_history = [
         {"data": {"timestamp": 1700000000 + i*900, "close": 2.1050, "atr": 0.02}}
         for i in range(30)
@@ -61,6 +62,61 @@ async def test_fast_be_trigger_at_1r():
             # Debe incluir el Fee Absorber (+0.08% o ATR buffer)
             assert signal["stop_loss"] >= 2.0000, "El nuevo SL debe estar en la entrada o superior"
             assert mock_modify.called, "Debe llamar a modify_position_tpsl en Bitunix"
+
+
+@pytest.mark.asyncio
+async def test_sop136_near_requires_1_2r_post_tp1_breakeven():
+    """
+    [SOP-136] Certifica que NEARUSDT exija +1.2R (TP1) antes de mover el Stop Loss a Breakeven,
+    impidiendo que un retesteo estructural tras tocar +1.05R cierre la posición ganadora en $0.
+    """
+    tm = TradeManager()
+    assert tm.get_optimal_be_threshold("NEARUSDT", "15m") == 1.2
+    assert tm.get_optimal_be_threshold("NEARUSDT", "1h") == 1.2
+    assert tm.get_optimal_be_threshold("SUIUSDT", "15m") == 1.2
+    assert tm.get_optimal_be_threshold("ATOMUSDT", "15m") == 1.2
+    assert tm.get_optimal_be_threshold("FETUSDT", "15m") == 1.0
+    assert tm.get_optimal_be_threshold("INJUSDT", "15m") == 1.0
+    assert tm.get_optimal_be_threshold("INJUSDT", "1h") == 1.2
+
+    signal_near = {
+        "asset": "NEARUSDT",
+        "symbol": "NEARUSDT",
+        "interval": "15m",
+        "signal_type": "LONG",
+        "price": 5.0000,
+        "stop_loss": 4.9000,  # 1R = $0.10 -> +1.05R = $5.1050 (< +1.2R = $5.1200)
+        "initial_stop_loss": 4.9000,
+        "tp1": 5.1200,
+        "tp2": 5.2000,
+        "tp3": 5.3500,
+        "trailing_phase": "ACTIVE",
+        "status": "FILLED",
+        "position_id": "mock_near_pos"
+    }
+
+    mock_hist_105r = [
+        {"data": {"timestamp": 1700000000 + i * 900, "close": 5.1050, "atr": 0.03}}
+        for i in range(30)
+    ]
+    with patch("engine.workers.trade_manager.fetch_binance_history", new_callable=AsyncMock, return_value=mock_hist_105r), \
+         patch("engine.execution.bitunix_executor.BitunixExecutor.modify_position_tpsl", new_callable=AsyncMock) as mock_mod:
+        await tm._update_signal_trailing(signal_near)
+        assert signal_near["trailing_phase"] == "ACTIVE"
+        assert signal_near["stop_loss"] == 4.9000
+        mock_mod.assert_not_awaited()
+
+    # Al alcanzar +1.20R ($5.1200 = TP1), sí debe blindar en Breakeven con Fee Absorber
+    mock_hist_120r = [
+        {"data": {"timestamp": 1700000000 + i * 900, "close": 5.1200, "atr": 0.03}}
+        for i in range(30)
+    ]
+    with patch("engine.workers.trade_manager.fetch_binance_history", new_callable=AsyncMock, return_value=mock_hist_120r), \
+         patch("engine.execution.bitunix_executor.BitunixExecutor.modify_position_tpsl", new_callable=AsyncMock, return_value=True) as mock_mod2:
+        await tm._update_signal_trailing(signal_near)
+        assert signal_near["trailing_phase"] == "BREAKEVEN"
+        assert signal_near["stop_loss"] >= 5.0040
+        mock_mod2.assert_awaited_once()
 
 
 @pytest.mark.asyncio

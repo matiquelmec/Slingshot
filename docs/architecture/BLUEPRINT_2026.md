@@ -995,3 +995,16 @@ Sometidas las 3 optimizaciones a la matriz experimental de 180 días en los 13 a
 3. **Blindaje de las 5 Pestañas de `SESSION LOG` (`src/app/(dashboard)/history/page.tsx`):**
    * Protección `try/catch` en todas las transiciones React 19 de `SystemDiagnosticsWidget.tsx`, estados de reintento en `BacktestAuditWidget.tsx` y `DatabaseHealthWidget.tsx`, normalización semántica en `StatusBadge` y respaldo híbrido con `/api/v1/signals` y `/api/v1/trades/history` en `engine/api/main.py`.
 
+---
+
+## 44. SOP-136: PARIDAD ADAPTATIVA DE BREAKEVEN POST-TP1 (+1.2R), ESPECIALIZACIÓN SOP-125 EN RECICLADOR Y AUTO-HEALING DE GRILLA TP
+
+1. **Ablación Empírica y Paridad de Breakeven Post-TP1 (`engine/workers/trade_manager.py` y `engine/backtest/unified_backtest_engine.py`):**
+   * `TradeManager.get_optimal_be_threshold(symbol, interval)` ancla el movimiento de Stop Loss a Breakeven (`Entry + 0.08%`) en **`+1.2R` (junto al cobro del 50% en TP1)** para `NEARUSDT`, `ATOMUSDT`, `SUIUSDT`, Mega-Caps y todos los Swings `1h` (`+3.40R` recuperados en `NEARUSDT`, eliminando cierres prematuros en `$0` antes de TP1).
+   * Reserva `Fast BE @ +1.0R` y `SOP-48 Half-Risk @ +0.60R` exclusivamente a los activos de impulso vertical sin retesteo en `15m` (`FETUSDT`, `INJUSDT`), donde la ablación demuestra `+4.54R` adicionales y `0` ganadoras ahogadas, manteniendo simetría 1:1 en `UnifiedBacktestEngine`.
+2. **Gobernanza `SOP-125` en el Reciclador de Cupos (`engine/execution/nexus.py`):**
+   * `NexusNode.on_risk_released()` filtra los candidatos de reemplazo mediante `MarketScanner.is_quant_approved_pair(sym_cand, tf_cand)`, elevando el Profit Factor efectivo de cartera de `1.75` a `2.09` y la expectativa a `+0.411R/trade` (`VaR 99%` Monte Carlo de `+11.30R`).
+3. **Auto-Healing de Grilla 50/30/20 ante Activación Temprana de Breakeven (`engine/execution/nexus.py`):**
+   * `_sync_exchange_positions_loop` verifica `tp1_unfilled_yet` (`pos_qty >= orig_qty_heal * 0.90`) para restaurar siempre las órdenes límite `TP1/TP2/TP3` cuando `close_count == 0`, incluso si `FAST_BE` se activó antes del barrido del reconciliador.
+
+

@@ -373,6 +373,10 @@ class UnifiedBacktestEngine:
 
             max_horizon = min(fill_idx + (48 if interval == "15m" else 36), n)
             exit_idx = fill_idx
+            is_fast_impulse_1r = (interval == "15m") and any(symbol.upper().startswith(p) for p in ("FET", "INJ"))
+            hit_fast_be = False
+            p_be_1r = (entry + risk * 1.0) if direction == "LONG" else (entry - risk * 1.0)
+            p_half_06r = (entry + risk * 0.60) if direction == "LONG" else (entry - risk * 0.60)
 
             for k in range(fill_idx + 1, max_horizon):
                 bar = df.iloc[k]
@@ -383,7 +387,7 @@ class UnifiedBacktestEngine:
                 if direction == "LONG":
                     # SOP-25: Early Structural Invalidation (@ -0.65R)
                     cur_adverse = (entry - bl) / risk
-                    if cur_adverse >= 0.65 and not hit_tp1:
+                    if cur_adverse >= 0.65 and not hit_tp1 and not hit_fast_be and curr_sl == sl:
                         close_reason = "SOP25_EARLY_INVALIDATION"
                         outcome_r -= (0.65 * rem_pos * total_multiplier)
                         break
@@ -395,12 +399,20 @@ class UnifiedBacktestEngine:
                             outcome_r -= (1.0 * rem_pos * total_multiplier)
                         else:
                             close_reason = "PROTECTED_EXIT"
-                            if hit_tp2:
-                                # Capturar la ganancia bloqueada en verde del runner (ej: +1.0R o +2.5R Ratchet)
-                                lock_r = (curr_sl - entry) / risk
-                                if lock_r > 0:
-                                    outcome_r += (lock_r * rem_pos * total_multiplier)
+                            lock_r = (curr_sl - entry) / risk
+                            if hit_tp2 and lock_r > 0:
+                                outcome_r += (lock_r * rem_pos * total_multiplier)
+                            elif lock_r < -0.05:
+                                outcome_r += (lock_r * rem_pos * total_multiplier)
                         break
+
+                    # SOP-136: Fast BE @ +1.0R y Half-Risk @ +0.60R exclusivo para impulsos verticales 15m (FET, INJ)
+                    if is_fast_impulse_1r and not hit_tp1:
+                        if bh >= p_be_1r:
+                            curr_sl = max(curr_sl, entry + (entry * 0.0008))
+                            hit_fast_be = True
+                        elif bh >= p_half_06r and not hit_fast_be:
+                            curr_sl = max(curr_sl, entry - (risk * 0.50))
 
                     # SOP-26 Canonical Exit Sizing: TP1 (+1.2R) cobra 50% y mueve SL a Breakeven + Fee Buffer
                     if not hit_tp1 and bh >= p_tp1:
@@ -435,7 +447,7 @@ class UnifiedBacktestEngine:
                 else:  # SHORT
                     # SOP-25: Early Structural Invalidation (@ -0.65R)
                     cur_adverse = (bh - entry) / risk
-                    if cur_adverse >= 0.65 and not hit_tp1:
+                    if cur_adverse >= 0.65 and not hit_tp1 and not hit_fast_be and curr_sl == sl:
                         close_reason = "SOP25_EARLY_INVALIDATION"
                         outcome_r -= (0.65 * rem_pos * total_multiplier)
                         break
@@ -446,11 +458,20 @@ class UnifiedBacktestEngine:
                             outcome_r -= (1.0 * rem_pos * total_multiplier)
                         else:
                             close_reason = "PROTECTED_EXIT"
-                            if hit_tp2:
-                                lock_r = (entry - curr_sl) / risk
-                                if lock_r > 0:
-                                    outcome_r += (lock_r * rem_pos * total_multiplier)
+                            lock_r = (entry - curr_sl) / risk
+                            if hit_tp2 and lock_r > 0:
+                                outcome_r += (lock_r * rem_pos * total_multiplier)
+                            elif lock_r < -0.05:
+                                outcome_r += (lock_r * rem_pos * total_multiplier)
                         break
+
+                    # SOP-136: Fast BE @ +1.0R y Half-Risk @ +0.60R exclusivo para impulsos verticales 15m (FET, INJ)
+                    if is_fast_impulse_1r and not hit_tp1:
+                        if bl <= p_be_1r:
+                            curr_sl = min(curr_sl, entry - (entry * 0.0008))
+                            hit_fast_be = True
+                        elif bl <= p_half_06r and not hit_fast_be:
+                            curr_sl = min(curr_sl, entry + (risk * 0.50))
 
                     # SOP-26 Canonical Exit Sizing: TP1 (+1.2R) cobra 50% y mueve SL a Breakeven + Fee Buffer
                     if not hit_tp1 and bl <= p_tp1:

@@ -868,7 +868,9 @@ class NexusNode:
                                 or sl_at_be_heal
                                 or be_dispatched_heal
                             )
-                            if close_count == 0 and not is_be_active:
+                            orig_qty_heal = float(pos_data.get("execution", {}).get("amount", 0) or 0)
+                            tp1_unfilled_yet = bool(orig_qty_heal > 0 and pos_qty >= orig_qty_heal * 0.90)
+                            if close_count == 0 and (not is_be_active or tp1_unfilled_yet):
                                 logger.warning(f"🩹 [AUTO-HEALING] [{target_ex.account_label}] Posición {symbol} no tiene órdenes límite TP en Bitunix. Auto-reparando salidas escalonadas 50/30/20...")
                                 rules = await target_ex.get_symbol_rules(symbol)
                                 q_dec = rules["qty_precision"]
@@ -1711,9 +1713,13 @@ class NexusNode:
                 logger.debug(f"[SLOT RECYCLER] No hay oportunidades activas registradas en store para [{account_id}].")
                 return
 
+            from engine.workers.market_scanner import MarketScanner
             valid_cands = []
             for c in candidates:
                 sym_cand = c.get("asset", c.get("symbol", "")).upper()
+                tf_cand = str(c.get("interval") or c.get("timeframe") or "15m").lower()
+                if not MarketScanner.is_quant_approved_pair(sym_cand, tf_cand):
+                    continue
                 score_cand = float(c.get("confluence_score", c.get("score", 0)))
                 is_chasing = c.get("ote_chasing", False)
                 is_quar = c.get("asset_health", {}).get("is_quarantined", False)

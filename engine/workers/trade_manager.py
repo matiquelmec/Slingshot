@@ -346,6 +346,23 @@ class TradeManager:
         s = (symbol or "").upper()
         return any(m in s for m in ["BTC", "ETH", "SOL", "AVAX", "LINK", "XRP", "BNB", "XAU", "XAG"])
 
+    # [SOP-136] Activos de impulso explosivo vertical en 15m donde Fast BE @ +1.0R mejora expectativa (+4.54R, 0 ahogadas)
+    FAST_IMPULSE_BE_1R_ASSETS = ("FET", "INJ")
+
+    def get_optimal_be_threshold(self, symbol: str, interval: str = "15m") -> float:
+        """
+        [SOP-136 ADAPTIVE POST-TP1 BREAKEVEN PARITY SSoT]
+        Determina el umbral en unidades R para mover el Stop Loss a Breakeven (+0.08% Fee Buffer):
+        - 1.0R exclusivamente en activos de impulso vertical sin retesteo en 15m (FETUSDT, INJUSDT).
+        - 1.2R (sincronizado con el cobro del 50% en TP1) para NEARUSDT, ATOMUSDT, SUIUSDT, Mega-Caps
+          y todos los Swings 1h, evitando que un retesteo estructural previo a TP1 cierre la operación en $0.
+        """
+        s = (symbol or "").replace("/", "").upper()
+        tf = str(interval or "15m").lower()
+        if tf == "15m" and any(s.startswith(prefix) for prefix in self.FAST_IMPULSE_BE_1R_ASSETS):
+            return 1.0
+        return 1.2
+
 
 
     # A??,A??,A??,A??,A??,A??,A??,A??,A??,A??,A??,A??,A??,A??,A??,A??,A??,A??,A??,A??,A??,A??,A??,A??,A??,A??,A??,A??,A??,A??,A??,A??,A??,A??,A??,A??,A??,A??,A??,A??,A??,A??,A??,A??,A??,
@@ -420,7 +437,7 @@ class TradeManager:
 
             risk_dist = abs(entry_price - initial_sl)
 
-            be_multiplier = 1.2 if self.is_megacap(asset) else 1.0
+            be_multiplier = self.get_optimal_be_threshold(asset, interval)
 
             be_fast_trigger = entry_price + (risk_dist * be_multiplier) if is_long else entry_price - (risk_dist * be_multiplier)
 
@@ -1169,7 +1186,7 @@ class TradeManager:
 
 
 
-                    be_threshold = 1.2 if self.is_megacap(sym) else 1.0
+                    be_threshold = self.get_optimal_be_threshold(sym, "15m")
 
                     fee_buffer = entry_price * 0.0008
 
@@ -1314,7 +1331,7 @@ class TradeManager:
 
                         status_msg = f"PROTEGIDO_FAST_BE (+{be_threshold:.1f}R)"
 
-                    elif r_profit >= 0.60 and not sl_at_be:
+                    elif be_threshold <= 1.0 and r_profit >= 0.60 and not sl_at_be:
 
                         target_sl = round(entry_price - (sl_dist * 0.50), 4) if side == "LONG" else round(entry_price + (sl_dist * 0.50), 4)
 

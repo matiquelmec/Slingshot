@@ -164,7 +164,8 @@ async def test_sop133_nexus_l2_microstructure_blocks_heavy_ask_wall():
         "asset_health": {"ker": 0.45, "adx": 30.0},
     }
 
-    with patch("engine.execution.nexus.logger.warning") as mock_warn:
+    with patch("engine.workers.market_scanner.is_trade_allowed_sop18", return_value=True), \
+         patch("engine.execution.nexus.logger.warning") as mock_warn:
         res = await nexus.process_limit_setup(signal)
 
     assert res["placed"] is False

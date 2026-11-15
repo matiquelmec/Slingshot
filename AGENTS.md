@@ -348,3 +348,16 @@ Todos los mensajes de commit deben seguir estrictamente el estándar de Conventi
 4. **Resiliencia Dual-Engine en `SESSION LOG` (`/history`):**
    * Todas las llamadas a Server Actions dentro de `startTransition` o `useEffect` en `/history`, `SystemDiagnosticsWidget`, `BacktestAuditWidget` y `DatabaseHealthWidget` deben contar con bloques `try/catch` independientes, estados de reintento explícitos y fallback hacia los endpoints REST del VPS (`/api/v1/signals` y `/api/v1/trades/history`).
 
+---
+
+## 21. Regla 31: Paridad Adaptativa de Breakeven Post-TP1 (+1.2R), Especialización SOP-125 en Reciclador y Auto-Healing TP (SOP-136)
+
+1. **Umbral Adaptativo de Breakeven Post-TP1 (`TradeManager.get_optimal_be_threshold`):**
+   * Queda prohibido mover el Stop Loss a Breakeven (`+0.08%`) al alcanzar `+1.0R` en activos con estructura de retesteo al Order Block (`NEARUSDT`, `ATOMUSDT`, `SUIUSDT`, Mega-Caps y todos los Swings `1h`), ya que estrangula operaciones ganadoras antes de cobrar el 50% en `TP1 (+1.2R)` (`-3.40R` en `NEARUSDT`).
+   * Para `NEARUSDT`, `ATOMUSDT`, `SUIUSDT`, Mega-Caps y Swings `1h`, `be_threshold` debe ser obligatoriamente `1.2R` (sincronizado con `TP1`). Únicamente los activos de impulso vertical sin retesteo en `15m` (`FETUSDT`, `INJUSDT`) aplican `Fast BE @ +1.0R` y `SOP-48 Half-Risk @ +0.60R` (`+4.54R` auditados y `0` ganadoras ahogadas), manteniendo paridad 1:1 con `UnifiedBacktestEngine`.
+2. **Filtro `SOP-125` Obligatorio en `Slot Recycler` (`NexusNode.on_risk_released`):**
+   * Al liberarse un cupo de riesgo en vivo, `NexusNode.on_risk_released()` debe validar `MarketScanner.is_quant_approved_pair(sym_cand, tf_cand)` antes de seleccionar reemplazos de `store.get_scanner_opportunities()`, impidiendo que pares con expectativa negativa o bajo Sharpe (`INJUSDT:1h`, `LINKUSDT:15m`, `BTCUSDT:15m`) desplacen a los pares campeones.
+3. **Auto-Healing de Grilla 50/30/20 Pre-TP1 Incluso con `FAST_BE` Activo:**
+   * Si una posición carece de órdenes límite de cierre (`close_count == 0`) y aún conserva $\ge 90\%$ de su volumen original (`tp1_unfilled_yet`), el reconciliador de `NexusNode` debe colocar la grilla `50% / 30% / 20%` aunque `is_be_active` ya sea `True`.
+
+
