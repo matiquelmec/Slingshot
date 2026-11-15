@@ -55,7 +55,7 @@ export default function ChartPage() {
             </div>
 
             {/* Chart Toolbar */}
-            <div className="h-12 border-b border-white/5 bg-gradient-to-r from-white/[0.03] to-transparent flex items-center px-3 lg:px-5 gap-3 lg:gap-5 z-20 relative overflow-x-auto no-scrollbar">
+            <div className="h-12 border-b border-white/5 bg-gradient-to-r from-white/[0.03] to-transparent flex items-center px-3 lg:px-5 gap-3 lg:gap-5 z-20 relative">
                 {/* Active Symbol Display */}
                 <div className="flex items-center gap-1.5 shrink-0">
                     <span className="text-xs font-black text-white font-mono tracking-wider">{activeSymbol || 'Ninguno'}</span>
@@ -67,7 +67,7 @@ export default function ChartPage() {
                 <div className="h-4 w-px bg-white/10 shrink-0" />
 
                 {/* Timeframe Selector */}
-                <div className="flex items-center gap-1 shrink-0">
+                <div className="flex items-center gap-1 min-w-0 overflow-x-auto no-scrollbar">
                     {TIMEFRAMES.map(tf => {
                         const isActiveTf = tf === activeTimeframe;
                         return (
@@ -113,7 +113,7 @@ export default function ChartPage() {
                                 animate={{ opacity: 1, y: 0, scale: 1 }}
                                 exit={{ opacity: 0, y: -8, scale: 0.97 }}
                                 transition={{ duration: 0.15 }}
-                                className="absolute top-full mt-2 left-0 w-64 bg-[#06101A]/95 backdrop-blur-2xl border border-white/10 rounded-xl shadow-2xl z-[200] overflow-hidden"
+                                className="absolute top-full mt-2 right-0 md:left-0 md:right-auto w-64 bg-[#06101A]/95 backdrop-blur-2xl border border-white/10 rounded-xl shadow-2xl z-[200] overflow-hidden"
                                 onClick={e => e.stopPropagation()}
                             >
                                 <div className="p-3 border-b border-white/5">
