@@ -15,9 +15,16 @@ Gobernanza bajo AGENTS.md & docs/architecture/BLUEPRINT_2026.md:
 3. Cero Ganancia Fantasma: basado estrictamente en retornos matemáticos reales en R.
 """
 
+import json
+import os
 from dataclasses import dataclass, field
-from typing import Dict, List, Any, Optional, Tuple
+from typing import Dict, List, Any, Optional, Union
 import numpy as np
+from engine.core.strategy_ssot import (
+    SOP119_LIVE_HAIRCUT_FACTOR,
+    SOP119_MAKER_FILL_RATE,
+    SOP119_MEAN_SL_SLIPPAGE_R,
+)
 
 
 @dataclass
@@ -72,6 +79,51 @@ CANONICAL_AUDITED_TRADE_DISTRIBUTION = (
 )
 
 
+def apply_sop119_live_friction(
+    returns: List[float],
+    haircut_factor: float = SOP119_LIVE_HAIRCUT_FACTOR,
+    sl_slippage_r: float = SOP119_MEAN_SL_SLIPPAGE_R,
+    maker_fill_rate: float = SOP119_MAKER_FILL_RATE,
+    seed: Optional[int] = 42,
+) -> List[float]:
+    """
+    [SOP-119 EMPIRICAL FRICTION MODEL]
+    Ajusta una secuencia de retornos teóricos en R para reflejar fricción real en vivo:
+    - Ganancias escaladas por haircut empírico (~11.6% por carry drag / fees).
+    - Pérdidas penalizadas por slippage medio de Stop Loss a mercado (-0.04R).
+    - Órdenes límite no llenadas (1 - maker_fill_rate = 3.8%) neutralizadas a 0.0R.
+    """
+    if not returns:
+        return []
+    rng = np.random.default_rng(seed)
+    adjusted: List[float] = []
+    for r in returns:
+        if rng.random() > maker_fill_rate:
+            adjusted.append(0.0)
+            continue
+        val = float(r)
+        if val > 0:
+            adjusted.append(round(val * haircut_factor, 4))
+        elif val < 0:
+            adjusted.append(round(val - sl_slippage_r, 4))
+        else:
+            adjusted.append(0.0)
+    return adjusted
+
+
+def _extract_returns_from_report_payload(report: Dict[str, Any]) -> List[float]:
+    """Extrae la secuencia real de retornos en R (outcome_r * sizing_mult) de un reporte."""
+    trades = report.get("trades", [])
+    extracted: List[float] = []
+    for tr in trades:
+        outcome = tr.get("outcome_r")
+        if outcome is None:
+            continue
+        mult = float(tr.get("sizing_mult", 1.0) or 1.0)
+        extracted.append(float(outcome) * mult)
+    return extracted
+
+
 class MonteCarloResilienceEngine:
     """
     Motor institucional de simulación Monte Carlo para auditar la resiliencia
@@ -84,6 +136,24 @@ class MonteCarloResilienceEngine:
             else CANONICAL_AUDITED_TRADE_DISTRIBUTION,
             dtype=np.float64
         )
+
+    @classmethod
+    def from_chronological_report(
+        cls,
+        report: Union[str, Dict[str, Any]],
+        apply_live_friction: bool = False,
+        seed: Optional[int] = 42,
+    ) -> "MonteCarloResilienceEngine":
+        """Construye el motor directamente desde un reporte cronológico SSoT (JSON o dict)."""
+        if isinstance(report, str):
+            with open(report, "r", encoding="utf-8") as f:
+                payload = json.load(f)
+        else:
+            payload = report
+        returns = _extract_returns_from_report_payload(payload)
+        if apply_live_friction and returns:
+            returns = apply_sop119_live_friction(returns, seed=seed)
+        return cls(audited_returns=returns)
 
     def run_simulation(
         self,
@@ -206,10 +276,7 @@ class MonteCarloResilienceEngine:
         )
 
 
-def get_default_monte_carlo_resilience_report() -> Dict[str, Any]:
-    """Helper directo para integración full-stack."""
-    engine = MonteCarloResilienceEngine()
-    metrics = engine.run_simulation(iterations=10000, horizon_trades=100, seed=42)
+def _metrics_to_dict(metrics: MonteCarloMetrics) -> Dict[str, Any]:
     return {
         "iterations": metrics.iterations,
         "horizonTrades": metrics.horizon_trades,
@@ -231,3 +298,63 @@ def get_default_monte_carlo_resilience_report() -> Dict[str, Any]:
         "equityCones": metrics.equity_cones,
         "summaryReport": metrics.summary_report,
     }
+
+
+def run_dual_parity_monte_carlo(
+    report_or_returns: Union[str, Dict[str, Any], List[float]],
+    iterations: int = 10000,
+    horizon_trades: int = 100,
+    seed: int = 42,
+) -> Dict[str, Any]:
+    """
+    Ejecuta doble auditoría estocástica SSoT:
+    1. theoretical: Sobre los retornos exactos del replay cronológico.
+    2. realistic_sop119: Aplicando fricción empírica SOP-119 (haircut, slippage SL, fill rate).
+    """
+    if isinstance(report_or_returns, list):
+        raw_returns = [float(x) for x in report_or_returns]
+    elif isinstance(report_or_returns, str):
+        with open(report_or_returns, "r", encoding="utf-8") as f:
+            raw_returns = _extract_returns_from_report_payload(json.load(f))
+    else:
+        raw_returns = _extract_returns_from_report_payload(report_or_returns)
+
+    theo_engine = MonteCarloResilienceEngine(audited_returns=raw_returns)
+    theo_metrics = theo_engine.run_simulation(iterations=iterations, horizon_trades=horizon_trades, seed=seed)
+
+    friction_returns = apply_sop119_live_friction(raw_returns, seed=seed)
+    real_engine = MonteCarloResilienceEngine(audited_returns=friction_returns)
+    real_metrics = real_engine.run_simulation(iterations=iterations, horizon_trades=horizon_trades, seed=seed)
+
+    return {
+        "sampleSize": len(raw_returns),
+        "theoretical": _metrics_to_dict(theo_metrics),
+        "realisticSop119": _metrics_to_dict(real_metrics),
+    }
+
+
+def get_default_monte_carlo_resilience_report(apply_live_friction: bool = False) -> Dict[str, Any]:
+    """Helper directo para integración full-stack; prioriza el reporte cronológico SSoT."""
+    default_report_path = os.path.abspath(
+        os.path.join(os.path.dirname(__file__), "..", "backtest", "reports", "chronological_backtest_report.json")
+    )
+    source_mode = "CANONICAL_FALLBACK"
+    if os.path.exists(default_report_path):
+        engine = MonteCarloResilienceEngine.from_chronological_report(
+            default_report_path,
+            apply_live_friction=apply_live_friction,
+        )
+        source_mode = "CHRONOLOGICAL_REPORT_SSOT"
+    else:
+        base_returns = (
+            apply_sop119_live_friction(CANONICAL_AUDITED_TRADE_DISTRIBUTION)
+            if apply_live_friction
+            else CANONICAL_AUDITED_TRADE_DISTRIBUTION
+        )
+        engine = MonteCarloResilienceEngine(audited_returns=base_returns)
+
+    metrics = engine.run_simulation(iterations=10000, horizon_trades=100, seed=42)
+    result = _metrics_to_dict(metrics)
+    result["sourceMode"] = source_mode
+    result["sop119FrictionApplied"] = apply_live_friction
+    return result

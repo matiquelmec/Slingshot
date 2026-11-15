@@ -33,6 +33,17 @@ if sys.platform == "win32":
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
 
 from engine.indicators.polars_engine import polars_engine
+from engine.core.strategy_ssot import (
+    BASE_MAX_UNPROTECTED_RISK_SLOTS,
+    BASE_MAX_CONCURRENT_PHYSICAL_SLOTS,
+    TOXIC_UTC_HOURS_SOP137,
+    PRUNED_NEGATIVE_EXPECTANCY_ASSETS,
+    APPROVED_SWING_1H_EXECUTION,
+    is_quant_approved_pair as ssot_is_quant_approved_pair,
+    is_directional_setup_allowed_sop137 as ssot_is_directional_allowed_sop137,
+    calculate_priority_score as ssot_calculate_priority_score,
+)
+from engine.analytics.monte_carlo_resilience_engine import run_dual_parity_monte_carlo
 from engine.indicators.structure import identify_order_blocks
 from engine.indicators.volume import calculate_vwap
 from engine.strategies.smc import SMCInstitutionalStrategy
@@ -662,8 +673,8 @@ class UnifiedBacktestEngine:
 
     def run_chronological_portfolio_replay(
         self,
-        max_unprotected_positions: int = 2,
-        max_concurrent_positions: int = 4,
+        max_unprotected_positions: int = BASE_MAX_UNPROTECTED_RISK_SLOTS,
+        max_concurrent_positions: int = BASE_MAX_CONCURRENT_PHYSICAL_SLOTS,
         max_concurrent_longs: Optional[int] = None,
         max_heat_pct: float = 7.5,
         strict_btc_macro: bool = True,
@@ -683,7 +694,8 @@ class UnifiedBacktestEngine:
         streak_cooldown_trades: int = 1,
         enable_progressive_exposure: bool = True,
         enable_dual_timeframe_sop101: bool = True,
-        enable_directional_guard_sop137: bool = True
+        enable_directional_guard_sop137: bool = True,
+        enable_quant_pair_gate_sop139: bool = True
     ) -> Dict[str, Any]:
         """
         [EVENT-DRIVEN TIMELINE REPLAY v60.0 SSoT — SOP-137 ALIGNED]
@@ -703,9 +715,9 @@ class UnifiedBacktestEngine:
         if max_concurrent_longs is not None and max_concurrent_longs != 2:
             max_unprotected_positions = max_concurrent_longs
 
-        toxic_hours = [7, 10, 14, 21, 22] if toxic_hours is None else toxic_hours
+        toxic_hours = sorted(TOXIC_UTC_HOURS_SOP137) if toxic_hours is None else toxic_hours
         if excluded_assets is None:
-            excluded_assets = ["RENDERUSDT", "AVAXUSDT"] if enable_dual_timeframe_sop101 else ["RENDERUSDT"]
+            excluded_assets = sorted(PRUNED_NEGATIVE_EXPECTANCY_ASSETS) if enable_dual_timeframe_sop101 else ["RENDERUSDT"]
 
         btc_map = self._load_btc_macro_map()
         all_assets = MEGA_CAPS + HIGH_BETA_ALTS + TRADFI_METALS
@@ -746,7 +758,7 @@ class UnifiedBacktestEngine:
 
         if enable_dual_timeframe_sop101 and all_results:
             min_15m_ts = min(pd.to_datetime(t["entry_time"]) for t in all_results)
-            swing_1h_elite = ["XAUUSDT", "NEARUSDT", "ATOMUSDT", "ETHUSDT", "BTCUSDT", "INJUSDT", "LINKUSDT"]
+            swing_1h_elite = sorted(APPROVED_SWING_1H_EXECUTION)
             for sym_1h in swing_1h_elite:
                 if excluded_assets and sym_1h in excluded_assets:
                     continue
@@ -765,24 +777,18 @@ class UnifiedBacktestEngine:
             print("⚠️ No se encontraron operaciones para los criterios seleccionados.")
             return {}
 
-        # SOP-97 & SOP-137: Ponderación de Prioridad para desempate cronológico (Tier 1 Champions 1.25x, Tier 2 1.00x)
-        def calculate_priority_score(row) -> float:
-            score = float(row.get("confluence_score", 70.0))
-            s = str(row.get("symbol", "")).upper()
-            if any(t1 in s for t1 in ("ETH", "SOL", "BNB", "INJ", "FET", "XAU")):
-                multiplier = 1.25
-            elif any(t2 in s for t2 in ("AVAX", "NEAR", "SUI", "XRP", "BTC", "ATOM")):
-                multiplier = 1.00
-            else:
-                multiplier = 0.85
-            return round(score * multiplier, 2)
-
-        df_all["priority_score"] = df_all.apply(calculate_priority_score, axis=1)
+        # SOP-97 & SOP-137: Ponderación de Prioridad compartida SSoT (Tier 1 Champions 1.25x, Tier 2 1.00x)
+        df_all["priority_score"] = df_all.apply(
+            lambda row: ssot_calculate_priority_score(
+                str(row.get("symbol", "")),
+                float(row.get("confluence_score", 70.0))
+            ),
+            axis=1
+        )
         df_all = df_all.sort_values(by=["entry_time", "priority_score"], ascending=[True, False]).reset_index(drop=True)
         raw_signal_count = len(df_all)
 
-        # 2. Replay Cronológico con Máquina de Estados (SOP-97, SOP-99 y SOP-137)
-        from engine.workers.market_scanner import MarketScanner
+        # 2. Replay Cronológico con Máquina de Estados (SOP-97, SOP-99, SOP-137 y SOP-139)
         active_unprotected_positions = []
         active_physical_positions = []
         executed_trades = []
@@ -793,6 +799,7 @@ class UnifiedBacktestEngine:
         rejected_portfolio_heat = 0
         rejected_toxic_hours = 0
         rejected_directional_asymmetry = 0
+        rejected_quant_pair_gate = 0
         rejected_streak_breaker = 0
         rejected_already_open = 0
         
@@ -815,8 +822,13 @@ class UnifiedBacktestEngine:
             if excluded_assets and sym in excluded_assets:
                 continue
 
+            # Compuerta Activo:Timeframe SSoT (SOP-125 & SOP-139)
+            if enable_quant_pair_gate_sop139 and not ssot_is_quant_approved_pair(sym, tr.get("interval", "15m")):
+                rejected_quant_pair_gate += 1
+                continue
+
             # Guardia Direccional Asimétrica (SOP-137)
-            if enable_directional_guard_sop137 and not MarketScanner.is_directional_setup_allowed_sop137(sym, direction):
+            if enable_directional_guard_sop137 and not ssot_is_directional_allowed_sop137(sym, direction):
                 rejected_directional_asymmetry += 1
                 continue
 
@@ -1108,7 +1120,8 @@ class UnifiedBacktestEngine:
                 "regime_agent_sop63": enable_regime_agent,
                 "meta_labeling_sop100": enable_meta_labeling,
                 "dual_timeframe_sop101": enable_dual_timeframe_sop101,
-                "directional_guard_sop137": enable_directional_guard_sop137
+                "directional_guard_sop137": enable_directional_guard_sop137,
+                "quant_pair_gate_sop139": enable_quant_pair_gate_sop139
             },
             "telemetry_funnel": {
                 "raw_signals": raw_signal_count,
@@ -1120,6 +1133,7 @@ class UnifiedBacktestEngine:
                 "rejected_portfolio_heat": rejected_portfolio_heat,
                 "rejected_toxic_hours": rejected_toxic_hours,
                 "rejected_directional_asymmetry": rejected_directional_asymmetry,
+                "rejected_quant_pair_gate": rejected_quant_pair_gate,
                 "rejected_streak_breaker": rejected_streak_breaker,
                 "executed_trades": executed_count
             },
@@ -1146,6 +1160,7 @@ class UnifiedBacktestEngine:
             },
             "trades": df_exec.to_dict(orient="records")
         }
+        summary_payload["monte_carlo_parity"] = run_dual_parity_monte_carlo(summary_payload)
         with open(report_path, "w", encoding="utf-8") as f:
             json.dump(summary_payload, f, indent=4, default=str)
 

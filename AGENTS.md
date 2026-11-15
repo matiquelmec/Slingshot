@@ -384,6 +384,19 @@ Todos los mensajes de commit deben seguir estrictamente el estándar de Conventi
    * `src/features/backtest-metrics/actions.ts` y `BacktestAuditWidget.tsx` reflejan exactamente la auditoría post-`SOP-136/137/139` (`343` trades, `49.0%` WR, `PF Base 1.93`, `PF Alpha 2.11`, `+105.94R` Base, `+138.01R` Alpha, `$25,949.22 USD` compuesto, `MaxDD Alpha -3.99%`).
    * `scripts/deploy/deploy_and_verify_vps.ps1` ejecuta en cada despliegue una sonda en vivo de latencia REST y spread/OBI L2 (`OrderBookMicrostructureSentinel`) sobre `BTCUSDT`, `ETHUSDT`, `XRPUSDT` y `LINKUSDT`.
 
+---
+
+## 24. Regla 34: Protocolo de Paridad Continua SSoT `Backtest ↔ Monte Carlo ↔ Live` (SOP-141)
+
+1. **Módulo Único de Gobernanza (`engine/core/strategy_ssot.py`):**
+   * Toda constante y regla de selección táctica (`APPROVED_SCALP_15M_EXECUTION`, `APPROVED_SWING_1H_EXECUTION`, `SHORT_ONLY_ASYMMETRIC_ASSETS_SOP137`, `LONG_ONLY_STRUCTURAL_ASSETS_SOP137`, `TOXIC_UTC_HOURS_SOP137`, cupos `BASE_MAX_UNPROTECTED_RISK_SLOTS=2` / `BASE_MAX_CONCURRENT_PHYSICAL_SLOTS=4` y `calculate_priority_score`) debe residir exclusivamente en `engine/core/strategy_ssot.py` y ser importada por `MarketScanner`, `NexusNode` y `UnifiedBacktestEngine`. Queda prohibido duplicar estas reglas en módulos individuales.
+2. **Compuerta `Asset:TF` (`is_quant_approved_pair`) en `UnifiedBacktestEngine`:**
+   * `run_chronological_portfolio_replay` debe ejecutar `enable_quant_pair_gate_sop139=True` por defecto, filtrando cada señal mediante `is_quant_approved_pair(sym, interval)` para garantizar paridad 1:1 con `MarketScanner` (`262` trades, `51.5%` WR, `PF Base 2.22`, `PF Alpha 2.37`, `+100.55R` Base, `+132.29R` Alpha, `MaxDD Alpha -4.82%`, `Sharpe 5.73`, `$22,927.17 USD` compuesto).
+3. **Doble Auditoría Monte Carlo Conectada al Replay + Fricción SOP-119:**
+   * `MonteCarloResilienceEngine.from_chronological_report()` y `run_dual_parity_monte_carlo()` deben ejecutarse automáticamente sobre la secuencia real de `outcome_r * sizing_mult` del replay cronológico, certificando calificación `TIER_1_AAA` tanto en modo teórico (`100.0%` prob. ganancia, `RoR 0.47%`, mediana `+50.35R`) como bajo fricción empírica `SOP-119` (`99.8%` prob. ganancia, `RoR 1.21%`, mediana `+37.65R`).
+4. **Guardia de Contrato CI/CD (`engine/tests/test_sop141_continuous_parity_guard.py`):**
+   * La suite de pruebas falla automáticamente ante cualquier divergencia entre `strategy_ssot.py`, `MarketScanner`, `NexusNode`, `chronological_backtest_report.json` y `src/features/backtest-metrics/actions.ts`.
+
 
 
 

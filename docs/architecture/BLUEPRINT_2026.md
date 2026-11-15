@@ -1038,6 +1038,19 @@ Sometidas las 3 optimizaciones a la matriz experimental de 180 días en los 13 a
 2. **Sonda en Vivo de Latencia y Slippage L2 (`scripts/deploy/deploy_and_verify_vps.ps1`):**
    * Verifica tras cada despliegue en el VPS la latencia REST de Bitunix (`ms`), el spread efectivo (`bps`) y el Order Book Imbalance (`OBI`) mediante `OrderBookMicrostructureSentinel` sobre `BTCUSDT`, `ETHUSDT`, `XRPUSDT` y `LINKUSDT`.
 
+---
+
+## 48. SOP-141: PROTOCOLO DE PARIDAD CONTINUA SSoT (`BACKTEST ↔ MONTE CARLO ↔ LIVE`)
+
+1. **Módulo Único de Gobernanza Estratégica (`engine/core/strategy_ssot.py`):**
+   * Centraliza matrices `APPROVED_SCALP_15M_EXECUTION` / `APPROVED_SWING_1H_EXECUTION`, guardias asimétricas `SOP-137`, horas tóxicas `[7, 10, 14, 21, 22] UTC`, cupos `SOP-97`/`SOP-99`, `calculate_priority_score()` y constantes de fricción `SOP-119` (`haircut=0.884`, `fill_rate=0.962`, `sl_slippage=0.04R`), eliminando duplicación entre `MarketScanner`, `NexusNode` y `UnifiedBacktestEngine`.
+2. **Paridad Exacta `Asset:TF` en Replay Cronológico (`engine/backtest/unified_backtest_engine.py`):**
+   * `run_chronological_portfolio_replay` aplica `is_quant_approved_pair(sym, interval)` (`enable_quant_pair_gate_sop139=True`), alineando 1:1 las 262 operaciones auditadas (`51.5%` WR, `PF Base 2.22`, `PF Alpha 2.37`, `+100.55R` Base, `+132.29R` Alpha, `MaxDD Alpha -4.82%`, `Sharpe 5.73`, `$22,927.17 USD` compuesto).
+3. **Doble Simulación Monte Carlo + Fricción L2 (`engine/analytics/monte_carlo_resilience_engine.py`):**
+   * `run_dual_parity_monte_carlo()` y `get_default_monte_carlo_resilience_report()` consumen directamente `chronological_backtest_report.json`, certificando solvencia `TIER_1_AAA` en modo teórico (`100.0%` prob. ganancia, `RoR 0.47%`) y realista `SOP-119` (`99.8%` prob. ganancia, `RoR 1.21%`).
+4. **Contrato Automático CI/CD (`engine/tests/test_sop141_continuous_parity_guard.py`):**
+   * Valida en cada corrida que `strategy_ssot.py`, `MarketScanner`, `NexusNode`, `chronological_backtest_report.json` y `src/features/backtest-metrics/actions.ts` permanezcan 100% sincronizados.
+
 
 
 

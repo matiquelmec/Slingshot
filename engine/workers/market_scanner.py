@@ -12,6 +12,16 @@ from engine.indicators.polars_engine import polars_engine
 
 from engine.api.config import settings
 from engine.indicators.data_utils import fetch_binance_history, fetch_top_liquid_tickers
+from engine.core.strategy_ssot import (
+    APPROVED_SCALP_15M_EXECUTION as SSOT_APPROVED_SCALP_15M,
+    APPROVED_SWING_1H_EXECUTION as SSOT_APPROVED_SWING_1H,
+    SHORT_ONLY_ASYMMETRIC_ASSETS_SOP137 as SSOT_SHORT_ONLY_SOP137,
+    LONG_ONLY_STRUCTURAL_ASSETS_SOP137 as SSOT_LONG_ONLY_SOP137,
+    TOXIC_UTC_HOURS_SOP137 as SSOT_TOXIC_UTC_HOURS_SOP137,
+    is_quant_approved_pair as ssot_is_quant_approved_pair,
+    is_directional_setup_allowed_sop137 as ssot_is_directional_allowed_sop137,
+    is_toxic_hour_sop137 as ssot_is_toxic_hour_sop137,
+)
 
 def is_trade_allowed_sop18(
     symbol: str,
@@ -81,32 +91,20 @@ class MarketScanner:
     # - XRPUSDT:15m restaurado (PF 1.72, +17.65R, MC 99.4%)
     # - ETHUSDT:1h restaurado (PF 1.70, +5.58R, MC 99.0%)
     # - LINKUSDT:1h restaurado bajo guardia SOP-137 Short-Only (PF 3.01, +5.31R, MC 100.0%)
-    APPROVED_SCALP_15M_EXECUTION = {
-        "BNBUSDT", "ETHUSDT", "SOLUSDT", "NEARUSDT", "FETUSDT", "INJUSDT", "ATOMUSDT", "XRPUSDT"
-    }
-    APPROVED_SWING_1H_EXECUTION = {
-        "XAUUSDT", "BTCUSDT", "NEARUSDT", "ATOMUSDT", "ETHUSDT", "LINKUSDT"
-    }
+    APPROVED_SCALP_15M_EXECUTION = set(SSOT_APPROVED_SCALP_15M)
+    APPROVED_SWING_1H_EXECUTION = set(SSOT_APPROVED_SWING_1H)
 
     # [SOP-137] Guardia Direccional Asimétrica Auditada (Backtest 437 ops + Monte Carlo 10,000 rutas):
     # - INJUSDT & LINKUSDT presentan expectativa negativa en LONG (PF 0.81 / 0.74, WR 28.6% / 29.6%), pero PF 2.84 / 2.59 en SHORT.
     # - XAUUSDT, SOLUSDT & SUIUSDT presentan expectativa negativa en SHORT (PF 0.96 / 0.82 / 0.93), pero PF 5.17 / 2.67 / 1.28 en LONG.
-    SHORT_ONLY_ASYMMETRIC_ASSETS_SOP137 = {"INJUSDT", "LINKUSDT"}
-    LONG_ONLY_STRUCTURAL_ASSETS_SOP137 = {"XAUUSDT", "XAUUSD", "SOLUSDT", "SUIUSDT"}
-    TOXIC_UTC_HOURS_SOP137 = {7, 10, 14, 21, 22}
+    SHORT_ONLY_ASYMMETRIC_ASSETS_SOP137 = set(SSOT_SHORT_ONLY_SOP137)
+    LONG_ONLY_STRUCTURAL_ASSETS_SOP137 = set(SSOT_LONG_ONLY_SOP137)
+    TOXIC_UTC_HOURS_SOP137 = set(SSOT_TOXIC_UTC_HOURS_SOP137)
 
     @classmethod
     def is_quant_approved_pair(cls, symbol: str, interval: str) -> bool:
-        """Verifica si el par Activo:Timeframe supera los umbrales de Backtest + Monte Carlo (SOP-125)."""
-        sym = (symbol or "").replace("/", "").upper()
-        if not sym.endswith("USDT") and sym not in ("XAUUSD", "XAUUSDT"):
-            sym = f"{sym}USDT"
-        tf = (interval or "15m").lower()
-        if tf == "15m":
-            return sym in cls.APPROVED_SCALP_15M_EXECUTION
-        if tf == "1h":
-            return sym in cls.APPROVED_SWING_1H_EXECUTION
-        return True
+        """Verifica si el par Activo:Timeframe supera los umbrales de Backtest + Monte Carlo (SOP-125 / SSoT)."""
+        return ssot_is_quant_approved_pair(symbol, interval)
 
     @classmethod
     def is_directional_setup_allowed_sop137(cls, symbol: str, direction: str) -> bool:
@@ -115,15 +113,7 @@ class MarketScanner:
         - INJUSDT / LINKUSDT: Bloquea LONG (solo permite SHORT).
         - XAUUSDT / SOLUSDT / SUIUSDT: Bloquea SHORT (solo permite LONG).
         """
-        sym = (symbol or "").replace("/", "").upper()
-        if not sym.endswith("USDT") and sym not in ("XAUUSD", "XAUUSDT"):
-            sym = f"{sym}USDT"
-        dir_clean = "SHORT" if "SHORT" in str(direction or "LONG").upper() else "LONG"
-        if sym in cls.SHORT_ONLY_ASYMMETRIC_ASSETS_SOP137 and dir_clean == "LONG":
-            return False
-        if sym in cls.LONG_ONLY_STRUCTURAL_ASSETS_SOP137 and dir_clean == "SHORT":
-            return False
-        return True
+        return ssot_is_directional_allowed_sop137(symbol, direction)
 
     @classmethod
     def is_toxic_hour_sop137(cls, dt: datetime) -> bool:
@@ -134,7 +124,7 @@ class MarketScanner:
         - 14:00 UTC: NY Open Chop
         - 21:00-22:00 UTC: NY Close Dead Zone (WR 0.0%)
         """
-        return int(dt.hour) in cls.TOXIC_UTC_HOURS_SOP137
+        return ssot_is_toxic_hour_sop137(dt.hour)
 
     def __init__(self):
         self.router = SlingshotRouter()

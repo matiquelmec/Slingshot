@@ -26,6 +26,10 @@ from engine.workers.trade_manager import trade_manager
 from engine.api.registry import registry
 from engine.risk.cluster_risk_guard import cluster_risk_guard
 from engine.risk.risk_manager import RiskManager
+from engine.core.strategy_ssot import (
+    BASE_MAX_UNPROTECTED_RISK_SLOTS,
+    calculate_priority_score as ssot_calculate_priority_score,
+)
 
 
 class NexusNode:
@@ -937,26 +941,18 @@ class NexusNode:
             await asyncio.sleep(15)
 
     MAX_CONCURRENT_POSITIONS = 4
-    MAX_UNPROTECTED_RISK_POSITIONS = 2  # SOP-97: Máximo 2 operaciones con riesgo real flotante simultáneas
+    MAX_UNPROTECTED_RISK_POSITIONS = BASE_MAX_UNPROTECTED_RISK_SLOTS  # SOP-97 SSoT
     DEFAULT_MARGIN_USDT = 17.00 # SOP-39: 2.5% de riesgo real para cuenta de $200 USD (~8.5% de margen a ~12X con SL medio)
 
     @staticmethod
     def calculate_priority_score(opportunity: Dict[str, Any]) -> float:
         """
-        [SOP-97 & SOP-137 ALPHA-TIER PRIORITY SCORING]
-        Calcula la puntuación ponderada para desempate y selección en cola.
-        Campeones Tier 1 (ETH, SOL, BNB, INJ, FET, XAU) reciben multiplicador 1.25x;
-        Tier 2 (NEAR, SUI, XRP, BTC, ATOM, AVAX) reciben 1.00x.
+        [SOP-97 & SOP-137 ALPHA-TIER PRIORITY SCORING — SSoT]
+        Delega al módulo único engine.core.strategy_ssot para garantizar paridad 1:1 con backtest.
         """
         score = float(opportunity.get("confluence_score") or opportunity.get("score", 70.0))
         asset = str(opportunity.get("asset", opportunity.get("symbol", ""))).upper()
-        if any(t1 in asset for t1 in ("ETH", "SOL", "BNB", "INJ", "FET", "XAU")):
-            multiplier = 1.25
-        elif any(t2 in asset for t2 in ("AVAX", "NEAR", "SUI", "XRP", "BTC", "ATOM")):
-            multiplier = 1.00
-        else:
-            multiplier = 0.85
-        return round(score * multiplier, 2)
+        return ssot_calculate_priority_score(asset, score)
 
     def get_unprotected_risk_count(self, account_id: Optional[str] = None) -> int:
         """
