@@ -46,7 +46,7 @@ export default function ActiveAssetsMonitor() {
 
                 // 2. Hidratación Base
                 const BASE_URL = getApiBaseUrl();
-                const res = await fetch(`${BASE_URL}/api/v1/market-states`);
+                const res = await fetch(`${BASE_URL}/api/v1/market-states`, { cache: 'no-store' });
                 if (res.ok) {
                     const masterStates = await res.json();
                     const formatted = masterStates.map((s: any) => ({

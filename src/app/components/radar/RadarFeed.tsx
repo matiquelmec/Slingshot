@@ -59,7 +59,7 @@ export default function RadarFeed() {
                 }
 
                 // 2. Fallback a endpoint REST de FastAPI en caso de inicialización en frío
-                const res = await fetch(`${BASE_URL}/api/v1/signals?status=ALL`);
+                const res = await fetch(`${BASE_URL}/api/v1/signals?status=ALL`, { cache: 'no-store' });
                 if (res.ok) {
                     const data = await res.json();
                     if (data && data.length > 0) {
@@ -114,9 +114,10 @@ export default function RadarFeed() {
             )
             .sort((a, b) => new Date(b.created_at || b.timestamp).getTime() - new Date(a.created_at || a.timestamp).getTime());
 
+        const q = filter.toLowerCase();
         return signals.filter(s =>
-            s.asset.toLowerCase().includes(filter.toLowerCase()) ||
-            s.signal_type.toLowerCase().includes(filter.toLowerCase())
+            s.asset.toLowerCase().includes(q) ||
+            (s.signal_type || s.type || '').toLowerCase().includes(q)
         );
     }, [globalSignals, auditedSignals, filter]);
 

@@ -2,12 +2,15 @@
 
 import React from 'react';
 import { motion } from 'framer-motion';
-import { Activity, ShieldCheck, Cpu } from 'lucide-react';
+import { Activity, ShieldCheck, Cpu, AlertTriangle } from 'lucide-react';
 import ActiveAssetsMonitor from '../../components/radar/ActiveAssetsMonitor';
 import RadarFeed from '../../components/radar/RadarFeed';
 import OpportunitiesScanner from '../../components/radar/OpportunitiesScanner';
+import { useTelemetryStore } from '../../store/telemetryStore';
 
 export default function RadarPage() {
+    const { isConnected, connectionStatus, connectionMode } = useTelemetryStore();
+
     return (
         <div className="h-full w-full flex flex-col gap-6 p-6 overflow-y-auto custom-scrollbar">
             {/* Header / Stats Summary */}
@@ -37,14 +40,28 @@ export default function RadarPage() {
                 <motion.div 
                     initial={{ opacity: 0, x: 20 }}
                     animate={{ opacity: 1, x: 0 }}
-                    className="w-full md:w-80 bg-neon-cyan/5 border border-neon-cyan/10 rounded-3xl p-6 flex flex-col justify-center items-center text-center gap-3"
+                    className={`w-full md:w-80 border rounded-3xl p-6 flex flex-col justify-center items-center text-center gap-3 ${
+                        isConnected
+                            ? 'bg-neon-cyan/5 border-neon-cyan/10'
+                            : 'bg-amber-500/5 border-amber-500/20'
+                    }`}
                 >
-                    <div className="p-3 bg-neon-green/20 rounded-full border border-neon-green/30">
-                        <ShieldCheck size={32} className="text-neon-green" />
+                    <div className={`p-3 rounded-full border ${
+                        isConnected
+                            ? 'bg-neon-green/20 border-neon-green/30'
+                            : 'bg-amber-500/20 border-amber-500/30'
+                    }`}>
+                        {isConnected
+                            ? <ShieldCheck size={32} className="text-neon-green" />
+                            : <AlertTriangle size={32} className="text-amber-400" />}
                     </div>
                     <div>
-                        <h3 className="text-sm font-bold text-white uppercase tracking-widest">Sincronización OK</h3>
-                        <p className="text-[10px] text-white/40 font-mono mt-1">LATENCIA: 14ms | MASTER NODE: v3.2</p>
+                        <h3 className="text-sm font-bold text-white uppercase tracking-widest">
+                            {isConnected ? 'Sincronización OK' : 'Sincronizando...'}
+                        </h3>
+                        <p className="text-[10px] text-white/40 font-mono mt-1">
+                            MODO: {connectionMode || 'REST'} | ESTADO: {connectionStatus || 'CONNECTING'}
+                        </p>
                     </div>
                 </motion.div>
             </div>
