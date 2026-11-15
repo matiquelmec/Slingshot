@@ -150,7 +150,7 @@ try {
         $probeScript = @"
 import asyncio, time
 from engine.execution.bitunix_executor import BitunixExecutor
-from engine.risk.order_book_microstructure_sentinel import OrderBookMicrostructureSentinel
+from engine.analytics.order_book_microstructure_sentinel import OrderBookMicrostructureSentinel
 
 async def main():
     ex = BitunixExecutor()
