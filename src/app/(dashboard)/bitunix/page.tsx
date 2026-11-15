@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
     Zap, ShieldCheck, Activity, RefreshCw, AlertTriangle, ArrowUpRight, ArrowDownRight, 
@@ -72,13 +72,15 @@ interface BitunixTelemetryData {
     positions: BitunixPosition[];
     pending_orders_count: number;
     pending_orders: BitunixPendingOrder[];
+    is_stabilizing?: boolean;
 }
 
 export default function BitunixDashboardPage() {
     const [data, setData] = useState<BitunixTelemetryData | null>(null);
     const [loading, setLoading] = useState(true);
     const [mounted, setMounted] = useState(false);
-    const [zeroPositionsPulses, setZeroPositionsPulses] = useState<number>(0);
+    const zeroPositionsPulsesRef = useRef<number>(0);
+    const isFetchingRef = useRef<boolean>(false);
     const [simEntry, setSimEntry] = useState<number>(0);
     const [simSl, setSimSl] = useState<number>(0);
 
@@ -97,39 +99,44 @@ export default function BitunixDashboardPage() {
     }, []);
 
     const fetchBitunixData = async () => {
+        if (isFetchingRef.current) return;
+        isFetchingRef.current = true;
         try {
             const apiHost = getApiBaseUrl();
             const res = await fetch(`${apiHost}/api/v1/bitunix/telemetry`, { cache: 'no-store' });
             if (res.ok) {
-                const json = await res.json();
+                const json: BitunixTelemetryData = await res.json();
                 if (json && (json.connected || json.equity > 0 || json.positions_count > 0)) {
                     setData(prev => {
                         let nextData = json;
-                        if (prev?.positions && prev.positions.length > 0 && (!json.positions || json.positions.length === 0)) {
-                            if (json.is_stabilizing || zeroPositionsPulses < 2) {
-                                setZeroPositionsPulses(p => p + 1);
-                                nextData = {
-                                    ...json,
-                                    positions: prev.positions,
-                                    positions_count: prev.positions.length,
-                                    total_floating_pnl: prev.total_floating_pnl,
-                                    is_stabilizing: true
-                                };
-                                try { localStorage.setItem('slingshot_bitunix_lkg_v1', JSON.stringify(nextData)); } catch {}
-                                return nextData;
-                            }
+                        const incomingEmpty = !json.positions || json.positions.length === 0;
+                        if (prev?.positions && prev.positions.length > 0 && incomingEmpty && json.is_stabilizing && zeroPositionsPulsesRef.current < 2) {
+                            zeroPositionsPulsesRef.current += 1;
+                            nextData = {
+                                ...json,
+                                positions: prev.positions,
+                                positions_count: prev.positions.length,
+                                total_floating_pnl: prev.total_floating_pnl,
+                                is_stabilizing: true
+                            };
+                        } else {
+                            zeroPositionsPulsesRef.current = 0;
                         }
-                        setZeroPositionsPulses(0);
                         try { localStorage.setItem('slingshot_bitunix_lkg_v1', JSON.stringify(nextData)); } catch {}
                         return nextData;
                     });
-                } else {
-                    setData(prev => prev ? { ...prev, connected: true } : json);
+                } else if (json) {
+                    zeroPositionsPulsesRef.current = 0;
+                    setData(prev => prev ? { ...prev, connected: Boolean(json.connected), latency_ms: json.latency_ms ?? prev.latency_ms } : json);
                 }
+            } else {
+                setData(prev => prev ? { ...prev, connected: false } : prev);
             }
         } catch (e) {
             console.warn("Bitunix Terminal: Error consultando telemetría en vivo:", e);
+            setData(prev => prev ? { ...prev, connected: false } : prev);
         } finally {
+            isFetchingRef.current = false;
             setLoading(false);
         }
     };
@@ -254,7 +261,11 @@ export default function BitunixDashboardPage() {
                         {data?.positions_count ?? 0} Posición(es)
                     </span>
                     <span className="text-[8px] font-mono text-white/40 mt-2">
-                        {data?.pending_orders_count ?? 0} Órdenes Límite / TPs en exchange
+                        {(() => {
+                            const activeTps = (data?.positions || []).reduce((acc, p) => acc + (p.take_profits?.length || 0), 0);
+                            const activeSls = (data?.positions || []).filter(p => p.active_sl?.is_protected).length;
+                            return `${data?.pending_orders_count ?? 0} Límite en libro | ${activeTps} TPs · ${activeSls} SL activos`;
+                        })()}
                     </span>
                 </div>
             </div>
