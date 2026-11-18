@@ -830,14 +830,23 @@ class NexusNode:
                         sl_p = float(sig.get("stop_loss", 0))
                         side = sig.get("signal_type", sig.get("type", "LONG"))
 
-                        # 4.1 Comprobar y auto-reparar Stop Loss si falta
-                        if sl_p > 0 and pos_id:
+                        # 4.1 Comprobar y auto-reparar Stop Loss si falta (solo si la API responde code == 0 y live_pos tampoco reporta SL)
+                        if sl_p > 0 and pos_id and live_pos:
+                            live_sl_val = float(live_pos.get("slPrice") or live_pos.get("stopLoss") or 0.0)
                             chk_tpsl = await target_ex._request("GET", "/api/v1/futures/tpsl/get_pending_orders", params={"symbol": symbol})
-                            t_orders = chk_tpsl.get("data", []) or []
-                            has_active_sl = any(t.get("slPrice") or t.get("triggerPrice") for t in t_orders) if isinstance(t_orders, list) else False
-                            if not has_active_sl:
-                                logger.warning(f"🩹 [AUTO-HEALING] [{target_ex.account_label}] Posición {symbol} carece de Stop Loss activo en Bitunix. Auto-reparando SL @ ${sl_p}...")
-                                await target_ex.place_position_tpsl(symbol=symbol, position_id=pos_id, sl_price=sl_p)
+                            if isinstance(chk_tpsl, dict) and chk_tpsl.get("code") == 0:
+                                t_orders = chk_tpsl.get("data", []) or []
+                                has_active_sl = (live_sl_val > 0) or (
+                                    any(t.get("slPrice") or t.get("triggerPrice") for t in t_orders) if isinstance(t_orders, list) else False
+                                )
+                                if not has_active_sl:
+                                    logger.warning(f"🩹 [AUTO-HEALING] [{target_ex.account_label}] Posición {symbol} carece de Stop Loss activo en Bitunix. Auto-reparando SL @ ${sl_p}...")
+                                    await target_ex.place_position_tpsl(
+                                        symbol=symbol,
+                                        position_id=pos_id,
+                                        sl_price=sl_p,
+                                        allow_emergency_close=False,
+                                    )
 
                         # 4.2 Comprobar y auto-reparar Take Profits límites si faltan
                         tp1_val = float(sig.get("tp1", 0))
@@ -929,7 +938,8 @@ class NexusNode:
                                             await target_ex.place_position_tpsl(
                                                 symbol=symbol,
                                                 position_id=str(pos_id),
-                                                tp_price=float(p_val)
+                                                tp_price=float(p_val),
+                                                allow_emergency_close=False,
                                             )
 
                     except Exception as heal_err:

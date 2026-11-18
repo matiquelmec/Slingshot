@@ -8,8 +8,7 @@ import logging
 from typing import Dict, Any, List, Optional
 from decimal import Decimal, ROUND_DOWN
 from engine.api.config import settings
-
-logger = logging.getLogger("BitunixExecutor")
+from engine.core.logger import logger
 
 class BitunixExecutor:
     """
@@ -800,7 +799,14 @@ class BitunixExecutor:
             logger.error(f"❌ [BITUNIX] Error escalando posición: {e}")
             return False
 
-    async def place_position_tpsl(self, symbol: str, position_id: str, sl_price: Optional[float] = None, tp_price: Optional[float] = None) -> Optional[str]:
+    async def place_position_tpsl(
+        self,
+        symbol: str,
+        position_id: str,
+        sl_price: Optional[float] = None,
+        tp_price: Optional[float] = None,
+        allow_emergency_close: bool = True,
+    ) -> Optional[str]:
         """
         Establece Stop Loss y/o Take Profit para una posicion abierta en Bitunix.
         Pre-valida contra el precio de mercado actual para detectar precios perforados (SOP-58/SOP-25)
@@ -982,9 +988,26 @@ class BitunixExecutor:
                             logger.debug(f"[BITUNIX] Error cancelando TPSL previo {cancel_id}: {ce}")
             return str(order_id)
 
-        # 4. [RESCUE MECHANISM]: Solo si la posición está TOTALMENTE DESPROTEGIDA (sin ningún SL previo o purgado)
-        # y fallaron todos los intentos de colocar el SL inicial, ejecutar cierre de emergencia a mercado.
+        # 4. [RESCUE MECHANISM]: Solo si se estaba colocando un Stop Loss (sl_price is not None),
+        # allow_emergency_close=True y una segunda verificación confirma que NO existe SL activo
+        if not allow_emergency_close or sl_price is None:
+            logger.warning(f"⚠️ [BITUNIX SOP-143] No se pudo colocar/actualizar TPSL para {sym} (modo no-destructivo / solo TP). Se omite cierre de emergencia.")
+            return None
+
         if not eo_id or prior_sl_purged:
+            try:
+                recheck = await self._request("GET", "/api/v1/futures/tpsl/get_pending_orders", params={"symbol": sym})
+                if isinstance(recheck, dict) and recheck.get("code") == 0:
+                    r_list = recheck.get("data", []) or []
+                    if isinstance(r_list, list) and any(item.get("slPrice") or item.get("triggerPrice") for item in r_list):
+                        logger.info(f"🛡️ [BITUNIX SOP-143] Re-verificación confirmó que {sym} YA tiene SL activo en Bitunix. Cierre de emergencia abortado.")
+                        return str(r_list[0].get("id") or r_list[0].get("orderId") or "existing_sl")
+                elif isinstance(recheck, dict) and recheck.get("code") != 0:
+                    logger.warning(f"⚠️ [BITUNIX SOP-143] Error de red al re-verificar TPSL de {sym} ({recheck.get('msg')}). Abortando cierre de emergencia por fallo transitorio.")
+                    return None
+            except Exception:
+                pass
+
             logger.critical(f"🚨 [SOP-58 RESCUE] Fallo persistente al colocar SL para {sym}. Ejecutando CIERRE A MERCADO DE EMERGENCIA...")
             try:
                 await self.close_position_market(symbol=sym, position_id=position_id)
