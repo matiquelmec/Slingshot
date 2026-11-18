@@ -1324,27 +1324,12 @@ class NexusNode:
                           ("SHORT" in new_direction and "LONG" in existing_dir)
 
             if is_opposite:
-                if conf_score >= 75.0:
-                    logger.warning(
-                        f"🚨 [NEXUS REVERSAL GUARD SOP-46] [{account.label}] Señal contraria confirmada para {asset} "
-                        f"({new_direction} vs {existing_dir} activo, Confluencia: {conf_score}% >= 75%). "
-                        f"Ejecutando cierre preventivo a mercado de la posición anterior..."
-                    )
-                    try:
-                        if hasattr(executor, "close_position_market"):
-                            await executor.close_position_market(asset)
-                        self._active_positions.pop(acc_pos_key, None)
-                        if acc_id == "primary":
-                            self._active_positions.pop(asset, None)
-                        logger.info(f"✅ [NEXUS REVERSAL GUARD] Posición contraria en {asset} cerrada con éxito.")
-                    except Exception as close_err:
-                        logger.error(f"❌ [NEXUS REVERSAL GUARD] Error al cerrar posición contraria en {asset}: {close_err}")
-                else:
-                    logger.info(
-                        f"🛡️ [NEXUS REVERSAL GUARD] Señal opuesta en {asset} recibida pero confluencia insuficiente "
-                        f"({conf_score}% < 75%). Manteniendo posición {existing_dir} actual."
-                    )
-                    return None
+                logger.info(
+                    f"🛡️ [NEXUS REVERSAL GUARD SOP-143] [{account.label}] Señal contraria en {asset} "
+                    f"({new_direction} vs {existing_dir} activo, Confluencia: {conf_score}%). "
+                    f"Bloqueando nueva señal para preservar la posición actual con su SL/TP nativo."
+                )
+                return None
             else:
                 logger.warning(f"🛑 [NEXUS DEDUP GUARD] [{account.label}] Rechazando orden a mercado en {asset}: Ya existe una posición {existing_dir} activa.")
                 return None
