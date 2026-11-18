@@ -303,7 +303,7 @@ Simulación Event-Driven Oficial sobre la cartera Tier A (`XAUUSD`, `US100`, `GB
 
 ---
 
-## 🧪 Certificación QA Oficial (66 Vitest + 516 Pytest Recolectados)
+## 🧪 Certificación QA Oficial (66 Vitest + 529 Pytest Recolectados)
 
 Para certificar la integridad del sistema en local:
 
@@ -317,7 +317,7 @@ npm test
 # 3. Suite Cuantitativa de Motor Python (SOP-131 a SOP-135 y regresión)
 .venv\Scripts\python.exe -m pytest engine/tests/test_turso_sync.py engine/tests/test_sop133_autonomous_learning_and_live_sentinels.py engine/tests/test_sop132_telegram_minimalist_privacy.py engine/tests/test_sop131_limit_distance_and_buffer_ttl.py -v
 
-# 4. Suite Completa de Motor Python (516 tests recolectados)
+# 4. Suite Completa de Motor Python (529 tests recolectados)
 .venv\Scripts\python.exe -m pytest engine/tests -q
 ```
 

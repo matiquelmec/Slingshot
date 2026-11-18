@@ -2,7 +2,7 @@
 
 > **Versión del Sistema:** 10.0.0 (FSD Multi-Tenant Dual-Engine Architecture)  
 > **Fecha de Actualización:** Noviembre 2026  
-> **Estado:** Producción Activa — Arquitectura FSD, Bitunix/MT5 Dual-Engine y SOP-133 Desplegados
+> **Estado:** Producción Activa — Arquitectura FSD, Bitunix/MT5 Dual-Engine y SOP-142 Desplegados
 
 ---
 

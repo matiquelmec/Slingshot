@@ -1,6 +1,6 @@
 # Estructura del Proyecto Slingshot v10.0.0
 
-> Mapa oficial de directorios y módulos activos del ecosistema **Slingshot (`v10.0.0` — FSD Multi-Tenant Dual-Engine, SOP-133)**.  
+> Mapa oficial de directorios y módulos activos del ecosistema **Slingshot (`v10.0.0` — FSD Multi-Tenant Dual-Engine, SOP-142)**.  
 > **Última actualización:** Noviembre 2026 | **Gobernanza:** [`AGENTS.md`](../AGENTS.md) | **Blueprint:** [`BLUEPRINT_2026.md`](architecture/BLUEPRINT_2026.md)
 
 ---
@@ -45,7 +45,7 @@ Slingshot_Trading/
 │   ├── router/                           # analyzer.py, gatekeeper.py, telegram_dispatcher.py
 │   ├── strategies/                       # Estrategias SMC y Playbooks
 │   ├── workers/                          # orchestrator.py, market_scanner.py, tradfi_scanner.py, trade_manager.py, asset_incubator.py, ci_cd_sentinel.py, calendar_worker.py, news_worker.py
-│   └── tests/                            # Suite Pytest (513 tests recolectados, SOP-01 a SOP-133)
+│   └── tests/                            # Suite Pytest (529 tests recolectados, SOP-01 a SOP-142)
 │
 ├── sidecar/                              # Ingestor HFT WebSocket en Node.js (:8080)
 │   └── index.js                          # Streaming de ticks y ordenamiento L2 para activos canónicos
