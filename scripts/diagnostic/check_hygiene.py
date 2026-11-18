@@ -21,12 +21,18 @@ def main():
             elif any(f.name.endswith(e) for e in forbidden_extensions):
                 violations.append(f"Extensión temporal en raíz: {f.name}")
 
-    # 2. Higiene SSoT en docs/ (Solo SLINGSHOT_BIBLE_V60.md debe estar activo en docs/)
+    # 2. Higiene SSoT en docs/ y scripts/ (Sin archivos obsoletos ni carpetas vacías)
     docs_dir = ROOT_DIR / "docs"
     if docs_dir.exists():
         bibles = [f.name for f in docs_dir.glob("SLINGSHOT_BIBLE_*.md")]
-        if len(bibles) > 1 or (len(bibles) == 1 and bibles[0] != "SLINGSHOT_BIBLE_V60.md"):
-            violations.append(f"Múltiples o desactualizadas Biblias en docs/ (deben ir en docs/archive/): {bibles}")
+        if bibles:
+            violations.append(f"Biblias heredadas fuera de estándar BLUEPRINT_2026.md: {bibles}")
+        if (docs_dir / "archive").exists():
+            violations.append("Directorio obsoleto docs/archive/ detectado.")
+
+    for obsolete_dir in (ROOT_DIR / "scratch", ROOT_DIR / "scripts" / "archive"):
+        if obsolete_dir.exists():
+            violations.append(f"Directorio obsoleto detectado: {obsolete_dir.relative_to(ROOT_DIR)}")
 
     # 3. Higiene de Estado en engine/data/ (Sin activos erradicados)
     engine_data_dir = ROOT_DIR / "engine" / "data"

@@ -18,6 +18,17 @@ from typing import Dict, List, Any, Optional
 
 
 @dataclass
+class FundingSqueezeOpportunity:
+    asset: str
+    triggered: bool
+    recommended_direction: Optional[str]
+    annualized_funding_apr_pct: float
+    confluence_boost_pts: float
+    priority_multiplier: float
+    reason: str
+
+
+@dataclass
 class FundingDragAuditResult:
     asset: str
     current_funding_rate_8h_pct: float
@@ -90,6 +101,53 @@ class FundingRateDragSentinel:
             status=status,
             recommended_chandelier_multiplier=multiplier,
             action_directive=directive,
+        )
+
+    def detect_funding_squeeze_opportunity(
+        self,
+        asset: str,
+        direction: str,
+        funding_rate_8h: float,
+        obi_score: float = 0.0,
+        min_abs_apr_pct: float = 60.0,
+    ) -> FundingSqueezeOpportunity:
+        """
+        [SOP-142B] Detecta oportunidades de cosecha de Funding Squeeze cuando el
+        APR anualizado supera ±60% y el flujo L2 acompaña el lado que cobra funding.
+        """
+        annualized_apr = funding_rate_8h * 100.0 * 3.0 * 365.0
+        dir_up = "SHORT" if "SHORT" in str(direction or "LONG").upper() else "LONG"
+
+        if annualized_apr >= min_abs_apr_pct and dir_up == "SHORT" and obi_score <= 0.0:
+            return FundingSqueezeOpportunity(
+                asset=asset,
+                triggered=True,
+                recommended_direction="SHORT",
+                annualized_funding_apr_pct=round(annualized_apr, 1),
+                confluence_boost_pts=8.0,
+                priority_multiplier=1.30,
+                reason=f"Funding +{annualized_apr:.1f}% APR favorece SHORT cobrando carry.",
+            )
+
+        if annualized_apr <= -min_abs_apr_pct and dir_up == "LONG" and obi_score >= 0.0:
+            return FundingSqueezeOpportunity(
+                asset=asset,
+                triggered=True,
+                recommended_direction="LONG",
+                annualized_funding_apr_pct=round(annualized_apr, 1),
+                confluence_boost_pts=8.0,
+                priority_multiplier=1.30,
+                reason=f"Funding {annualized_apr:.1f}% APR favorece LONG cobrando carry.",
+            )
+
+        return FundingSqueezeOpportunity(
+            asset=asset,
+            triggered=False,
+            recommended_direction=None,
+            annualized_funding_apr_pct=round(annualized_apr, 1),
+            confluence_boost_pts=0.0,
+            priority_multiplier=1.0,
+            reason="Sin asimetría extrema de funding para la dirección evaluada.",
         )
 
 

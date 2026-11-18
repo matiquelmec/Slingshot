@@ -27,6 +27,18 @@ class OrderBookLevel:
 
 
 @dataclass
+class LiquidationExhaustionSignal:
+    asset: str
+    triggered: bool
+    direction: Optional[str]  # 'LONG' (tras barrido bajista) o 'SHORT' (tras barrido alcista)
+    atr_deviation: float
+    obi_score: float
+    spread_bps: float
+    execution_mode: str  # 'MAKER_POST_ONLY' o 'NONE'
+    reason: str
+
+
+@dataclass
 class MicrostructureAuditResult:
     asset: str
     is_approved: boolean if False else bool  # typing bool
@@ -157,6 +169,87 @@ class OrderBookMicrostructureSentinel:
             spoofing_detected=spoofing,
             recommended_action=recommended_action,
         )
+
+    def detect_liquidation_exhaustion_reversion(
+        self,
+        asset: str,
+        price_change_atr: float,
+        obi_score: float,
+        spread_bps: float,
+        min_atr_deviation: float = 2.5,
+    ) -> LiquidationExhaustionSignal:
+        """
+        [SOP-142B] Detecta agotamiento de cascadas de liquidación forzada para
+        reversión a la media mediante órdenes pasivas Maker Post-Only.
+        - Barrido bajista extremo (price_change_atr <= -2.5) + absorción compradora (OBI >= +0.20) -> LONG.
+        - Barrido alcista extremo (price_change_atr >= +2.5) + absorción vendedora (OBI <= -0.20) -> SHORT.
+        """
+        if spread_bps > self.max_spread_bps:
+            return LiquidationExhaustionSignal(
+                asset=asset,
+                triggered=False,
+                direction=None,
+                atr_deviation=round(price_change_atr, 2),
+                obi_score=round(obi_score, 3),
+                spread_bps=round(spread_bps, 2),
+                execution_mode="NONE",
+                reason=f"Spread {spread_bps:.2f} bps excede límite de {self.max_spread_bps:.1f} bps.",
+            )
+
+        if price_change_atr <= -abs(min_atr_deviation) and obi_score >= 0.20:
+            return LiquidationExhaustionSignal(
+                asset=asset,
+                triggered=True,
+                direction="LONG",
+                atr_deviation=round(price_change_atr, 2),
+                obi_score=round(obi_score, 3),
+                spread_bps=round(spread_bps, 2),
+                execution_mode="MAKER_POST_ONLY",
+                reason="Absorción compradora L2 tras barrido bajista extremo.",
+            )
+
+        if price_change_atr >= abs(min_atr_deviation) and obi_score <= -0.20:
+            return LiquidationExhaustionSignal(
+                asset=asset,
+                triggered=True,
+                direction="SHORT",
+                atr_deviation=round(price_change_atr, 2),
+                obi_score=round(obi_score, 3),
+                spread_bps=round(spread_bps, 2),
+                execution_mode="MAKER_POST_ONLY",
+                reason="Absorción vendedora L2 tras barrido alcista extremo.",
+            )
+
+        return LiquidationExhaustionSignal(
+            asset=asset,
+            triggered=False,
+            direction=None,
+            atr_deviation=round(price_change_atr, 2),
+            obi_score=round(obi_score, 3),
+            spread_bps=round(spread_bps, 2),
+            execution_mode="NONE",
+            reason="Sin agotamiento extremo de liquidación confirmado.",
+        )
+
+    def evaluate_limit_order_adverse_selection(
+        self,
+        direction: str,
+        obi_score: float,
+        spread_bps: float,
+        spoofing_detected: bool = False,
+    ) -> Tuple[bool, Optional[str]]:
+        """
+        [SOP-142] Escudo anti-selección adversa para órdenes límite pendientes.
+        Retorna (should_cancel, reason).
+        """
+        dir_up = str(direction or "LONG").upper()
+        if spoofing_detected and spread_bps > 10.0:
+            return True, f"SPOOFING_Y_SPREAD_ALTO ({spread_bps:.1f} bps)"
+        if dir_up == "LONG" and obi_score <= -0.55:
+            return True, f"SELECCION_ADVERSA_LONG (OBI={obi_score:.2f})"
+        if dir_up == "SHORT" and obi_score >= 0.55:
+            return True, f"SELECCION_ADVERSA_SHORT (OBI={obi_score:.2f})"
+        return False, None
 
 
 def get_canonical_universe_l2_summary() -> List[Dict[str, Any]]:

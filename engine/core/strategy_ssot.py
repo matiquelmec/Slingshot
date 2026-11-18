@@ -13,7 +13,7 @@ empírica en vivo (SOP-119) para garantizar paridad 1:1 entre:
   - MonteCarloResilienceEngine (auditoría estocástica)
 """
 
-from typing import FrozenSet, Tuple
+from typing import FrozenSet, Optional, Tuple
 
 # =============================================================================
 # 1. UNIVERSO CANÓNICO Y MATRIZ ACTIVO:TIMEFRAME (SOP-125 & SOP-139)
@@ -101,14 +101,33 @@ def is_quant_approved_pair(symbol: str, interval: str) -> bool:
     return True
 
 
-def is_directional_setup_allowed_sop137(symbol: str, direction: str) -> bool:
+def is_directional_setup_allowed_sop137(
+    symbol: str,
+    direction: str,
+    rs_zscore_vs_btc: Optional[float] = None,
+    obi_score: Optional[float] = None,
+) -> bool:
     """
-    [SOP-137] Veta el lado perdedor de activos con asimetría direccional comprobada:
-    - INJUSDT / LINKUSDT: Bloquea LONG (solo permite SHORT).
-    - XAUUSDT / SOLUSDT / SUIUSDT: Bloquea SHORT (solo permite LONG).
+    [SOP-137 + SOP-142] Gobernanza direccional híbrida:
+    - Sin telemetría viva: aplica el prior estático auditado (SOP-137).
+    - Con telemetría viva (rs_zscore_vs_btc / obi_score): permite override por
+      ruptura institucional (>= +1.5σ para LONG, <= -1.5σ para SHORT) y veta
+      entradas contra fuerza relativa extrema (>= ±1.8σ).
     """
     sym = normalize_symbol(symbol)
     dir_clean = "SHORT" if "SHORT" in str(direction or "LONG").upper() else "LONG"
+
+    if rs_zscore_vs_btc is not None:
+        rs_z = float(rs_zscore_vs_btc)
+        if dir_clean == "LONG" and rs_z <= -1.8:
+            return False
+        if dir_clean == "SHORT" and rs_z >= 1.8:
+            return False
+        if dir_clean == "LONG" and rs_z >= 1.5 and (obi_score is None or float(obi_score) >= 0.20):
+            return True
+        if dir_clean == "SHORT" and rs_z <= -1.5 and (obi_score is None or float(obi_score) <= -0.20):
+            return True
+
     if sym in SHORT_ONLY_ASYMMETRIC_ASSETS_SOP137 and dir_clean == "LONG":
         return False
     if sym in LONG_ONLY_STRUCTURAL_ASSETS_SOP137 and dir_clean == "SHORT":
@@ -116,8 +135,34 @@ def is_directional_setup_allowed_sop137(symbol: str, direction: str) -> bool:
     return True
 
 
-def is_toxic_hour_sop137(hour_utc: int) -> bool:
-    """[SOP-137] Retorna True si la hora UTC corresponde a una ventana tóxica vetada."""
+def is_toxic_hour_sop137(
+    hour_utc: int,
+    spread_bps: Optional[float] = None,
+    obi_score: Optional[float] = None,
+    ker: Optional[float] = None,
+    depth_usd: Optional[float] = None,
+) -> bool:
+    """
+    [SOP-137 + SOP-142] Evalúa toxicidad horaria:
+    - Sin telemetría L2: usa el calendario estático TOXIC_UTC_HOURS_SOP137.
+    - Con telemetría L2: desbloquea horas si la liquidez es excepcional
+      (spread <= 4.0 bps, depth >= $150k, ker >= 0.45) y bloquea cualquier hora
+      si el spread > 8.0 bps o ker < 0.20.
+    """
+    if spread_bps is not None or ker is not None or depth_usd is not None:
+        if spread_bps is not None and float(spread_bps) > 8.0:
+            return True
+        if ker is not None and float(ker) < 0.20:
+            return True
+        if (
+            spread_bps is not None
+            and depth_usd is not None
+            and ker is not None
+            and float(spread_bps) <= 4.0
+            and float(depth_usd) >= 150000.0
+            and float(ker) >= 0.45
+        ):
+            return False
     return int(hour_utc) in TOXIC_UTC_HOURS_SOP137
 
 

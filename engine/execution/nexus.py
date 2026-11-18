@@ -1704,7 +1704,11 @@ class NexusNode:
             candidates = []
             for tf in ("swing", "scalp"):
                 opps = store.get_scanner_opportunities(tf) or []
-                candidates.extend(opps)
+                default_tf = "1h" if tf == "swing" else "15m"
+                for item in opps:
+                    cand = dict(item)
+                    cand.setdefault("interval", default_tf)
+                    candidates.append(cand)
 
             if not candidates:
                 logger.debug(f"[SLOT RECYCLER] No hay oportunidades activas registradas en store para [{account_id}].")
@@ -1714,11 +1718,12 @@ class NexusNode:
             valid_cands = []
             for c in candidates:
                 sym_cand = c.get("asset", c.get("symbol", "")).upper()
+                sym_eval = "XAUUSDT" if sym_cand == "PAXGUSDT" else sym_cand
                 tf_cand = str(c.get("interval") or c.get("timeframe") or "15m").lower()
                 dir_cand = str(c.get("direction") or c.get("signal_type") or c.get("type") or "LONG").upper()
-                if not MarketScanner.is_quant_approved_pair(sym_cand, tf_cand):
+                if not MarketScanner.is_quant_approved_pair(sym_eval, tf_cand):
                     continue
-                if not MarketScanner.is_directional_setup_allowed_sop137(sym_cand, dir_cand):
+                if not MarketScanner.is_directional_setup_allowed_sop137(sym_eval, dir_cand):
                     continue
                 score_cand = float(c.get("confluence_score", c.get("score", 0)))
                 is_chasing = c.get("ote_chasing", False)

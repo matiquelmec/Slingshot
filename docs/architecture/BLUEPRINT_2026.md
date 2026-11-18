@@ -1055,3 +1055,13 @@ Sometidas las 3 optimizaciones a la matriz experimental de 180 días en los 13 a
 
 
 
+
+
+---
+
+## Fase 49: SOP-142 — Gobernanza Dinámica de Microestructura, Fast-Path Reactivo y Purga Forense
+
+- **Des-sobreajuste SSoT (`engine/core/strategy_ssot.py`):** Override direccional continuo por `rs_zscore_vs_btc` y `obi_score`; evaluación horaria continua por `spread_bps`, `depth_usd` y `ker`.
+- **Microestructura Ofensiva (`engine/analytics/`):** `detect_liquidation_exhaustion_reversion()` + `evaluate_limit_order_adverse_selection()` en `OrderBookMicrostructureSentinel` y `detect_funding_squeeze_opportunity()` en `FundingRateDragSentinel`.
+- **Fast-Path Reactivo (`engine/workers/trade_manager.py` & `engine/execution/nexus.py`):** Evaluación sub-segundo en memoria (`evaluate_realtime_tick_protection`), corrección IEEE-754 en `r_profit`, y alineación `1h/15m` del reciclador de slots.
+- **Higiene Forense:** Purga de `scratch/`, `scripts/archive/` y `docs/archive/` validada por `scripts/diagnostic/check_hygiene.py`.

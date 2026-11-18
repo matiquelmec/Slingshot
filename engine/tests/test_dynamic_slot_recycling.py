@@ -26,7 +26,7 @@ async def test_slot_recycler_triggers_best_opportunity_from_store():
     engine.MAX_CONCURRENT_POSITIONS = 4
     fake_opps = [
         {"asset": "PAXGUSDT", "confluence_score": 73, "direction": "LONG", "price": 4350.0, "stop_loss": 4300.0, "tp1": 4400.0, "tp2": 4450.0, "tp3": 4500.0},
-        {"asset": "SOLUSDT", "confluence_score": 80, "direction": "LONG", "price": 105.0, "stop_loss": 102.0, "tp1": 108.0, "tp2": 110.0, "tp3": 115.0}
+        {"asset": "SOLUSDT", "interval": "15m", "confluence_score": 80, "direction": "LONG", "price": 105.0, "stop_loss": 102.0, "tp1": 108.0, "tp2": 110.0, "tp3": 115.0}
     ]
     await store.save_scanner_opportunities("swing", fake_opps)
 
@@ -47,7 +47,7 @@ async def test_slot_recycler_deduplicates_existing_positions():
     engine._active_positions["primary_SOLUSDT"] = {"asset": "SOLUSDT"}
     fake_opps = [
         {"asset": "PAXGUSDT", "confluence_score": 76, "direction": "LONG", "price": 4350.0, "stop_loss": 4300.0, "tp1": 4400.0, "tp2": 4450.0, "tp3": 4500.0},
-        {"asset": "SOLUSDT", "confluence_score": 80, "direction": "LONG", "price": 105.0, "stop_loss": 102.0, "tp1": 108.0, "tp2": 110.0, "tp3": 115.0}
+        {"asset": "SOLUSDT", "interval": "15m", "confluence_score": 80, "direction": "LONG", "price": 105.0, "stop_loss": 102.0, "tp1": 108.0, "tp2": 110.0, "tp3": 115.0}
     ]
     await store.save_scanner_opportunities("swing", fake_opps)
 

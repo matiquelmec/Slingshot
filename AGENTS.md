@@ -401,3 +401,18 @@ Todos los mensajes de commit deben seguir estrictamente el estándar de Conventi
 
 
 
+
+
+---
+
+## SOP-142: Gobernanza Dinámica de Microestructura, Fast-Path Reactivo y Purga Forense
+
+1. **Des-sobreajuste Dinámico (`strategy_ssot.py`):**
+   * `is_directional_setup_allowed_sop137()` evoluciona a modelo híbrido (*Prior Estructural + Override Continuo*): permite desbloquear `LONG`/`SHORT` mediante fuerza relativa en vivo (`rs_zscore_vs_btc >= ±1.5σ`) confirmada por flujo L2 (`obi_score >= ±0.20`), y veta entradas contra fuerza relativa extrema (`±1.8σ`).
+   * `is_toxic_hour_sop137()` evalúa toxicidad continua cuando hay telemetría L2 (`spread_bps`, `depth_usd`, `ker`), desbloqueando horas con liquidez institucional excepcional y vetando cualquier hora con `spread_bps > 8.0` o `ker < 0.20`.
+2. **Centinelas Ofensivos L2 y Funding (`engine/analytics/`):**
+   * `OrderBookMicrostructureSentinel.detect_liquidation_exhaustion_reversion()` detecta agotamiento de cascadas de liquidación (`>= 2.5x ATR`) con giro de absorción OBI para entradas pasivas `MAKER_POST_ONLY`.
+   * `OrderBookMicrostructureSentinel.evaluate_limit_order_adverse_selection()` previene llenados tóxicos en órdenes límite pendientes.
+   * `FundingRateDragSentinel.detect_funding_squeeze_opportunity()` otorga boost de confluencia (`+8.0 pts`) y prioridad (`1.30x`) cuando el Funding APR supera `±60%` a favor del lado que cobra carry.
+3. **Fast-Path Sub-Segundo (`trade_manager.py`):**
+   * `evaluate_realtime_tick_protection()` evalúa `SOP-25` (`-0.65R`) y `Fast BE` (`+1.0R / +1.2R`) en memoria con debounce atómico, junto con redondeo `round(..., 6)` en `r_profit` para eliminar truncamientos IEEE-754.

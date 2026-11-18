@@ -377,3 +377,12 @@ A partir de la versión 10.0.0, la plataforma incorpora el rol del **Agente KRON
 
 
 
+
+
+---
+
+### Actualización SOP-142 (Gobernanza Dinámica de Microestructura y Fast-Path)
+- **SSoT Dinámico (`engine/core/strategy_ssot.py`):** Override continuo por fuerza relativa (`rs_zscore_vs_btc`) y liquidez L2 (`spread_bps`, `depth_usd`, `ker`).
+- **Centinelas Ofensivos (`engine/analytics/`):** Detección de reversión por agotamiento de liquidaciones (`MAKER_POST_ONLY`), escudo anti-selección adversa y cosecha de *Funding Squeeze* (`±60% APR`).
+- **Fast-Path Sub-Segundo (`engine/workers/trade_manager.py`):** Protección reactiva en memoria (`SOP-25` / `Fast BE`) y precisión IEEE-754 en `r_profit`.
+- **Repositorio Limpio:** Eliminación de `scratch/`, `scripts/archive/` y `docs/archive/` verificada con `python scripts/diagnostic/check_hygiene.py`.

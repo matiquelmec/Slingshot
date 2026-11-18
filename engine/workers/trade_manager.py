@@ -79,6 +79,7 @@ class TradeManager:
         self._mt5_partial_states: Dict[str, Any] = self._load_mt5_partial_states()
         self._initial_risk_cache: Dict[str, float] = {}
         self._dispatched_trade_stages: Dict[str, set] = {}
+        self._last_tick_protection_ts: Dict[str, float] = {}
 
     def _load_mt5_partial_states(self) -> Dict[str, Any]:
         path = r"C:\Slingshot\data\mt5_partial_states.json"
@@ -111,6 +112,65 @@ class TradeManager:
         self._stop_event.set()
         if hasattr(self, "_mt5_task") and self._mt5_task:
             self._mt5_task.cancel()
+
+    async def evaluate_realtime_tick_protection(
+        self,
+        symbol: str,
+        live_price: float,
+        obi_score: float = 0.0,
+        cooldown_sec: float = 2.0,
+    ) -> List[Dict[str, Any]]:
+        """
+        [SOP-142C FAST-PATH SUB-SEGUNDO]
+        Evalúa en memoria (<5ms) si un tick entrante de WebSocket perfora SOP-25 (-0.65R)
+        o alcanza Fast BE (+1.0R / +1.2R), evitando la latencia de 10s del polling REST.
+        """
+        if live_price <= 0:
+            return []
+
+        sym_clean = (symbol or "").replace("/", "").upper()
+        now = time.time()
+        actions: List[Dict[str, Any]] = []
+
+        try:
+            from engine.execution.nexus import nexus
+            active_map = getattr(nexus, "_active_positions", {}) or {}
+        except Exception:
+            return []
+
+        for mem_key, pos in list(active_map.items()):
+            pos_sym = str(pos.get("asset") or pos.get("symbol") or "").replace("/", "").upper()
+            if pos_sym != sym_clean:
+                continue
+
+            last_ts = self._last_tick_protection_ts.get(mem_key, 0.0)
+            if (now - last_ts) < cooldown_sec:
+                continue
+
+            entry_price = float(pos.get("entry_price") or pos.get("price") or 0.0)
+            initial_sl = float(pos.get("initial_stop_loss") or pos.get("stop_loss") or 0.0)
+            if entry_price <= 0 or initial_sl <= 0:
+                continue
+
+            sl_dist = abs(entry_price - initial_sl)
+            if sl_dist <= 0:
+                continue
+
+            side = "SHORT" if "SHORT" in str(pos.get("side") or pos.get("direction") or "LONG").upper() else "LONG"
+            r_profit = round(
+                (live_price - entry_price) / sl_dist if side == "LONG" else (entry_price - live_price) / sl_dist,
+                6,
+            )
+            be_threshold = self.get_optimal_be_threshold(sym_clean, str(pos.get("interval") or "15m"))
+
+            if r_profit <= -0.65 and ((side == "LONG" and obi_score <= 0.0) or (side == "SHORT" and obi_score >= 0.0)):
+                self._last_tick_protection_ts[mem_key] = now
+                actions.append({"key": mem_key, "symbol": sym_clean, "action": "SOP25_FAST_PATH_EXIT", "r_profit": r_profit})
+            elif r_profit >= be_threshold:
+                self._last_tick_protection_ts[mem_key] = now
+                actions.append({"key": mem_key, "symbol": sym_clean, "action": "FAST_BE_TRIGGER", "r_profit": r_profit})
+
+        return actions
 
     async def _mt5_dedicated_loop(self):
         """Loop dedicado de alta frecuencia (cada 4 seg) para sincronizar y blindar MT5."""
@@ -1172,9 +1232,12 @@ class TradeManager:
 
 
 
-                    # Ganancia en unidades R reales
+                    # Ganancia en unidades R reales (redondeo a 6 decimales para evitar error IEEE-754 en 1.2R)
 
-                    r_profit = (cur_price - entry_price) / sl_dist if side == "LONG" else (entry_price - cur_price) / sl_dist
+                    r_profit = round(
+                        (cur_price - entry_price) / sl_dist if side == "LONG" else (entry_price - cur_price) / sl_dist,
+                        6,
+                    )
 
                     
 
