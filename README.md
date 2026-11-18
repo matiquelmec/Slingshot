@@ -1,7 +1,7 @@
 # 🛡️ SLINGSHOT v10.0.0 — Autonomous Dual Terminal
 ## High-Availability Edge (FSD `src/`), 24/7 Sovereign VPS Execution & Institutional Risk Architecture
 
-> **"Terminal Cuantitativa Autónoma de Grado Institucional (`v10.0.0`). Desacoplamiento soberano entre el Frontend Reactivo Next.js 15 + FSD (`src/`) y el Núcleo Cuantitativo de Ejecución (FastAPI `:8000` + Sidecar HFT Node.js `:8080` + MetaTrader 5 en Windows Server VPS `80.65.211.99`). Integra el canon completo de protocolos hasta SOP-133 (bucle cerrado Walk-Forward ML, bandit bayesiano acotado `[-8, +8]` pts, centinelas en vivo de microestructura L2 SOP-108 y funding drag SOP-109, privacidad minimalista Telegram SOP-132 y blindaje pre-flight SOP-131). Gobernanza y especificaciones canónicas en [`AGENTS.md`](AGENTS.md), [`BLUEPRINT_2026.md`](docs/architecture/BLUEPRINT_2026.md) y [`ESTRUCTURA_PROYECTO.md`](docs/ESTRUCTURA_PROYECTO.md)."**
+> **"Terminal Cuantitativa Autónoma de Grado Institucional (`v10.0.0`). Desacoplamiento soberano entre el Frontend Reactivo Next.js 15 + FSD (`src/`) y el Núcleo Cuantitativo de Ejecución (FastAPI `:8000` + Sidecar HFT Node.js `:8080` + MetaTrader 5 en Windows Server VPS `80.65.211.99`). Integra el canon completo de protocolos hasta SOP-142 (bucle cerrado Walk-Forward ML, gobernanza dinámica de microestructura L2 SOP-142, centinelas ofensivos de liquidaciones/funding, Fast-Path sub-segundo en TradeManager, privacidad minimalista Telegram SOP-132 y blindaje pre-flight SOP-131). Gobernanza y especificaciones canónicas en [`AGENTS.md`](AGENTS.md), [`BLUEPRINT_2026.md`](docs/architecture/BLUEPRINT_2026.md) y [`ESTRUCTURA_PROYECTO.md`](docs/ESTRUCTURA_PROYECTO.md)."**
 
 ![Status](https://img.shields.io/badge/Status-100%25_AUTONOMOUS_&_SSOT_VERIFIED-0d2a1a?style=for-the-badge&logo=codeproject&logoColor=fff)
 ![Version](https://img.shields.io/badge/Version-10.0.0_FSD_Dual--Engine-1a3a6e?style=for-the-badge)
@@ -10,8 +10,8 @@
 ![Crypto Engine](https://img.shields.io/badge/Bitunix_Crypto-2.5%25_Compounded_Live-f39c12?style=for-the-badge&logo=bitcoin&logoColor=fff)
 ![MetaTrader 5](https://img.shields.io/badge/MetaTrader_5-FTMO_Institutional_Live-2980b9?style=for-the-badge&logo=windows&logoColor=fff)
 ![Execution Engine](https://img.shields.io/badge/Execution-SOP--64_Auto--Dispatcher_≥75%25-green?style=for-the-badge)
-![Security](https://img.shields.io/badge/Security_Protocols-SOP--01%20to%20SOP--133-emerald?style=for-the-badge)
-![QA Suite](https://img.shields.io/badge/QA_Suite-66_Vitest_%2B_513_Pytest-success?style=for-the-badge)
+![Security](https://img.shields.io/badge/Security_Protocols-SOP--01%20to%20SOP--142-emerald?style=for-the-badge)
+![QA Suite](https://img.shields.io/badge/QA_Suite-66_Vitest_%2B_529_Pytest-success?style=for-the-badge)
 ![Crypto Return](https://img.shields.io/badge/Crypto_Compounded_ROI-%2B4820%25_Proyectado-gold?style=for-the-badge)
 ![Total Alpha](https://img.shields.io/badge/Total_Alpha-%2B97.98_R_Base_%7C_%2B221.38_R_Optimizada-gold?style=for-the-badge)
 ![Profit Factor](https://img.shields.io/badge/Profit_Factor-2.35_Alpha--Tier-blue?style=for-the-badge)
@@ -108,7 +108,7 @@ graph TB
         GATES --> NX["NexusNode (Emisor Único Telegram SOP-132)"]
         NX --> BX["BitunixExecutor (Cripto 2.5% + L2 Depth)"]
         NX --> MT5["MT5Bridge Institutional (FTMO TradFi)"]
-        TM["TradeManager (Polling 10s)"] --> |"SOP-109 Funding Ratchet, SOP-104/117/118"| BX
+        TM["TradeManager (Sub-1s Fast-Path + Polling 10s)"] --> |"SOP-109 Funding Ratchet, SOP-104/117/118"| BX
         TM --> |"SOP-25 Early Invalidation (-0.65R) & SOP-26 50/30/20"| MT5
     end
 
@@ -117,7 +117,7 @@ graph TB
 
 ---
 
-## 🛡️ Tabla Maestra: El Canon de los Protocolos SOP (SOP-01 a SOP-133)
+## 🛡️ Tabla Maestra: El Canon de los Protocolos SOP (SOP-01 a SOP-142)
 
 | Protocolo | Nombre Técnico | Especificación Matemática & Blindaje de Mercado |
 | :--- | :--- | :--- |
@@ -227,6 +227,10 @@ graph TB
 | **SOP-137** | Directional Asymmetry Guard, Extended Toxic Hours `[7,10,14,21,22]`, Priority Champions & Regime Agent | Veto de lados perdedores (`INJ/LINK` Short-Only, `XAU/SOL/SUI` Long-Only), veto de `07h` Pre-Londres y `21-22h` NY Close, `FET/XAU` a `1.25x` en `calculate_priority_score` y `Regime Agent` activo (`+138.32R Alpha`, `$26,143.96 USD` compuesto, `MaxDD 3.99%`). |
 | **SOP-139** | Dual-TF Live Execution Parity (`XRP:15m`, `ETH:1h`, `LINK:1h SHORT`) | Habilitación en `MarketScanner` de `XRPUSDT:15m` (`PF 1.72`, `MC 99.4%`), `ETHUSDT:1h` (`PF 1.70`, `MC 99.0%`) y `LINKUSDT:1h` (`SHORT-only`, `PF 3.01`, `MC 100.0%`), manteniendo el Universo Canónico de 13 activos SSoT. |
 | **SOP-140** | UI SSoT Snapshot Sync & Live VPS L2 Latency/Slippage Probe | Sincronización de `BacktestAuditWidget` con las métricas `SOP-136/137/139` (`343` trades, `PF Alpha 2.11`, `$25,949.22 USD`) y sonda en vivo de latencia REST + spread L2 en `deploy_and_verify_vps.ps1` para `BTC/ETH/XRP/LINK`. |
+| **SOP-141** | Continuous Parity Guard & Dual Monte Carlo | Paridad continua 1:1 en `strategy_ssot.py` (`262` trades, `51.5%` WR, `PF 2.37`) y simulación dual Monte Carlo (`theoretical` + `realisticSop119`). |
+| **SOP-142** | Dynamic Microstructure Governance, Sub-1s Fast-Path & Forensic Purge | Override direccional por `rs_zscore_vs_btc`/`obi_score`, centinelas ofensivos L2/Funding, Fast-Path en memoria (`SOP-25` / `Fast BE`), precisión IEEE-754 en `r_profit` y purga de archivos obsoletos. |
+
+> **Regla de Oro (Forward Testing en Bitunix):** Con `SOP-142` desplegado, la métrica crítica a vigilar en las próximas 30 a 50 operaciones reales en el ledger de Bitunix es que la pérdida media realizada deje de superar a la ganancia media (superando el Payoff Ratio histórico de `0.76`).
 
 ---
 

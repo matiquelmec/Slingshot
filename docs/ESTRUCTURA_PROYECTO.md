@@ -59,8 +59,7 @@ Slingshot_Trading/
 ├── docs/
 │   ├── architecture/BLUEPRINT_2026.md    # Especificación técnica maestra y bitácora de fases
 │   ├── ESTRUCTURA_PROYECTO.md            # Este mapa de estructura
-│   ├── knowledge/                        # Documentación de referencia de regímenes
-│   └── archive/                          # Especificaciones históricas (SLINGSHOT_BIBLE_V10..V60, etc.)
+│   └── knowledge/                        # Documentación de referencia de regímenes
 │
 ├── AGENTS.md                             # Protocolo de gobernanza y reglas innegociables (Reglas 1-28)
 ├── README.md                             # Portada ejecutiva y guía operativa del repositorio

@@ -41,6 +41,7 @@ from engine.core.strategy_ssot import (
     APPROVED_SWING_1H_EXECUTION,
     is_quant_approved_pair as ssot_is_quant_approved_pair,
     is_directional_setup_allowed_sop137 as ssot_is_directional_allowed_sop137,
+    is_toxic_hour_sop137 as ssot_is_toxic_hour_sop137,
     calculate_priority_score as ssot_calculate_priority_score,
 )
 from engine.analytics.monte_carlo_resilience_engine import run_dual_parity_monte_carlo
@@ -827,13 +828,18 @@ class UnifiedBacktestEngine:
                 rejected_quant_pair_gate += 1
                 continue
 
-            # Guardia Direccional Asimétrica (SOP-137)
-            if enable_directional_guard_sop137 and not ssot_is_directional_allowed_sop137(sym, direction):
+            # Guardia Direccional Asimétrica Dinámica (SOP-137 + SOP-142)
+            rs_z = tr.get("rs_zscore_vs_btc")
+            obi_val = tr.get("obi_score")
+            if enable_directional_guard_sop137 and not ssot_is_directional_allowed_sop137(
+                sym, direction, rs_zscore_vs_btc=rs_z, obi_score=obi_val
+            ):
                 rejected_directional_asymmetry += 1
                 continue
 
-            # Quirófano Horario
-            if toxic_hours and h in toxic_hours:
+            # Quirófano Horario Dinámico (SOP-137 + SOP-142)
+            ker_val = tr.get("ker")
+            if toxic_hours and h in toxic_hours and ssot_is_toxic_hour_sop137(h, ker=ker_val):
                 rejected_toxic_hours += 1
                 continue
 
