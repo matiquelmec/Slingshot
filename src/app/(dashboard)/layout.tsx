@@ -10,12 +10,15 @@ import {
 } from 'lucide-react';
 import { useTelemetryStore } from '../store/telemetryStore';
 import OnboardingModal from '@/app/components/setup/OnboardingModal';
+import { isBitunixCoreVisible, isFtmoMt5Visible } from '@/shared';
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
     const pathname = usePathname();
     const { isConnected, connect, connectionStatus } = useTelemetryStore();
     const hasInitialized = React.useRef(false);
     const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
+    const showBitunixCore = isBitunixCoreVisible();
+    const showFtmoMt5 = isFtmoMt5Visible();
 
     // Auto-Conexión Global con persistencia de moneda
     useEffect(() => {
@@ -28,6 +31,15 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         }
     }, [connect]);
 
+    // Purgar caché local de balances Bitunix cuando la sección está oculta por privacidad
+    useEffect(() => {
+        if (!showBitunixCore && typeof window !== 'undefined') {
+            try {
+                localStorage.removeItem('slingshot_bitunix_lkg_v1');
+            } catch {}
+        }
+    }, [showBitunixCore]);
+
     // Cerrar drawer automáticamente al cambiar de ruta
     useEffect(() => {
         setMobileDrawerOpen(false);
@@ -37,8 +49,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         { name: 'Overview', href: '/', icon: LayoutDashboard },
         { name: 'Radar Center', href: '/radar', icon: Radio },
         { name: 'Signal Terminal', href: '/signals', icon: Terminal },
-        { name: 'Bitunix Core', href: '/bitunix', icon: Zap },
-        { name: 'FTMO MT5', href: '/ftmo', icon: ShieldCheck },
+        ...(showBitunixCore ? [{ name: 'Bitunix Core', href: '/bitunix', icon: Zap }] : []),
+        ...(showFtmoMt5 ? [{ name: 'FTMO MT5', href: '/ftmo', icon: ShieldCheck }] : []),
         { name: 'Trading Chart', href: '/chart', icon: BarChart2 },
         { name: 'Liquidity Heatmap', href: '/heatmap', icon: Activity },
         { name: 'Session Log', href: '/history', icon: Database },
@@ -48,8 +60,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         { name: 'Overview', href: '/', icon: LayoutDashboard },
         { name: 'Radar', href: '/radar', icon: Radio },
         { name: 'Signals', href: '/signals', icon: Terminal },
-        { name: 'Bitunix', href: '/bitunix', icon: Zap },
-        { name: 'FTMO', href: '/ftmo', icon: ShieldCheck },
+        ...(showBitunixCore ? [{ name: 'Bitunix', href: '/bitunix', icon: Zap }] : []),
+        ...(showFtmoMt5 ? [{ name: 'FTMO', href: '/ftmo', icon: ShieldCheck }] : []),
+        ...(!showBitunixCore && !showFtmoMt5 ? [{ name: 'Chart', href: '/chart', icon: BarChart2 }] : []),
     ];
 
     return (

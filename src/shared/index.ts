@@ -1,4 +1,5 @@
 export * from './auth';
+export * from './config';
 export * from './db';
 export * from './ui/Button';
 export * from './lib/formatters';

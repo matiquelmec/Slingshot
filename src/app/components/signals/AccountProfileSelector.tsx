@@ -3,6 +3,7 @@
 
 import React from 'react';
 import { AccountProfileType, FtmoPhase, AccountProfileConfig } from '../../types/signal';
+import { isFtmoMt5Visible } from '@/shared';
 
 export interface AccountProfileState {
     profile: AccountProfileType;
@@ -76,7 +77,12 @@ export const AccountProfileSelector: React.FC<AccountProfileSelectorProps> = ({
     onProfileChange,
     onPhaseChange,
 }) => {
-    const activeConfig = PROFILES_CONFIG[currentProfile](currentPhase);
+    const showFtmoMt5 = isFtmoMt5Visible();
+    const effectiveProfile: AccountProfileType =
+        !showFtmoMt5 && (currentProfile === 'FTMO_100K' || currentProfile === 'FTMO_200K')
+            ? 'PERSONAL_250K'
+            : currentProfile;
+    const activeConfig = PROFILES_CONFIG[effectiveProfile](currentPhase);
 
     return (
         <div className="flex flex-col gap-2.5 bg-black/60 border border-white/10 rounded-xl p-3 shadow-lg backdrop-blur-md">
@@ -90,38 +96,42 @@ export const AccountProfileSelector: React.FC<AccountProfileSelectorProps> = ({
                         <button
                             onClick={() => onProfileChange('PERSONAL_250K')}
                             className={`px-2.5 py-1 rounded-md text-[10px] font-mono font-bold transition-all ${
-                                currentProfile === 'PERSONAL_250K'
+                                effectiveProfile === 'PERSONAL_250K'
                                     ? 'bg-neon-cyan text-black shadow-[0_0_12px_rgba(6,182,212,0.5)] font-black'
                                     : 'text-white/60 hover:text-white hover:bg-white/5'
                             }`}
                         >
                             🔵 Personal $250k
                         </button>
-                        <button
-                            onClick={() => onProfileChange('FTMO_100K')}
-                            className={`px-2.5 py-1 rounded-md text-[10px] font-mono font-bold transition-all ${
-                                currentProfile === 'FTMO_100K'
-                                    ? 'bg-neon-green text-black shadow-[0_0_12px_rgba(165,243,180,0.5)] font-black'
-                                    : 'text-white/60 hover:text-white hover:bg-white/5'
-                            }`}
-                        >
-                            🟢 FTMO $100k
-                        </button>
-                        <button
-                            onClick={() => onProfileChange('FTMO_200K')}
-                            className={`px-2.5 py-1 rounded-md text-[10px] font-mono font-bold transition-all ${
-                                currentProfile === 'FTMO_200K'
-                                    ? 'bg-purple-500 text-white shadow-[0_0_12px_rgba(168,85,247,0.5)] font-black'
-                                    : 'text-white/60 hover:text-white hover:bg-white/5'
-                            }`}
-                        >
-                            🟣 FTMO $200k
-                        </button>
+                        {showFtmoMt5 && (
+                            <>
+                                <button
+                                    onClick={() => onProfileChange('FTMO_100K')}
+                                    className={`px-2.5 py-1 rounded-md text-[10px] font-mono font-bold transition-all ${
+                                        effectiveProfile === 'FTMO_100K'
+                                            ? 'bg-neon-green text-black shadow-[0_0_12px_rgba(165,243,180,0.5)] font-black'
+                                            : 'text-white/60 hover:text-white hover:bg-white/5'
+                                    }`}
+                                >
+                                    🟢 FTMO $100k
+                                </button>
+                                <button
+                                    onClick={() => onProfileChange('FTMO_200K')}
+                                    className={`px-2.5 py-1 rounded-md text-[10px] font-mono font-bold transition-all ${
+                                        effectiveProfile === 'FTMO_200K'
+                                            ? 'bg-purple-500 text-white shadow-[0_0_12px_rgba(168,85,247,0.5)] font-black'
+                                            : 'text-white/60 hover:text-white hover:bg-white/5'
+                                    }`}
+                                >
+                                    🟣 FTMO $200k
+                                </button>
+                            </>
+                        )}
                     </div>
                 </div>
 
                 {/* Si es FTMO, mostrar Selector de Fase */}
-                {activeConfig.isFtmo && (
+                {showFtmoMt5 && activeConfig.isFtmo && (
                     <div className="flex items-center gap-1.5">
                         <span className="text-[9px] font-mono text-white/40 uppercase">Fase:</span>
                         <div className="flex items-center gap-1 bg-white/5 p-0.5 rounded-lg border border-white/10">

@@ -3,6 +3,7 @@
 
 import React from 'react';
 import { AccountProfileConfig } from '../../types/signal';
+import { isFtmoMt5Visible } from '@/shared';
 
 interface FtmoShieldWidgetProps {
     config: AccountProfileConfig;
@@ -15,7 +16,7 @@ export const FtmoShieldWidget: React.FC<FtmoShieldWidgetProps> = ({
     currentProfitUsd = 0,
     dailyLossUsd = 0,
 }) => {
-    if (!config.isFtmo) return null;
+    if (!isFtmoMt5Visible() || !config.isFtmo) return null;
 
     const targetUsd = config.targetProfitUsd || (config.accountSize * 0.10);
     const progressPct = Math.min(100, Math.max(0, (currentProfitUsd / targetUsd) * 100));
