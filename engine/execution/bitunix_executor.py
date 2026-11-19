@@ -1535,16 +1535,18 @@ class BitunixExecutor:
                         active_sl_id = str(t_o.get("id") or t_o.get("orderId") or "")
                         break
 
-            # TPs en el libro de órdenes
+            # TPs en el libro de órdenes (filtrados por positionId cuando está disponible - SOP-144)
             pos_tps = []
             for ord_item in raw_orders:
                 if str(ord_item.get("symbol", "")).upper() == sym and (ord_item.get("tradeSide") == "CLOSE" or ord_item.get("reduceOnly")):
-                    pos_tps.append({
-                        "order_id": str(ord_item.get("orderId")),
-                        "price": float(ord_item.get("price") or 0.0),
-                        "qty": float(ord_item.get("qty") or 0.0),
-                        "ctime": ord_item.get("ctime")
-                    })
+                    o_pos = str(ord_item.get("positionId") or "")
+                    if not pos_id or not o_pos or o_pos == pos_id:
+                        pos_tps.append({
+                            "order_id": str(ord_item.get("orderId")),
+                            "price": float(ord_item.get("price") or 0.0),
+                            "qty": float(ord_item.get("qty") or 0.0),
+                            "ctime": ord_item.get("ctime")
+                        })
 
             # Ordenar TPs por precio ascendente/descendente
             pos_tps.sort(key=lambda x: x["price"], reverse=(side == "SHORT"))

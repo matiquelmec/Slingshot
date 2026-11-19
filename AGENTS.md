@@ -416,3 +416,12 @@ Todos los mensajes de commit deben seguir estrictamente el estándar de Conventi
    * `FundingRateDragSentinel.detect_funding_squeeze_opportunity()` otorga boost de confluencia (`+8.0 pts`) y prioridad (`1.30x`) cuando el Funding APR supera `±60%` a favor del lado que cobra carry.
 3. **Fast-Path Sub-Segundo (`trade_manager.py`):**
    * `evaluate_realtime_tick_protection()` evalúa `SOP-25` (`-0.65R`) y `Fast BE` (`+1.0R / +1.2R`) en memoria con debounce atómico, junto con redondeo `round(..., 6)` en `r_profit` para eliminar truncamientos IEEE-754.
+
+
+---
+
+## SOP-144: Aislamiento Multi-Posición por `positionId` (Bitunix Isolated-Multi)
+
+1. **Indexación por `positionId` (`nexus.py`):** `_sync_exchange_positions_loop()` indexa posiciones vivas por `positionId` (`mem_key = f"{acc_id}_{symbol}_{position_id}"`) evitando sobrescrituras cuando existen múltiples posiciones del mismo activo en modo Isolated-Multi.
+2. **Cero Cierres Accidentales y Cero Cancelación Cruzada:** Adopción externa y `AUTO-HEALING` invocan `place_position_tpsl(..., allow_emergency_close=False)` filtrando SL y órdenes `CLOSE` por `positionId`. Al cerrarse una posición, `cancel_all_orders_for_symbol` solo se ejecuta si no quedan posiciones hermanas abiertas en la misma moneda.
+3. **Paridad en `TradeManager` y Telemetría UI (`trade_manager.py`, `bitunix_executor.py`):** `tpsl_by_pos_id` y `pos_tps` filtran estrictamente por `positionId`.

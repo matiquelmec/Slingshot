@@ -371,26 +371,37 @@ class NexusNode:
                 if not executors:
                     executors = {"primary": self.executor}
 
-                all_account_positions = {}
+                all_account_positions_by_id = {}
+                active_symbols_by_acc = {}
                 for acc_id, ex in executors.items():
                     try:
                         acc_pos = await ex.get_pending_positions()
                         if acc_pos is not None:
-                            all_account_positions[acc_id] = {p.get("symbol"): p for p in acc_pos if p.get("symbol")}
+                            by_id = {}
+                            syms_set = set()
+                            for idx_p, p in enumerate(acc_pos):
+                                sym_p = str(p.get("symbol") or "").upper()
+                                if not sym_p:
+                                    continue
+                                pid_p = str(p.get("positionId") or p.get("id") or f"{sym_p}_{idx_p}")
+                                by_id[pid_p] = p
+                                syms_set.add(sym_p)
+                            all_account_positions_by_id[acc_id] = by_id
+                            active_symbols_by_acc[acc_id] = syms_set
                     except Exception as err:
                         logger.debug(f"[NEXUS SYNC] Error obteniendo posiciones para {acc_id}: {err}")
 
-                primary_positions_map = all_account_positions.get("primary", {})
-                real_positions_map = primary_positions_map
-
-                # 2. Eliminar de memoria posiciones que ya no existen en Bitunix (cerradas)
+                # 2. Eliminar de memoria posiciones que ya no existen en Bitunix (cerradas, por positionId - SOP-144)
                 closed_assets = []
                 for mem_key, pos_data in list(self._active_positions.items()):
                     pos_acc = pos_data.get("account_id", "primary")
-                    acc_active_map = all_account_positions.get(pos_acc, {})
-                    symbol = pos_data.get("signal", {}).get("asset", mem_key.split("_")[-1]).upper()
-                    if symbol not in acc_active_map:
-                        logger.info(f"📉 [NEXUS SYNC] Posición en {symbol} ({pos_acc}) ya no existe en Bitunix. Removiendo.")
+                    acc_active_by_id = all_account_positions_by_id.get(pos_acc, {})
+                    acc_active_syms = active_symbols_by_acc.get(pos_acc, set())
+                    symbol = str(pos_data.get("signal", {}).get("asset", mem_key.split("_")[1] if "_" in mem_key else mem_key)).upper()
+                    stored_pid = str(pos_data.get("execution", {}).get("main_order_id") or "")
+                    still_open = (stored_pid in acc_active_by_id) if stored_pid else (symbol in acc_active_syms)
+                    if not still_open:
+                        logger.info(f"📉 [NEXUS SYNC] Posición en {symbol} ({pos_acc}, PosId={stored_pid or 'N/A'}) ya no existe en Bitunix. Removiendo.")
                         closed_assets.append(mem_key)
                         sig = pos_data.get("signal", {})
                         sig["status"] = "CLOSED"
@@ -400,8 +411,9 @@ class NexusNode:
                 for mem_key in closed_assets:
                     pos_info = self._active_positions.pop(mem_key, None)
                     closed_acc = pos_info.get("account_id", "primary") if pos_info else "primary"
-                    closed_sym = pos_info.get("signal", {}).get("asset", mem_key.split("_")[-1]) if pos_info else mem_key
-                    if closed_acc == "primary":
+                    closed_sym = str(pos_info.get("signal", {}).get("asset", mem_key.split("_")[-1])).upper() if pos_info else mem_key
+                    still_has_sister_pos = closed_sym in active_symbols_by_acc.get(closed_acc, set())
+                    if closed_acc == "primary" and not still_has_sister_pos:
                         self._active_positions.pop(closed_sym, None)
                     pnl_val = float(pos_info.get("unrealized_pnl", 0.0)) if pos_info else 0.0
                     sig_ref = pos_info.get("signal", {}) if pos_info else {}
@@ -456,26 +468,39 @@ class NexusNode:
                         vault.purge_system_order_plan(closed_acc, sym_clean)
                     except Exception:
                         pass
-                    # 🧹 [SOP-22 PURGA ATÓMICA] Cancelar órdenes huérfanas de ese activo solo en la cuenta correspondiente
-                    try:
-                        await t_ex.cancel_all_orders_for_symbol(sym_clean)
-                    except Exception as purge_err:
-                        logger.error(f"❌ [NEXUS SOP-22] Error purgando órdenes huérfanas para {sym_clean}: {purge_err}")
+                    # 🧹 [SOP-22 / SOP-144 PURGA ATÓMICA SEGURA] Solo purgar todas las órdenes del símbolo si NO quedan posiciones hermanas abiertas
+                    if not still_has_sister_pos:
+                        try:
+                            await t_ex.cancel_all_orders_for_symbol(sym_clean)
+                        except Exception as purge_err:
+                            logger.error(f"❌ [NEXUS SOP-22] Error purgando órdenes huérfanas para {sym_clean}: {purge_err}")
+                    else:
+                        logger.info(f"🛡️ [NEXUS SOP-144] Preservando órdenes TP de posición hermana aún activa en {sym_clean} ({closed_acc}).")
 
                 # 2.1 🛡️ [SOP-22 GHOST ERADICATOR] Purgar cualquier orden CLOSE huérfana de monedas sin posición
                 for acc_id, ex in executors.items():
                     try:
-                        acc_syms = set(all_account_positions.get(acc_id, {}).keys())
+                        acc_syms = set(active_symbols_by_acc.get(acc_id, set()))
                         await ex.purge_orphaned_close_orders(active_symbols=acc_syms)
                     except Exception as ghost_err:
                         logger.debug(f"[NEXUS SOP-22] Skip erradicación de órdenes fantasma ({acc_id}): {ghost_err}")
 
-                # 3. Añadir a memoria posiciones abiertas en Bitunix que no tenemos registradas (para TODAS las cuentas activas)
-                for acc_id, acc_pos_map in all_account_positions.items():
+                # 3. Añadir a memoria posiciones abiertas en Bitunix que no tenemos registradas (por positionId - SOP-144)
+                for acc_id, acc_pos_by_id in all_account_positions_by_id.items():
                     target_ex = executors.get(acc_id) or self.executor
                     is_primary_acc = (acc_id == "primary")
-                    for symbol, p in acc_pos_map.items():
-                        mem_key = f"{acc_id}_{symbol}"
+                    for pos_id_key, p in acc_pos_by_id.items():
+                        symbol = str(p.get("symbol") or "").upper()
+                        if not symbol:
+                            continue
+                        position_id = str(p.get("positionId") or p.get("id") or pos_id_key)
+                        mem_key = f"{acc_id}_{symbol}_{position_id}"
+                        legacy_key = f"{acc_id}_{symbol}"
+                        if mem_key not in self._active_positions and legacy_key in self._active_positions:
+                            leg_pid = str(self._active_positions[legacy_key].get("execution", {}).get("main_order_id") or "")
+                            if not leg_pid or leg_pid == position_id:
+                                self._active_positions[mem_key] = self._active_positions.pop(legacy_key)
+                                self._active_positions[mem_key].setdefault("execution", {})["main_order_id"] = position_id
                         
                         # Si ya está registrada en memoria bajo la clave aislada de cuenta, sincronizar su PnL y estado BE en vivo
                         if mem_key in self._active_positions:
@@ -551,6 +576,9 @@ class NexusNode:
                                 tpsl_chk = await target_ex._request("GET", "/api/v1/futures/tpsl/get_pending_orders", params={"symbol": symbol})
                                 if tpsl_chk.get("code") == 0 and isinstance(tpsl_chk.get("data"), list):
                                     for t_item in tpsl_chk["data"]:
+                                        t_pid = str(t_item.get("positionId") or "")
+                                        if t_pid and str(position_id) and t_pid != str(position_id):
+                                            continue
                                         raw_sl = t_item.get("slPrice") or t_item.get("triggerPrice")
                                         if raw_sl:
                                             try:
@@ -686,24 +714,29 @@ class NexusNode:
                             "account_id": acc_id
                         }
 
-                        # Si NO tenía Stop Loss en el exchange, colocar el SL inicial
+                        # Si NO tenía Stop Loss en el exchange, colocar el SL inicial (modo no destructivo SOP-144)
                         protection_ids = []
                         if not existing_sl_in_exchange and sl_price > 0:
-                            logger.info(f"🛡️ [NEXUS SYNC] [{target_ex.account_label}] Configurando Stop Loss inicial en Bitunix (SL: ${sl_price:.2f}) para {symbol}...")
+                            logger.info(f"🛡️ [NEXUS SYNC] [{target_ex.account_label}] Configurando Stop Loss inicial en Bitunix (SL: ${sl_price:.4f}) para {symbol} (PosId: {position_id})...")
                             tpsl_order_id = await target_ex.place_position_tpsl(
                                 symbol=symbol,
                                 position_id=position_id,
                                 sl_price=sl_price,
-                                tp_price=None
+                                tp_price=None,
+                                allow_emergency_close=False,
                             )
                             if tpsl_order_id:
                                 protection_ids.append(tpsl_order_id)
 
-                        # 2. Colocar Take Profits límites fragmentados canónicos (50% / 30% / 20% SOP-102) si no existen previamente
+                        # 2. Colocar Take Profits límites fragmentados canónicos (50% / 30% / 20% SOP-102) si no existen para este positionId
                         try:
                             existing_orders_res = await target_ex._request("GET", "/api/v1/futures/trade/get_pending_orders", params={"symbol": symbol})
                             existing_orders = existing_orders_res.get("data", {}).get("orderList", []) if existing_orders_res.get("code") == 0 else []
-                            existing_close_orders = [o for o in existing_orders if o.get("reduceOnly") or o.get("tradeSide") == "CLOSE"]
+                            existing_close_orders = [
+                                o for o in existing_orders
+                                if (o.get("reduceOnly") or o.get("tradeSide") == "CLOSE")
+                                and (not o.get("positionId") or str(o.get("positionId")) == str(position_id))
+                            ]
                         except Exception:
                             existing_close_orders = []
 
@@ -818,9 +851,11 @@ class NexusNode:
                         sig = pos_data.get("signal", {})
                         symbol = sig.get("asset", sig.get("symbol", key.split("_")[-1])).upper()
                         pos_id = str(pos_data.get("execution", {}).get("main_order_id", ""))
-                        # SOP-45: Extraer el positionId real del exchange si existe en el mapa en vivo
-                        acc_active_map = all_account_positions.get(pos_acc, {})
-                        live_pos = acc_active_map.get(symbol)
+                        # SOP-45 / SOP-144: Extraer el live_pos exacto por positionId
+                        acc_active_by_id = all_account_positions_by_id.get(pos_acc, {})
+                        live_pos = acc_active_by_id.get(pos_id) if pos_id else None
+                        if not live_pos:
+                            live_pos = next((lp for lp in acc_active_by_id.values() if str(lp.get("symbol", "")).upper() == symbol), None)
                         if live_pos and live_pos.get("positionId"):
                             pos_id = str(live_pos["positionId"])
                             pos_data.setdefault("execution", {})["main_order_id"] = pos_id
@@ -830,17 +865,21 @@ class NexusNode:
                         sl_p = float(sig.get("stop_loss", 0))
                         side = sig.get("signal_type", sig.get("type", "LONG"))
 
-                        # 4.1 Comprobar y auto-reparar Stop Loss si falta (solo si la API responde code == 0 y live_pos tampoco reporta SL)
+                        # 4.1 Comprobar y auto-reparar Stop Loss por positionId (solo si API code == 0 y live_pos tampoco reporta SL)
                         if sl_p > 0 and pos_id and live_pos:
                             live_sl_val = float(live_pos.get("slPrice") or live_pos.get("stopLoss") or 0.0)
                             chk_tpsl = await target_ex._request("GET", "/api/v1/futures/tpsl/get_pending_orders", params={"symbol": symbol})
                             if isinstance(chk_tpsl, dict) and chk_tpsl.get("code") == 0:
                                 t_orders = chk_tpsl.get("data", []) or []
                                 has_active_sl = (live_sl_val > 0) or (
-                                    any(t.get("slPrice") or t.get("triggerPrice") for t in t_orders) if isinstance(t_orders, list) else False
+                                    any(
+                                        (t.get("slPrice") or t.get("triggerPrice"))
+                                        and (not t.get("positionId") or str(t.get("positionId")) == str(pos_id))
+                                        for t in t_orders
+                                    ) if isinstance(t_orders, list) else False
                                 )
                                 if not has_active_sl:
-                                    logger.warning(f"🩹 [AUTO-HEALING] [{target_ex.account_label}] Posición {symbol} carece de Stop Loss activo en Bitunix. Auto-reparando SL @ ${sl_p}...")
+                                    logger.warning(f"🩹 [AUTO-HEALING] [{target_ex.account_label}] Posición {symbol} (PosId: {pos_id}) carece de Stop Loss activo en Bitunix. Auto-reparando SL @ ${sl_p}...")
                                     await target_ex.place_position_tpsl(
                                         symbol=symbol,
                                         position_id=pos_id,
@@ -848,7 +887,7 @@ class NexusNode:
                                         allow_emergency_close=False,
                                     )
 
-                        # 4.2 Comprobar y auto-reparar Take Profits límites si faltan
+                        # 4.2 Comprobar y auto-reparar Take Profits límites por positionId si faltan
                         tp1_val = float(sig.get("tp1", 0))
                         tp2_val = float(sig.get("tp2", 0))
                         tp3_val = float(sig.get("tp3") or sig.get("take_profit_3r", 0))
@@ -857,7 +896,11 @@ class NexusNode:
                             chk_orders_res = await target_ex._request("GET", "/api/v1/futures/trade/get_pending_orders", params={"symbol": symbol})
                             chk_data = chk_orders_res.get("data", {})
                             cur_orders = chk_data.get("orderList", []) if isinstance(chk_data, dict) else (chk_data if isinstance(chk_data, list) else [])
-                            close_count = sum(1 for o in cur_orders if o.get("tradeSide") == "CLOSE" or o.get("reduceOnly"))
+                            close_count = sum(
+                                1 for o in cur_orders
+                                if (o.get("tradeSide") == "CLOSE" or o.get("reduceOnly"))
+                                and (not o.get("positionId") or str(o.get("positionId")) == str(pos_id))
+                            )
                             
                             # Si no hay órdenes de cierre y aún no hemos alcanzado TP1/BE, re-colocar la grilla canónica 50/30/20 (SOP-102 / SOP-130)
                             entry_heal = float(sig.get("entry_price") or sig.get("price") or (live_pos or {}).get("avgOpenPrice") or 0.0)

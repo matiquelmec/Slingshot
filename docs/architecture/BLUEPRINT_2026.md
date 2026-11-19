@@ -1065,3 +1065,12 @@ Sometidas las 3 optimizaciones a la matriz experimental de 180 días en los 13 a
 - **Microestructura Ofensiva (`engine/analytics/`):** `detect_liquidation_exhaustion_reversion()` + `evaluate_limit_order_adverse_selection()` en `OrderBookMicrostructureSentinel` y `detect_funding_squeeze_opportunity()` en `FundingRateDragSentinel`.
 - **Fast-Path Reactivo (`engine/workers/trade_manager.py` & `engine/execution/nexus.py`):** Evaluación sub-segundo en memoria (`evaluate_realtime_tick_protection`), corrección IEEE-754 en `r_profit`, y alineación `1h/15m` del reciclador de slots.
 - **Higiene Forense:** Purga de `scratch/`, `scripts/archive/` y `docs/archive/` validada por `scripts/diagnostic/check_hygiene.py`.
+
+
+---
+
+## Fase 50: SOP-144 — Aislamiento Multi-Posición por `positionId` (Bitunix Isolated-Multi)
+
+- **`engine/execution/nexus.py`:** Indexación por `positionId` en `_sync_exchange_positions_loop`, adopción externa no destructiva (`allow_emergency_close=False`), `AUTO-HEALING` filtrado por `positionId` y protección contra cancelación cruzada de órdenes TP cuando existen posiciones hermanas abiertas.
+- **`engine/workers/trade_manager.py`:** `tpsl_by_pos_id[(sym, pos_id)]` y `initial_sl_eval` basado en `1R` inicial verdadero para `SOP-25`.
+- **`engine/execution/bitunix_executor.py`:** Filtrado de `pos_tps` por `positionId` en `get_account_telemetry()`.

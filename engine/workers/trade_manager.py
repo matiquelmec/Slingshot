@@ -1128,7 +1128,13 @@ class TradeManager:
 
                 # Pre-consultar órdenes TPSL de Bitunix pasando params={'symbol': s} para cada símbolo
                 distinct_syms = list({str(p.get("symbol", "")).upper() for p in (positions or []) if p.get("symbol")})
-                tpsl_map = {}
+                sym_pos_counts: Dict[str, int] = {}
+                for p in (positions or []):
+                    ps = str(p.get("symbol", "")).upper()
+                    if ps:
+                        sym_pos_counts[ps] = sym_pos_counts.get(ps, 0) + 1
+                tpsl_by_pos_id: Dict[tuple, float] = {}
+                tpsl_by_sym_fallback: Dict[str, float] = {}
                 if distinct_syms:
                     tpsl_tasks = [bitunix._request("GET", "/api/v1/futures/tpsl/get_pending_orders", params={"symbol": s}) for s in distinct_syms]
                     tpsl_responses = await asyncio.gather(*tpsl_tasks, return_exceptions=True)
@@ -1138,8 +1144,12 @@ class TradeManager:
                                 raw_val = to.get("slPrice") or to.get("triggerPrice")
                                 if raw_val:
                                     try:
-                                        tpsl_map[s] = float(raw_val)
-                                        break
+                                        sl_float = float(raw_val)
+                                        t_pid = str(to.get("positionId") or "")
+                                        if t_pid:
+                                            tpsl_by_pos_id[(s, t_pid)] = sl_float
+                                        elif s not in tpsl_by_sym_fallback:
+                                            tpsl_by_sym_fallback[s] = sl_float
                                     except (ValueError, TypeError):
                                         pass
 
@@ -1147,7 +1157,7 @@ class TradeManager:
 
                 for pos in positions:
 
-                    sym = pos.get("symbol", "UNKNOWN")
+                    sym = str(pos.get("symbol", "UNKNOWN")).upper()
 
                     side = "LONG" if pos.get("side") in ("BUY", "LONG", "1") else "SHORT"
 
@@ -1155,9 +1165,15 @@ class TradeManager:
 
                     cur_price = float(pos.get("lastPrice") or pos.get("markPrice") or (await bitunix.get_ticker_price(sym)))
 
-                    cur_sl = float(pos.get("slPrice") or pos.get("stopLoss") or tpsl_map.get(sym) or 0.0)
-
                     pos_id = str(pos.get("positionId") or pos.get("id") or "")
+
+                    cur_sl = float(
+                        pos.get("slPrice")
+                        or pos.get("stopLoss")
+                        or tpsl_by_pos_id.get((sym, pos_id))
+                        or (tpsl_by_sym_fallback.get(sym) if sym_pos_counts.get(sym, 0) == 1 else 0.0)
+                        or 0.0
+                    )
 
                     
 
@@ -1255,15 +1271,16 @@ class TradeManager:
 
 
 
-                    # SOP-25: Early Structural Invalidation @ 0.65R
+                    # SOP-25: Early Structural Invalidation @ 0.65R (usando 1R inicial verdadero)
 
+                    initial_sl_eval = (entry_price - sl_dist) if side == "LONG" else (entry_price + sl_dist)
                     is_early_inval, early_sl = RiskManager.check_early_invalidation_candidate(
 
                         entry_price=entry_price,
 
                         current_price=cur_price,
 
-                        sl_price=cur_sl if cur_sl > 0 else (entry_price - sl_dist),
+                        sl_price=initial_sl_eval,
 
                         side=side
 
