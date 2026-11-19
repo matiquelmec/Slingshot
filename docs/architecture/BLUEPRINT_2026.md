@@ -1074,3 +1074,11 @@ Sometidas las 3 optimizaciones a la matriz experimental de 180 días en los 13 a
 - **`engine/execution/nexus.py`:** Indexación por `positionId` en `_sync_exchange_positions_loop`, adopción externa no destructiva (`allow_emergency_close=False`), `AUTO-HEALING` filtrado por `positionId` y protección contra cancelación cruzada de órdenes TP cuando existen posiciones hermanas abiertas.
 - **`engine/workers/trade_manager.py`:** `tpsl_by_pos_id[(sym, pos_id)]` y `initial_sl_eval` basado en `1R` inicial verdadero para `SOP-25`.
 - **`engine/execution/bitunix_executor.py`:** Filtrado de `pos_tps` por `positionId` en `get_account_telemetry()`.
+
+
+---
+
+## Fase 51: SOP-145 — Blindaje Anti-Plan Obsoleto y Pre-Validación No Destructiva
+
+- **`engine/execution/nexus.py`:** Helper `_is_plan_geometrically_valid()` para descartar planes obsoletos/invertidos de `vault` en `_sync_exchange_positions_loop()`.
+- **`engine/execution/bitunix_executor.py`:** `SOP-58 PRE-VALIDATION` respeta `allow_emergency_close=False` para garantizar cero cierres accidentales.

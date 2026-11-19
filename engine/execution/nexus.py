@@ -617,6 +617,27 @@ class NexusNode:
                         origin_tag = "SYSTEM_AUTO" if persisted_plan else "MANUAL_OR_EXTERNAL"
 
                         if persisted_plan:
+                            plan_entry_ref = float(persisted_plan.get("entry_price") or 0.0)
+                            plan_sl_cand = float(
+                                (persisted_risk or {}).get("initial_sl")
+                                or persisted_plan.get("initial_sl")
+                                or existing_sl_in_exchange
+                                or 0.0
+                            )
+                            if not self._is_plan_geometrically_valid(
+                                entry_price=entry_price,
+                                sl_price=plan_sl_cand,
+                                side=side,
+                                plan_entry=plan_entry_ref if plan_entry_ref > 0 else None,
+                                has_exchange_sl=bool(existing_sl_in_exchange),
+                            ):
+                                logger.warning(
+                                    f"🛡️ [NEXUS SYNC SOP-145] Plan obsoleto o invertido descartado para {symbol} ({side}): "
+                                    f"Entry=${entry_price:.4f} vs PlanEntry=${plan_entry_ref:.4f} | PlanSL=${plan_sl_cand:.4f}."
+                                )
+                                persisted_plan = None
+
+                        if persisted_plan:
                             initial_sl_true = float(
                                 (persisted_risk or {}).get("initial_sl")
                                 or persisted_plan.get("initial_sl")
@@ -996,6 +1017,31 @@ class NexusNode:
     MAX_CONCURRENT_POSITIONS = 4
     MAX_UNPROTECTED_RISK_POSITIONS = BASE_MAX_UNPROTECTED_RISK_SLOTS  # SOP-97 SSoT
     DEFAULT_MARGIN_USDT = 17.00 # SOP-39: 2.5% de riesgo real para cuenta de $200 USD (~8.5% de margen a ~12X con SL medio)
+
+    @staticmethod
+    def _is_plan_geometrically_valid(
+        entry_price: float,
+        sl_price: float,
+        side: str,
+        plan_entry: Optional[float] = None,
+        has_exchange_sl: bool = False,
+    ) -> bool:
+        """
+        [SOP-145] Valida que un plan recuperado de Vault corresponda a la posición actual
+        (|plan_entry - entry_price| <= 2%) y que el SL esté del lado defensivo si no existe SL previo en exchange.
+        """
+        if entry_price <= 0 or sl_price <= 0:
+            return False
+        if plan_entry is not None and plan_entry > 0:
+            if abs(plan_entry - entry_price) / entry_price > 0.02:
+                return False
+        if not has_exchange_sl:
+            is_long = "SHORT" not in str(side or "LONG").upper() and "SELL" not in str(side or "LONG").upper()
+            if is_long and sl_price >= entry_price:
+                return False
+            if not is_long and sl_price <= entry_price:
+                return False
+        return True
 
     @staticmethod
     def calculate_priority_score(opportunity: Dict[str, Any]) -> float:

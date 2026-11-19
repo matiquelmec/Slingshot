@@ -425,3 +425,11 @@ Todos los mensajes de commit deben seguir estrictamente el estándar de Conventi
 1. **Indexación por `positionId` (`nexus.py`):** `_sync_exchange_positions_loop()` indexa posiciones vivas por `positionId` (`mem_key = f"{acc_id}_{symbol}_{position_id}"`) evitando sobrescrituras cuando existen múltiples posiciones del mismo activo en modo Isolated-Multi.
 2. **Cero Cierres Accidentales y Cero Cancelación Cruzada:** Adopción externa y `AUTO-HEALING` invocan `place_position_tpsl(..., allow_emergency_close=False)` filtrando SL y órdenes `CLOSE` por `positionId`. Al cerrarse una posición, `cancel_all_orders_for_symbol` solo se ejecuta si no quedan posiciones hermanas abiertas en la misma moneda.
 3. **Paridad en `TradeManager` y Telemetría UI (`trade_manager.py`, `bitunix_executor.py`):** `tpsl_by_pos_id` y `pos_tps` filtran estrictamente por `positionId`.
+
+
+---
+
+## SOP-145: Blindaje Anti-Plan Obsoleto y Pre-Validación No Destructiva
+
+1. **`NexusNode._is_plan_geometrically_valid()` (`nexus.py`):** Valida que cualquier plan recuperado de `vault` tenga entrada dentro de `±2%` del `entry_price` real y SL del lado defensivo antes de adoptarlo.
+2. **Pre-validación no destructiva (`bitunix_executor.py`):** El bloque `SOP-58 PRE-VALIDATION` dentro de `place_position_tpsl()` respeta estrictamente `allow_emergency_close=False`, rechazando SLs invertidos sin invocar `close_position_market()`.

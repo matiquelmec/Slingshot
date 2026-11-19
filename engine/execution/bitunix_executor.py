@@ -895,6 +895,9 @@ class BitunixExecutor:
                             pos_side = str(target_pos.get("side", "BUY")).upper()
                             is_long = pos_side in ("BUY", "LONG", "1")
                             if (is_long and sl_price >= cur_price) or (not is_long and sl_price <= cur_price):
+                                if not allow_emergency_close:
+                                    logger.warning(f"⚠️ [SOP-145 NON-DESTRUCTIVE GUARD] SL invertido/perforado rechazado para {sym} ({pos_side}) sin cerrar posición (SL=${sl_price} vs mercado=${cur_price}).")
+                                    return None
                                 if attempt < 2:
                                     await asyncio.sleep(0.4)
                                     continue
