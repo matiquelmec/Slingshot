@@ -138,6 +138,56 @@ def compute_daily_clustered_statistics(
     }
 
 
+def compute_weekly_clustered_statistics(
+    trades: List[Dict[str, Any]], returns: List[float]
+) -> Dict[str, Any]:
+    """
+    Calcula Error Estándar e Intervalo de Confianza al 95% agrupando retornos en R
+    por semana calendario ISO (YYYY-Www), mitigando la autocorrelación entre días
+    consecutivos de un mismo régimen de mercado.
+    """
+    weekly_buckets: Dict[str, float] = {}
+    for tr, r in zip(trades, returns):
+        if r is None or math.isnan(float(r)):
+            continue
+        raw_dt = str(tr.get("entry_time", ""))[:10]
+        try:
+            iso_year, iso_week, _ = datetime.strptime(raw_dt, "%Y-%m-%d").isocalendar()
+            week_key = f"{iso_year}-W{iso_week:02d}"
+        except Exception:
+            week_key = "unknown"
+        weekly_buckets[week_key] = weekly_buckets.get(week_key, 0.0) + float(r)
+
+    weekly_vals = list(weekly_buckets.values())
+    n_weeks = len(weekly_vals)
+    if n_weeks == 0:
+        return {
+            "active_weeks_count": 0,
+            "mean_weekly_r": 0.0,
+            "std_weekly_r": 0.0,
+            "weekly_se_r": 0.0,
+            "weekly_ci95_low_r": 0.0,
+            "weekly_ci95_high_r": 0.0,
+            "weekly_t_statistic": 0.0,
+        }
+
+    arr = np.array(weekly_vals, dtype=np.float64)
+    mean_w = float(np.mean(arr))
+    std_w = float(np.std(arr, ddof=1)) if n_weeks > 1 else 0.0
+    se_w = (std_w / math.sqrt(n_weeks)) if n_weeks > 1 else 0.0
+    t_w = (mean_w / se_w) if se_w > 1e-9 else 0.0
+
+    return {
+        "active_weeks_count": n_weeks,
+        "mean_weekly_r": round(mean_w, 3),
+        "std_weekly_r": round(std_w, 3),
+        "weekly_se_r": round(se_w, 3),
+        "weekly_ci95_low_r": round(mean_w - 1.96 * se_w, 3),
+        "weekly_ci95_high_r": round(mean_w + 1.96 * se_w, 3),
+        "weekly_t_statistic": round(t_w, 2),
+    }
+
+
 def evaluate_temporal_out_of_sample(
     trades: List[Dict[str, Any]], train_ratio: float = 0.60
 ) -> Dict[str, Any]:
@@ -200,6 +250,8 @@ def evaluate_temporal_out_of_sample(
         "full_sample_friction_sop119_1r": compute_sample_statistics(friction_returns),
         "daily_clustered_flat_1r": compute_daily_clustered_statistics(sorted_trades, flat_returns),
         "daily_clustered_friction_sop119_1r": compute_daily_clustered_statistics(sorted_trades, friction_returns),
+        "weekly_clustered_flat_1r": compute_weekly_clustered_statistics(sorted_trades, flat_returns),
+        "weekly_clustered_friction_sop119_1r": compute_weekly_clustered_statistics(sorted_trades, friction_returns),
         "in_sample_60pct": {
             "start_date": str(sorted_trades[0].get("entry_time", ""))[:10] if sorted_trades else "",
             "end_date": str(sorted_trades[split_idx - 1].get("entry_time", ""))[:10] if sorted_trades else "",

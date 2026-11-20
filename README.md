@@ -7,7 +7,7 @@
 ![Kernel](https://img.shields.io/badge/Data_Kernel-Polars_Rust_%2B_Node_WS_Sidecar-0d2a1a?style=flat-square)
 ![Persistence](https://img.shields.io/badge/Storage-SQLite_WAL_ACID_%2B_Turso_LibSQL-003B57?style=flat-square)
 ![QA Suite](https://img.shields.io/badge/Tests-Vitest_%2B_Pytest_Dual--Engine-2e7d32?style=flat-square)
-![Validation](https://img.shields.io/badge/Quant_Audit-Walk--Forward_OOS_%26_Ablation_SOP--146-455a64?style=flat-square)
+![Validation](https://img.shields.io/badge/Quant_Audit-Temporal_Stability_%26_Ablation_SOP--146-455a64?style=flat-square)
 
 ---
 
@@ -95,9 +95,10 @@ Para aislar la ventaja estructural de las reglas de entrada/salida respecto de c
 | **Segundo Bloque Cronológico (40%)** | 105 | `1.0R` Plano Teórico | 54.29% | **2.45** | `+44.66 R` | `+0.425 R` | `0.102 R` | `[+0.225 R, +0.625 R]` | `-2.05 R` |
 | **Segundo Bloque Cronológico (40%)** | 105 | `1.0R` + Fricción `SOP-119` | 54.29% | **2.18** | `+36.12 R` | `+0.344 R` | `0.094 R` | `[+0.159 R, +0.529 R]` | `-2.45 R` |
 
-* **Error Estándar Agrupado por Día Calendario (*Cluster-Robust SE*):** Para corregir la correlación intradía entre los 13 criptoactivos impulsados por BTC, se agregaron todos los retornos en $R$ por día calendario (**$N_{\text{efectivo}} = 123$ días activos**):
-  * `1.0R` Plano Teórico: media **`+0.817 R/día`**, $\text{SE}_{\text{diario}} = 0.157\text{R}$, $\text{IC}_{95\%} = [+0.509\text{R}, +1.126\text{R}]$, **$t = 5.19$**.
-  * `1.0R` + Fricción `SOP-119`: media **`+0.599 R/día`**, $\text{SE}_{\text{diario}} = 0.142\text{R}$, $\text{IC}_{95\%} = [+0.321\text{R}, +0.878\text{R}]$, **$t = 4.21$**.
+* **Error Estándar Agrupado por Día y por Semana (*Cluster-Robust SE*):** Para mitigar la correlación intradía y entre días consecutivos de los 13 criptoactivos:
+  * **Agrupación Diaria ($N_{\text{efectivo}} = 123$ días activos):** `1.0R` + Fricción `SOP-119` $\to$ media **`+0.599 R/día`**, $\text{SE}_{\text{diario}} = 0.142\text{R}$, $\text{IC}_{95\%} = [+0.321\text{R}, +0.878\text{R}]$, **$t = 4.21$** (`+0.817 R/día`, $t = 5.19$ teórico).
+  * **Agrupación Semanal ISO ($N_{\text{efectivo}} = 28$ semanas activas):** `1.0R` + Fricción `SOP-119` $\to$ media **`+2.633 R/semana`**, $\text{SE}_{\text{semanal}} = 0.615\text{R}$, $\text{IC}_{95\%} = [+1.429\text{R}, +3.838\text{R}]$, **$t = 4.28$** (`+3.591 R/semana`, $t = 5.11$ teórico).
+  * *Nota:* Incluso con agrupación semanal, el estadístico sigue calculado sobre la muestra *in-sample* podada; la referencia más conservadora del documento es el **universo sin podar** (`PF 1.39`, $t = 2.77$ en la sección 3.2).
 
 ### 3.2 Cuantificación Transparente del Sesgo de Supervivencia (*15 Activos Sin Podar vs. 13 Canónicos*)
 
@@ -127,7 +128,7 @@ Los activos `AVAXUSDT` y `RENDERUSDT` (así como ciertas combinaciones `Activo:T
 
 ### 3.4 Estudio de Ablación (*Ablation Study* por Capa)
 
-| Configuración Evaluada | PF In-Sample (60%) | $\mathbb{E}[R]$ In-Sample | PF Out-of-Sample (40%) | $\mathbb{E}[R]$ Out-of-Sample | Max DD Full Sample ($R$) |
+| Configuración Evaluada | PF Primer Bloque (60%) | $\mathbb{E}[R]$ Bloque 1 | PF Segundo Bloque (40%) | $\mathbb{E}[R]$ Bloque 2 | Max DD Full Sample ($R$) |
 | :--- | :---: | :---: | :---: | :---: | :---: |
 | **1. Baseline SMC Puro (`1.0R` Plano, Sin Multiplicadores)** | 2.09 | `+0.356 R` | **2.45** | `+0.425 R` | `-5.28 R` |
 | **2. Baseline SMC + Fricción Real `SOP-119`** | 1.70 | `+0.240 R` | **2.18** | `+0.344 R` | `-6.01 R` |
@@ -145,8 +146,12 @@ Los activos `AVAXUSDT` y `RENDERUSDT` (así como ciertas combinaciones `Activo:T
 3. **Perfil de Riesgo Operativo Configurado (`2.50%` en Bitunix / `0.75%` en FTMO MT5):**
    * En **Bitunix Futures**, la cuenta principal opera por defecto con un riesgo agresivo de **`2.50%` por operación** (`BITUNIX_BASE_RISK_PCT=0.025`, configurable en `.env`), orientado a crecimiento sobre capital propio con límite de 2 posiciones desprotegidas simultáneas (`SOP-97`) y mínimo 50% de margen libre (`SOP-40`).
    * En **FTMO / MetaTrader 5**, el riesgo se restringe a `0.75%` en Fase 1, `0.50%` en Fase 2 y `0.35%` en cuenta fondeada, con *kill-switch* diario a `-3.5%`.
-4. **Auditoría Continua de Forward-Test vs. Backtest (`engine/analytics/live_forward_tracker.py`):**
-   * El módulo `LiveForwardTracker` compara las operaciones reales cerradas en producción desde la fecha de congelamiento de parámetros (`PARAMETER_FREEZE_DATE`) contra la expectativa con fricción (`+0.281R`), midiendo el *Implementation Shortfall* real (slippage de llenado en bps, comisiones y funding reales) y emitiendo una alerta de degradación estadística si el *z-score* cae por debajo de `-2.0`.
+4. **Auditoría Continua de Forward-Test, Política Pre-Comprometida y Horizonte (`engine/analytics/live_forward_tracker.py`):**
+   * El módulo `LiveForwardTracker` compara las operaciones reales cerradas en producción desde `PARAMETER_FREEZE_DATE` (`2026-11-18`) contra la expectativa con fricción (`+0.281R`), midiendo el *Implementation Shortfall* real (slippage en bps, comisiones y funding reales).
+   * **Política Pre-Comprometida ante Degradación (definida antes de observar resultados en vivo, aplicable a partir de $N \ge 20$ trades):**
+     * Si $z \le -1.5$ (`WARNING_DRIFT` $\to$ `DE_RISK_TO_1_0PCT`): reducir `BITUNIX_BASE_RISK_PCT` de `2.50%` a `1.00%`.
+     * Si $z \le -2.0$ (`CRITICAL_DEGRADATION` $\to$ `PAUSE_AUTO_EXECUTION_AND_AUDIT`): pausar la auto-ejecución y auditar la causa raíz antes de reanudar.
+   * **Horizonte Estadístico del Forward-Test:** A un ritmo estimado de `~1.5` trades/día ($\sigma \approx 1.06\text{R}$), los primeros `100` trades ($\text{SE} \approx 0.11\text{R}$, ~2 meses) permiten detectar un colapso claro del *edge*, mientras que confirmar una expectativa cercana a `+0.28R` requiere `200+` trades sin alterar reglas de entrada, salida ni sizing.
 
 ---
 
@@ -179,7 +184,7 @@ npm test
 # 3. Suite Cuantitativa y de Ejecución Backend (Pytest)
 pytest engine/tests/
 
-# 4. Suite de Validación Científica Out-of-Sample, Sensibilidad y Ablación
+# 4. Suite de Validación Científica (Estabilidad Temporal, Stress Test y Ablación)
 python -m engine.backtest.scientific_validation_suite
 ```
 

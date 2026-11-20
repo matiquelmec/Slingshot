@@ -349,7 +349,7 @@ Se verificó la paridad matemática exacta del ciclo de vida de cada operación:
 
 ---
 
-## 14. Diagnóstico Forense de Estabilidad, Anti-Freeze Audit & Optimizador de Retornos Alpha (Fase 10)
+## 14. Diagnóstico Forense de Estabilidad, Anti-Freeze Audit & Optimizador de Retornos Alpha (Fase 10) [Histórico — Superado por SOP-146]
 
 ### 14.1 Diagnóstico de Congelamiento: La Paradoja del Centinela Ultra-Defensivo
 Tras auditar exhaustivamente el runtime, el bucle de eventos (`asyncio`) y los registros forenses de `logs/slingshot.log`:
@@ -505,7 +505,7 @@ Para elevar los retornos de $+128.48\text{R}$ (Base) / $+154.99\text{R}$ (Alpha-
 
 ---
 
-## 18. Fase 14: Backtest Inteligente, Detección de Fase y Proyección de Escenarios (SOP-106)
+## 18. Fase 14: Backtest Inteligente, Detección de Fase y Proyección de Escenarios (SOP-106) [Histórico — Superado por SOP-146]
 
 ### 18.1 Inferencia Continua de Fase de Mercado y Escenarios Espejo
 * **Módulo:** `engine/analytics/market_regime_scenario_analyzer.py`.
@@ -562,7 +562,7 @@ A partir de la coincidencia estadística observada en 2020 y 2024:
 * **Ajuste 4 (Alineación con Bitcoin `btc_aligned`):** 100% mandataria para altcoins. En los ciclos 2020 y 2024, operar en contra de la marea de BTC tuvo un Win Rate inferior al 25%.
 ---
 
-## 20. Fase 16: Protocolo de Simulación Monte Carlo y Certificación de Resiliencia Estocástica (SOP-107)
+## 20. Fase 16: Protocolo de Simulación Monte Carlo y Certificación de Resiliencia Estocástica (SOP-107) [Histórico — Superado por SOP-146]
 
 ### 20.1 Justificación Institucional
 La evaluación de una estrategia cuantitativa sobre una única serie temporal histórica es insuficiente para descartar el sobreajuste (*overfitting*) o la fragilidad ante el reordenamiento aleatorio de rachas de pérdidas. Mediante el **Motor Vectorial de Simulación Monte Carlo** (`engine/analytics/monte_carlo_resilience_engine.py`), Slingshot somete su muestra auditada SSoT (436 operaciones consolidadas) a **10,000 caminos estocásticos bootstrap** sobre horizontes de 100 operaciones para certificar la estabilidad de la curva de capital y calcular el riesgo de cola extrema.
@@ -892,7 +892,7 @@ Sometidas las 3 optimizaciones a la matriz experimental de 180 días en los 13 a
 
 ---
 
-## 37. Fase 33: Selección Cuantitativa Dual (Backtest + Monte Carlo 5,000 Rutas) y Paridad de Ejecución en Vivo (SOP-125)
+## 37. Fase 33: Selección Cuantitativa Dual (Backtest + Monte Carlo 5,000 Rutas) y Paridad de Ejecución en Vivo (SOP-125) [Histórico — Superado por SOP-146]
 
 ### 37.1 Diagnóstico Forense de Divergencia Backtest vs. Ledger Real Bitunix
 1. **Atribución Empírica del Ledger Real (171 Posiciones Cerradas):**

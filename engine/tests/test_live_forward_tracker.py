@@ -73,3 +73,4 @@ def test_live_forward_tracker_detects_critical_degradation():
     assert summary.live_trades_count == 30
     assert summary.drift_z_score < -2.0
     assert summary.drift_status == "CRITICAL_DEGRADATION"
+    assert summary.recommended_risk_action == "PAUSE_AUTO_EXECUTION_AND_AUDIT"

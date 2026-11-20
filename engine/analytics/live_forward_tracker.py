@@ -81,6 +81,7 @@ class LiveForwardAuditSummary:
     implementation_shortfall_r: float
     drift_z_score: float
     drift_status: str  # IN_LINE, SAMPLE_BUILDING, WARNING_DRIFT, CRITICAL_DEGRADATION
+    recommended_risk_action: str = "KEEP_BASE_RISK_2_5PCT"  # Pre-registered de-risk policy
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
@@ -171,12 +172,16 @@ class LiveForwardTracker:
 
         if n < 20:
             status = "SAMPLE_BUILDING"
+            risk_action = "KEEP_BASE_RISK_2_5PCT"
         elif z_score <= -2.0:
             status = "CRITICAL_DEGRADATION"
-        elif z_score <= -1.25:
+            risk_action = "PAUSE_AUTO_EXECUTION_AND_AUDIT"
+        elif z_score <= -1.5:
             status = "WARNING_DRIFT"
+            risk_action = "DE_RISK_TO_1_0PCT"
         else:
             status = "IN_LINE"
+            risk_action = "KEEP_BASE_RISK_2_5PCT"
 
         return LiveForwardAuditSummary(
             parameter_freeze_date=self.parameter_freeze_date,
@@ -195,4 +200,5 @@ class LiveForwardTracker:
             implementation_shortfall_r=shortfall_r,
             drift_z_score=z_score,
             drift_status=status,
+            recommended_risk_action=risk_action,
         )
