@@ -74,3 +74,87 @@ def test_live_forward_tracker_detects_critical_degradation():
     assert summary.drift_z_score < -2.0
     assert summary.drift_status == "CRITICAL_DEGRADATION"
     assert summary.recommended_risk_action == "PAUSE_AUTO_EXECUTION_AND_AUDIT"
+
+
+def test_enforce_policy_derisk_to_1pct_and_audit_log(tmp_path):
+    import sqlite3
+    from types import SimpleNamespace
+
+    tracker = LiveForwardTracker(parameter_freeze_date="2026-11-01")
+    # 25 trades con media ~ -0.05R -> z-score entre -1.5 y -2.0 (WARNING_DRIFT)
+    mixed_trades = [
+        LiveTradeObservation(
+            symbol="ETHUSDT",
+            direction="LONG",
+            closed_at="2026-11-19T12:00:00Z",
+            signal_entry_price=3000.0,
+            fill_entry_price=3000.0,
+            risk_usd=25.0,
+            gross_pnl_usd=25.0 if i < 12 else -25.0,
+        )
+        for i in range(25)
+    ]
+    summary = tracker.evaluate_live_trades(mixed_trades)
+    assert summary.drift_status == "WARNING_DRIFT"
+    assert summary.recommended_risk_action == "DE_RISK_TO_1_0PCT"
+
+    acc = SimpleNamespace(risk_pct=0.025)
+    mgr = SimpleNamespace(_accounts={"primary": acc})
+    db_file = str(tmp_path / "audit_derisk.db")
+
+    result = tracker.apply_pre_registered_policy(
+        summary, account_manager=mgr, audit_db_path=db_file
+    )
+    assert result["action_taken"] == "DE_RISK_TO_1_0PCT"
+    assert acc.risk_pct == 0.010
+
+    conn = sqlite3.connect(db_file)
+    rows = conn.execute("SELECT action_taken, previous_risk_pct, new_risk_pct, paused FROM forward_policy_audit_log").fetchall()
+    conn.close()
+    assert len(rows) == 1
+    assert rows[0] == ("DE_RISK_TO_1_0PCT", 0.025, 0.010, 0)
+
+
+def test_enforce_policy_pause_and_override_immutable_audit_trail(tmp_path):
+    import sqlite3
+
+    tracker = LiveForwardTracker(parameter_freeze_date="2026-11-01")
+    losing_trades = [
+        LiveTradeObservation(
+            symbol="SOLUSDT",
+            direction="LONG",
+            closed_at="2026-11-19T10:00:00Z",
+            signal_entry_price=180.0,
+            fill_entry_price=180.0,
+            risk_usd=25.0,
+            gross_pnl_usd=-20.0,
+        )
+        for _ in range(30)
+    ]
+    summary = tracker.evaluate_live_trades(losing_trades)
+    db_file = str(tmp_path / "audit_pause.db")
+
+    paused_flag = {"called": False}
+    result = tracker.apply_pre_registered_policy(
+        summary,
+        pause_callback=lambda: paused_flag.__setitem__("called", True),
+        audit_db_path=db_file,
+    )
+    assert result["action_taken"] == "PAUSE_AUTO_EXECUTION_AND_AUDIT"
+    assert result["paused"] is True
+    assert paused_flag["called"] is True
+
+    # Intentar anular/override debe dejar registro inmutable en la misma tabla
+    override_res = tracker.apply_pre_registered_policy(
+        summary,
+        audit_db_path=db_file,
+        override_reason="Auditoria manual aprobada tras evento macro aislado",
+    )
+    assert override_res["action_taken"] == "POLICY_OVERRIDE_LOGGED"
+
+    conn = sqlite3.connect(db_file)
+    rows = conn.execute("SELECT action_taken, override_reason FROM forward_policy_audit_log ORDER BY id ASC").fetchall()
+    conn.close()
+    assert len(rows) == 2
+    assert rows[0] == ("PAUSE_AUTO_EXECUTION_AND_AUDIT", None)
+    assert rows[1] == ("POLICY_OVERRIDE_LOGGED", "Auditoria manual aprobada tras evento macro aislado")

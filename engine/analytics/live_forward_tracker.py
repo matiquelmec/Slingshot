@@ -12,8 +12,10 @@ la expectativa teórica del backtest ajustado por fricción (SOP-119):
 """
 
 import math
+import sqlite3
 from dataclasses import dataclass, asdict
-from typing import Any, Dict, List, Optional
+from datetime import datetime, timezone
+from typing import Any, Callable, Dict, List, Optional
 
 import numpy as np
 
@@ -202,3 +204,93 @@ class LiveForwardTracker:
             drift_status=status,
             recommended_risk_action=risk_action,
         )
+
+    def apply_pre_registered_policy(
+        self,
+        summary: LiveForwardAuditSummary,
+        account_manager: Optional[Any] = None,
+        pause_callback: Optional[Callable[[], Any]] = None,
+        audit_db_path: str = "slingshot_vault.db",
+        override_reason: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """
+        Ejecuta la política pre-comprometida de degradación y registra cada acción
+        (o intento de anulación/override) en una tabla append-only `forward_policy_audit_log`
+        en SQLite WAL para garantizar trazabilidad inmutable.
+        """
+        action = summary.recommended_risk_action
+        prev_risk = summary.configured_base_risk_pct
+        new_risk = prev_risk
+        paused = False
+        action_taken = "NO_CHANGE"
+
+        if override_reason and override_reason.strip():
+            action_taken = "POLICY_OVERRIDE_LOGGED"
+        elif action == "DE_RISK_TO_1_0PCT":
+            new_risk = 0.010
+            action_taken = "DE_RISK_TO_1_0PCT"
+            if account_manager is not None:
+                accounts = getattr(account_manager, "_accounts", {}) or {}
+                for acc in accounts.values():
+                    if hasattr(acc, "risk_pct"):
+                        acc.risk_pct = 0.010
+        elif action == "PAUSE_AUTO_EXECUTION_AND_AUDIT":
+            paused = True
+            action_taken = "PAUSE_AUTO_EXECUTION_AND_AUDIT"
+            if pause_callback is not None:
+                pause_callback()
+
+        ts_utc = datetime.now(timezone.utc).isoformat()
+        conn = sqlite3.connect(audit_db_path)
+        try:
+            conn.execute("PRAGMA journal_mode=WAL;")
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS forward_policy_audit_log (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    timestamp_utc TEXT NOT NULL,
+                    parameter_freeze_date TEXT NOT NULL,
+                    live_trades_count INTEGER NOT NULL,
+                    drift_z_score REAL NOT NULL,
+                    drift_status TEXT NOT NULL,
+                    action_taken TEXT NOT NULL,
+                    previous_risk_pct REAL NOT NULL,
+                    new_risk_pct REAL NOT NULL,
+                    paused INTEGER NOT NULL,
+                    override_reason TEXT
+                )
+                """
+            )
+            conn.execute(
+                """
+                INSERT INTO forward_policy_audit_log (
+                    timestamp_utc, parameter_freeze_date, live_trades_count,
+                    drift_z_score, drift_status, action_taken,
+                    previous_risk_pct, new_risk_pct, paused, override_reason
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    ts_utc,
+                    summary.parameter_freeze_date,
+                    int(summary.live_trades_count),
+                    float(summary.drift_z_score),
+                    summary.drift_status,
+                    action_taken,
+                    float(prev_risk),
+                    float(new_risk),
+                    1 if paused else 0,
+                    override_reason.strip() if override_reason else None,
+                ),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
+        return {
+            "timestamp_utc": ts_utc,
+            "action_taken": action_taken,
+            "previous_risk_pct": prev_risk,
+            "new_risk_pct": new_risk,
+            "paused": paused,
+            "override_reason": override_reason.strip() if override_reason else None,
+        }

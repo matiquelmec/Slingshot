@@ -141,7 +141,7 @@ Los activos `AVAXUSDT` y `RENDERUSDT` (así como ciertas combinaciones `Activo:T
 
 ## 4. Limitaciones Estadísticas Conocidas, Perfil de Riesgo y Forward-Test en Vivo
 
-1. **Tamaño de Muestra e Incertidumbre Muestral:** Con $N = 262$ operaciones en 180 días ($N_{\text{OOS}} = 105$), el error estándar bajo fricción es $\text{SE}_R = 0.061\text{R}$ ($\text{IC}_{95\%} = [+0.163\text{R}, +0.400\text{R}]$). Aunque es estadísticamente distinto de cero ($t = 4.64$), una muestra de 6 meses en cripto no captura todos los regímenes macro posibles.
+1. **Tamaño de Muestra e Incertidumbre Muestral:** Con $N = 262$ operaciones en 180 días ($N_{\text{bloque 2}} = 105$), el error estándar bajo fricción es $\text{SE}_R = 0.061\text{R}$ ($\text{IC}_{95\%} = [+0.163\text{R}, +0.400\text{R}]$). Aunque es estadísticamente distinto de cero ($t = 4.64$), una muestra de 6 meses en cripto no captura todos los regímenes macro posibles.
 2. **Alcance Real del Monte Carlo (`engine/analytics/monte_carlo_resilience_engine.py`):** El motor Monte Carlo ejecuta tanto *i.i.d. Bootstrap* como *Circular Block Bootstrap ($b=5$)* sobre los retornos históricos para estimar el **riesgo de secuencia (*path risk*) y drawdowns de cola (P95 / P99)** condicionados a esa muestra. **No prueba ni garantiza rentabilidad fuera de muestra.**
 3. **Perfil de Riesgo Operativo Configurado (`2.50%` en Bitunix / `0.75%` en FTMO MT5):**
    * En **Bitunix Futures**, la cuenta principal opera por defecto con un riesgo agresivo de **`2.50%` por operación** (`BITUNIX_BASE_RISK_PCT=0.025`, configurable en `.env`), orientado a crecimiento sobre capital propio con límite de 2 posiciones desprotegidas simultáneas (`SOP-97`) y mínimo 50% de margen libre (`SOP-40`).

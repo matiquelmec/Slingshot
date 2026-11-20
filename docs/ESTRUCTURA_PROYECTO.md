@@ -32,7 +32,7 @@ Slingshot_Trading/
 │   ├── aiq/                              # Orquestación NVIDIA AI-Q (agent_router, relational, semantic_memory)
 │   ├── analytics/                        # Centinelas cuantitativos (L2 SOP-108, Funding SOP-109, Monte Carlo SOP-107, Live Forward Tracker SOP-146)
 │   ├── api/                              # FastAPI (main.py, config.py, auth.py, ws_manager.py, routes/, broadcaster/)
-│   ├── backtest/                         # Motor de backtesting unificado y suite científica OOS/Sensibilidad/Ablation (SOP-146)
+│   ├── backtest/                         # Motor de backtesting unificado y suite científica Estabilidad/Stress/Ablation (SOP-146)
 │   ├── core/                             # confluence.py, memory.py (BlackBox), bayesian_confluence.py, session_manager.py, store.py, vault.py, tear_sheet.py, validator.py, maintenance.py
 │   ├── data/                             # Ingesta y caché de datos históricos/mercado
 │   ├── execution/                        # nexus.py, bitunix_executor.py, mt5_bridge.py, account_manager.py, omni_broker_hub.py, turso_sync.py, omega_listener.py

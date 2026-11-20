@@ -192,7 +192,7 @@ En versiones previas del backtest (`unified_backtest_engine.py`), las órdenes l
 
 Esta inflación teórica generaba un sesgo optimista acumulado de **+30.50 R** en los 437 trades de la muestra histórica.
 
-### 8.2 Métricas Oficiales Inmutables Reconciliadas (Zero Phantom Profit)
+### 8.2 Métricas Oficiales Inmutables Reconciliadas (Zero Phantom Profit) [Histórico — Superado por SOP-146]
 Tras corregir la acreditación a `1.2 * 0.50` y `2.0 * 0.30` exacta:
 * **Universo:** 437 trades cronológicos (196 Ganadoras / 241 Pérdidas).
 * **Win Rate:** **44.9%** (intacto, dado que los precios de activación nunca cambiaron).
@@ -495,7 +495,7 @@ Para elevar los retornos de $+128.48\text{R}$ (Base) / $+154.99\text{R}$ (Alpha-
   * `PROMOTION_CANDIDATE`: Activo externo bajo simulación que cumple todos los filtros y exhibe Sharpe $\ge 2.0$ y $PF \ge 1.80$ (candidato a votación de gobernanza).
   * `PRUNED_VETOED`: Activos vetados irrevocablemente (`AVAX`, `RENDER`) con exclusión permanente.
 
-### 17.4 Proyección Cuantitativa Consolidada de Retornos
+### 17.4 Proyección Cuantitativa Consolidada de Retornos [Histórico — Superado por SOP-146]
 | Métrica Institucional | Rendimiento Base (v42.2) | Proyección Optimizada (Fase 13) | Expansión Relativa |
 | :--- | :---: | :---: | :---: |
 | **Retorno Total Acumulado en R** | **+97.98 R** | **+221.38 R** | **+126%** |
@@ -775,7 +775,7 @@ El análisis de expectativa demostró que en régimen `RANGING`, el jurado de co
 
 ## 32. Fase 28: Protocolo de Auditoría de Paridad Teórica vs. Ejecución Práctica en Vivo (SOP-119)
 
-### 32.1 Fundamentación Teórica vs. Realidad de Microestructura
+### 32.1 Fundamentación Teórica vs. Realidad de Microestructura [Histórico — Superado por SOP-146]
 1. **El Modelo Teórico (Backtest SSoT v60.0 & Monte Carlo 10k):**
    * El backtest cronológico unificado (437 operaciones) asume fills instantáneos a precio límite (OTE 61.8%), comisiones estáticas de Maker/Taker, y salida determinista en la grilla 50/30/20.
    * La simulación Monte Carlo de 10,000 caminos sobre la distribución de trades certifica solvencia de grado institucional `TIER_1_AAA`: retorno mediano de +76.80R en 100 trades, VaR 99% de +30.20R y riesgo de ruina de capital inicial de apenas 1.11% (< 2.5% umbral regulatorio).
@@ -1045,7 +1045,7 @@ Sometidas las 3 optimizaciones a la matriz experimental de 180 días en los 13 a
 
 ---
 
-## 48. SOP-141: PROTOCOLO DE PARIDAD CONTINUA SSoT (`BACKTEST ↔ MONTE CARLO ↔ LIVE`)
+## 48. SOP-141: PROTOCOLO DE PARIDAD CONTINUA SSoT (`BACKTEST ↔ MONTE CARLO ↔ LIVE`) [Histórico — Superado por SOP-146]
 
 1. **Módulo Único de Gobernanza Estratégica (`engine/core/strategy_ssot.py`):**
    * Centraliza matrices `APPROVED_SCALP_15M_EXECUTION` / `APPROVED_SWING_1H_EXECUTION`, guardias asimétricas `SOP-137`, horas tóxicas `[7, 10, 14, 21, 22] UTC`, cupos `SOP-97`/`SOP-99`, `calculate_priority_score()` y constantes de fricción `SOP-119` (`haircut=0.884`, `fill_rate=0.962`, `sl_slippage=0.04R`), eliminando duplicación entre `MarketScanner`, `NexusNode` y `UnifiedBacktestEngine`.
