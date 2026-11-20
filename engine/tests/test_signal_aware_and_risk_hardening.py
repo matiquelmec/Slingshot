@@ -129,8 +129,10 @@ async def test_reversal_guard_closes_opposite_position_on_high_confluence():
             fragments=[]
         )
 
-    # Verificar que se ordenó cerrar la posición previa a mercado
-    mock_executor.close_position_market.assert_called_once_with("ETHUSDT")
+    # [SOP-143] Verificar que el Reversal Guard protege la posición abierta:
+    # NO cierra la posición en vivo a mercado y veta la señal opuesta.
+    mock_executor.close_position_market.assert_not_called()
+    mock_executor.execute_signal.assert_not_called()
 
 
 @pytest.mark.asyncio

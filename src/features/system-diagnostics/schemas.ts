@@ -22,7 +22,15 @@ export const monteCarloQuerySchema = z.object({
 export type MonteCarloQueryParams = z.infer<typeof monteCarloQuerySchema>;
 
 export const fullStackSyncQuerySchema = z.object({
-  targetVpsUrl: z.string().url().optional().default('http://80.65.211.99:8000'),
+  targetVpsUrl: z
+    .string()
+    .url()
+    .optional()
+    .default(
+      process.env.BACKEND_INTERNAL_URL ||
+        process.env.NEXT_PUBLIC_API_URL ||
+        'http://127.0.0.1:8000'
+    ),
 });
 
 export type FullStackSyncQueryParams = z.input<typeof fullStackSyncQuerySchema>;

@@ -228,7 +228,7 @@ Todos los mensajes de commit deben seguir estrictamente el estándar de Conventi
 
 ## 11. Regla 21: Gobernanza de Despliegue Continuo, Telemetría y Cero Orfandad en VPS (SOP-120)
 
-1. **Inviolabilidad de Salud Post-Push en VPS (`80.65.211.99`):**
+1. **Inviolabilidad de Salud Post-Push en VPS (`<SLINGSHOT_VPS_IP>`):**
    * Queda terminantemente prohibido dar por concluida cualquier tarea que afecte el motor de ejecución (`engine/`), Sidecar Node (`sidecar/`), conectores de exchange (`BitunixExecutor`) o scripts sin la sincronización y verificación remota en vivo en el VPS.
    * La verificación debe ejecutarse mediante `powershell -File scripts/deploy/deploy_and_verify_vps.ps1` certificando que `origin/main` está activo en `C:\Slingshot`.
 2. **Supervisión de la Tríada Operativa de Producción:**
@@ -433,3 +433,19 @@ Todos los mensajes de commit deben seguir estrictamente el estándar de Conventi
 
 1. **`NexusNode._is_plan_geometrically_valid()` (`nexus.py`):** Valida que cualquier plan recuperado de `vault` tenga entrada dentro de `±2%` del `entry_price` real y SL del lado defensivo antes de adoptarlo.
 2. **Pre-validación no destructiva (`bitunix_executor.py`):** El bloque `SOP-58 PRE-VALIDATION` dentro de `place_position_tpsl()` respeta estrictamente `allow_emergency_close=False`, rechazando SLs invertidos sin invocar `close_position_market()`.
+
+
+---
+
+## SOP-146: Gobernanza OpSec Zero-Leak, Validación Científica Out-of-Sample y Forward-Test Tracker
+
+1. **Inviolabilidad OpSec Zero-Leak (`scripts/diagnostic/check_hygiene.py`):**
+   * Queda terminantemente prohibido versionar en Git la dirección IP pública del VPS o credenciales WinRM en texto plano. Toda conexión remota debe resolverse mediante `SLINGSHOT_VPS_IP`, `SLINGSHOT_VPS_PASS` y `BACKEND_INTERNAL_URL` desde `.env` no versionado.
+2. **Suite de Validación Científica Anti-Overfitting (`engine/backtest/scientific_validation_suite.py`):**
+   * Toda evaluación cuantitativa debe reportar métricas en **1.0R Plano** (sin multiplicadores de sizing) y bajo **Fricción Empírica SOP-119**, desglosando:
+     - Split cronológico estricto **In-Sample (60%) vs. Out-of-Sample (40%)** y 3-Fold Walk-Forward.
+     - Benchmark transparente de sesgo de selección (**Universo 15 Activos Sin Podar vs. 13 Activos Canónicos**).
+     - Matriz de sensibilidad de parámetros ($\pm 10\%$ y $\pm 20\%$) e intervalo de confianza al 95% ($\mathbb{E}[R] \pm 1.96 \times \text{SE}_R$).
+     - Ablation Study capa por capa.
+3. **Tracker de Forward-Test en Vivo (`engine/analytics/live_forward_tracker.py`):**
+   * Audita el *Implementation Shortfall* real (slippage de llenado en bps, comisiones y funding reales frente a la expectativa teórica SOP-119) manteniendo el riesgo base configurable en `BITUNIX_BASE_RISK_PCT` (default `0.025` = `2.50%`).

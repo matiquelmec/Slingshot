@@ -117,7 +117,7 @@ Sincronizar atómicamente la documentación técnica con el código implementado
 > 🚨 **Obligatorio** si el cambio impactó: `engine/`, `scripts/`, `sidecar/`, `entities/`, o dependencias de ejecución.
 
 1. **Despliegue Atómico y Reinicio Remoto:**
-   Ejecutar el script automatizado de sincronización y reinicio en el VPS (`80.65.211.99`):
+   Ejecutar el script automatizado de sincronización y reinicio en el VPS (`<SLINGSHOT_VPS_IP>`):
    ```powershell
    powershell -File scripts/deploy/deploy_and_verify_vps.ps1
    ```
@@ -134,7 +134,7 @@ Entregar al usuario un resumen conciso estructurado:
 - **Resumen de Cambios:** Qué se implementó o corrigió.
 - **Resultado Quality Gate:** Confirmación de `typecheck` (0 errores) y pruebas en verde (`vitest` / `pytest`).
 - **Commit & Push:** Hash del commit y confirmación de sincronización con GitHub.
-- **Estado del VPS en Vivo (80.65.211.99):** Confirmación de despliegue, healthcheck HTTP `200 OK` y PIDs de la tríada operativa.
+- **Estado del VPS en Vivo (<SLINGSHOT_VPS_IP>):** Confirmación de despliegue, healthcheck HTTP `200 OK` y PIDs de la tríada operativa.
 
 ---
 

@@ -612,7 +612,7 @@ En runners de semanas (SOP-104), el recalentamiento de tasas de financiamiento e
 ## 23. Fase 19: Alta Disponibilidad Activo-Pasiva y Failover Multi-Región (SOP-110)
 
 ### 23.1 Justificación Institucional
-Erradicación del punto único de falla (*Single Point of Failure*) del servidor VPS en Frankfurt (`80.65.211.99`) mediante topología Active-Leader / Standby-Sentinel sincronizada con Turso LibSQL Cloud.
+Erradicación del punto único de falla (*Single Point of Failure*) del servidor VPS en Frankfurt (`<SLINGSHOT_VPS_IP>`) mediante topología Active-Leader / Standby-Sentinel sincronizada con Turso LibSQL Cloud.
 * **Módulo:** `MultiRegionFailoverCoordinator` (`engine/resilience/multi_region_failover_coordinator.py`).
 * **Latido y Lease Atómico:** Heartbeat cada 5 segundos con Lease TTL de 15 segundos.
 * **Promoción Automática CAS:** Si el líder no renueva en 15s, el centinela en Londres asume el liderazgo en sub-2 segundos sin riesgo de Split-Brain (SOP-50 Dedup).
@@ -801,7 +801,7 @@ El análisis de expectativa demostró que en régimen `RANGING`, el jurado de co
 
 ### 33.1 Topología y Supervisión de Producción
 1. **Infraestructura Dedicada 24/7:**
-   * Servidor VPS institucional en `80.65.211.99`, administrado mediante WinRM seguro sobre HTTPS (puerto `5986`).
+   * Servidor VPS institucional en `<SLINGSHOT_VPS_IP>` (configurado vía `.env`), administrado mediante WinRM seguro sobre HTTPS (puerto `5986`).
    * Directorio raíz de producción: `C:\Slingshot`.
 2. **El Agente KRONOS (SRE & DevOps Sentinel):**
    * Encargado del ciclo de vida de despliegue post-push (`scripts/deploy/deploy_and_verify_vps.ps1`).
@@ -1082,3 +1082,13 @@ Sometidas las 3 optimizaciones a la matriz experimental de 180 días en los 13 a
 
 - **`engine/execution/nexus.py`:** Helper `_is_plan_geometrically_valid()` para descartar planes obsoletos/invertidos de `vault` en `_sync_exchange_positions_loop()`.
 - **`engine/execution/bitunix_executor.py`:** `SOP-58 PRE-VALIDATION` respeta `allow_emergency_close=False` para garantizar cero cierres accidentales.
+
+
+---
+
+## Fase 52: SOP-146 — Gobernanza OpSec Zero-Leak, Validación Científica Out-of-Sample & Live Forward Tracker
+
+- **OpSec Zero-Leak (`scripts/diagnostic/check_hygiene.py`, `scripts/deploy/*.ps1`, `next.config.ts`, `src/shared/lib/apiUrl.ts`):** Eliminación total de IPs públicas y credenciales literales en el código versionado; escáner automático anti-leak en `check_hygiene.py`.
+- **Suite de Validación Científica (`engine/backtest/scientific_validation_suite.py`):** Split cronológico estricto In-Sample (60%, $N=157$, PF 2.09 en 1R plano) vs. Out-of-Sample (40%, $N=105$, PF 2.45 en 1R plano / PF 2.18 con fricción SOP-119), cuantificación explícita del sesgo de selección (15 activos sin podar PF 1.65 / 1.39 con fricción vs. 13 activos canónicos PF 2.22 / 1.87 con fricción), matriz de sensibilidad $\pm 20\%$ (`Stability Score = 0.735`, `Min PF = 1.30`) y Ablation Study.
+- **Monte Carlo Block Bootstrap & IC 95% (`engine/analytics/monte_carlo_resilience_engine.py`):** Soporte de Circular Block Bootstrap ($b=5$), intervalo de confianza al 95% de la expectativa ($[+0.163\text{R}, +0.400\text{R}]$ bajo fricción SOP-119) y nota metodológica de riesgo de secuencia.
+- **Tracker de Forward-Test en Vivo (`engine/analytics/live_forward_tracker.py`):** Medición de *Implementation Shortfall* real (slippage en bps, comisiones y funding en vivo vs. benchmark teórico) preservando el riesgo base `BITUNIX_BASE_RISK_PCT=0.025` (`2.50%`).

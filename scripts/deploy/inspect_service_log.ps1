@@ -12,12 +12,12 @@ if (Test-Path $envFile) {
     }
 }
 
-$vpsIp   = if ($env:SLINGSHOT_VPS_IP)   { $env:SLINGSHOT_VPS_IP }   else { "80.65.211.99" }
+$vpsIp   = $env:SLINGSHOT_VPS_IP
 $vpsPort = if ($env:SLINGSHOT_VPS_PORT) { [int]$env:SLINGSHOT_VPS_PORT } else { 5986 }
 $vpsUser = if ($env:SLINGSHOT_VPS_USER) { $env:SLINGSHOT_VPS_USER } else { "Administrator" }
 $vpsPass = $env:SLINGSHOT_VPS_PASS
-if (-not $vpsPass) {
-    Write-Error "Falta SLINGSHOT_VPS_PASS en variables de entorno o .env. Operación abortada por seguridad."
+if (-not $vpsIp -or -not $vpsPass) {
+    Write-Error "Falta SLINGSHOT_VPS_IP o SLINGSHOT_VPS_PASS en variables de entorno o .env. Operación abortada por seguridad."
     exit 1
 }
 

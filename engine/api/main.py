@@ -208,9 +208,11 @@ app = FastAPI(
 # Compresión GZip automática para payloads > 1KB (Fast REST)
 app.add_middleware(GZipMiddleware, minimum_size=1000)
 
+_vps_origin = f"http://{os.getenv('SLINGSHOT_VPS_IP')}:3000" if os.getenv("SLINGSHOT_VPS_IP") else None
+_extra_origins = ["http://localhost:3000", "http://127.0.0.1:3000"] + ([_vps_origin] if _vps_origin else [])
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=list(set(settings.CORS_ORIGINS + ["http://localhost:3000", "http://127.0.0.1:3000", "http://80.65.211.99:3000"])),
+    allow_origins=list(set(settings.CORS_ORIGINS + _extra_origins)),
     allow_origin_regex=r"https?://.*",
     allow_credentials=True,
     allow_methods=["*"],

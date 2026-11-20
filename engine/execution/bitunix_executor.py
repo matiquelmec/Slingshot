@@ -1002,9 +1002,14 @@ class BitunixExecutor:
                 recheck = await self._request("GET", "/api/v1/futures/tpsl/get_pending_orders", params={"symbol": sym})
                 if isinstance(recheck, dict) and recheck.get("code") == 0:
                     r_list = recheck.get("data", []) or []
-                    if isinstance(r_list, list) and any(item.get("slPrice") or item.get("triggerPrice") for item in r_list):
+                    active_rem = [
+                        item for item in r_list
+                        if (item.get("slPrice") or item.get("triggerPrice"))
+                        and not (prior_sl_purged and str(item.get("id") or item.get("orderId")) == str(eo_id))
+                    ] if isinstance(r_list, list) else []
+                    if active_rem:
                         logger.info(f"🛡️ [BITUNIX SOP-143] Re-verificación confirmó que {sym} YA tiene SL activo en Bitunix. Cierre de emergencia abortado.")
-                        return str(r_list[0].get("id") or r_list[0].get("orderId") or "existing_sl")
+                        return str(active_rem[0].get("id") or active_rem[0].get("orderId") or "existing_sl")
                 elif isinstance(recheck, dict) and recheck.get("code") != 0:
                     logger.warning(f"⚠️ [BITUNIX SOP-143] Error de red al re-verificar TPSL de {sym} ({recheck.get('msg')}). Abortando cierre de emergencia por fallo transitorio.")
                     return None

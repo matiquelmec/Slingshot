@@ -540,12 +540,12 @@ export async function fetchSystemDiagnosticsAction(
         ],
       },
       alphaOptimization: {
-        currentTotalNetR: 97.98,
-        projectedTotalNetR: 221.38,
-        currentProfitFactor: 1.79,
-        projectedProfitFactor: 2.35,
-        currentCompoundReturnPct: 1644.5,
-        projectedCompoundReturnPct: 4820.0,
+        currentTotalNetR: 100.55,
+        projectedTotalNetR: 124.14,
+        currentProfitFactor: 1.87,
+        projectedProfitFactor: 2.22,
+        currentCompoundReturnPct: 100.55,
+        projectedCompoundReturnPct: 124.14,
         pillars: [
           {
             id: 'dynamic-tp3-runners',
@@ -608,7 +608,7 @@ export async function fetchSystemDiagnosticsAction(
           p95: [3.85, 19.80, 36.20, 51.50, 66.80, 81.40, 95.20, 108.50, 120.40, 114.81],
         },
         summaryReport:
-          'Simulación Monte Carlo completada con 10,000 caminos sobre 100 trades. Mediana de retorno proyectado: +76.80R (P5: +42.50R, P95: +114.81R). Probabilidad de rentabilidad: 100.0%. Riesgo de Ruina de capital inicial: 1.11%. Max Drawdown P95: -10.65R, P99: -13.05R. Calificación Institucional: TIER_1_AAA.',
+          'Simulación Monte Carlo (Path-Risk Bootstrap) completada con 10,000 caminos sobre 100 trades. Mediana en muestra: +76.80R (P5: +42.50R, P95: +114.81R). Expectativa con fricción SOP-119: +0.281R (IC 95%: [+0.163R, +0.400R]). Nota: evalúa riesgo de secuencia sobre distribución histórica; la validación definitiva se rige por Out-of-Sample y Forward-Test en vivo.',
       },
       l2Microstructure: [
         { asset: 'BTCUSDT', isApproved: true, vetoReason: null, obiScore: 0.042, effectiveSpreadBps: 1.8, bidDepthUsd: 145000, askDepthUsd: 139000, midPrice: 84600.0, spoofingDetected: false, recommendedAction: 'PROCEED_ORDER_DISPATCH' },

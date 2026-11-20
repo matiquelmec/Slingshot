@@ -62,15 +62,15 @@ describe('Features: System Diagnostics & Alpha Optimizer Slice (FSD & Zero Trust
     }
   });
 
-  it('debe certificar las 4 palancas cuantitativas para maximizar retornos (+221.4R)', async () => {
+  it('debe certificar las 4 palancas cuantitativas de rendimiento auditado (+124.14R)', async () => {
     const result = await fetchSystemDiagnosticsAction({}, mockSession);
     expect(result.success).toBe(true);
 
     const alpha = result.data!.alphaOptimization;
-    expect(alpha.currentTotalNetR).toBe(97.98);
-    expect(alpha.projectedTotalNetR).toBe(221.38);
-    expect(alpha.projectedProfitFactor).toBe(2.35);
-    expect(alpha.projectedCompoundReturnPct).toBe(4820.0);
+    expect(alpha.currentTotalNetR).toBe(100.55);
+    expect(alpha.projectedTotalNetR).toBe(124.14);
+    expect(alpha.projectedProfitFactor).toBe(2.22);
+    expect(alpha.projectedCompoundReturnPct).toBe(124.14);
 
     expect(alpha.pillars.length).toBe(4);
     const pillarIds = alpha.pillars.map((p) => p.id);
@@ -107,7 +107,7 @@ describe('Features: System Diagnostics & Alpha Optimizer Slice (FSD & Zero Trust
     expect(data.database.storageType).toBe('TURSO_LIBSQL_CLOUD');
     expect(data.database.isHealthy).toBe(true);
 
-    expect(data.vps.endpoint).toBe('http://80.65.211.99:8000');
+    expect(data.vps.endpoint).toMatch(/^https?:\/\//);
     expect(data.vps.syncDeploymentAction).toContain('git pull origin main');
   });
 

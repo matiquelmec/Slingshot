@@ -120,13 +120,14 @@ class AccountManager:
         """Carga la cuenta primaria de .env y las secundarias del archivo JSON (descifrando credenciales)."""
         # 1. Cuenta Primaria (.env)
         if settings.BITUNIX_API_KEY and settings.BITUNIX_SECRET_KEY:
+            base_risk = float(os.getenv("BITUNIX_BASE_RISK_PCT", "0.025"))
             primary = BitunixAccountConfig(
                 account_id="primary",
                 label="Cuenta Principal (.env)",
                 api_key=settings.BITUNIX_API_KEY,
                 secret_key=settings.BITUNIX_SECRET_KEY,
                 enabled=True,
-                risk_pct=0.025,
+                risk_pct=base_risk,
                 max_notional_mult=5.0,
                 dry_run=self.dry_run or not settings.ENABLE_LIVE_TRADING,
                 is_primary=True

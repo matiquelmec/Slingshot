@@ -73,8 +73,11 @@ PRIORITY_TIER_2_MULTIPLIER: float = 1.00
 PRIORITY_TIER_3_MULTIPLIER: float = 0.85
 
 # =============================================================================
-# 5. PARÁMETROS DE FRICCIÓN EMPÍRICA EN VIVO (SOP-119)
+# 5. PARÁMETROS DE FRICCIÓN EMPÍRICA EN VIVO (SOP-119) & RIESGO BASE (SOP-41)
 # =============================================================================
+import os as _os
+
+BITUNIX_CANONICAL_BASE_RISK_PCT: float = float(_os.getenv("BITUNIX_BASE_RISK_PCT", "0.025"))
 SOP119_LIVE_HAIRCUT_FACTOR: float = 0.884  # ~11.6% degradación por fricción real
 SOP119_MAKER_FILL_RATE: float = 0.962      # 96.2% tasa de llenado límite
 SOP119_MEAN_SL_SLIPPAGE_R: float = 0.04    # 0.03R - 0.08R slippage medio en SL

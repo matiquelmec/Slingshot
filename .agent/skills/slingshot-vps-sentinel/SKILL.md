@@ -1,11 +1,11 @@
 ---
 name: slingshot-vps-sentinel
-description: Protocolos, scripts y herramientas para despliegue continuo, auditoría en vivo y auto-healing del VPS de producción Slingshot (80.65.211.99). Cubre sincronización GitOps, verificación de la tríada operativa (Python FastAPI :8000, Node HFT Sidecar, MT5), inspección de logs y healthchecks.
+description: Protocolos, scripts y herramientas para despliegue continuo, auditoría en vivo y auto-healing del VPS de producción Slingshot (<SLINGSHOT_VPS_IP>). Cubre sincronización GitOps, verificación de la tríada operativa (Python FastAPI :8000, Node HFT Sidecar, MT5), inspección de logs y healthchecks.
 ---
 
 # Slingshot VPS Sentinel & Deployment Orchestrator
 
-Esta habilidad equipa a los agentes (especialmente a **KRONOS**) con las directivas, credenciales y scripts para interactuar, desplegar y auditar el VPS institucional de producción (`80.65.211.99`).
+Esta habilidad equipa a los agentes (especialmente a **KRONOS**) con las directivas, credenciales y scripts para interactuar, desplegar y auditar el VPS institucional de producción (`<SLINGSHOT_VPS_IP>`).
 
 ---
 
@@ -13,7 +13,7 @@ Esta habilidad equipa a los agentes (especialmente a **KRONOS**) con las directi
 
 | Parámetro | Valor |
 | :--- | :--- |
-| **Host IP** | `80.65.211.99` |
+| **Host IP** | `<SLINGSHOT_VPS_IP>` (configurado en `.env`) |
 | **Protocolo de Gestión** | WinRM sobre HTTPS (`Port 5986`, Auth Basic, SSL) |
 | **Directorio Raíz** | `C:\Slingshot` |
 | **Backend FastAPI** | `http://127.0.0.1:8000` (Healthcheck: `/api/v1/health`) |

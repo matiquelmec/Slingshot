@@ -59,6 +59,15 @@ class MonteCarloMetrics:
     # Equity Cones (Trajectory samples across horizon)
     equity_cones: Dict[str, List[float]] = field(default_factory=dict)
     summary_report: str = ""
+    standard_error_r: float = 0.0
+    expectancy_ci95_low_r: float = 0.0
+    expectancy_ci95_high_r: float = 0.0
+    bootstrap_mode: str = "IID_BOOTSTRAP"
+    methodology_disclaimer: str = (
+        "NOTA METODOLÓGICA (SOP-146): El remuestreo bootstrap evalúa el riesgo de secuencia "
+        "(path risk) condicionado a la distribución empírica de la muestra histórica. "
+        "No constituye una garantía de rentabilidad fuera de muestra (Out-of-Sample)."
+    )
 
 
 # Dataset Canónico Auditado SSoT (436 operaciones consolidadas del backtest institucional)
@@ -161,9 +170,11 @@ class MonteCarloResilienceEngine:
         horizon_trades: int = 100,
         seed: Optional[int] = 42,
         ruin_drawdown_r: float = 8.0,  # 8.0R equivalen a 20% de DD de capital inicial
+        block_size: int = 1,
     ) -> MonteCarloMetrics:
         """
-        Ejecuta iteraciones estocásticas vectorizadas.
+        Ejecuta iteraciones estocásticas vectorizadas (i.i.d. si block_size=1,
+        o Circular Block Bootstrap si block_size > 1 para preservar rachas).
         """
         if seed is not None:
             np.random.seed(seed)
@@ -173,7 +184,16 @@ class MonteCarloResilienceEngine:
             raise ValueError("No hay datos de operaciones disponibles para la simulación.")
 
         # 1. Generación de matriz bootstrap estocástica (iterations x horizon_trades)
-        random_indices = np.random.randint(0, n_samples, size=(iterations, horizon_trades))
+        if block_size <= 1:
+            random_indices = np.random.randint(0, n_samples, size=(iterations, horizon_trades))
+            bootstrap_mode = "IID_BOOTSTRAP"
+        else:
+            n_blocks = int(np.ceil(horizon_trades / float(block_size)))
+            block_starts = np.random.randint(0, n_samples, size=(iterations, n_blocks))
+            offsets = np.arange(block_size)[None, None, :]
+            block_indices = (block_starts[:, :, None] + offsets) % n_samples
+            random_indices = block_indices.reshape(iterations, n_blocks * block_size)[:, :horizon_trades]
+            bootstrap_mode = f"CIRCULAR_BLOCK_BOOTSTRAP_B{block_size}"
         simulated_trades = self.returns[random_indices]  # Shape: (iterations, horizon_trades)
 
         # 2. Trayectorias de equidad acumulada en R
@@ -242,10 +262,17 @@ class MonteCarloResilienceEngine:
             "p95": [round(float(np.percentile(equity_curves[:, s], 95)), 2) for s in sample_steps],
         }
 
+        sample_mean = float(np.mean(self.returns))
+        sample_std = float(np.std(self.returns, ddof=1)) if n_samples > 1 else 0.0
+        se_r = float(sample_std / np.sqrt(n_samples)) if n_samples > 1 else 0.0
+        ci95_low = sample_mean - 1.96 * se_r
+        ci95_high = sample_mean + 1.96 * se_r
+
         summary = (
-            f"Simulación Monte Carlo completada con {iterations:,} caminos sobre {horizon_trades} trades. "
+            f"Simulación Monte Carlo ({bootstrap_mode}) completada con {iterations:,} caminos sobre {horizon_trades} trades. "
             f"Mediana de retorno proyectado: +{median_r:.2f}R (P5: +{p5_r:.2f}R, P95: +{p95_r:.2f}R). "
-            f"Probabilidad de rentabilidad: {prob_profit_pct:.1f}%. "
+            f"Expectativa muestral: {sample_mean:+.3f}R (IC 95%: [{ci95_low:+.3f}R, {ci95_high:+.3f}R]). "
+            f"Probabilidad condicional en muestra: {prob_profit_pct:.1f}%. "
             f"Riesgo de Ruina de capital inicial (caída <= -{ruin_drawdown_r:.1f}R): {risk_of_ruin_pct:.2f}%. "
             f"Max Drawdown P95: -{p95_dd:.2f}R, P99: -{p99_dd:.2f}R. Calificación: {solvency}."
         )
@@ -273,6 +300,10 @@ class MonteCarloResilienceEngine:
             solvency_grade=solvency,
             equity_cones=equity_cones,
             summary_report=summary,
+            standard_error_r=round(se_r, 4),
+            expectancy_ci95_low_r=round(ci95_low, 4),
+            expectancy_ci95_high_r=round(ci95_high, 4),
+            bootstrap_mode=bootstrap_mode,
         )
 
 
@@ -297,6 +328,11 @@ def _metrics_to_dict(metrics: MonteCarloMetrics) -> Dict[str, Any]:
         "solvencyGrade": metrics.solvency_grade,
         "equityCones": metrics.equity_cones,
         "summaryReport": metrics.summary_report,
+        "standardErrorR": metrics.standard_error_r,
+        "expectancyCi95LowR": metrics.expectancy_ci95_low_r,
+        "expectancyCi95HighR": metrics.expectancy_ci95_high_r,
+        "bootstrapMode": metrics.bootstrap_mode,
+        "methodologyDisclaimer": metrics.methodology_disclaimer,
     }
 
 

@@ -1056,16 +1056,16 @@ export function SystemDiagnosticsWidget() {
 
               <div className="p-4 rounded-xl bg-gradient-to-br from-purple-950/30 to-slate-900 border border-purple-500/30 space-y-1">
                 <span className="text-[10px] font-bold text-purple-400 uppercase tracking-wider">
-                  Retorno Compuesto (2.50% SOP-41)
+                  Retorno Auditado 180d (1R Base vs Alpha-Tier)
                 </span>
                 <div className="flex items-baseline gap-2">
-                  <span className="text-xl sm:text-2xl font-black text-white">+1,644%</span>
+                  <span className="text-xl sm:text-2xl font-black text-white">+100.55R</span>
                   <span className="text-xs font-mono font-bold text-purple-300">
-                    ➔ +4,820% ROI
+                    ➔ +124.14R Alpha
                   </span>
                 </div>
                 <p className="text-[11px] text-slate-300">
-                  Multiplicador geométrico con Mega-Kelly & Scale-In
+                  IC 95% con fricción SOP-119: [+0.163R, +0.400R] / trade
                 </p>
               </div>
             </div>
