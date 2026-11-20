@@ -80,18 +80,24 @@ python -m engine.backtest.scientific_validation_suite
 
 El artefacto completo se exporta en [`engine/backtest/reports/scientific_validation_report.json`](engine/backtest/reports/scientific_validation_report.json) a partir de la bitácora cronológica de 180 días ([`chronological_backtest_report.json`](engine/backtest/reports/chronological_backtest_report.json)).
 
-### 3.1 Split Temporal Estricto In-Sample (60%) vs. Out-of-Sample (40%) en `1.0R` Plano
+### 3.1 Split Cronológico de Estabilidad Temporal In-Sample (60% vs. 40%) en `1.0R` Plano
+
+> **Aclaración metodológica:** Dado que la selección de activos y parámetros se realizó observando la ventana histórica completa de 180 días, este corte 60/40 constituye un **chequeo de estabilidad temporal In-Sample** (no una validación estrictamente fuera de muestra). El único **Out-of-Sample verdadero** es el *Forward-Test* en vivo a partir de `PARAMETER_FREEZE_DATE` (`2026-11-18`).
 
 Para aislar la ventaja estructural de las reglas de entrada/salida respecto de cualquier multiplicador de *position sizing*, la tabla principal evalúa todas las operaciones con **riesgo fijo de `1.0R` por operación** (`sizing_mult = 1.0`), con y sin el modelo de fricción empírica en vivo `SOP-119` (tasa de llenado límite `96.2%`, *haircut* de `11.6%` por comisiones/funding en ganadoras y `-0.04R` de slippage adicional en Stop Loss):
 
-| Segmento Temporal | Muestra ($N$) | Modo de Evaluación | Win Rate | Profit Factor | Retorno Total ($R$) | Expectativa ($\mathbb{E}[R]$) | Error Estándar ($\text{SE}_R$) | Intervalo Confianza 95% ($\text{IC}_{95\%}$) | Max Drawdown ($R$) |
+| Segmento Temporal (In-Sample 180d) | Muestra ($N$) | Modo de Evaluación | Win Rate | Profit Factor | Retorno Total ($R$) | Expectativa ($\mathbb{E}[R]$) | Error Estándar ($\text{SE}_R$) | Intervalo Confianza 95% ($\text{IC}_{95\%}$) | Max Drawdown ($R$) |
 | :--- | :---: | :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
 | **Muestra Completa (180d)** | 262 | `1.0R` Plano Teórico | 51.53% | **2.22** | `+100.55 R` | `+0.384 R` | `0.066 R` | `[+0.255 R, +0.512 R]` | `-5.28 R` |
 | **Muestra Completa (180d)** | 262 | `1.0R` + Fricción `SOP-119` | 50.38% | **1.87** | `+73.74 R` | `+0.281 R` | `0.061 R` | `[+0.163 R, +0.400 R]` | `-6.01 R` |
-| **In-Sample (Primeros 60%)** | 157 | `1.0R` Plano Teórico | 49.68% | **2.09** | `+55.89 R` | `+0.356 R` | `0.086 R` | `[+0.188 R, +0.524 R]` | `-5.28 R` |
-| **In-Sample (Primeros 60%)** | 157 | `1.0R` + Fricción `SOP-119` | 47.77% | **1.70** | `+37.61 R` | `+0.240 R` | `0.079 R` | `[+0.084 R, +0.395 R]` | `-6.01 R` |
-| **Out-of-Sample (Últimos 40%)** | 105 | `1.0R` Plano Teórico | 54.29% | **2.45** | `+44.66 R` | `+0.425 R` | `0.102 R` | `[+0.225 R, +0.625 R]` | `-2.05 R` |
-| **Out-of-Sample (Últimos 40%)** | 105 | `1.0R` + Fricción `SOP-119` | 54.29% | **2.18** | `+36.12 R` | `+0.344 R` | `0.094 R` | `[+0.159 R, +0.529 R]` | `-2.45 R` |
+| **Primer Bloque Cronológico (60%)** | 157 | `1.0R` Plano Teórico | 49.68% | **2.09** | `+55.89 R` | `+0.356 R` | `0.086 R` | `[+0.188 R, +0.524 R]` | `-5.28 R` |
+| **Primer Bloque Cronológico (60%)** | 157 | `1.0R` + Fricción `SOP-119` | 47.77% | **1.70** | `+37.61 R` | `+0.240 R` | `0.079 R` | `[+0.084 R, +0.395 R]` | `-6.01 R` |
+| **Segundo Bloque Cronológico (40%)** | 105 | `1.0R` Plano Teórico | 54.29% | **2.45** | `+44.66 R` | `+0.425 R` | `0.102 R` | `[+0.225 R, +0.625 R]` | `-2.05 R` |
+| **Segundo Bloque Cronológico (40%)** | 105 | `1.0R` + Fricción `SOP-119` | 54.29% | **2.18** | `+36.12 R` | `+0.344 R` | `0.094 R` | `[+0.159 R, +0.529 R]` | `-2.45 R` |
+
+* **Error Estándar Agrupado por Día Calendario (*Cluster-Robust SE*):** Para corregir la correlación intradía entre los 13 criptoactivos impulsados por BTC, se agregaron todos los retornos en $R$ por día calendario (**$N_{\text{efectivo}} = 123$ días activos**):
+  * `1.0R` Plano Teórico: media **`+0.817 R/día`**, $\text{SE}_{\text{diario}} = 0.157\text{R}$, $\text{IC}_{95\%} = [+0.509\text{R}, +1.126\text{R}]$, **$t = 5.19$**.
+  * `1.0R` + Fricción `SOP-119`: media **`+0.599 R/día`**, $\text{SE}_{\text{diario}} = 0.142\text{R}$, $\text{IC}_{95\%} = [+0.321\text{R}, +0.878\text{R}]$, **$t = 4.21$**.
 
 ### 3.2 Cuantificación Transparente del Sesgo de Supervivencia (*15 Activos Sin Podar vs. 13 Canónicos*)
 
@@ -105,19 +111,19 @@ Los activos `AVAXUSDT` y `RENDERUSDT` (así como ciertas combinaciones `Activo:T
 
 > **Conclusión metodológica:** La poda de activos explica `+0.48` puntos del Profit Factor bajo fricción. Aun sin aplicar dicha poda (universo bruto de 15 activos), la estrategia mantiene una expectativa positiva estadísticamente significativa ($t = 2.77$, límite inferior $\text{IC}_{95\%} = +0.045\text{R}$), aunque con un drawdown sustancialmente mayor (`-22.41R`). La validez real de conservar el universo de 13 activos solo puede confirmarse en el *forward-test* en vivo.
 
-### 3.3 Matriz de Sensibilidad de Parámetros ($\pm 10\%$ y $\pm 20\%$)
+### 3.3 Stress Test de Payoff y Fricción ($\pm 10\%$ y $\pm 20\%$)
 
-Para descartar que el resultado dependa de un punto crítico frágil (*cliff overfitting*), se perturbaron simultáneamente el umbral de invalidación temprana (`SOP-25`: `-0.65R`), la distancia de los objetivos Take Profit y la severidad de la fricción `SOP-119`:
+> **Nota:** Esta matriz aplica un *stress test* reescalando payoffs y severidad de fricción `SOP-119` sobre la secuencia histórica de 262 operaciones (no re-simula velas OHLCV; por ello el PF teórico permanece constante en el tramo $\le 1.00\text{x}$ mientras la expectativa cae). Sirve para medir cuánto margen de seguridad existe ante mayor slippage/comisiones en vivo:
 
-| Perturbación de Parámetros | Factor de Escala | PF (`1.0R` Plano) | $\mathbb{E}[R]$ (`1.0R` Plano) | PF (`1.0R` + Fricción `SOP-119`) | $\mathbb{E}[R]$ (`1.0R` + Fricción) | Límite Inferior $\text{IC}_{95\%}$ | Max DD ($R$) |
+| Escenario de Estrés | Factor de Escala | PF (`1.0R` Plano) | $\mathbb{E}[R]$ (`1.0R` Plano) | PF (`1.0R` + Fricción `SOP-119`) | $\mathbb{E}[R]$ (`1.0R` + Fricción) | Límite Inferior $\text{IC}_{95\%}$ | Max DD ($R$) |
 | :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
 | **$-20\%$** | `0.80x` | 2.22 | `+0.306 R` | **1.87** | `+0.224 R` | `+0.129 R` | `-4.81 R` |
 | **$-10\%$** | `0.90x` | 2.22 | `+0.345 R` | **1.87** | `+0.253 R` | `+0.146 R` | `-5.41 R` |
 | **Base ($0\%$)** | `1.00x` | 2.22 | `+0.384 R` | **1.87** | `+0.281 R` | `+0.163 R` | `-6.01 R` |
-| **$+10\%$** | `1.10x` | 2.04 | `+0.357 R` | **1.56** | `+0.198 R` | `+0.082 R` | `-8.44 R` |
-| **$+20\%$** | `1.20x` | 1.85 | `+0.319 R` | **1.30** | `+0.115 R` | `+0.002 R` | `-12.18 R` |
+| **$+10\%$ (Más Fricción)** | `1.10x` | 2.04 | `+0.357 R` | **1.56** | `+0.198 R` | `+0.082 R` | `-8.44 R` |
+| **$+20\%$ (Estrés Severo)** | `1.20x` | 1.85 | `+0.319 R` | **1.30** | `+0.115 R` | `+0.002 R` | `-12.18 R` |
 
-* **Parameter Stability Score:** `0.735 / 1.000` (Profit Factor mínimo de `1.30` en el extremo más adverso de $+20\%$ de fricción y alejamiento de objetivos).
+* **Lectura de fragilidad:** En el escenario de estrés severo (`+20%` de fricción/slippage y alejamiento de objetivos), el límite inferior del $\text{IC}_{95\%}$ cae a `+0.002 R` (prácticamente *breakeven* estadístico). Esto confirma que controlar el slippage real y las comisiones en vivo es crítico para preservar el *edge*.
 
 ### 3.4 Estudio de Ablación (*Ablation Study* por Capa)
 

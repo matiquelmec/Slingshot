@@ -2,7 +2,12 @@
 
 > **Versión del Sistema:** 10.0.0 (FSD Multi-Tenant Dual-Engine Architecture)  
 > **Fecha de Actualización:** Noviembre 2026  
-> **Estado:** Producción Activa — Arquitectura FSD, Bitunix/MT5 Dual-Engine y SOP-142 Desplegados
+> **Estado:** Producción Activa — Arquitectura FSD, Bitunix/MT5 Dual-Engine y SOP-146 Desplegados
+
+> [!IMPORTANT]
+> **Nota de Vigencia y Registro Histórico (`SOP-146`):**
+> Este documento conserva la bitácora cronológica completa de evolución del proyecto (Fases 1 a 52). Las cifras de backtest mencionadas en fases históricas anteriores a `SOP-146` (como muestras previas de 436 trades, `+221R`, `+4,820% ROI proyectado`, `Sharpe 3.77/5.03` o `100% probabilidad`) corresponden a **iteraciones históricas superadas** y no representan métricas vigentes ni promesas fuera de muestra.
+> La **única fuente vigente** de métricas cuantitativas auditadas (en `1.0R` plano, con fricción `SOP-119`, error estándar agrupado por día y cuantificación de sesgo de selección) es [`README.md`](../../README.md) y el reporte reproducible [`scientific_validation_report.json`](../../engine/backtest/reports/scientific_validation_report.json).
 
 ---
 

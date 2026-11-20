@@ -4,6 +4,7 @@ Tests unitarios para la Suite de Validación Científica Anti-Overfitting (SOP-1
 """
 
 from engine.backtest.scientific_validation_suite import (
+    compute_daily_clustered_statistics,
     compute_sample_statistics,
     evaluate_ablation_study,
     evaluate_parameter_sensitivity_grid,
@@ -47,6 +48,8 @@ def test_evaluate_temporal_out_of_sample_split_and_folds():
     assert oos["out_of_sample_40pct"]["flat_1r"]["trades_count"] == 12
     assert len(oos["rolling_3_folds"]) == 3
     assert oos["out_of_sample_40pct"]["flat_1r"]["profit_factor"] > 1.0
+    assert oos["daily_clustered_flat_1r"]["active_days_count"] == 15
+    assert oos["daily_clustered_friction_sop119_1r"]["daily_se_r"] > 0.0
 
 
 def test_evaluate_parameter_sensitivity_and_ablation():

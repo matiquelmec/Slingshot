@@ -93,6 +93,51 @@ def compute_sample_statistics(returns: List[float]) -> Dict[str, Any]:
     }
 
 
+def compute_daily_clustered_statistics(
+    trades: List[Dict[str, Any]], returns: List[float]
+) -> Dict[str, Any]:
+    """
+    Calcula Error Estándar e Intervalo de Confianza al 95% agrupando retornos en R
+    por día calendario (Cluster-Robust SE), corrigiendo la correlación intradía
+    entre los 13 criptoactivos impulsados por la beta de BTC.
+    """
+    daily_buckets: Dict[str, float] = {}
+    for tr, r in zip(trades, returns):
+        if r is None or math.isnan(float(r)):
+            continue
+        day_key = str(tr.get("entry_time", ""))[:10] or "unknown"
+        daily_buckets[day_key] = daily_buckets.get(day_key, 0.0) + float(r)
+
+    daily_vals = list(daily_buckets.values())
+    n_days = len(daily_vals)
+    if n_days == 0:
+        return {
+            "active_days_count": 0,
+            "mean_daily_r": 0.0,
+            "std_daily_r": 0.0,
+            "daily_se_r": 0.0,
+            "daily_ci95_low_r": 0.0,
+            "daily_ci95_high_r": 0.0,
+            "daily_t_statistic": 0.0,
+        }
+
+    arr = np.array(daily_vals, dtype=np.float64)
+    mean_d = float(np.mean(arr))
+    std_d = float(np.std(arr, ddof=1)) if n_days > 1 else 0.0
+    se_d = (std_d / math.sqrt(n_days)) if n_days > 1 else 0.0
+    t_d = (mean_d / se_d) if se_d > 1e-9 else 0.0
+
+    return {
+        "active_days_count": n_days,
+        "mean_daily_r": round(mean_d, 3),
+        "std_daily_r": round(std_d, 3),
+        "daily_se_r": round(se_d, 3),
+        "daily_ci95_low_r": round(mean_d - 1.96 * se_d, 3),
+        "daily_ci95_high_r": round(mean_d + 1.96 * se_d, 3),
+        "daily_t_statistic": round(t_d, 2),
+    }
+
+
 def evaluate_temporal_out_of_sample(
     trades: List[Dict[str, Any]], train_ratio: float = 0.60
 ) -> Dict[str, Any]:
@@ -145,8 +190,16 @@ def evaluate_temporal_out_of_sample(
 
     return {
         "train_ratio": train_ratio,
+        "methodology_note": (
+            "Split cronológico de estabilidad temporal sobre la ventana histórica de 180 días "
+            "(In-Sample Temporal Split). Dado que la selección de activos y reglas se realizó "
+            "observando la ventana completa, la única validación verdaderamente Out-of-Sample "
+            "es el Forward-Test en vivo a partir de PARAMETER_FREEZE_DATE."
+        ),
         "full_sample_flat_1r": compute_sample_statistics(flat_returns),
         "full_sample_friction_sop119_1r": compute_sample_statistics(friction_returns),
+        "daily_clustered_flat_1r": compute_daily_clustered_statistics(sorted_trades, flat_returns),
+        "daily_clustered_friction_sop119_1r": compute_daily_clustered_statistics(sorted_trades, friction_returns),
         "in_sample_60pct": {
             "start_date": str(sorted_trades[0].get("entry_time", ""))[:10] if sorted_trades else "",
             "end_date": str(sorted_trades[split_idx - 1].get("entry_time", ""))[:10] if sorted_trades else "",

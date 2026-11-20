@@ -45,7 +45,7 @@ Slingshot_Trading/
 │   ├── router/                           # analyzer.py, gatekeeper.py, telegram_dispatcher.py
 │   ├── strategies/                       # Estrategias SMC y Playbooks
 │   ├── workers/                          # orchestrator.py, market_scanner.py, tradfi_scanner.py, trade_manager.py, asset_incubator.py, ci_cd_sentinel.py, calendar_worker.py, news_worker.py
-│   └── tests/                            # Suite Pytest (529 tests recolectados, SOP-01 a SOP-142)
+│   └── tests/                            # Suite Pytest (537 tests recolectados, SOP-01 a SOP-146)
 │
 ├── sidecar/                              # Ingestor HFT WebSocket en Node.js (:8080)
 │   └── index.js                          # Streaming de ticks y ordenamiento L2 para activos canónicos
@@ -55,7 +55,7 @@ Slingshot_Trading/
 │   ├── diagnostic/                       # check_hygiene.py, inspect_real_state.py
 │   └── archive/                          # Scripts históricos de exploración y herramientas
 │
-├── tests/unit/                           # Suite Vitest Frontend & FSD (66 tests)
+├── tests/unit/                           # Suite Vitest Frontend & FSD (71 tests)
 ├── docs/
 │   ├── architecture/BLUEPRINT_2026.md    # Especificación técnica maestra y bitácora de fases
 │   ├── ESTRUCTURA_PROYECTO.md            # Este mapa de estructura
