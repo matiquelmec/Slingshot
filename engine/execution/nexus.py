@@ -2380,26 +2380,6 @@ class NexusNode:
         res = await executor.place_limit_signal(acc_signal)
         if res.get("status") == "success":
             self._pending_limit_symbols.add(asset)
-            # [SOP-151] Puente opcional Core SMC -> MT5 FTMO (BTCUSD, ETHUSD, SOLUSD, XAUUSD)
-            if os.getenv("ENABLE_CORE_TO_MT5_BRIDGE", "false").lower() in ("1", "true", "yes"):
-                try:
-                    from engine.risk.prop_firm_governor import prop_firm_governor
-                    mt5_sym = prop_firm_governor.map_core_to_mt5_symbol(asset)
-                    if mt5_sym:
-                        from engine.execution.mt5_bridge import mt5_bridge
-                        mt5_bridge.place_limit_order(
-                            symbol=mt5_sym,
-                            direction=sig_dir_l,
-                            entry_price=entry_p,
-                            stop_loss=float(acc_signal.get("stop_loss") or 0.0),
-                            tp1=float(acc_signal.get("tp1") or entry_p),
-                            tp2=float(acc_signal.get("tp2") or entry_p),
-                            tp3=float(acc_signal.get("tp3") or acc_signal.get("take_profit_3r") or entry_p),
-                            score=int(acc_signal.get("confluence_score") or 75),
-                            single_ticket_mode=True,
-                        )
-                except Exception as mt5_bridge_err:
-                    logger.debug(f"[SOP-151 CORE-TO-MT5] Bridge no bloqueante: {mt5_bridge_err}")
             try:
                 from engine.core.vault import vault
                 lim_side = "LONG" if "SHORT" not in str(acc_signal.get("direction") or acc_signal.get("signal_type") or acc_signal.get("type") or "LONG").upper() else "SHORT"

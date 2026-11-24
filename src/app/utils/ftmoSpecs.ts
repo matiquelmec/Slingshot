@@ -61,50 +61,33 @@ export const FTMO_CONTRACT_SIZES: Record<string, number> = {
     'AUDUSD': 100000,
     'USDCAD': 100000,
 
-    // Cripto FTMO & Exchange
+    // Cripto FTMO & Exchange (Símbolos reales verificados en FTMO MT5)
     'BTC': 1,
     'BTCUSD': 1,
     'BTCUSDT': 1,
-    'ETH': 10,
-    'ETHUSD': 10,
-    'ETHUSDT': 10,
-    'SOL': 10,
-    'SOLUSD': 10,
-    'SOLUSDT': 10,
-    'AVAX': 10,
-    'AVAXUSD': 10,
-    'AVAXUSDT': 10,
-    'INJ': 10,
-    'INJUSD': 10,
-    'INJUSDT': 10,
-    'NEAR': 10,
-    'NEARUSD': 10,
-    'NEARUSDT': 10,
-    'RENDER': 10,
-    'RENDERUSD': 10,
-    'RENDERUSDT': 10,
-    'FET': 100,
-    'FETUSD': 100,
-    'FETUSDT': 100,
-    'SUI': 100,
-    'SUIUSD': 100,
-    'SUIUSDT': 100,
-    'TIA': 10,
-    'TIAUSD': 10,
-    'TIAUSDT': 10,
-    'ATOM': 100,
-    'ATOMUSD': 100,
-    'ATOMUSDT': 100,
+    'ETH': 1,
+    'ETHUSD': 1,
+    'ETHUSDT': 1,
+    'SOL': 1,
+    'SOLUSD': 1,
+    'SOLUSDT': 1,
+    'DOT': 10,
+    'DOTUSD': 10,
+    'DOTUSDT': 10,
+    'XRP': 100,
+    'XRPUSD': 100,
+    'XRPUSDT': 100,
+    'USOIL': 100,
 };
 
 /**
  * Lista de activos institucionales soportados en FTMO MT5
  */
 export const FTMO_INSTITUTIONAL_SYMBOLS = new Set([
-    'XAUUSD', 'GOLD', 'PAXGUSDT', 'XAGUSD', 'HGUSD', 'COPPER',
-    'US100', 'NAS100', 'US30', 'DJ30', 'US500', 'SPX500', 'GER40', 'DAX40', 'DE40',
+    'XAUUSD', 'GOLD', 'XAGUSD', 'USOIL',
+    'US100', 'NAS100', 'US500', 'SPX500', 'GER40', 'DAX40', 'DE40',
     'EURUSD', 'GBPUSD', 'GBPJPY', 'USDJPY', 'AUDUSD', 'USDCAD',
-    'BTCUSD', 'BTCUSDT', 'ETHUSD', 'ETHUSDT', 'SOLUSD', 'SOLUSDT', 'AVAXUSD', 'AVAXUSDT'
+    'BTCUSD', 'BTCUSDT', 'ETHUSD', 'ETHUSDT', 'SOLUSD', 'SOLUSDT', 'DOTUSD', 'XRPUSD'
 ]);
 
 /**

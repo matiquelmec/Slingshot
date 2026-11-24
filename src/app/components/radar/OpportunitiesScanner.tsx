@@ -40,6 +40,7 @@ interface Opportunity {
     is_active_trigger: boolean;
     ote_chasing?: boolean;
     session?: string;
+    data_source?: 'MT5_NATIVE' | 'REFERENCE_FALLBACK' | string;
     asset_health?: AssetHealth;
 }
 
@@ -252,7 +253,7 @@ export default function OpportunitiesScanner() {
                             Escáner de Oportunidades
                         </h2>
                         <p className="text-[10px] text-white/40 font-mono mt-0.5">
-                            ANÁLISIS MULTITEMPORAL DE 20 ACTIVOS EN VIVO
+                            ANÁLISIS MULTITEMPORAL DE 13 ACTIVOS CANÓNICOS + TRADFI
                         </p>
                     </div>
                 </div>
@@ -306,7 +307,7 @@ export default function OpportunitiesScanner() {
                                     : 'text-white/40 hover:text-neon-green border border-transparent'
                             }`}
                         >
-                            🏛️ FTMO TradFi (US100, US30, GBPUSD, Oro)
+                            🏛️ FTMO TradFi (XAUUSD, US100, Core)
                         </button>
                         <button
                             onClick={() => setMarketCategoryFilter('CRYPTO_ALTCOINS')}
@@ -431,15 +432,22 @@ export default function OpportunitiesScanner() {
                                                 </span>
                                                 <span className="text-white/40 text-[8px] font-mono">COPIAR AL EXCHANGE</span>
                                             </div>
-                                            {/* Priority Banner for High Confluence */}
+                                            {/* Priority Banner for High Confluence (Honest Metrics SOP-153) */}
+                                            {opp.data_source === 'REFERENCE_FALLBACK' && (
+                                                <div className="flex items-center gap-2 bg-amber-500/15 border border-amber-500/40 rounded-xl px-3 py-1.5 mb-2.5">
+                                                    <span className="text-amber-300 text-[9px] font-mono font-bold uppercase tracking-wider">
+                                                        ⚠️ MT5 DESCONECTADO — Precio Referencial Futuros (No copiar a CFD)
+                                                    </span>
+                                                </div>
+                                            )}
                                             {opp.confluence_score >= 60 ? (
                                                 <div className="flex items-center justify-between bg-neon-green/10 border border-neon-green/25 rounded-xl px-3 py-1.5 mb-3">
                                                     <span className="text-neon-green text-[9px] font-mono font-black uppercase tracking-wider flex items-center gap-1">
-                                                        <span>👑 PRIORIDAD ELITE</span>
+                                                        <span>👑 ALTA CONFLUENCIA</span>
                                                         <span className="text-white/40">|</span>
-                                                        <span>PROFIT FACTOR 3.00</span>
+                                                        <span>{opp.confluence_score}% SCORE</span>
                                                     </span>
-                                                    <span className="text-neon-green text-[8px] font-mono font-bold bg-neon-green/20 px-1.5 py-0.5 rounded">R:R 1:3.0+</span>
+                                                    <span className="text-neon-green text-[8px] font-mono font-bold bg-neon-green/20 px-1.5 py-0.5 rounded">R:R 1:{opp.rr_ratio_tp3 || 3.5}</span>
                                                 </div>
                                             ) : opp.confluence_score >= 50 ? (
                                                 <div className="flex items-center justify-between bg-neon-cyan/10 border border-neon-cyan/20 rounded-xl px-3 py-1.5 mb-3">

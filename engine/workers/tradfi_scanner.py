@@ -50,7 +50,7 @@ class TradFiScanner:
                 # [SOP-67 TIER-A FILTER & PODA INSTITUCIONAL]
                 if spec.get("tier") == "EXCLUDED" or not spec.get("enabled", True):
                     continue
-                df = await tradfi_provider.get_candles(symbol, interval=self.interval, limit=100)
+                df, data_source = await tradfi_provider.get_candles_with_meta(symbol, interval=self.interval, limit=100)
                 if df is None or len(df) < 50:
                     continue
                     
@@ -147,6 +147,7 @@ class TradFiScanner:
                     "checklist": checklist,
                     "session_status": "KILLZONE ACTIVA (EJECUCIÓN PERMITIDA)" if is_tradfi_killzone else "STANDBY (MONITOREO FUERA DE KILLZONE)",
                     "is_killzone": is_tradfi_killzone,
+                    "data_source": data_source,
                     "timestamp": datetime.now(timezone.utc).isoformat()
                 }
                 # [SOP-92 PRE-NEWS PROTECTIVE SHIELD FOR OPEN POSITIONS]
@@ -182,8 +183,15 @@ class TradFiScanner:
 
                 candidates.append(candidate)
                 
-                # [SOP-64 FTMO AUTO-DISPATCHER] Disparo Automatico a MT5 EXCLUSIVO dentro de Killzone para confluencia >= 75%
-                if score >= 75 and is_tradfi_killzone and not ftmo_guardian.is_daily_lockout:
+                # [SOP-64 & SOP-153 FTMO AUTO-DISPATCHER FAIL-CLOSED]
+                # Solo despacha órdenes a MT5 si los datos provienen nativamente de MT5 (nunca Yahoo Finance)
+                if (
+                    data_source == "MT5_NATIVE"
+                    and mt5_bridge.ensure_connected()
+                    and score >= 75
+                    and is_tradfi_killzone
+                    and not ftmo_guardian.is_daily_lockout
+                ):
                     if not ftmo_guardian.check_midnight_rollover_risk(now_utc.hour, now_utc.minute):
                         try:
                             import MetaTrader5 as mt5

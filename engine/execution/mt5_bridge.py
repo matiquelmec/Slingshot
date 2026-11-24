@@ -115,6 +115,26 @@ class MT5Bridge:
 
         return False
 
+    def resolve_broker_symbol(self, symbol: str) -> Optional[str]:
+        """
+        [SOP-153] Verifica contra mt5.symbol_info() que el símbolo exista en el servidor
+        MT5 conectado (probando variantes exactas y sufijos .cash / .sim) y lo habilita en Market Watch.
+        """
+        base = symbol.replace("USDT", "USD").upper()
+        if not MT5_AVAILABLE or self.dry_run or not self.connected:
+            if any(idx in base for idx in ["US100", "US30", "US500", "GER40", "USOIL"]):
+                return f"{base}.cash" if ".cash" not in base.lower() else base
+            return base
+        for cand in (base, f"{base}.cash", f"{base}.sim"):
+            try:
+                if mt5.symbol_info(cand) is not None:
+                    mt5.symbol_select(cand, True)
+                    return cand
+            except Exception:
+                continue
+        logger.warning(f"⚠️ [MT5_BRIDGE] Símbolo {symbol} ({base}) no disponible en este servidor MT5.")
+        return None
+
     def place_limit_order(
         self,
         symbol: str,

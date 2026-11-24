@@ -274,45 +274,83 @@ class FtmoGuardianShield:
             return True
         return False
         
-    def calculate_mt5_lots(self, symbol: str, entry_price: float, stop_loss: float, risk_usd_override: Optional[float] = None, margin_free: Optional[float] = None) -> Dict[str, Any]:
+    def calculate_mt5_lots(
+        self,
+        symbol: str,
+        entry_price: float,
+        stop_loss: float,
+        risk_usd_override: Optional[float] = None,
+        margin_free: Optional[float] = None,
+        mt5_symbol_info: Optional[Any] = None,
+    ) -> Dict[str, Any]:
         """
-        Calcula los lotes exactos para MetaTrader 5 según el tamaño de contrato institucional y la fragmentación 50/30/20.
-        Incluye gobernador de margen adaptado a apalancamiento 1:30 en FTMO SWING.
+        [SOP-153] Calcula los lotes exactos para MetaTrader 5:
+        1. Si mt5_symbol_info tiene trade_tick_value > 0 y trade_tick_size > 0, usa la ecuación
+           universal exacta de MT5 (inmune a divisas cruzadas y tamaños de contrato).
+        2. En simulación offline usa la tabla canónica verificada (sin bug 100,000 en cripto/oil).
+        3. Rechaza la orden (lots=0.0) si el lote mínimo del broker excede 1.25x el presupuesto de riesgo.
         """
-        symbol = symbol.upper()
+        symbol = symbol.upper().replace(".CASH", "").replace(".SIM", "")
+        canonical_contracts = {
+            "XAUUSD": 100, "XAGUSD": 5000, "USOIL": 100,
+            "US100": 1, "US500": 1, "US30": 1, "GER40": 1,
+            "BTCUSD": 1, "ETHUSD": 1, "SOLUSD": 1, "DOTUSD": 10, "XRPUSD": 100, "ADAUSD": 100,
+        }
+        default_cs = canonical_contracts.get(symbol, 100000 if len(symbol) == 6 else 1)
         spec = TRADFI_ASSETS_CONFIG.get(symbol, {
-            "contract_size": 100 if "XAU" in symbol else 1 if any(i in symbol for i in ["US", "NQ", "YM", "GER"]) else 100000,
+            "contract_size": default_cs,
             "min_lot": 0.01,
-            "name": symbol
+            "name": symbol,
         })
-        
+
         # Riesgo base según fase (Fase 1: 0.75% = $750 | Fase 2: 0.50% = $500 | Fondeada: 0.35% = $350)
         risk_pct = self.current_config["risk_pct"]
         risk_usd = risk_usd_override or (self.current_equity * risk_pct)
-        
+
         dist = abs(entry_price - stop_loss)
         if dist <= 0:
-            return {"lots": spec["min_lot"], "risk_usd": risk_usd, "dist": 0.0, "lots_tp1": spec["min_lot"], "lots_tp2": 0.0, "lots_tp3": 0.0, "contract_size": spec["contract_size"], "margin_warning": False}
-            
+            return {"lots": 0.0, "risk_usd": risk_usd, "dist": 0.0, "lots_tp1": 0.0, "lots_tp2": 0.0, "lots_tp3": 0.0, "contract_size": spec["contract_size"], "margin_warning": False, "lot_error": "ZERO_STOP_DISTANCE"}
+
         contract_size = spec["contract_size"]
-        
-        # Fórmula institucional de lotes: Lotes = Riesgo_USD / (Distancia * Contract_Size)
-        raw_lots = risk_usd / (dist * contract_size)
-        
-        # Ajuste de pasos y mínimos según activo
-        min_lot = spec.get("min_lot", 0.01)
-        is_index = any(idx in symbol for idx in ["US100", "US30", "US500", "GER40"])
-        
-        if is_index:
-            total_lots = round(max(min_lot, raw_lots), 1)
-            lots_tp1 = round(total_lots * 0.50, 1)
-            lots_tp2 = round(total_lots * 0.30, 1)
-            lots_tp3 = round(total_lots - lots_tp1 - lots_tp2, 1)
+        min_lot = float(getattr(mt5_symbol_info, "volume_min", None) or spec.get("min_lot", 0.01))
+        step_lot = float(getattr(mt5_symbol_info, "volume_step", None) or 0.01)
+        max_lot = float(getattr(mt5_symbol_info, "volume_max", None) or 100.0)
+
+        tick_val = float(getattr(mt5_symbol_info, "trade_tick_value", 0.0) or 0.0)
+        tick_size = float(getattr(mt5_symbol_info, "trade_tick_size", 0.0) or 0.0)
+
+        if tick_val > 0 and tick_size > 0:
+            loss_per_lot_usd = (dist / tick_size) * tick_val
+            raw_lots = risk_usd / loss_per_lot_usd if loss_per_lot_usd > 0 else 0.0
         else:
-            total_lots = round(max(min_lot, raw_lots), 2)
-            lots_tp1 = round(total_lots * 0.50, 2)
-            lots_tp2 = round(total_lots * 0.30, 2)
-            lots_tp3 = round(total_lots - lots_tp1 - lots_tp2, 2)
+            loss_per_lot_usd = dist * contract_size
+            raw_lots = risk_usd / loss_per_lot_usd if loss_per_lot_usd > 0 else 0.0
+
+        # Guard: si incluso el lote mínimo arriesga > 1.25x el presupuesto, abortar
+        if (min_lot * loss_per_lot_usd) > (risk_usd * 1.25):
+            return {
+                "symbol": symbol,
+                "name": spec.get("name", symbol),
+                "entry_price": entry_price,
+                "stop_loss": stop_loss,
+                "dist": dist,
+                "risk_usd": risk_usd,
+                "risk_pct": risk_pct * 100.0,
+                "lots": 0.0,
+                "lots_tp1": 0.0,
+                "lots_tp2": 0.0,
+                "lots_tp3": 0.0,
+                "contract_size": contract_size,
+                "margin_warning": False,
+                "lot_error": "MIN_LOT_EXCEEDS_RISK_BUDGET",
+            }
+
+        is_index = any(idx in symbol for idx in ["US100", "US30", "US500", "GER40"])
+        stepped = max(min_lot, min(max_lot, round(raw_lots / step_lot) * step_lot))
+        total_lots = round(stepped, 2 if step_lot < 0.1 else 1)
+        lots_tp1 = round(total_lots * 0.50, 2 if step_lot < 0.1 else 1)
+        lots_tp2 = round(total_lots * 0.30, 2 if step_lot < 0.1 else 1)
+        lots_tp3 = round(max(0.0, total_lots - lots_tp1 - lots_tp2), 2 if step_lot < 0.1 else 1)
 
         # Gobernador de Margen Libre para FTMO SWING (Apalancamiento 1:30 en Forex, 1:20 en Índices/Metales)
         margin_warning = False

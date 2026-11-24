@@ -73,6 +73,24 @@ class SlingshotVault:
             """)
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_telegram_ts ON telegram_dispatches(timestamp);")
 
+            # [SOP-153] Tabla de Planes MT5 Single-Ticket para Cierres Parciales Reales (50/30/20)
+            cursor.execute("""
+            CREATE TABLE IF NOT EXISTS mt5_trade_plans (
+                order_id TEXT PRIMARY KEY,
+                symbol TEXT NOT NULL,
+                direction TEXT NOT NULL,
+                entry_price REAL NOT NULL,
+                stop_loss REAL NOT NULL,
+                be_price REAL NOT NULL,
+                tp1 REAL NOT NULL,
+                tp2 REAL NOT NULL,
+                tp3 REAL NOT NULL,
+                initial_volume REAL NOT NULL,
+                stage TEXT DEFAULT 'ACTIVE',
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+            """)
+
             # 2. Tabla de Estados de Sesiones (PDH / PDL / ONH / ONL)
             cursor.execute("""
             CREATE TABLE IF NOT EXISTS session_states (
@@ -733,6 +751,60 @@ class SlingshotVault:
             VALUES (?, ?, ?, ?, ?, ?, ?)
             """, (trade_id, symbol.upper(), side.upper(), float(pnl_usd), loss_category, causal_analysis, preventive_rule))
             conn.commit()
+
+    def save_mt5_trade_plan(
+        self,
+        order_id: str,
+        symbol: str,
+        direction: str,
+        entry_price: float,
+        stop_loss: float,
+        be_price: float,
+        tp1: float,
+        tp2: float,
+        tp3: float,
+        initial_volume: float,
+    ) -> None:
+        """[SOP-153] Persiste plan Single-Ticket MT5 para gestión de parciales 50/30/20."""
+        with self._get_connection() as conn:
+            conn.execute(
+                """
+                INSERT OR REPLACE INTO mt5_trade_plans
+                (order_id, symbol, direction, entry_price, stop_loss, be_price, tp1, tp2, tp3, initial_volume, stage)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'ACTIVE')
+                """,
+                (str(order_id), symbol.upper(), direction.upper(), float(entry_price), float(stop_loss), float(be_price), float(tp1), float(tp2), float(tp3), float(initial_volume)),
+            )
+            conn.commit()
+
+    def get_mt5_trade_plan(self, order_id_or_symbol: str) -> Optional[Dict[str, Any]]:
+        """[SOP-153] Recupera plan MT5 por order_id/ticket o símbolo activo más reciente."""
+        with self._get_connection() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                "SELECT order_id, symbol, direction, entry_price, stop_loss, be_price, tp1, tp2, tp3, initial_volume, stage "
+                "FROM mt5_trade_plans WHERE order_id = ? OR symbol = ? ORDER BY updated_at DESC LIMIT 1",
+                (str(order_id_or_symbol), str(order_id_or_symbol).upper()),
+            )
+            row = cur.fetchone()
+            if not row:
+                return None
+            return {
+                "order_id": row[0], "symbol": row[1], "direction": row[2],
+                "entry_price": row[3], "stop_loss": row[4], "be_price": row[5],
+                "tp1": row[6], "tp2": row[7], "tp3": row[8],
+                "initial_volume": row[9], "stage": row[10],
+            }
+
+    def update_mt5_trade_plan_stage(self, order_id: str, stage: str) -> None:
+        """[SOP-153] Actualiza el hito alcanzado (BE_SET, TP1_TAKEN, TP2_TAKEN, CLOSED)."""
+        with self._get_connection() as conn:
+            conn.execute(
+                "UPDATE mt5_trade_plans SET stage = ?, updated_at = CURRENT_TIMESTAMP WHERE order_id = ?",
+                (stage.upper(), str(order_id)),
+            )
+            conn.commit()
+
 
 # Instancia global singleton
 vault = SlingshotVault()

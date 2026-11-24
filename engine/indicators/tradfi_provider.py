@@ -164,9 +164,7 @@ class TradFiProvider:
             import MetaTrader5 as mt5
             
             if mt5_bridge.connected:
-                sym_mt5 = symbol.replace("USDT", "USD")
-                if ".cash" not in sym_mt5 and any(idx in sym_mt5 for idx in ["US100", "US30", "US500", "GER40"]):
-                    sym_mt5 = f"{sym_mt5}.cash"
+                sym_mt5 = mt5_bridge.resolve_broker_symbol(symbol) or symbol.replace("USDT", "USD")
                     
                 tf_map = {
                     "1m": mt5.TIMEFRAME_M1,
@@ -234,5 +232,12 @@ class TradFiProvider:
         except Exception as e:
             logger.error(f"[TRADFI_PROVIDER] Error descargando {symbol} ({ticker}) en {interval}: {e}")
             return None
+
+    async def get_candles_with_meta(self, symbol: str, interval: str = "15m", limit: int = 100) -> tuple[Optional[pd.DataFrame], str]:
+        """[SOP-153] Retorna (df, data_source) donde data_source es 'MT5_NATIVE' o 'REFERENCE_FALLBACK'."""
+        df = await self.get_candles(symbol, interval=interval, limit=limit)
+        cache_key = f"{symbol.upper()}:{interval}"
+        source = self._cache.get(cache_key, {}).get("source", "REFERENCE_FALLBACK")
+        return df, ("MT5_NATIVE" if source == "MT5_NATIVE" else "REFERENCE_FALLBACK")
 
 tradfi_provider = TradFiProvider()
