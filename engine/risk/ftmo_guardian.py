@@ -49,6 +49,9 @@ class FtmoGuardianShield:
         self.daily_loss_count = 0
         self.consecutive_losses = 0
         self.max_daily_losses = int(os.getenv("FTMO_MAX_DAILY_LOSSES", "2"))
+        self.is_target_locked = False
+        self.min_trading_days = int(os.getenv("FTMO_MIN_TRADING_DAYS", "4"))
+        self.trading_days_count = int(os.getenv("FTMO_TRADING_DAYS_COUNT", "0"))
         self._load_state()
         
     @property
@@ -115,6 +118,17 @@ class FtmoGuardianShield:
                     logger.warning(f"🛑 [FTMO_GUARDIAN] {purged} órdenes pendientes canceladas por activación de Kill-Switch.")
         except Exception as e:
             logger.debug(f"[FTMO_GUARDIAN] Error purgando órdenes en MT5: {e}")
+
+    def _flatten_mt5_positions_on_emergency(self, reason: str):
+        """[SOP-151] Cierra posiciones abiertas a mercado para blindar equidad flotante (-5%/-10%)."""
+        try:
+            from engine.execution.mt5_bridge import mt5_bridge
+            mt5_bridge.cancel_all_pending_orders()
+            closed = mt5_bridge.close_all_open_positions(reason=reason)
+            if closed > 0:
+                logger.critical(f"🚨 [FTMO_GUARDIAN] {closed} posiciones abiertas liquidadas por {reason}.")
+        except Exception as e:
+            logger.debug(f"[FTMO_GUARDIAN] Error liquidando posiciones MT5: {e}")
 
     def set_phase(self, phase: str):
         """Actualiza la fase de evaluación de FTMO."""
@@ -191,6 +205,11 @@ class FtmoGuardianShield:
             self._save_state()
             self._purge_mt5_pending_orders_on_lockout()
 
+        # 3b. [SOP-151 HARD EQUITY FLATTEN @ -3.8%] Cierre forzoso a mercado antes del -5.0% fatal
+        if daily_dd_pct >= max(daily_limit + 0.3, 3.8):
+            self.is_daily_lockout = True
+            self._flatten_mt5_positions_on_emergency("HARD_DAILY_DD_3_8PCT")
+
         # 4. Evaluar Kill-Switch Total (-7.5% en Fase 1 / -5.0% en Fase 2)
         total_limit = self.MAX_TOTAL_DRAWDOWN_PCT
         if total_dd_pct >= total_limit and not self.is_daily_lockout:
@@ -198,12 +217,26 @@ class FtmoGuardianShield:
             self.lockout_reason = f"KILL-SWITCH TOTAL ACTIVADO ({self.phase}): Drawdown total ({total_dd_pct:.2f}% >= {total_limit}%). Bot congelado."
             logger.error(f"🛑 [FTMO_GUARDIAN] {self.lockout_reason}")
             self._save_state()
-            self._purge_mt5_pending_orders_on_lockout()
-            
-        # 5. Evaluar Progreso de Fase
+            self._flatten_mt5_positions_on_emergency("HARD_TOTAL_DD")
+
+        # 5. Evaluar Progreso de Fase & Victory Lock (+10.10% Fase 1 / +5.10% Fase 2)
         target_pct = self.current_config["target_pct"]
         profit_usd = current_equity - self.account_size
+        profit_pct = (profit_usd / self.account_size * 100.0) if self.account_size > 0 else 0.0
         progress_pct = (profit_usd / (self.account_size * (target_pct / 100.0)) * 100.0) if target_pct > 0 else 100.0
+
+        if (
+            target_pct > 0
+            and profit_pct >= (target_pct + 0.10)
+            and self.trading_days_count >= self.min_trading_days
+            and not self.is_target_locked
+        ):
+            self.is_target_locked = True
+            self.is_daily_lockout = True
+            self.lockout_reason = f"VICTORY LOCK ({self.phase}): Meta +{target_pct:.1f}% superada (+{profit_pct:.2f}%). Cuenta blindada."
+            logger.info(f"🏆 [FTMO_GUARDIAN] {self.lockout_reason}")
+            self._save_state()
+            self._flatten_mt5_positions_on_emergency("VICTORY_LOCK")
         
         effective_daily_dd_pct = max(0.0, daily_dd_pct)
         effective_total_dd_pct = max(0.0, total_dd_pct)
@@ -218,6 +251,7 @@ class FtmoGuardianShield:
             "total_dd_pct": effective_total_dd_pct,
             "daily_safe_margin_left_pct": max(0.0, daily_limit - effective_daily_dd_pct),
             "is_daily_lockout": self.is_daily_lockout,
+            "is_target_locked": self.is_target_locked,
             "lockout_reason": self.lockout_reason,
             "phase": self.phase,
             "target_pct": target_pct,

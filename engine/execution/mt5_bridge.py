@@ -115,12 +115,24 @@ class MT5Bridge:
 
         return False
 
-    def place_limit_order(self, symbol: str, direction: str, entry_price: float, stop_loss: float, tp1: float, tp2: float, tp3: float, score: int = 70) -> Dict[str, Any]:
+    def place_limit_order(
+        self,
+        symbol: str,
+        direction: str,
+        entry_price: float,
+        stop_loss: float,
+        tp1: float,
+        tp2: float,
+        tp3: float,
+        score: int = 70,
+        single_ticket_mode: bool = True,
+    ) -> Dict[str, Any]:
         """
-        Calcula lotes exactos con FTMO Guardian y transmite 3 órdenes límite fraccionadas:
-        - Tramo 1 (50% de lotes): Take Profit en TP1 (+1.3R) -> Asegura Breakeven
-        - Tramo 2 (30% de lotes): Take Profit en TP2 (+2.5R) -> Asegura +1.0R neto
-        - Tramo 3 (20% de lotes): Take Profit en TP3 (+4.0R a +5.0R) -> Runner elástico
+        Calcula lotes exactos con FTMO Guardian y transmite órdenes límite:
+        - Modo Single-Ticket (SOP-151, default en Prop-Firms): 1 único ticket limpio con SL y TP3
+          (los cierres parciales 50%/30% en TP1/TP2 se ejecutan vía close_partial_position, evitando
+          múltiples tickets simultáneos que algunas prop firms marcan como Order Splitting).
+        - Modo Multi-Tranche (single_ticket_mode=False): 3 órdenes límite 50/30/20.
         """
         # 1. Blindaje de Riesgo FTMO ($750 USD / 0.75%)
         lot_info = ftmo_guardian.calculate_mt5_lots(symbol, entry_price, stop_loss)
@@ -148,21 +160,26 @@ class MT5Bridge:
             except Exception:
                 pass
 
-        # 2. Validación de Kill-Switch de Drawdown
-        if ftmo_guardian.is_daily_lockout:
-            logger.error(f"🛑 [MT5_BRIDGE] Orden rechazada para {sym_mt5}: Cuenta bloqueada por Kill-Switch de Drawdown Diario.")
+        # 2. Validación de Kill-Switch de Drawdown o Victory Lock
+        if ftmo_guardian.is_daily_lockout or getattr(ftmo_guardian, "is_target_locked", False):
+            reason = "FTMO_VICTORY_LOCK" if getattr(ftmo_guardian, "is_target_locked", False) else "FTMO_DAILY_DRAWDOWN_LOCKOUT"
+            logger.error(f"🛑 [MT5_BRIDGE] Orden rechazada para {sym_mt5}: {reason}.")
             return {
                 "success": False,
-                "reason": "FTMO_DAILY_DRAWDOWN_LOCKOUT",
+                "reason": reason,
                 "symbol": sym_mt5,
                 "lots": total_lots
             }
 
         order_type_str = "BUY_LIMIT" if is_long else "SELL_LIMIT"
 
-        # 3. Fraccionamiento Cuantitativo en 3 Salidas (SOP-26 & SOP-66: 50 / 30 / 20)
+        # 3. Construcción de tramos (Single-Ticket Anti-Splitting vs. Multi-Tranche)
         tranches = []
-        if total_lots >= (min_lot * 3):
+        if single_ticket_mode:
+            tranches = [
+                {"label": "SINGLE_APEX", "lots": total_lots, "tp": round(tp3, digits)}
+            ]
+        elif total_lots >= (min_lot * 3):
             # 3 tramos: 50% TP1, 30% TP2, 20% TP3
             l1 = round(round(total_lots * 0.50 / step_lot) * step_lot, 2)
             l2 = round(round(total_lots * 0.30 / step_lot) * step_lot, 2)
@@ -446,6 +463,45 @@ class MT5Bridge:
         except Exception as e:
             logger.error(f"❌ [MT5_BRIDGE] Excepción cancelando orden #{ticket}: {e}")
             return False
+
+    def close_all_open_positions(self, reason: str = "HARD_EQUITY_GUARD") -> int:
+        """
+        [SOP-151 HARD EQUITY FLATTEN]
+        Cierra inmediatamente todas las posiciones abiertas en MT5 al precio de mercado (IOC)
+        para impedir que la equidad flotante viole el límite diario (-5%) o total (-10%) de FTMO.
+        """
+        if not MT5_AVAILABLE or self.dry_run or not self.ensure_connected():
+            logger.warning(f"🏛️ [MT5_BRIDGE:SIMULATED] Cierre forzoso de posiciones ({reason}).")
+            return 0
+        try:
+            positions = mt5.positions_get() or []
+            closed = 0
+            for p in positions:
+                tick = mt5.symbol_info_tick(p.symbol)
+                if not tick:
+                    continue
+                is_buy = p.type == mt5.POSITION_TYPE_BUY
+                req = {
+                    "action": mt5.TRADE_ACTION_DEAL,
+                    "position": p.ticket,
+                    "symbol": p.symbol,
+                    "volume": float(p.volume),
+                    "type": mt5.ORDER_TYPE_SELL if is_buy else mt5.ORDER_TYPE_BUY,
+                    "price": tick.bid if is_buy else tick.ask,
+                    "deviation": 80,
+                    "magic": self.MAGIC_NUMBER,
+                    "comment": f"Flatten_{reason[:12]}",
+                    "type_time": mt5.ORDER_TIME_GTC,
+                    "type_filling": mt5.ORDER_FILLING_IOC,
+                }
+                res = mt5.order_send(req)
+                if res and res.retcode == mt5.TRADE_RETCODE_DONE:
+                    closed += 1
+                    logger.critical(f"🚨 [MT5_FLATTEN] Posición #{p.ticket} ({p.symbol}) cerrada a mercado por {reason}.")
+            return closed
+        except Exception as e:
+            logger.error(f"❌ [MT5_BRIDGE] Error en close_all_open_positions: {e}")
+            return 0
 
     def cancel_all_pending_orders(self) -> int:
         """Cancela todas las órdenes límite/stop pendientes en MetaTrader 5 (Fail-Closed Killswitch)."""

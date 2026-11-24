@@ -51,8 +51,8 @@ TRADFI_ASSETS_CONFIG = {
         "min_lot": 0.01,
         "pip_value": 10.0,
         "point_size": 0.0001,
-        "tier": "TIER_A",
-        "enabled": True,
+        "tier": "INCUBATION",
+        "enabled": False,
         "long_only": False
     },
     "US30": {
@@ -64,8 +64,8 @@ TRADFI_ASSETS_CONFIG = {
         "min_lot": 0.1,
         "pip_value": 1.0,
         "point_size": 1.0,
-        "tier": "TIER_A",
-        "enabled": True,
+        "tier": "INCUBATION",
+        "enabled": False,
         "long_only": False
     },
     "EURUSD": {

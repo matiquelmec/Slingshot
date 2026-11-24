@@ -795,6 +795,14 @@ async def get_ftmo_guardian_status():
     return ftmo_guardian.update_equity(ftmo_guardian.current_equity)
 
 
+@app.get("/api/v1/ftmo/pass-simulation")
+async def get_ftmo_pass_simulation():
+    """[SOP-151] Simulación Monte Carlo de probabilidad de pase de fondeo sobre universo Prop Tier-1."""
+    from engine.analytics.prop_firm_pass_simulator import prop_firm_pass_simulator
+    r_series = prop_firm_pass_simulator.load_audited_r_series(prop_tier1_only=True)
+    return sanitize_for_json(prop_firm_pass_simulator.simulate_risk_grid(r_series, n_trials=1000))
+
+
 @app.get("/api/v1/ftmo/positions")
 async def get_ftmo_positions_and_telemetry():
     """
