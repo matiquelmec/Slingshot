@@ -30,6 +30,37 @@ FTMO_MT5_BRIDGE_MAP: Dict[str, str] = {
     "XAUUSDT": "XAUUSD",
 }
 
+# [SOP-152] Matriz validada en Torneo Walk-Forward ciego (60% Train / 40% Blind OOS)
+CRYPTO_PROP_APPROVED_MATRIX: Dict[str, str] = {
+    "ETHUSDT": "15m",
+    "BNBUSDT": "15m",
+    "SOLUSDT": "15m",
+    "XAUUSDT": "1h",
+    "NEARUSDT": "15m",
+    "BTCUSDT": "1h",
+    "XRPUSDT": "15m",
+    "LINKUSDT": "15m",
+    "DOTUSDT": "15m",
+}
+
+FTMO_MT5_APPROVED_MATRIX: Dict[str, str] = {
+    "XAUUSD": "1h",
+    "USOIL": "15m",
+    "BTCUSD": "1h",
+    "ETHUSD": "15m",
+    "SOLUSD": "15m",
+}
+
+MACRO_CLUSTER_MAP: Dict[str, str] = {
+    "BTCUSDT": "CRYPTO_BETA", "ETHUSDT": "CRYPTO_BETA", "SOLUSDT": "CRYPTO_BETA",
+    "BNBUSDT": "CRYPTO_BETA", "XRPUSDT": "CRYPTO_BETA", "LINKUSDT": "CRYPTO_BETA",
+    "NEARUSDT": "CRYPTO_BETA", "DOTUSDT": "CRYPTO_BETA",
+    "BTCUSD": "CRYPTO_BETA", "ETHUSD": "CRYPTO_BETA", "SOLUSD": "CRYPTO_BETA",
+    "XAUUSDT": "SAFE_HAVEN_METALS", "XAUUSD": "SAFE_HAVEN_METALS", "XAGUSD": "SAFE_HAVEN_METALS",
+    "US100": "EQUITY_INDICES", "US500": "EQUITY_INDICES", "GER40": "EQUITY_INDICES",
+    "USOIL": "ENERGY_COMMODITIES", "EURUSD": "G10_FX", "USDJPY": "G10_FX",
+}
+
 
 class PropFirmGovernor:
     """Gobernador de riesgo y elegibilidad de activos para pruebas de fondeo."""
@@ -80,6 +111,38 @@ class PropFirmGovernor:
             return dampened, f"NEAR_TARGET_DAMPENER ({progress_pct:.1f}% >= {self.near_target_threshold_pct:.0f}%)"
 
         return base_risk_pct, "STANDARD_PROP_RISK"
+
+    @staticmethod
+    def is_spread_to_risk_acceptable(
+        entry_price: float,
+        stop_loss: float,
+        round_trip_cost_usd: float,
+        max_ratio: float = 0.08,
+    ) -> Tuple[bool, float]:
+        """
+        [SOP-152A] Rechaza entradas cuyo costo (spread + comisión) supere el 8% de |Entry - SL|.
+        """
+        risk_dist = abs(float(entry_price) - float(stop_loss))
+        if risk_dist <= 1e-9:
+            return False, 1.0
+        ratio = float(round_trip_cost_usd) / risk_dist
+        return ratio <= max_ratio, round(ratio, 4)
+
+    @staticmethod
+    def is_cluster_slot_available(
+        symbol: str,
+        open_unsecured_symbols: list,
+    ) -> Tuple[bool, str]:
+        """
+        [SOP-152B] Máximo 1 posición con riesgo abierto (SL != BE) por clúster macro.
+        """
+        clean = (symbol or "").replace("/", "").replace(".cash", "").upper()
+        target_cluster = MACRO_CLUSTER_MAP.get(clean, "OTHER")
+        for op_sym in open_unsecured_symbols:
+            op_clean = (op_sym or "").replace("/", "").replace(".cash", "").upper()
+            if MACRO_CLUSTER_MAP.get(op_clean, "OTHER") == target_cluster:
+                return False, f"CLUSTER_CAP_ACTIVE ({target_cluster}: {op_clean})"
+        return True, target_cluster
 
 
 prop_firm_governor = PropFirmGovernor()
