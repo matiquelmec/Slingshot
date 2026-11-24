@@ -19,8 +19,12 @@ import { useTelemetryStore } from '../../store/telemetryStore';
 import { useIndicatorsStore } from '../../store/indicatorsStore';
 import {
     buildStructuralFingerprint,
+    computeAutoFib,
     computeEMA,
+    computeMarketTraps,
     computeSessionAVWAP,
+    computeVolumeProfile,
+    computeWilliamsOops,
     extractActiveSymbolSetup,
     formatPrice,
     getCandleCountdown,
@@ -583,18 +587,19 @@ export default function TradingChart({
         addSetupLine(setup.tp3, '#FACC15', 'TP3 (20% RUNNER)', LineStyle.Solid, 2);
     }, [activeSymbol, tacticalDecision, auditedSignals, signalHistory, enabledMap]);
 
-    // ── SMC & FVG (Fingerprint-Memoized) ──
+    // ── SMC & FVG (Fingerprint-Memoized with tacticalDecision.smc fallback) ──
     useEffect(() => {
         const chart = chartRef.current;
         if (!chart || candles.length === 0) return;
 
+        const effectiveSmc = smcData ?? tacticalDecision?.smc ?? null;
         const showSmc = isEnabled('smc');
         const showFvg = isEnabled('fvg');
         const fp = buildStructuralFingerprint({
             showSmc,
             showFvg,
-            ob: smcData?.order_blocks || null,
-            fvg: smcData?.fvgs || null,
+            ob: effectiveSmc?.order_blocks || null,
+            fvg: effectiveSmc?.fvgs || null,
             lastTime: candles[candles.length - 1]?.time,
         });
         if (fp === smcFingerprintRef.current) return;
@@ -613,7 +618,7 @@ export default function TradingChart({
         });
         fvgSeriesRef.current = [];
 
-        if (!smcData || (!showSmc && !showFvg)) return;
+        if (!effectiveSmc || (!showSmc && !showFvg)) return;
 
         const times = candles.map((c) => Number(c.time)).sort((a, b) => a - b);
         const addBaseline = (opts: any, data: any[]) => {
@@ -627,10 +632,10 @@ export default function TradingChart({
             }
         };
 
-        const bullishOBs = smcData?.order_blocks?.bullish || [];
-        const bearishOBs = smcData?.order_blocks?.bearish || [];
-        const bullishFVGs = smcData?.fvgs?.bullish || [];
-        const bearishFVGs = smcData?.fvgs?.bearish || [];
+        const bullishOBs = effectiveSmc?.order_blocks?.bullish || [];
+        const bearishOBs = effectiveSmc?.order_blocks?.bearish || [];
+        const bullishFVGs = effectiveSmc?.fvgs?.bullish || [];
+        const bearishFVGs = effectiveSmc?.fvgs?.bearish || [];
 
         if (showSmc) {
             bullishOBs.forEach((ob) => {
@@ -786,14 +791,17 @@ export default function TradingChart({
         }
     }, [liquidations, enabledMap]);
 
-    // ── YOSH Value Area (Fingerprint-Memoized) ──
+    // ── YOSH Value Area (Fingerprint-Memoized with deterministic 0ms fallback) ──
     useEffect(() => {
         const chart = chartRef.current;
         const s = candleSeriesRef.current;
         if (!chart || !s || candles.length === 0) return;
 
         const showVa = isEnabled('value_area');
-        const vp = smcData?.volume_profile;
+        const backendVp = smcData?.volume_profile;
+        const hasBackendVp = Boolean(backendVp?.vah && backendVp?.val && backendVp?.poc);
+        const vp = showVa ? (hasBackendVp ? backendVp : computeVolumeProfile(candles, 50)) : null;
+
         const fp = buildStructuralFingerprint({
             showVa,
             vah: vp?.vah,
@@ -932,6 +940,18 @@ export default function TradingChart({
                     }
                 });
             }
+
+            // Historical deterministic LAF/LBF traps across visible candles
+            const histTraps = computeMarketTraps(candles, sessionData);
+            histTraps.forEach((tr) => {
+                markers.push({
+                    time: tr.time,
+                    position: tr.type === 'BULL_TRAP' ? 'belowBar' : 'aboveBar',
+                    color: tr.type === 'BULL_TRAP' ? '#00E5FF' : '#FF007A',
+                    shape: tr.type === 'BULL_TRAP' ? 'arrowUp' : 'arrowDown',
+                    text: tr.label,
+                });
+            });
         }
 
         if (isEnabled('williams_oops')) {
@@ -953,6 +973,18 @@ export default function TradingChart({
                         text: `Oops! ${isLong ? 'Buy' : 'Sell'}`,
                     });
                 }
+            });
+
+            // Historical deterministic Larry Williams Oops! reversals across visible candles
+            const histOops = computeWilliamsOops(candles, sessionData);
+            histOops.forEach((op) => {
+                markers.push({
+                    time: op.time,
+                    position: op.direction === 'LONG' ? 'belowBar' : 'aboveBar',
+                    color: op.direction === 'LONG' ? '#10B981' : '#E11D48',
+                    shape: op.direction === 'LONG' ? 'arrowUp' : 'arrowDown',
+                    text: op.label,
+                });
             });
         }
 
@@ -1059,8 +1091,9 @@ export default function TradingChart({
             });
         }
 
-        if (showFib && tacticalDecision?.fibonacci?.levels) {
-            const { levels, swing_high, swing_low } = tacticalDecision.fibonacci;
+        const effectiveFib = showFib ? (tacticalDecision?.fibonacci?.levels ? tacticalDecision.fibonacci : computeAutoFib(candles)) : null;
+        if (showFib && effectiveFib?.levels) {
+            const { levels, swing_high, swing_low } = effectiveFib;
             const isUptrend = (swing_low ?? 0) < (swing_high ?? 0);
             Object.entries(levels).forEach(([label, price]) => {
                 const p = price as number;
@@ -1122,12 +1155,16 @@ export default function TradingChart({
                 if (onh) addLine(onh, '#FF00FF', 'ONH', LineStyle.Dashed, 1);
                 if (onl) addLine(onl, '#FF00FF', 'ONL', LineStyle.Dashed, 1);
 
-                const lvns = sessionData?.volume_profile?.lvns || [];
+                const lvns =
+                    sessionData?.volume_profile?.lvns && sessionData.volume_profile.lvns.length > 0
+                        ? sessionData.volume_profile.lvns
+                        : (computeVolumeProfile(sorted, 50)?.lvns || []);
                 lvns.forEach((lvn: number, i: number) => {
                     addLine(lvn, 'rgba(200,200,200,0.45)', `LVN ${i + 1}`, LineStyle.Dotted, 1);
                 });
 
-                if (sorted.length > 0) {
+                const isIntradayTf = !['1d', '1w', '1M'].includes(activeTimeframe);
+                if (sorted.length > 0 && isIntradayTf) {
                     Object.entries(sessions).forEach(([id, info]: [string, any]) => {
                         if (info.start_utc == null || info.end_utc == null || !sessionColors[id]) return;
 
@@ -1199,7 +1236,7 @@ export default function TradingChart({
                 }
             }
         }
-    }, [tacticalDecision, sessionData, enabledMap, candles.length]);
+    }, [tacticalDecision, sessionData, enabledMap, candles.length, activeTimeframe]);
 
     const isUpBar = hudData ? hudData.close >= hudData.open : true;
 

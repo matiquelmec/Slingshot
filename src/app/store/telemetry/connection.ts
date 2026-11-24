@@ -197,6 +197,26 @@ export const createConnectionManager = (set: any, get: any) => {
                                 set({ liquidations: data });
                             }
                         })
+                        .catch(() => {}),
+                    fetch(`${BASE_URL}/api/v1/trades/active?asset=${clean}`, { cache: 'no-store' })
+                        .then(r => r.json())
+                        .then(data => {
+                            const trades = Array.isArray(data?.trades) ? data.trades : [];
+                            if (trades.length > 0) {
+                                set((state: any) => {
+                                    const nextAudited = { ...(state.auditedSignals || {}) };
+                                    for (const t of trades) {
+                                        const id = String(t.id || `${t.asset}-${t.created_at || Date.now()}`);
+                                        nextAudited[id] = {
+                                            ...t,
+                                            price: t.entry_price ?? t.price,
+                                            signal_type: t.direction ?? t.signal_type,
+                                        };
+                                    }
+                                    return { auditedSignals: nextAudited };
+                                });
+                            }
+                        })
                         .catch(() => {})
                 ]);
 

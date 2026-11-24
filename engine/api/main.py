@@ -393,17 +393,8 @@ async def get_diagnostic_state(asset: str, timeframe: str = "15m"):
             "volume": float(d.get("volume", 0))
         })
 
+    # [SOP-115 / SOP-149] Solo libro L2 real: cero muros sintéticos fabricados
     heatmap = broadcaster.state.heatmap if (broadcaster and broadcaster.state.heatmap) else None
-    if not heatmap and clean_candles:
-        cur_p = clean_candles[-1]["close"]
-        heatmap = {
-            "imbalance": 0.02,
-            "sentiment": "NEUTRAL",
-            "hot_bids": [{"price": round(cur_p * (1 - 0.002 * i), 2), "volume": round(18.5 * (5 - i), 2), "heat": 85 - i * 12, "type": "SUPPORT"} for i in range(1, 5)],
-            "hot_asks": [{"price": round(cur_p * (1 + 0.002 * i), 2), "volume": round(16.0 * (5 - i), 2), "heat": 80 - i * 12, "type": "RESISTANCE"} for i in range(1, 5)],
-            "bids": [{"price": round(cur_p * (1 - 0.002 * i), 2), "volume": round(18.5 * (5 - i), 2), "heat": 85 - i * 12, "type": "SUPPORT"} for i in range(1, 5)],
-            "asks": [{"price": round(cur_p * (1 + 0.002 * i), 2), "volume": round(16.0 * (5 - i), 2), "heat": 80 - i * 12, "type": "RESISTANCE"} for i in range(1, 5)]
-        }
 
     # 🧠 [ML INFERENCE HYDRATION] Inferencia live XGBoost sobre el buffer de velas
     ml_proj = broadcaster.state.ml_projection
@@ -540,23 +531,16 @@ async def get_liquidity_heatmap(asset: str, interval: str = "15m"):
     if broadcaster and broadcaster.state.heatmap:
         return sanitize_for_json(broadcaster.state.heatmap)
     
-    raw_history = list(broadcaster.state.live_buffer) if (broadcaster and broadcaster.state.live_buffer) else (list(broadcaster.state.history) if broadcaster else [])
-    cur_p = 1.0
-    if raw_history:
-        d = raw_history[-1].get("data", raw_history[-1]) if isinstance(raw_history[-1], dict) else raw_history[-1]
-        cur_p = float(d.get("close", 1.0))
-    elif broadcaster and broadcaster.state.latest_price:
-        cur_p = float(broadcaster.state.latest_price)
-
-    heatmap = {
-        "imbalance": 0.02,
+    # [SOP-115 / SOP-149] Sin muros L2 reales aún: retornar vacío transparente
+    return sanitize_for_json({
+        "imbalance": 0.0,
         "sentiment": "NEUTRAL",
-        "hot_bids": [{"price": round(cur_p * (1 - 0.002 * i), 2 if cur_p > 10 else 4), "volume": round(18.5 * (5 - i), 2), "heat": 85 - i * 12, "type": "SUPPORT"} for i in range(1, 5)],
-        "hot_asks": [{"price": round(cur_p * (1 + 0.002 * i), 2 if cur_p > 10 else 4), "volume": round(16.0 * (5 - i), 2), "heat": 80 - i * 12, "type": "RESISTANCE"} for i in range(1, 5)],
-        "bids": [{"price": round(cur_p * (1 - 0.002 * i), 2 if cur_p > 10 else 4), "volume": round(18.5 * (5 - i), 2), "heat": 85 - i * 12, "type": "SUPPORT"} for i in range(1, 5)],
-        "asks": [{"price": round(cur_p * (1 + 0.002 * i), 2 if cur_p > 10 else 4), "volume": round(16.0 * (5 - i), 2), "heat": 80 - i * 12, "type": "RESISTANCE"} for i in range(1, 5)]
-    }
-    return sanitize_for_json(heatmap)
+        "is_live": False,
+        "hot_bids": [],
+        "hot_asks": [],
+        "bids": [],
+        "asks": [],
+    })
 
 @app.get("/api/v1/klines/{asset}")
 async def get_klines(asset: str, interval: str = "15m", limit: int = 300):

@@ -272,6 +272,15 @@ class SymbolBroadcaster:
                     # SMC
                     fast_ob = await asyncio.to_thread(identify_order_blocks, df_fast)
                     fast_smc = await asyncio.to_thread(extract_smc_coordinates, fast_ob)
+                    from engine.indicators.volume import calculate_volume_profile
+                    from engine.indicators.structure import identify_look_and_fail
+                    fast_smc["volume_profile"] = await asyncio.to_thread(calculate_volume_profile, df_fast)
+                    sess_bootstrap = self._session_manager.get_current_state().get("data")
+                    df_trap = await asyncio.to_thread(identify_look_and_fail, fast_ob, sess_bootstrap)
+                    fast_smc["traps"] = {
+                        "laf_bull": bool(df_trap["laf_bull"].iloc[-1]) if len(df_trap) > 0 else False,
+                        "laf_bear": bool(df_trap["laf_bear"].iloc[-1]) if len(df_trap) > 0 else False,
+                    }
                     await self._broadcast({"type": "smc_data", "data": fast_smc})
                     
                     # Initial Liquidations

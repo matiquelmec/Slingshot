@@ -1,7 +1,11 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import {
+    computeAutoFib,
     computeEMA,
+    computeMarketTraps,
     computeSessionAVWAP,
+    computeVolumeProfile,
+    computeWilliamsOops,
     getCandleCountdown,
     buildStructuralFingerprint,
     extractActiveSymbolSetup,
@@ -142,5 +146,75 @@ describe('SOP-148 Trading Chart Deterministic Math & Store', () => {
         expect(MASTER_WATCHLIST).toHaveLength(13);
         expect(MASTER_WATCHLIST).not.toContain('AVAXUSDT');
         expect(MASTER_WATCHLIST).not.toContain('RENDERUSDT');
+    });
+
+    it('computes deterministic Volume Profile (POC, VAH, VAL) for 0ms Yosh Value Area', () => {
+        const candles = Array.from({ length: 40 }, (_, i) => ({
+            time: 1700000000 + i * 900,
+            open: 100 + (i % 5),
+            high: 102 + (i % 5),
+            low: 99 + (i % 5),
+            close: 101 + (i % 5),
+            volume: i % 5 === 2 ? 500 : 50,
+        }));
+        const vp = computeVolumeProfile(candles, 30);
+        expect(vp).not.toBeNull();
+        expect(vp!.vah).toBeGreaterThanOrEqual(vp!.poc);
+        expect(vp!.poc).toBeGreaterThanOrEqual(vp!.val);
+    });
+
+    it('detects historical Market Traps (LAF/LBF) and Larry Williams Oops! reversals', () => {
+        const candles = Array.from({ length: 25 }, (_, i) => ({
+            time: 1700000000 + i * 900,
+            open: 100,
+            high: 102,
+            low: 98,
+            close: 100.5,
+            volume: 100,
+        }));
+        // Inject clear Bear Trap (sweeps above 102 and closes below 100)
+        candles.push({
+            time: 1700000000 + 25 * 900,
+            open: 101.5,
+            high: 104.0,
+            low: 99.0,
+            close: 99.2,
+            volume: 300,
+        });
+        const traps = computeMarketTraps(candles, { pdh: 102.5, pdl: 97.5 });
+        expect(traps.some((t) => t.type === 'BEAR_TRAP')).toBe(true);
+
+        const oops = computeWilliamsOops(candles, { pdh: 102.5, pdl: 97.5 });
+        expect(oops.some((o) => o.direction === 'SHORT')).toBe(true);
+    });
+
+    it('computes AutoFib fallback and parses /api/v1/trades/active entry_price payloads', () => {
+        const candles = Array.from({ length: 30 }, (_, i) => ({
+            time: 1700000000 + i * 900,
+            open: 100 + i,
+            high: 102 + i,
+            low: 99 + i,
+            close: 101 + i,
+            volume: 50,
+        }));
+        const fib = computeAutoFib(candles);
+        expect(fib).not.toBeNull();
+        expect(fib!.levels['0.618']).toBeGreaterThan(fib!.swing_low);
+        expect(fib!.levels['0.618']).toBeLessThan(fib!.swing_high);
+
+        const setup = extractActiveSymbolSetup('BTCUSDT', undefined, {
+            t1: {
+                asset: 'BTCUSDT',
+                direction: 'SHORT',
+                entry_price: 62000,
+                stop_loss: 63000,
+                status: 'ACTIVE',
+                created_at: '2026-11-23T22:00:00Z',
+            },
+        });
+        expect(setup).not.toBeNull();
+        expect(setup?.direction).toBe('SHORT');
+        expect(setup?.entry).toBe(62000);
+        expect(setup?.stopLoss).toBe(63000);
     });
 });
