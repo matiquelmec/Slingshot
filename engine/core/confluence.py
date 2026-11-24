@@ -16,6 +16,14 @@ from engine.api.config import settings
 from typing import Dict, Any, Optional
 from engine.core.logger import logger
 from engine.core.bayesian_confluence import bayesian_calibrator
+from engine.core.strategy_ssot import FORWARD_TEST_FROZEN_MODE
+
+
+def _resolve_factor_weight(factor_name: str, default: float) -> float:
+    """[SOP-147] Congela pesos en su valor base cuando FORWARD_TEST_FROZEN_MODE está activo."""
+    if FORWARD_TEST_FROZEN_MODE:
+        return float(default)
+    return bayesian_calibrator.get_weight(factor_name, default=default)
 
 class ConfluenceManager:
     """
@@ -63,8 +71,8 @@ class ConfluenceManager:
         smt_strength = 0 # Inicialización para evitar NameError [FIX v11.1]
         cluster_hit = False # Inicialización para evitar NameError [FIX v13.6]
 
-        # 1. NARRATIVA ESTRUCTURAL (Peso Dinámico Bayesiano - Base 15)
-        narrative_weight = bayesian_calibrator.get_weight("narrative_weight", default=15.0)
+        # 1. NARRATIVA ESTRUCTURAL (Peso Base 15)
+        narrative_weight = _resolve_factor_weight("narrative_weight", default=15.0)
         total_weight += narrative_weight
         regime = str(current.get('market_regime', signal.get('regime', 'UNKNOWN'))).upper()
         
@@ -96,8 +104,8 @@ class ConfluenceManager:
             detail_msg = f"Régimen RANGING sin descuento institucional (VWAP: {vwap_dist_check:+.2f}%)" if regime == 'RANGING' else f"Régimen {regime}"
             checklist.append({"factor": "Narrativa SMC", "status": "DIVERGENTE", "detail": detail_msg})
 
-        # 2. PUNTOS DE INTERÉS OB/FVG (Peso Dinámico Bayesiano - Base 40)
-        poi_weight = bayesian_calibrator.get_weight("poi_weight", default=40.0)
+        # 2. PUNTOS DE INTERÉS OB/FVG (Peso Base 40)
+        poi_weight = _resolve_factor_weight("poi_weight", default=40.0)
         total_weight += poi_weight
         
         smc_map = kwargs.get('smc_map', {})
@@ -160,10 +168,10 @@ class ConfluenceManager:
         else:
             checklist.append({"factor": "Yosh Order Flow", "status": "NEUTRAL", "detail": "Sin trampas extremas de Yosh"})
 
-        # 3. LIQUIDEZ Y SWEEPS (Peso Dinámico Bayesiano - Base 30/20)
+        # 3. LIQUIDEZ Y SWEEPS (Peso Base 30/20)
         current_session = session_data.get('current_session') if session_data else None
         base_liq = 30.0 if current_session else 20.0
-        liq_weight = bayesian_calibrator.get_weight("liq_weight", default=base_liq)
+        liq_weight = _resolve_factor_weight("liq_weight", default=base_liq)
         if current_session and liq_weight == 20.0:
             liq_weight = 30.0
         total_weight += liq_weight
@@ -185,8 +193,8 @@ class ConfluenceManager:
         status = "CONFIRMADO" if liq_pts >= (liq_weight * 0.6) else "PARCIAL" if liq_pts > 0 else "BAJO"
         checklist.append({"factor": "Liquidez", "status": status, "detail": detail_str})
 
-        # 4. VOLUMEN INSTITUCIONAL (RVOL) (Peso Dinámico Bayesiano - Base 15)
-        vol_weight = bayesian_calibrator.get_weight("vol_weight", default=15.0)
+        # 4. VOLUMEN INSTITUCIONAL (RVOL) (Peso Base 15)
+        vol_weight = _resolve_factor_weight("vol_weight", default=15.0)
         total_weight += vol_weight
         rvol = float(current.get('volume', 0)) / vol_mean if vol_mean > 0 else 1.0
         if rvol >= settings.INSTITUTIONAL_VOL_THRESHOLD:
@@ -195,8 +203,8 @@ class ConfluenceManager:
         else:
             checklist.append({"factor": "Huella RVOL", "status": "BAJO", "detail": f"Volumen {rvol:.1f}x"})
 
-        # 5. ALGORITMO NEURAL (Peso Dinámico Bayesiano - Base 10)
-        ml_weight = bayesian_calibrator.get_weight("ml_weight", default=10.0)
+        # 5. ALGORITMO NEURAL (Peso Base 10)
+        ml_weight = _resolve_factor_weight("ml_weight", default=10.0)
         ml_prob = ml_projection.get('probability') if ml_projection else None
         if ml_prob is not None:
             total_weight += ml_weight
@@ -242,8 +250,8 @@ class ConfluenceManager:
             else:
                 checklist.append({"factor": "Triple Screen Macro", "status": "DIVERGENTE", "detail": f"Divergencia con tendencia 1D ({daily_str})"})
 
-        # 6. CALENDARIO ECONÓMICO Y NARRATIVA RECIENTE (Peso Dinámico Bayesiano - Base 20) v5.7.155 Master Gold
-        econ_weight = bayesian_calibrator.get_weight("econ_weight", default=20.0)
+        # 6. CALENDARIO ECONÓMICO Y NARRATIVA RECIENTE (Peso Base 20)
+        econ_weight = _resolve_factor_weight("econ_weight", default=20.0)
         total_weight += econ_weight
         high_impact_near = False
         recent_impact_active = False
@@ -999,8 +1007,8 @@ class ConfluenceManager:
             # Fallback seguro: No vetar por error de sistema
             if 'multiplier' not in locals(): multiplier = 1.0
 
-        # 🚀 10. ALINEACIÓN HTF (Peso 25 — EL ANCLA) v5.7.155 Master Gold
-        onchain_weight = bayesian_calibrator.get_weight("onchain_weight", default=15.0)
+        # 🚀 10. ALINEACIÓN HTF (Peso Base 15)
+        onchain_weight = _resolve_factor_weight("onchain_weight", default=15.0)
         onchain_bias = kwargs.get('onchain_bias')
         
         if onchain_bias and onchain_bias != 'NEUTRAL':
@@ -1042,8 +1050,8 @@ class ConfluenceManager:
         base_score = int((score / total_weight) * 100) if total_weight > 0 else 0
         final_score = min(100, max(0, int(base_score * multiplier)))
 
-        # SOP-133: Modulación adaptativa acotada (±8 pts máx) desde BlackBox
-        if multiplier > 0 and final_score > 0:
+        # SOP-133: Modulación adaptativa acotada (±8 pts máx) desde BlackBox (congelada en FORWARD_TEST_FROZEN_MODE)
+        if not FORWARD_TEST_FROZEN_MODE and multiplier > 0 and final_score > 0:
             try:
                 from engine.core.memory import blackbox
                 adaptive_bonus, adaptive_detail = blackbox.get_adaptive_factor_bonus({
@@ -1094,8 +1102,20 @@ class ConfluenceManager:
                 "is_quarantined": is_quarantined
             },
             "calibration": {
-                "mode": "BAYESIAN_ADAPTIVE",
-                "weights": bayesian_calibrator.get_all_weights()
+                "mode": "FROZEN_FORWARD_TEST" if FORWARD_TEST_FROZEN_MODE else "BAYESIAN_ADAPTIVE",
+                "weights": (
+                    {
+                        "narrative_weight": 15.0,
+                        "poi_weight": 40.0,
+                        "liq_weight": 30.0,
+                        "vol_weight": 15.0,
+                        "ml_weight": 10.0,
+                        "econ_weight": 20.0,
+                        "onchain_weight": 15.0,
+                    }
+                    if FORWARD_TEST_FROZEN_MODE
+                    else bayesian_calibrator.get_all_weights()
+                ),
             }
         }
 

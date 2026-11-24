@@ -449,3 +449,18 @@ Todos los mensajes de commit deben seguir estrictamente el estándar de Conventi
      - Ablation Study capa por capa.
 3. **Tracker de Forward-Test en Vivo (`engine/analytics/live_forward_tracker.py`):**
    * Audita el *Implementation Shortfall* real (slippage de llenado en bps, comisiones y funding reales frente a la expectativa teórica SOP-119) manteniendo el riesgo base configurable en `BITUNIX_BASE_RISK_PCT` (default `0.025` = `2.50%`).
+
+
+---
+
+## SOP-147: Endurecimiento Forense del Flujo de Ejecución y Pureza del Forward-Test
+
+1. **Congelamiento Real del Forward-Test (`FORWARD_TEST_FROZEN_MODE=true`):**
+   * `ConfluenceManager` congela los pesos de factores en sus valores base (`1.0x`) y desactiva el ajuste dinámico del Bandit `BlackBox` (`±8 pts`); `NexusNode` fija `reg_mult=1.0` evitando leer estados residuales de `regime_history`.
+2. **Seguridad No Destructiva y Contabilidad `Isolated-Multi`:**
+   * `GiantFiberReflex` permanece desactivado por defecto (`ENABLE_FAST_VELOCITY_ESCAPE=false`) y jamás cierra posiciones `MANUAL_OR_EXTERNAL`.
+   * `NexusNode.get_unprotected_risk_count()` contabiliza por `positionId` en modo `Isolated-Multi`; `_omega_centinel_loop()` deduplica `blackbox.record_trade()`; `MarketScanner._format_opportunity()` propaga `is_btc_blocked` e `is_avwap_blocked`.
+3. **Aislamiento AST Permanente IA $\not\to$ Ejecución (`test_sop147_runtime_audit_fixes.py`):**
+   * Ningún archivo bajo `engine/aiq/` o `engine/agents/` puede importar `engine.execution`, `bitunix_executor` o `mt5_bridge`.
+4. **Sidecar Futures WS & GitOps Explícito:**
+   * `sidecar/index.js` consume Binance USDⓈ-M Futures (`fstream.binance.com`) y expone únicamente `GET /health` y `GET /ticks` en `127.0.0.1:8080`; `_cicd_autonomous_worker()` permanece desactivado por defecto (`ENABLE_AUTONOMOUS_GITOPS_POLL=false`).

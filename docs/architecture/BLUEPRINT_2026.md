@@ -1097,3 +1097,12 @@ Sometidas las 3 optimizaciones a la matriz experimental de 180 días en los 13 a
 - **Suite de Validación Científica (`engine/backtest/scientific_validation_suite.py`):** Split cronológico estricto In-Sample (60%, $N=157$, PF 2.09 en 1R plano) vs. Out-of-Sample (40%, $N=105$, PF 2.45 en 1R plano / PF 2.18 con fricción SOP-119), cuantificación explícita del sesgo de selección (15 activos sin podar PF 1.65 / 1.39 con fricción vs. 13 activos canónicos PF 2.22 / 1.87 con fricción), matriz de sensibilidad $\pm 20\%$ (`Stability Score = 0.735`, `Min PF = 1.30`) y Ablation Study.
 - **Monte Carlo Block Bootstrap & IC 95% (`engine/analytics/monte_carlo_resilience_engine.py`):** Soporte de Circular Block Bootstrap ($b=5$), intervalo de confianza al 95% de la expectativa ($[+0.163\text{R}, +0.400\text{R}]$ bajo fricción SOP-119) y nota metodológica de riesgo de secuencia.
 - **Tracker de Forward-Test en Vivo (`engine/analytics/live_forward_tracker.py`):** Medición de *Implementation Shortfall* real (slippage en bps, comisiones y funding en vivo vs. benchmark teórico) preservando el riesgo base `BITUNIX_BASE_RISK_PCT=0.025` (`2.50%`).
+
+
+---
+
+## Fase 53: SOP-147 — Endurecimiento Forense del Flujo de Ejecución & Forward-Test Congelado
+
+- **Congelamiento Real (`FORWARD_TEST_FROZEN_MODE=true`):** Pesos fijos en `ConfluenceManager`, Bandit `BlackBox` desactivado en vivo y `reg_mult=1.0` en `NexusNode`.
+- **Seguridad `Isolated-Multi`:** `GiantFiberReflex` desactivado por defecto (`ENABLE_FAST_VELOCITY_ESCAPE=false`), deduplicación de `blackbox.record_trade()`, conteo exacto por `positionId` en `get_unprotected_risk_count()` y conexión en vivo de `LiveForwardTracker` en `TradeManager`.
+- **Paridad `MarketScanner` & Sidecar Futures WS:** `ClusterRiskGuard` conectado a `nexus._active_positions`, propagación de `is_btc_blocked`/`is_avwap_blocked` en `_format_opportunity()`, `sidecar/index.js` migrado a `wss://fstream.binance.com` sin ruta muerta `POST /execute`, y test AST permanente de aislamiento IA $\not\to$ Ejecución.

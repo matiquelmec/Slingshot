@@ -169,7 +169,7 @@ def test_confluence_manager_emits_calibration_telemetry():
 
     res = cm.evaluate_signal(df=df, signal=sig)
     assert "calibration" in res
-    assert res["calibration"]["mode"] == "BAYESIAN_ADAPTIVE"
+    assert res["calibration"]["mode"] in ("BAYESIAN_ADAPTIVE", "FROZEN_FORWARD_TEST")
     assert "weights" in res["calibration"]
     assert "poi_weight" in res["calibration"]["weights"]
     assert res["score"] >= 0

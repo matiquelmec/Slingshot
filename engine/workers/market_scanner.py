@@ -1,8 +1,11 @@
 import asyncio
 import time
 from datetime import datetime, timezone
+import httpx
 import pandas as pd
 from engine.core.logger import logger
+
+_SIDECAR_HTTP_CLIENT = httpx.AsyncClient(timeout=0.25)
 from engine.main_router import SlingshotRouter
 from engine.indicators.data_utils import fetch_binance_history
 from engine.core.store import store
@@ -225,17 +228,15 @@ class MarketScanner:
     async def _get_hft_order_flow(self, symbol: str) -> dict:
         """
         Consulta la caché local del Sidecar Node.js HFT (http://127.0.0.1:8080/ticks)
-        para inyectar el Order Flow Delta y Taker Volume en tiempo real.
+        reutilizando pool HTTP persistente (SOP-147).
         """
         try:
-            import httpx
-            async with httpx.AsyncClient(timeout=0.25) as client:
-                res = await client.get("http://127.0.0.1:8080/ticks")
-                if res.status_code == 200:
-                    ticks = res.json()
-                    sym_upper = symbol.upper()
-                    if sym_upper in ticks:
-                        return ticks[sym_upper]
+            res = await _SIDECAR_HTTP_CLIENT.get("http://127.0.0.1:8080/ticks")
+            if res.status_code == 200:
+                ticks = res.json()
+                sym_upper = symbol.upper()
+                if sym_upper in ticks:
+                    return ticks[sym_upper]
         except Exception:
             pass
         return {}
@@ -383,7 +384,16 @@ class MarketScanner:
                 active_signals = result.get("signals", [])
                 if active_signals:
                     for sig in active_signals:
-                        candidates.append(self._format_opportunity(sig, is_active=True, df=df, session_data=session_data, interval=interval))
+                        candidates.append(
+                            self._format_opportunity(
+                                sig,
+                                is_active=True,
+                                df=df,
+                                session_data=session_data,
+                                interval=interval,
+                                btc_df=dfs_dict.get("BTCUSDT"),
+                            )
+                        )
                     return
                 
                 # ── PROTOCOLO CANÓNICO SOP-18 & ANTIRUIDO: EVALUACIÓN DE SALUD DE MERCADO ──
@@ -544,7 +554,8 @@ class MarketScanner:
 
                     # ── EVALUACIÓN PREVENTIVA DE RIESGO DE CLUSTER & CORRELACIÓN ──
                     from engine.risk.cluster_risk_guard import cluster_risk_guard
-                    active_positions = getattr(getattr(self.router, "_nexus", None), "_active_positions", {})
+                    from engine.execution.nexus import nexus as _live_nexus
+                    active_positions = getattr(_live_nexus, "_active_positions", {})
                     can_open_cluster, cluster_reason = cluster_risk_guard.can_open_position(
                         new_asset=symbol,
                         new_direction=direction,
@@ -895,7 +906,7 @@ class MarketScanner:
 
                 asyncio.create_task(telegram_dispatcher.send_signal_alert(tele_sig))
 
-    def _format_opportunity(self, sig: dict, is_active: bool, df: pd.DataFrame = None, session_data: dict = None, interval: str = "15m") -> dict:
+    def _format_opportunity(self, sig: dict, is_active: bool, df: pd.DataFrame = None, session_data: dict = None, interval: str = "15m", btc_df: pd.DataFrame = None) -> dict:
         health = sig.get("confluence", {}).get("asset_health", {})
         ker_val = float(health.get("ker", 0.40))
         is_ker_clean = ker_val >= 0.35
@@ -904,10 +915,11 @@ class MarketScanner:
         sym = sig.get("asset", "UNKNOWN").upper()
         from datetime import datetime, timezone
         from engine.risk.cluster_risk_guard import cluster_risk_guard
+        from engine.execution.nexus import nexus as _live_nexus
         now_utc = datetime.now(timezone.utc)
         is_time_ok = True if interval == "1d" else is_trade_allowed_sop18(sym, now_utc)
 
-        active_positions = getattr(getattr(self.router, "_nexus", None), "_active_positions", {})
+        active_positions = getattr(_live_nexus, "_active_positions", {})
         can_open_cluster, cluster_msg = cluster_risk_guard.can_open_position(
             new_asset=sym,
             new_direction=clean_dir,
@@ -919,6 +931,19 @@ class MarketScanner:
         cur_avwap = 0.0
         cur_avwap_dist = 0.0
         is_avwap_aligned = True
+        is_avwap_blocked = False
+        btc_aligned = None
+        if btc_df is not None and not btc_df.empty and sym not in ("BTCUSDT", "XAUUSDT", "PAXGUSDT"):
+            try:
+                if "ema200" not in btc_df.columns:
+                    btc_ema200 = float(btc_df["close"].ewm(span=200, adjust=False).mean().iloc[-1])
+                else:
+                    btc_ema200 = float(btc_df["ema200"].iloc[-1])
+                btc_price = float(btc_df["close"].iloc[-1])
+                btc_aligned = (clean_dir == "LONG" and btc_price > btc_ema200) or (clean_dir == "SHORT" and btc_price < btc_ema200)
+            except Exception:
+                btc_aligned = None
+        is_btc_blocked = (btc_aligned is False and sym not in ("BTCUSDT", "XAUUSDT", "PAXGUSDT"))
         if df is not None and not df.empty:
             if not playbook_name:
                 has_dir_sweep = bool(df.get("recent_sweep_bull", pd.Series([False])).iloc[-1]) if clean_dir == "LONG" else bool(df.get("recent_sweep_bear", pd.Series([False])).iloc[-1])
@@ -938,6 +963,8 @@ class MarketScanner:
                 cur_avwap_dist = float(df_avwap["session_avwap_dist_pct"].iloc[-1])
                 cur_p = float(df["close"].iloc[-1])
                 is_avwap_aligned = (clean_dir == "LONG" and cur_p >= cur_avwap * 0.999) or (clean_dir == "SHORT" and cur_p <= cur_avwap * 1.001)
+                if interval != "1d":
+                    is_avwap_blocked = (clean_dir == "LONG" and cur_avwap_dist < -0.40) or (clean_dir == "SHORT" and cur_avwap_dist > 0.40)
             except Exception:
                 pass
 
@@ -967,6 +994,9 @@ class MarketScanner:
             "cluster_reason":    cluster_msg,
             "is_time_blocked":   not is_time_ok,
             "is_ker_blocked":    not is_ker_clean,
+            "btc_aligned":       btc_aligned,
+            "is_btc_blocked":    is_btc_blocked,
+            "is_avwap_blocked":  is_avwap_blocked,
             "session":           (session_data or {}).get("session_label", (session_data or {}).get("current_session", "NEW_YORK")),
             "session_avwap":     round(cur_avwap, 4),
             "session_avwap_dist_pct": round(cur_avwap_dist, 2),

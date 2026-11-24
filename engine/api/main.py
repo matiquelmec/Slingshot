@@ -166,8 +166,12 @@ async def lifespan(app: FastAPI):
     # 5. Activar centinela asíncrono de telemetría Bitunix en segundo plano
     asyncio.create_task(_bitunix_telemetry_background_updater())
 
-    # 6. Activar GitOps Autónomo 24/7 (SOP-88 Continuous Deployment Gate)
-    asyncio.create_task(_cicd_autonomous_worker())
+    # 6. Activar GitOps Autónomo 24/7 solo si está habilitado explícitamente (SOP-147)
+    from engine.core.strategy_ssot import ENABLE_AUTONOMOUS_GITOPS_POLL
+    if ENABLE_AUTONOMOUS_GITOPS_POLL:
+        asyncio.create_task(_cicd_autonomous_worker())
+    else:
+        logger.info("🛡️ [GITOPS] Polling autónomo desactivado (ENABLE_AUTONOMOUS_GITOPS_POLL=False). Despliegues gobernados vía SOP-120.")
 
     logger.info(f"🏎️  [SYSTEM] Slingshot v{settings.VERSION} listo para el despliegue.")
 

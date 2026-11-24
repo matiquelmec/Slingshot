@@ -74,20 +74,19 @@ async def fetch_binance_history(symbol: str, interval: str = "15m", limit: int =
                     }
                 })
             
-            # ── INTEGRACIÓN DE CO-PROCESAMIENTO HFT SIDECAR ──
+            # ── INTEGRACIÓN DE CO-PROCESAMIENTO HFT SIDECAR (Pool HTTP persistente SOP-147) ──
             # Hidratamos el cierre y volumen de la vela en desarrollo con la caché de Node.js
             if candles:
                 try:
-                    async with httpx.AsyncClient(timeout=0.08) as local_client: # Límite estricto de 80ms
-                        local_res = await local_client.get("http://127.0.0.1:8080/ticks")
-                        if local_res.status_code == 200:
-                            ticks = local_res.json()
-                            asset_tick = ticks.get(sym)
-                            if asset_tick and asset_tick.get("price", 0) > 0:
-                                last_candle = candles[-1]["data"]
-                                last_candle["close"] = asset_tick["price"]
-                                last_candle["high"] = max(last_candle["high"], asset_tick["price"])
-                                last_candle["low"] = min(last_candle["low"], asset_tick["price"])
+                    local_res = await _HTTP_CLIENT.get("http://127.0.0.1:8080/ticks", timeout=0.08)
+                    if local_res.status_code == 200:
+                        ticks = local_res.json()
+                        asset_tick = ticks.get(sym)
+                        if asset_tick and asset_tick.get("price", 0) > 0:
+                            last_candle = candles[-1]["data"]
+                            last_candle["close"] = asset_tick["price"]
+                            last_candle["high"] = max(last_candle["high"], asset_tick["price"])
+                            last_candle["low"] = min(last_candle["low"], asset_tick["price"])
                 except Exception:
                     pass
                 

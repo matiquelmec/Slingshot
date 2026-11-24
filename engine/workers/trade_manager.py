@@ -1715,6 +1715,36 @@ class TradeManager:
                             except Exception:
                                 pass
 
+                            # SOP-147: Evaluar política pre-comprometida del LiveForwardTracker tras cierre real en cuenta principal
+                            if acc_id == "primary":
+                                try:
+                                    from engine.analytics.live_forward_tracker import LiveForwardTracker, LiveTradeObservation
+                                    from datetime import datetime as _dt, timezone as _tz
+                                    ft_tracker = LiveForwardTracker()
+                                    obs_list = []
+                                    for ct in vault.get_closed_trades(limit=500):
+                                        if str(ct.get("account_id") or "primary") != "primary":
+                                            continue
+                                        obs_list.append(
+                                            LiveTradeObservation(
+                                                symbol=str(ct.get("symbol") or ""),
+                                                direction=str(ct.get("side") or "LONG"),
+                                                closed_at=str(ct.get("closed_at") or _dt.now(_tz.utc).isoformat()),
+                                                signal_entry_price=0.0,
+                                                fill_entry_price=0.0,
+                                                risk_usd=max(1.0, float(base_1r_usd)),
+                                                gross_pnl_usd=float(ct.get("pnl_usd") or 0.0),
+                                            )
+                                        )
+                                    ft_summary = ft_tracker.evaluate_live_trades(obs_list)
+                                    if ft_summary.recommended_risk_action != "KEEP_BASE_RISK_2_5PCT":
+                                        ft_tracker.apply_pre_registered_policy(
+                                            ft_summary,
+                                            account_manager=mgr if "mgr" in locals() else None,
+                                        )
+                                except Exception as ft_err:
+                                    logger.debug(f"[TRADE_MANAGER SOP-147] LiveForwardTracker skip: {ft_err}")
+
                             # SOP-76: Gatillar análisis causal con NVIDIA NIM si fue pérdida
                             if est_r < 0 or real_pnl_usd < 0:
                                 try:

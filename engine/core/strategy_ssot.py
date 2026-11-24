@@ -77,7 +77,19 @@ PRIORITY_TIER_3_MULTIPLIER: float = 0.85
 # =============================================================================
 import os as _os
 
+
+def _parse_env_bool(env_key: str, default: bool) -> bool:
+    raw = _os.getenv(env_key)
+    if raw is None:
+        return default
+    return raw.strip().lower() in ("1", "true", "yes", "on")
+
+
 BITUNIX_CANONICAL_BASE_RISK_PCT: float = float(_os.getenv("BITUNIX_BASE_RISK_PCT", "0.025"))
+FORWARD_TEST_FROZEN_MODE: bool = _parse_env_bool("FORWARD_TEST_FROZEN_MODE", default=True)
+ENABLE_FAST_VELOCITY_ESCAPE: bool = _parse_env_bool("ENABLE_FAST_VELOCITY_ESCAPE", default=False)
+ENABLE_AUTONOMOUS_GITOPS_POLL: bool = _parse_env_bool("ENABLE_AUTONOMOUS_GITOPS_POLL", default=False)
+
 SOP119_LIVE_HAIRCUT_FACTOR: float = 0.884  # ~11.6% degradación por fricción real
 SOP119_MAKER_FILL_RATE: float = 0.962      # 96.2% tasa de llenado límite
 SOP119_MEAN_SL_SLIPPAGE_R: float = 0.04    # 0.03R - 0.08R slippage medio en SL

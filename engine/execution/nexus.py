@@ -28,8 +28,25 @@ from engine.risk.cluster_risk_guard import cluster_risk_guard
 from engine.risk.risk_manager import RiskManager
 from engine.core.strategy_ssot import (
     BASE_MAX_UNPROTECTED_RISK_SLOTS,
+    ENABLE_FAST_VELOCITY_ESCAPE,
+    FORWARD_TEST_FROZEN_MODE,
     calculate_priority_score as ssot_calculate_priority_score,
 )
+
+
+def _extract_symbol_from_entry(raw_key: str, pos_data: Optional[Dict[str, Any]] = None) -> str:
+    """[SOP-147] Extrae el símbolo limpio sin confundir positionId numérico en claves Isolated-Multi."""
+    if isinstance(pos_data, dict):
+        sig = pos_data.get("signal") or {}
+        sym = sig.get("asset") or sig.get("symbol") or (pos_data.get("execution") or {}).get("asset")
+        if sym:
+            return str(sym).replace("/", "").upper()
+    parts = [p for p in str(raw_key or "").split("_") if p]
+    if len(parts) >= 3 and parts[-1].isdigit():
+        return parts[-2].upper()
+    if len(parts) >= 2:
+        return parts[-1].upper()
+    return str(raw_key or "").upper()
 
 
 class NexusNode:
@@ -177,8 +194,9 @@ class NexusNode:
 
             assets_to_remove = []
             for raw_key, pos in list(self._active_positions.items()):
-                # [SSoT DECOUPLING] Separar clave interna del simbolo de mercado limpio
-                asset = pos.get('signal', {}).get('asset') or (raw_key.split('_')[-1] if '_' in raw_key else raw_key)
+                # [SSoT DECOUPLING] Separar clave interna del simbolo de mercado limpio (SOP-147)
+                asset = _extract_symbol_from_entry(raw_key, pos)
+                pos_id_loop = str((pos.get("execution") or {}).get("main_order_id") or (pos.get("signal") or {}).get("position_id") or "")
                 acc_id = pos.get('account_id', 'primary')
                 target_ex = self.account_manager.get_executor(acc_id) if hasattr(self, 'account_manager') else self.executor
                 if not target_ex:
@@ -274,20 +292,21 @@ class NexusNode:
                         continue
 
                     # 0. ⚡ [GIANT FIBER REFLEX - DROSOPHILA ESCAPE CIRCUIT]
-                    # Monitoreo de aceleración adversa ultrarrápida (ΔP / Δt) para evacuación de emergencia
-                    from engine.risk.bio_connectome_guard import giant_fiber_reflex
-                    should_escape, escape_reason = giant_fiber_reflex.check_emergency_escape(
-                        asset=asset,
-                        current_price=current_price,
-                        position_side=sig.get("type", "LONG"),
-                        entry_price=entry
-                    )
-                    if should_escape:
-                        logger.critical(f"⚡ [NEXUS BIO-REFLEX] Evacuando {asset} inmediatamente: {escape_reason}")
-                        try:
-                            await target_ex.close_position_market(asset)
-                        except Exception as esc_err:
-                            logger.error(f"❌ [NEXUS BIO-REFLEX] Fallo al forzar escape de mercado en {asset}: {esc_err}")
+                    # [SOP-147] Desactivado por defecto (ENABLE_FAST_VELOCITY_ESCAPE=False) y jamás cierra posiciones manuales.
+                    if ENABLE_FAST_VELOCITY_ESCAPE and sig.get("origin") != "MANUAL_OR_EXTERNAL":
+                        from engine.risk.bio_connectome_guard import giant_fiber_reflex
+                        should_escape, escape_reason = giant_fiber_reflex.check_emergency_escape(
+                            asset=asset,
+                            current_price=current_price,
+                            position_side=sig.get("type", "LONG"),
+                            entry_price=entry
+                        )
+                        if should_escape:
+                            logger.critical(f"⚡ [NEXUS BIO-REFLEX] Evacuando {asset} (PosId={pos_id_loop or 'N/A'}) inmediatamente: {escape_reason}")
+                            try:
+                                await target_ex.close_position_market(asset, position_id=pos_id_loop or None)
+                            except Exception as esc_err:
+                                logger.error(f"❌ [NEXUS BIO-REFLEX] Fallo al forzar escape de mercado en {asset}: {esc_err}")
 
                     # Solo evaluar SL si no estamos en período de gracia de apertura
                     is_sl = False
@@ -299,11 +318,12 @@ class NexusNode:
                         tp3 = sig.get('tp3', tp1 * 1.1)
                         is_tp = (current_price >= tp3) if is_long else (current_price <= tp3)
 
-                    if is_sl or is_tp:
+                    if (is_sl or is_tp) and not pos.get("_blackbox_recorded"):
+                        pos["_blackbox_recorded"] = True
                         result_str = "STOP_LOSS" if is_sl else "TAKE_PROFIT"
-                        logger.info(f"🏁 [OMEGA] {asset} alcanzó umbral de {result_str}. Grabando evento y transmitiendo. (Remoción delegada a Bitunix SSoT)")
+                        logger.info(f"🏁 [OMEGA] {asset} alcanzó umbral de {result_str}. Grabando evento único y transmitiendo. (Remoción delegada a Bitunix SSoT)")
 
-                        # Grabar en la caja negra para aprendizaje institucional
+                        # Grabar una única vez en la caja negra (SOP-147: previene duplicados cada 5s)
                         blackbox.record_trade(sig, result_str)
 
                         # Actualizar estado e informar al frontend y base de datos
@@ -1068,10 +1088,12 @@ class NexusNode:
                 continue
 
             sig = pos.get("signal", {})
-            sym = sig.get("asset", sig.get("symbol", key.split("_")[-1])).upper()
+            sym = _extract_symbol_from_entry(key, pos)
+            pos_id_risk = str((pos.get("execution") or {}).get("main_order_id") or sig.get("position_id") or "").strip()
 
-            # Evitar contar doble si la posición está registrada como 'XRPUSDT' y 'primary_XRPUSDT'
-            acc_sym_key = f"{pos_acc}_{sym}"
+            # [SOP-147] Deduplicar por positionId en Isolated-Multi (evita subconteo de 2 posiciones en la misma moneda)
+            # y por acc_sym solo en entradas legacy sin positionId (evita doble conteo de 'XRPUSDT' + 'primary_XRPUSDT').
+            acc_sym_key = f"{pos_acc}_{sym}_{pos_id_risk}" if pos_id_risk else f"{pos_acc}_{sym}"
             if acc_sym_key in counted_symbols:
                 continue
             counted_symbols.add(acc_sym_key)
@@ -2005,7 +2027,7 @@ class NexusNode:
             from engine.risk.risk_manager import RiskManager
             from engine.core.vault import vault
             hour_now = datetime.now(timezone.utc).hour
-            latest_regime = vault.get_latest_regime_state()
+            latest_regime = None if FORWARD_TEST_FROZEN_MODE else vault.get_latest_regime_state()
             reg_mult = float(latest_regime.get("risk_multiplier", 1.0)) if latest_regime else 1.0
             sizing_mult = RiskManager.calculate_alpha_tier_sizing(
                 asset,

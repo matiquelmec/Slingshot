@@ -45,7 +45,7 @@ Slingshot_Trading/
 │   ├── router/                           # analyzer.py, gatekeeper.py, telegram_dispatcher.py
 │   ├── strategies/                       # Estrategias SMC y Playbooks
 │   ├── workers/                          # orchestrator.py, market_scanner.py, tradfi_scanner.py, trade_manager.py, asset_incubator.py, ci_cd_sentinel.py, calendar_worker.py, news_worker.py
-│   └── tests/                            # Suite Pytest (537 tests recolectados, SOP-01 a SOP-146)
+│   └── tests/                            # Suite Pytest (544 tests recolectados, SOP-01 a SOP-147)
 │
 ├── sidecar/                              # Ingestor HFT WebSocket en Node.js (:8080)
 │   └── index.js                          # Streaming de ticks y ordenamiento L2 para activos canónicos
