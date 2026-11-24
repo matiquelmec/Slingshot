@@ -226,23 +226,23 @@ def calculate_volume_profile(df: pd.DataFrame, bins: int = 50) -> dict:
         return {"poc": price_min, "vah": price_min, "val": price_min, "lvns": [], "hvns": []}
 
     price_bins = np.linspace(price_min, price_max, bins + 1)
-    vol_at_price = np.zeros(bins)
-    
-    for _, row in df.iterrows():
-        # Lógica de Intersección: una vela alimenta todos los bins que toca
-        # Aseguramos que al menos un bin sea capturado (el que contiene el close)
-        candle_bins = np.where(
-            (price_bins[1:] >= row["low"]) & (price_bins[:-1] <= row["high"])
-        )[0]
-        
-        if len(candle_bins) > 0:
-            vol_per_bin = row["volume"] / len(candle_bins)
-            vol_at_price[candle_bins] += vol_per_bin
-        else:
-            # Fallback: asignar al bin que contiene el close si la vela es muy pequeña
-            idx = np.searchsorted(price_bins, row["close"]) - 1
-            idx = max(0, min(idx, bins - 1))
-            vol_at_price[idx] += row["volume"]
+
+    # [SOP-150] Vectorización matricial O(N*B) en C nativo (elimina df.iterrows())
+    lows = df["low"].to_numpy(dtype=np.float64)
+    highs = df["high"].to_numpy(dtype=np.float64)
+    closes = df["close"].to_numpy(dtype=np.float64)
+    vols = df["volume"].to_numpy(dtype=np.float64)
+
+    overlaps = (price_bins[None, 1:] >= lows[:, None]) & (price_bins[None, :-1] <= highs[:, None])
+    counts = overlaps.sum(axis=1)
+    safe_counts = np.where(counts > 0, counts, 1)
+    vol_at_price = (overlaps * (vols / safe_counts)[:, None]).sum(axis=0)
+
+    # Fallback vectorizado para velas puntuales sin intersección de bin
+    zero_mask = counts == 0
+    if np.any(zero_mask):
+        fallback_idxs = np.clip(np.searchsorted(price_bins, closes[zero_mask]) - 1, 0, bins - 1)
+        np.add.at(vol_at_price, fallback_idxs, vols[zero_mask])
     
     # 2. POC (Point of Control): Precio con mayor volumen
     poc_idx = np.argmax(vol_at_price)

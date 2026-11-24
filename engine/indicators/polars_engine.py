@@ -101,6 +101,13 @@ class PolarsEngine:
             "is_whale_leg": (leg / swing_low) > 0.05
         }
 
+    @classmethod
+    def compute_volume_profile(cls, df: Union[pd.DataFrame, pl.DataFrame], bins: int = 50) -> Dict[str, Any]:
+        """[SOP-150] Calcula Volume Profile vectorizado sobre arrays zero-copy de Polars/NumPy."""
+        from engine.indicators.volume import calculate_volume_profile
+        pdf = cls.to_pandas(df)
+        return calculate_volume_profile(pdf, bins=bins)
+
 # Instancia singleton para importación directa
 polars_engine = PolarsEngine()
 

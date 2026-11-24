@@ -393,8 +393,18 @@ async def get_diagnostic_state(asset: str, timeframe: str = "15m"):
             "volume": float(d.get("volume", 0))
         })
 
-    # [SOP-115 / SOP-149] Solo libro L2 real: cero muros sintéticos fabricados
+    # [SOP-115 / SOP-150] Solo libro L2 real: broadcaster o Sidecar HFT (:8080/depth/{sym})
     heatmap = broadcaster.state.heatmap if (broadcaster and broadcaster.state.heatmap) else None
+    if not heatmap:
+        try:
+            async with httpx.AsyncClient(timeout=0.25) as sc_client:
+                sc_res = await sc_client.get(f"http://127.0.0.1:8080/depth/{asset.upper()}")
+                if sc_res.status_code == 200:
+                    sc_data = sc_res.json()
+                    if isinstance(sc_data, dict) and sc_data.get("is_live") and (sc_data.get("bids") or sc_data.get("asks")):
+                        heatmap = sc_data
+        except Exception:
+            pass
 
     # 🧠 [ML INFERENCE HYDRATION] Inferencia live XGBoost sobre el buffer de velas
     ml_proj = broadcaster.state.ml_projection
@@ -531,7 +541,17 @@ async def get_liquidity_heatmap(asset: str, interval: str = "15m"):
     if broadcaster and broadcaster.state.heatmap:
         return sanitize_for_json(broadcaster.state.heatmap)
     
-    # [SOP-115 / SOP-149] Sin muros L2 reales aún: retornar vacío transparente
+    # [SOP-115 / SOP-150] Consultar Sidecar HFT (:8080/depth/{sym}) antes de retornar vacío
+    try:
+        async with httpx.AsyncClient(timeout=0.25) as sc_client:
+            sc_res = await sc_client.get(f"http://127.0.0.1:8080/depth/{sym}")
+            if sc_res.status_code == 200:
+                sc_data = sc_res.json()
+                if isinstance(sc_data, dict) and sc_data.get("is_live") and (sc_data.get("bids") or sc_data.get("asks")):
+                    return sanitize_for_json(sc_data)
+    except Exception:
+        pass
+
     return sanitize_for_json({
         "imbalance": 0.0,
         "sentiment": "NEUTRAL",
@@ -657,6 +677,74 @@ async def get_trades_history(limit: int = Query(50, ge=1, le=200)):
     except Exception:
         pass
     return sanitize_for_json(trades_out)
+
+
+@app.get("/api/v1/analytics/forward-tracker")
+async def get_forward_tracker_audit():
+    """
+    [SOP-146 / SOP-150] Retorna la auditoría estadística en vivo del Forward-Test
+    Out-of-Sample (Z-Score, Implementation Shortfall, IC 95% y bitácora inmutable).
+    """
+    from engine.analytics.live_forward_tracker import (
+        LiveForwardTracker,
+        LiveTradeObservation,
+    )
+    from engine.core.strategy_ssot import FORWARD_TEST_FROZEN_MODE
+
+    tracker = LiveForwardTracker()
+    observations: List[LiveTradeObservation] = []
+    policy_log: List[Dict[str, Any]] = []
+
+    try:
+        from engine.core.vault import vault
+        closed = vault.get_closed_trades()
+        for t in closed:
+            closed_at = str(t.get("closed_at") or t.get("timestamp") or "")
+            entry_p = float(t.get("entry_price") or 0.0)
+            risk_usd = float(t.get("risk_usd") or 0.0)
+            pnl_usd = float(t.get("pnl_usd") or 0.0)
+            if risk_usd <= 0.0 and abs(float(t.get("pnl_r") or 0.0)) > 1e-6:
+                risk_usd = abs(pnl_usd / float(t.get("pnl_r")))
+            observations.append(
+                LiveTradeObservation(
+                    symbol=str(t.get("symbol") or "BTCUSDT").upper(),
+                    direction=str(t.get("side") or "LONG").upper(),
+                    closed_at=closed_at,
+                    signal_entry_price=entry_p,
+                    fill_entry_price=entry_p,
+                    risk_usd=max(risk_usd, 1.0),
+                    gross_pnl_usd=pnl_usd,
+                    fees_usd=float(t.get("fees_usd") or 0.0),
+                    funding_usd=float(t.get("funding_usd") or 0.0),
+                )
+            )
+        with vault._get_conn() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name='forward_policy_audit_log'"
+            )
+            if cur.fetchone():
+                cur.execute(
+                    "SELECT created_at, drift_status, drift_z_score, recommended_action, executed_action "
+                    "FROM forward_policy_audit_log ORDER BY id DESC LIMIT 10"
+                )
+                for row in cur.fetchall():
+                    policy_log.append({
+                        "created_at": row[0],
+                        "drift_status": row[1],
+                        "drift_z_score": row[2],
+                        "recommended_action": row[3],
+                        "executed_action": row[4],
+                    })
+    except Exception:
+        pass
+
+    summary = tracker.evaluate_live_trades(observations)
+    return sanitize_for_json({
+        "frozen_mode": FORWARD_TEST_FROZEN_MODE,
+        "summary": summary.to_dict(),
+        "policy_audit_log": policy_log,
+    })
 
 
 @app.get("/api/v1/scanner/opportunities")

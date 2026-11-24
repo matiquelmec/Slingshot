@@ -21,6 +21,7 @@ import { formatCurrency } from '../../utils/formatters';
 import { getApiBaseUrl } from '../../utils/apiUrl';
 import { fetchSignalsAction, fetchTradesAction, BacktestAuditWidget, DatabaseHealthWidget, SystemDiagnosticsWidget } from '@/features';
 import { Trade } from '@/entities';
+import ForwardTestAuditCard from '../../components/ui/ForwardTestAuditCard';
 
 interface SignalEvent {
   id: string;
@@ -235,6 +236,11 @@ export default function HistoryPage() {
 
   return (
     <div className="h-full w-full flex flex-col p-6 overflow-hidden">
+      {/* SOP-150 Out-of-Sample Forward-Test Live Audit */}
+      <div className="flex-none mb-4">
+        <ForwardTestAuditCard />
+      </div>
+
       {/* Header */}
       <div className="flex-none mb-6">
         <div className="flex items-center justify-between mb-2">

@@ -18,6 +18,9 @@ class BitunixExecutor:
     # Caché compartida de offset de reloj del servidor Bitunix para todas las cuentas
     _shared_server_time_offset_ms: int = 0
     _shared_last_time_sync: float = 0.0
+    # [SOP-150] Caché compartida de libro L2 (TTL 1.5s) para deduplicar ráfagas multi-cuenta
+    _shared_l2_depth_cache: Dict[str, Dict[str, Any]] = {}
+    _L2_CACHE_TTL_SEC: float = 1.5
     
     def __init__(
         self,
@@ -41,12 +44,43 @@ class BitunixExecutor:
         self._last_positions_ts: float = 0.0
         self._positions_cache_ttl: float = 10.0
         self._recent_algo_closes: Dict[str, float] = {}
+        self._http_client: Optional[httpx.AsyncClient] = None
+        self._http_client_loop: Optional[asyncio.AbstractEventLoop] = None
         
         if not self.dry_run and (not self.api_key or not self.secret_key):
             logger.error(f"❌ [{self.account_label}] BITUNIX_API_KEY o SECRET_KEY no encontrados. Cambiando a DRY_RUN.")
             self.dry_run = True
             
         logger.info(f"🛡️ [BITUNIX] Executor '{self.account_label}' inicializado (Dry Run: {self.dry_run})")
+
+    def _get_http_client(self) -> httpx.AsyncClient:
+        """
+        [SOP-150] Retorna un cliente HTTPX persistente con TLS Keep-Alive Pooling
+        vinculado al event loop activo (inmune a cambios de loop en pytest-asyncio).
+        """
+        loop = asyncio.get_running_loop()
+        if (
+            self._http_client is None
+            or self._http_client.is_closed
+            or self._http_client_loop is not loop
+        ):
+            self._http_client = httpx.AsyncClient(
+                timeout=10.0,
+                limits=httpx.Limits(
+                    max_keepalive_connections=20,
+                    max_connections=50,
+                    keepalive_expiry=60.0,
+                ),
+            )
+            self._http_client_loop = loop
+        return self._http_client
+
+    async def aclose(self) -> None:
+        """Cierra limpiamente el pool HTTPX persistente."""
+        if self._http_client is not None and not self._http_client.is_closed:
+            await self._http_client.aclose()
+        self._http_client = None
+        self._http_client_loop = None
 
     async def sync_server_time(self) -> int:
         """
@@ -189,32 +223,32 @@ class BitunixExecutor:
                     "Content-Type": "application/json"
                 }
 
-                async with httpx.AsyncClient(timeout=10.0) as client:
-                    if method.upper() == "POST":
-                        response = await client.post(url, params=params, content=body_str, headers=curr_headers)
-                    else:
-                        response = await client.get(url, params=params, headers=curr_headers)
+                client = self._get_http_client()
+                if method.upper() == "POST":
+                    response = await client.post(url, params=params, content=body_str, headers=curr_headers)
+                else:
+                    response = await client.get(url, params=params, headers=curr_headers)
 
-                    if response.status_code == 429 or response.status_code >= 500:
-                        raise httpx.HTTPStatusError(f"HTTP {response.status_code}", request=response.request, response=response)
+                if response.status_code == 429 or response.status_code >= 500:
+                    raise httpx.HTTPStatusError(f"HTTP {response.status_code}", request=response.request, response=response)
 
-                    response.raise_for_status()
-                    res_json = response.json()
+                response.raise_for_status()
+                res_json = response.json()
 
-                    # Calibración dinámica continua mediante header oficial req-arrive-time (SOP-116)
-                    server_arrive_ts = response.headers.get("req-arrive-time")
-                    if server_arrive_ts and server_arrive_ts.isdigit():
-                        s_ts = int(server_arrive_ts)
-                        l_ts = int(time.time() * 1000)
-                        drift_ms = s_ts - l_ts
-                        BitunixExecutor._shared_server_time_offset_ms = drift_ms
-                        BitunixExecutor._shared_last_time_sync = time.time()
-                        self._server_time_offset_ms = drift_ms
+                # Calibración dinámica continua mediante header oficial req-arrive-time (SOP-116)
+                server_arrive_ts = response.headers.get("req-arrive-time")
+                if server_arrive_ts and server_arrive_ts.isdigit():
+                    s_ts = int(server_arrive_ts)
+                    l_ts = int(time.time() * 1000)
+                    drift_ms = s_ts - l_ts
+                    BitunixExecutor._shared_server_time_offset_ms = drift_ms
+                    BitunixExecutor._shared_last_time_sync = time.time()
+                    self._server_time_offset_ms = drift_ms
 
-                    if res_json.get("code") != 0:
-                        # Errores específicos de exchange (ej. 100007, 10002) no requieren retry infinito
-                        logger.error(f"❌ Bitunix API error en {path}: {res_json}")
-                    return res_json
+                if res_json.get("code") != 0:
+                    # Errores específicos de exchange (ej. 100007, 10002) no requieren retry infinito
+                    logger.error(f"❌ Bitunix API error en {path}: {res_json}")
+                return res_json
 
             except Exception as e:
                 last_err = e
@@ -301,13 +335,19 @@ class BitunixExecutor:
         return (0, 6) if any(m in sym for m in ["AKE", "PEPE", "SHIB", "FLOKI", "BONK"]) else (2, 2)
 
     async def get_orderbook_depth(self, symbol: str, limit: int = 15) -> Optional[Dict[str, List[Any]]]:
-        """SOP-133/108: Obtiene snapshot L2 (bids/asks) desde Bitunix para auditoría de microestructura."""
+        """SOP-133/108/150: Obtiene snapshot L2 (bids/asks) desde Bitunix con caché de ráfaga (1.5s)."""
         if self.dry_run:
             return None
         sym = symbol.replace('/', '').upper()
         # Bitunix /api/v1/futures/market/depth solo acepta ["1", "5", "15", "50", "max"]
         allowed_limits = (1, 5, 15, 50)
         safe_limit = next((val for val in allowed_limits if val >= int(limit)), 50)
+        cache_key = f"{sym}:{safe_limit}"
+        now = time.time()
+        cached = BitunixExecutor._shared_l2_depth_cache.get(cache_key)
+        if cached and (now - cached["ts"]) < BitunixExecutor._L2_CACHE_TTL_SEC:
+            return cached["data"]
+
         try:
             res = await self._request("GET", "/api/v1/futures/market/depth", params={"symbol": sym, "limit": str(safe_limit)})
             if res.get("code") == 0 and isinstance(res.get("data"), dict):
@@ -315,7 +355,9 @@ class BitunixExecutor:
                 bids = [(float(lvl[0]), float(lvl[1])) for lvl in (data.get("bids") or [])[:safe_limit] if len(lvl) >= 2]
                 asks = [(float(lvl[0]), float(lvl[1])) for lvl in (data.get("asks") or [])[:safe_limit] if len(lvl) >= 2]
                 if bids and asks:
-                    return {"bids": bids, "asks": asks}
+                    payload = {"bids": bids, "asks": asks}
+                    BitunixExecutor._shared_l2_depth_cache[cache_key] = {"ts": now, "data": payload}
+                    return payload
         except Exception as e:
             logger.debug(f"⚠️ Error consultando depth L2 Bitunix para {sym}: {e}")
         return None
