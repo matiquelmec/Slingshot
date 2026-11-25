@@ -77,3 +77,8 @@ def test_prop_firm_simulator_uses_weighted_r_for_ftmo_swing(tmp_path: Path):
 def test_trade_manager_has_bitunix_sync_lock():
     tm = TradeManager()
     assert isinstance(tm._bitunix_sync_lock, asyncio.Lock)
+
+
+def test_fastapi_gateway_imports_cleanly():
+    from engine.api.main import app
+    assert app is not None

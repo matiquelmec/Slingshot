@@ -7,7 +7,7 @@ Arquitectura Zero-Redis: Todo el estado vive en engine.core.store.
 
 from engine.core.logger import logger
 from pathlib import Path
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 import httpx
 import pandas as pd
 import asyncio
