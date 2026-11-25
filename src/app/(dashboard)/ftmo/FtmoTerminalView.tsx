@@ -4,6 +4,7 @@ import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ShieldCheck, Target, RefreshCw, Layers, Award, TrendingUp, AlertTriangle, Copy, CheckCircle2, Activity, ArrowUpRight, ArrowDownRight, Clock, Zap } from 'lucide-react';
 import { formatCurrency } from '../../utils/formatters';
+import { calculateMt5Lots } from '../../utils/ftmoSpecs';
 
 interface TradFiOpportunity {
     asset: string;
@@ -157,10 +158,10 @@ export default function FtmoPage() {
                         </div>
                         <div>
                             <h1 className="text-base lg:text-xl font-black tracking-wider lg:tracking-widest text-white uppercase flex items-center gap-2">
-                                FTMO ALPHA TERMINAL <span className="text-white/20 font-light hidden sm:inline">|</span> <span className="text-neon-cyan text-xs lg:text-sm hidden sm:inline">METATRADER 5</span>
+                                FTMO SWING ALPHA TERMINAL <span className="text-white/20 font-light hidden sm:inline">|</span> <span className="text-neon-cyan text-xs lg:text-sm hidden sm:inline">METATRADER 5 (1H)</span>
                             </h1>
                             <p className="text-[10px] lg:text-xs text-white/40 font-mono mt-0.5">
-                                Activos Tradicionales: Oro Spot (XAUUSD), Nasdaq (US100), Dow Jones (US30) y GBPUSD
+                                Portafolio Auditado SOP-154: Oro (XAUUSD), Nasdaq (US100.cash), Plata (XAGUSD) y FTSE (UK100.cash)
                             </p>
                         </div>
                     </div>
@@ -188,6 +189,19 @@ export default function FtmoPage() {
                     >
                         {selectedPhase === 'PHASE_1' ? 'FASE 1 (10% TARGET)' : 'FASE 2 (5% TARGET)'}
                     </button>
+                </div>
+            </div>
+
+            {/* FTMO Swing SOP-154 Certification Banner */}
+            <div className="mt-4 bg-gradient-to-r from-emerald-950/30 via-[#050B14] to-cyan-950/30 border border-emerald-500/20 rounded-2xl p-3.5 flex flex-wrap items-center justify-between gap-3 font-mono text-[10px]">
+                <div className="flex items-center gap-2.5">
+                    <span className={`px-2 py-0.5 rounded-full font-black border ${mt5Data?.connected ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40' : 'bg-amber-500/15 text-amber-300 border-amber-500/30'}`}>
+                        {mt5Data?.connected ? '🟢 MT5 CONECTADO' : '🟡 EN ESPERA DE FREE TRIAL FTMO SWING (FAIL-CLOSED)'}
+                    </span>
+                    <span className="text-white/70">Walk-Forward OOS: <strong className="text-neon-green">4/4 Activos 1H</strong></span>
+                </div>
+                <div className="text-white/60">
+                    Monte Carlo CE(S)T: <strong className="text-neon-cyan">83.4% Pase Fondeada</strong> @ <strong className="text-white">0.75% riesgo</strong>
                 </div>
             </div>
 
@@ -527,29 +541,36 @@ export default function FtmoPage() {
                                             <span className="text-white font-bold">{formatCurrency(opp.be_price)}</span>
                                         </div>
                                         <div className="bg-emerald-500/10 p-2 rounded-xl border border-emerald-500/20">
-                                            <span className="text-emerald-400 text-[8px] block">TP1 (+1.3R / 70%)</span>
+                                            <span className="text-emerald-400 text-[8px] block">TP1 (+1.3R / 50%)</span>
                                             <span className="text-emerald-400 font-bold">{formatCurrency(opp.tp1)}</span>
                                         </div>
                                     </div>
 
                                     {/* MT5 Lot Calculator Box */}
+                                    {(() => {
+                                        const dynRiskPct = selectedPhase === 'PHASE_1' ? 0.75 : 0.50;
+                                        const dynRiskUsd = Math.round(selectedAccountSize * (dynRiskPct / 100));
+                                        const dynLots = calculateMt5Lots(opp.asset, dynRiskUsd, Math.abs(opp.price - opp.stop_loss));
+                                        return (
                                     <div className="bg-black/40 border border-white/5 rounded-xl p-3 font-mono mb-4">
                                         <div className="flex justify-between items-center text-[10px] mb-1">
-                                            <span className="text-white/50">Lotes Sugeridos MT5:</span>
-                                            <span className="text-emerald-400 font-black text-[13px]">{opp.mt5_lots} Lots</span>
+                                            <span className="text-white/50">Lotes Sugeridos MT5 (${selectedAccountSize / 1000}K):</span>
+                                            <span className="text-emerald-400 font-black text-[13px]">{dynLots.toFixed(2)} Lots</span>
                                         </div>
                                         <div className="flex justify-between items-center text-[9px] text-white/40 border-t border-white/5 pt-1">
                                             <span>Riesgo en Cuenta:</span>
-                                            <span className="text-neon-cyan font-bold">${opp.risk_usd} USD (0.75%)</span>
+                                            <span className="text-neon-cyan font-bold">${dynRiskUsd} USD ({dynRiskPct}%)</span>
                                         </div>
                                     </div>
+                                        );
+                                    })()}
                                 </div>
 
                                 {/* Copy Button */}
                                 <button
                                     onClick={() => {
                                         const action = isLong ? 'BUY LIMIT' : 'SELL LIMIT';
-                                        const text = `[FTMO MT5] ${action} ${opp.asset} @ ${opp.price} | LOTES: ${opp.mt5_lots} | SL: ${opp.stop_loss} | 🛡️ BE (+1.0R): ${opp.be_price} | 🥇 TP1 (+1.3R): ${opp.tp1} | 🎯 TP3 (+3.5R): ${opp.tp3}`;
+                                        const text = `[FTMO MT5] ${action} ${opp.asset} @ ${opp.price} | LOTES: ${calculateMt5Lots(opp.asset, Math.round(selectedAccountSize * ((selectedPhase === 'PHASE_1' ? 0.75 : 0.50) / 100)), Math.abs(opp.price - opp.stop_loss)).toFixed(2)} | SL: ${opp.stop_loss} | 🛡️ BE (+1.0R): ${opp.be_price} | 🥇 TP1 (+1.3R): ${opp.tp1} | 🎯 TP3 (+3.8R): ${opp.tp3}`;
                                         navigator.clipboard.writeText(text);
                                         setCopiedAsset(assetKey);
                                         setTimeout(() => setCopiedAsset(null), 2000);

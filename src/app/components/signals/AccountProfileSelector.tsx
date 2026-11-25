@@ -1,9 +1,10 @@
 // app/components/signals/AccountProfileSelector.tsx
 'use client';
 
-import React from 'react';
+import React, { useEffect } from 'react';
 import { AccountProfileType, FtmoPhase, AccountProfileConfig } from '../../types/signal';
 import { isFtmoMt5Visible } from '@/shared';
+import { useAccountTelemetryStore } from '../../store/accountTelemetryStore';
 
 export interface AccountProfileState {
     profile: AccountProfileType;
@@ -21,19 +22,35 @@ interface AccountProfileSelectorProps {
 export const PROFILES_CONFIG: Record<AccountProfileType, (phase: FtmoPhase) => AccountProfileConfig> = {
     PERSONAL_250K: () => ({
         id: 'PERSONAL_250K',
-        name: 'Cuenta Personal $250k',
-        accountSize: 250000,
-        riskPct: 1.5,
-        riskUsd: 3750,
+        name: 'Simulador Bitunix Core (2.50%)',
+        accountSize: 10000,
+        riskPct: 2.5,
+        riskUsd: 250,
         platform: 'BITUNIX',
         isFtmo: false,
     }),
+    FTMO_50K: (phase) => ({
+        id: 'FTMO_50K',
+        name: 'FTMO Swing $50k',
+        accountSize: 50000,
+        riskPct: phase === 'PHASE_1' ? 0.75 : phase === 'PHASE_2' ? 0.50 : 0.35,
+        riskUsd: phase === 'PHASE_1' ? 375 : phase === 'PHASE_2' ? 250 : 175,
+        platform: 'MT5',
+        isFtmo: true,
+        phase,
+        targetProfitPct: phase === 'PHASE_1' ? 10.0 : phase === 'PHASE_2' ? 5.0 : undefined,
+        targetProfitUsd: phase === 'PHASE_1' ? 5000 : phase === 'PHASE_2' ? 2500 : undefined,
+        maxDailyLossPct: 5.0,
+        maxDailyLossUsd: 2500,
+        maxTotalLossPct: 10.0,
+        maxTotalLossUsd: 5000,
+    }),
     FTMO_100K: (phase) => ({
         id: 'FTMO_100K',
-        name: 'FTMO Challenge $100k',
+        name: 'FTMO Swing $100k',
         accountSize: 100000,
-        riskPct: phase === 'PHASE_1' ? 0.75 : phase === 'PHASE_2' ? 0.50 : 0.75,
-        riskUsd: phase === 'PHASE_1' ? 750 : phase === 'PHASE_2' ? 500 : 750,
+        riskPct: phase === 'PHASE_1' ? 0.75 : phase === 'PHASE_2' ? 0.50 : 0.35,
+        riskUsd: phase === 'PHASE_1' ? 750 : phase === 'PHASE_2' ? 500 : 350,
         platform: 'MT5',
         isFtmo: true,
         phase,
@@ -46,10 +63,10 @@ export const PROFILES_CONFIG: Record<AccountProfileType, (phase: FtmoPhase) => A
     }),
     FTMO_200K: (phase) => ({
         id: 'FTMO_200K',
-        name: 'FTMO Challenge $200k',
+        name: 'FTMO Swing $200k',
         accountSize: 200000,
-        riskPct: phase === 'PHASE_1' ? 0.75 : phase === 'PHASE_2' ? 0.50 : 0.75,
-        riskUsd: phase === 'PHASE_1' ? 1500 : phase === 'PHASE_2' ? 1000 : 1500,
+        riskPct: phase === 'PHASE_1' ? 0.75 : phase === 'PHASE_2' ? 0.50 : 0.35,
+        riskUsd: phase === 'PHASE_1' ? 1500 : phase === 'PHASE_2' ? 1000 : 700,
         platform: 'MT5',
         isFtmo: true,
         phase,
@@ -78,11 +95,25 @@ export const AccountProfileSelector: React.FC<AccountProfileSelectorProps> = ({
     onPhaseChange,
 }) => {
     const showFtmoMt5 = isFtmoMt5Visible();
-    const effectiveProfile: AccountProfileType =
-        !showFtmoMt5 && (currentProfile === 'FTMO_100K' || currentProfile === 'FTMO_200K')
-            ? 'PERSONAL_250K'
-            : currentProfile;
-    const activeConfig = PROFILES_CONFIG[effectiveProfile](currentPhase);
+    const {
+        syncAccountTelemetry,
+        getResolvedBitunixConfig,
+        getResolvedFtmoConfig,
+    } = useAccountTelemetryStore();
+
+    useEffect(() => {
+        syncAccountTelemetry();
+    }, [syncAccountTelemetry]);
+
+    const isFtmoProfile = currentProfile === 'FTMO_50K' || currentProfile === 'FTMO_100K' || currentProfile === 'FTMO_200K';
+    const effectiveProfile: AccountProfileType = !showFtmoMt5 && isFtmoProfile ? 'PERSONAL_250K' : currentProfile;
+
+    const activeConfig = effectiveProfile === 'PERSONAL_250K'
+        ? getResolvedBitunixConfig()
+        : getResolvedFtmoConfig(
+            effectiveProfile === 'FTMO_50K' ? 50000 : effectiveProfile === 'FTMO_200K' ? 200000 : 100000,
+            currentPhase
+        );
 
     return (
         <div className="flex flex-col gap-2.5 bg-black/60 border border-white/10 rounded-xl p-3 shadow-lg backdrop-blur-md">
@@ -95,19 +126,29 @@ export const AccountProfileSelector: React.FC<AccountProfileSelectorProps> = ({
                     <div className="flex items-center gap-1 bg-white/5 p-1 rounded-lg border border-white/10">
                         <button
                             onClick={() => onProfileChange('PERSONAL_250K')}
-                            className={`px-2.5 py-1 rounded-md text-[10px] font-mono font-bold transition-all ${
+                            className={`min-h-[44px] px-2.5 py-1 rounded-md text-[10px] font-mono font-bold transition-all ${
                                 effectiveProfile === 'PERSONAL_250K'
                                     ? 'bg-neon-cyan text-black shadow-[0_0_12px_rgba(6,182,212,0.5)] font-black'
                                     : 'text-white/60 hover:text-white hover:bg-white/5'
                             }`}
                         >
-                            🔵 Personal $250k
+                            ⚡ Bitunix Core
                         </button>
                         {showFtmoMt5 && (
                             <>
                                 <button
+                                    onClick={() => onProfileChange('FTMO_50K')}
+                                    className={`min-h-[44px] px-2.5 py-1 rounded-md text-[10px] font-mono font-bold transition-all ${
+                                        effectiveProfile === 'FTMO_50K'
+                                            ? 'bg-neon-green text-black shadow-[0_0_12px_rgba(165,243,180,0.5)] font-black'
+                                            : 'text-white/60 hover:text-white hover:bg-white/5'
+                                    }`}
+                                >
+                                    🟢 FTMO $50k
+                                </button>
+                                <button
                                     onClick={() => onProfileChange('FTMO_100K')}
-                                    className={`px-2.5 py-1 rounded-md text-[10px] font-mono font-bold transition-all ${
+                                    className={`min-h-[44px] px-2.5 py-1 rounded-md text-[10px] font-mono font-bold transition-all ${
                                         effectiveProfile === 'FTMO_100K'
                                             ? 'bg-neon-green text-black shadow-[0_0_12px_rgba(165,243,180,0.5)] font-black'
                                             : 'text-white/60 hover:text-white hover:bg-white/5'
@@ -117,7 +158,7 @@ export const AccountProfileSelector: React.FC<AccountProfileSelectorProps> = ({
                                 </button>
                                 <button
                                     onClick={() => onProfileChange('FTMO_200K')}
-                                    className={`px-2.5 py-1 rounded-md text-[10px] font-mono font-bold transition-all ${
+                                    className={`min-h-[44px] px-2.5 py-1 rounded-md text-[10px] font-mono font-bold transition-all ${
                                         effectiveProfile === 'FTMO_200K'
                                             ? 'bg-purple-500 text-white shadow-[0_0_12px_rgba(168,85,247,0.5)] font-black'
                                             : 'text-white/60 hover:text-white hover:bg-white/5'

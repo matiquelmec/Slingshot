@@ -35,12 +35,12 @@ export const FtmoShieldWidget: React.FC<FtmoShieldWidgetProps> = ({
                         <span className="relative inline-flex rounded-full h-2 w-2 bg-neon-green"></span>
                     </span>
                     <span className="text-[10px] font-mono font-black text-neon-green uppercase tracking-wider">
-                        🛡️ ESCUDO DE PROTECCIÓN FTMO &bull; {config.name}
+                        🛡️ ESCUDO FTMO SWING &bull; {config.name}
                     </span>
                 </div>
                 <div className="flex items-center gap-2">
                     <span className="text-[9px] font-mono text-white/50 bg-white/5 px-2 py-0.5 rounded border border-white/10">
-                        Kill-Switch Diario: <strong className="text-neon-green">ACTIVO (Máx 2 SLs)</strong>
+                        Kill-Switch Diario: <strong className="text-neon-green">-3.5% CE(S)T</strong>
                     </span>
                 </div>
             </div>

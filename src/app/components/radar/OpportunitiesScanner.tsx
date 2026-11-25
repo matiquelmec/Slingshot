@@ -4,10 +4,11 @@ import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Activity, ShieldCheck, Zap, ArrowUpRight, ArrowDownRight, RefreshCw, Layers } from 'lucide-react';
 import { formatCurrency } from '../../utils/formatters';
-import { AccountProfileSelector, PROFILES_CONFIG } from '../signals/AccountProfileSelector';
+import { AccountProfileSelector } from '../signals/AccountProfileSelector';
 import { FtmoShieldWidget } from '../signals/FtmoShieldWidget';
-import { AccountProfileType, FtmoPhase } from '../../types/signal';
-import { calculateMt5Lots, MarketCategory, getAssetMarketCategory } from '../../utils/ftmoSpecs';
+import { calculateMt5Lots, calculateBitunixPositionUsdt, MarketCategory, getAssetMarketCategory } from '../../utils/ftmoSpecs';
+import { useAccountTelemetryStore } from '../../store/accountTelemetryStore';
+import { isFtmoMt5Visible } from '@/shared';
 import { getApiBaseUrl } from '../../utils/apiUrl';
 
 interface ChecklistItem {
@@ -74,11 +75,25 @@ export default function OpportunitiesScanner() {
     const [expandedAsset, setExpandedAsset] = useState<string | null>(null);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
-    const [accountProfile, setAccountProfile] = useState<AccountProfileType>('FTMO_100K');
-    const [ftmoPhase, setFtmoPhase] = useState<FtmoPhase>('PHASE_1');
     const [copiedAsset, setCopiedAsset] = useState<string | null>(null);
 
-    const activeProfileConfig = PROFILES_CONFIG[accountProfile](ftmoPhase);
+    const {
+        selectedProfile: accountProfile,
+        ftmoPhase,
+        ftmoEquity,
+        ftmoDailyLossUsd,
+        setSelectedProfile: setAccountProfile,
+        setFtmoPhase,
+        syncAccountTelemetry,
+        getResolvedBitunixConfig,
+        getResolvedFtmoConfig,
+    } = useAccountTelemetryStore();
+
+    const showFtmoMt5 = isFtmoMt5Visible();
+    const isFtmoSelected = showFtmoMt5 && (accountProfile === 'FTMO_50K' || accountProfile === 'FTMO_100K' || accountProfile === 'FTMO_200K');
+    const resolvedBitunixConfig = getResolvedBitunixConfig();
+    const resolvedFtmoConfig = getResolvedFtmoConfig();
+    const activeProfileConfig = isFtmoSelected ? resolvedFtmoConfig : resolvedBitunixConfig;
 
     const fetchOpps = async () => {
         try {
@@ -307,7 +322,7 @@ export default function OpportunitiesScanner() {
                                     : 'text-white/40 hover:text-neon-green border border-transparent'
                             }`}
                         >
-                            🏛️ FTMO TradFi (XAUUSD, US100, Core)
+                            🏛️ FTMO Swing (XAU, US100, XAG, UK100)
                         </button>
                         <button
                             onClick={() => setMarketCategoryFilter('CRYPTO_ALTCOINS')}
@@ -317,11 +332,16 @@ export default function OpportunitiesScanner() {
                                     : 'text-white/40 hover:text-neon-cyan border border-transparent'
                             }`}
                         >
-                            ⚡ Altcoins (Bitunix)
+                            ⚡ Cripto Core (Bitunix)
                         </button>
                     </div>
 
-                    {/* Timeframe Selector tabs */}
+                    {/* Timeframe Selector tabs (adaptativo para FTMO 1H vs Cripto) */}
+                    {marketCategoryFilter === 'FTMO_INSTITUTIONAL' ? (
+                        <div className="flex items-center px-3 py-1.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-[10px] font-mono font-bold text-emerald-300">
+                            ⏱️ Marco Auditado: 1H Institucional (SOP-154)
+                        </div>
+                    ) : (
                     <div className="flex bg-[#070E18] p-1 rounded-xl border border-white/5">
                         <button
                             onClick={() => { setActiveTab('scalp'); setExpandedAsset(null); }}
@@ -330,7 +350,7 @@ export default function OpportunitiesScanner() {
                                     ? 'bg-neon-cyan/20 text-neon-cyan border border-neon-cyan/40 shadow-[0_0_10px_rgba(6,182,212,0.2)]'
                                     : 'text-white/40 hover:text-white border border-transparent'
                             }`}
-                            title="Altcoins de Alto Beta (RENDER, SUI, INJ, NEAR, FET, PAXG)"
+                            title="Altcoins Canónicas 15m (SUI, INJ, NEAR, FET, DOT)"
                         >
                             ⚡ Scalp (15m)
                         </button>
@@ -341,7 +361,7 @@ export default function OpportunitiesScanner() {
                                     ? 'bg-neon-purple/20 text-purple-400 border border-purple-500/40 shadow-[0_0_10px_rgba(168,85,247,0.2)]'
                                     : 'text-white/40 hover:text-white border border-transparent'
                             }`}
-                            title="Mega-Caps Institucionales OTE Swing (BTC, ETH, SOL, XRP, AVAX, LINK)"
+                            title="Mega-Caps Institucionales OTE Swing 1H (BTC, ETH, SOL, XRP, LINK)"
                         >
                             ⏱️ Intraday (1H)
                         </button>
@@ -356,6 +376,7 @@ export default function OpportunitiesScanner() {
                             Diario (1D)
                         </button>
                     </div>
+                    )}
 
                     <button
                         onClick={handleManualRefresh}
@@ -378,8 +399,8 @@ export default function OpportunitiesScanner() {
                 {activeProfileConfig.isFtmo && (
                     <FtmoShieldWidget
                         config={activeProfileConfig}
-                        currentProfitUsd={0}
-                        dailyLossUsd={0}
+                        currentProfitUsd={Math.max(0, ftmoEquity - activeProfileConfig.accountSize)}
+                        dailyLossUsd={ftmoDailyLossUsd}
                     />
                 )}
             </div>
@@ -578,7 +599,7 @@ export default function OpportunitiesScanner() {
                                                     </span>
                                                 </div>
                                                 <div className="flex justify-between items-center group/level">
-                                                    <span className="text-white/40">TP1 (+1.3R / 70%):</span>
+                                                    <span className="text-white/40">TP1 (+1.3R / 50%):</span>
                                                     <span 
                                                         onClick={() => {
                                                             navigator.clipboard.writeText(opp.tp1.toString());
@@ -642,48 +663,54 @@ export default function OpportunitiesScanner() {
                                                         <span id={`copy-tp3-${assetKey}`} className="text-[7px] text-white/20 border border-white/10 px-1 py-0.5 rounded opacity-0 group-hover/level:opacity-100 transition-opacity font-sans">COPIAR</span>
                                                     </span>
                                                 </div>
-                                                {/* Dynamic MT5 / Account Lot Size & 1-Click Copy */}
+                                                {/* Contextual Account Sizing (FTMO MT5 vs Bitunix USDT) & 1-Click Copy */}
+                                                {(() => {
+                                                    const isCardTradFi = getAssetMarketCategory(opp.asset) === 'FTMO_INSTITUTIONAL';
+                                                    const cardCfg = isCardTradFi ? resolvedFtmoConfig : resolvedBitunixConfig;
+                                                    const dist = Math.abs(opp.price - opp.stop_loss);
+                                                    const lots = calculateMt5Lots(opp.asset, cardCfg.riskUsd, dist);
+                                                    const posUsdt = calculateBitunixPositionUsdt(cardCfg.accountSize, cardCfg.riskPct, opp.price, opp.stop_loss);
+                                                    return (
                                                 <div className="flex flex-col gap-1.5 pt-2 border-t border-white/5 font-mono">
                                                     <div className="flex justify-between items-center text-[10px]">
                                                         <span className="text-neon-cyan/80 font-bold">
-                                                            {activeProfileConfig.isFtmo ? `🎯 Lotes MT5 (${activeProfileConfig.name.split(' ')[0]}):` : 'Pos Size Bitunix:'}
+                                                            {isCardTradFi ? `🎯 Lotes MT5 (${cardCfg.name}):` : `⚡ Posición Bitunix (${cardCfg.riskPct}%):`}
                                                         </span>
                                                         <span className="text-neon-green font-black text-[12px]">
-                                                            {(() => {
-                                                                const risk = activeProfileConfig.riskUsd;
-                                                                const dist = Math.abs(opp.price - opp.stop_loss);
-                                                                const lots = calculateMt5Lots(opp.asset, risk, dist);
-                                                                return activeProfileConfig.isFtmo ? `${lots.toFixed(2)} Lots` : `$${formatCurrency(opp.position_size_usdt || 12500)} USDT`;
-                                                            })()}
+                                                            {isCardTradFi ? `${lots.toFixed(2)} Lots` : `$${formatCurrency(posUsdt || opp.position_size_usdt || 0)} USDT`}
                                                         </span>
                                                     </div>
                                                     <div className="flex justify-between items-center text-[9px] text-white/40">
                                                         <span>Riesgo en Cuenta:</span>
-                                                        <span className="text-neon-cyan font-bold">${activeProfileConfig.riskUsd} USD ({activeProfileConfig.riskPct}%)</span>
+                                                        <span className="text-neon-cyan font-bold">${cardCfg.riskUsd} USD ({cardCfg.riskPct}%)</span>
                                                     </div>
                                                     <button
                                                         onClick={() => {
                                                             const action = opp.direction.toUpperCase() === 'LONG' ? 'BUY LIMIT' : 'SELL LIMIT';
-                                                            const sym = opp.asset.replace('USDT', 'USD');
-                                                            const risk = activeProfileConfig.riskUsd;
-                                                            const dist = Math.abs(opp.price - opp.stop_loss);
-                                                            const lots = calculateMt5Lots(opp.asset, risk, dist);
+                                                            const sym = isCardTradFi ? opp.asset.replace('USDT', 'USD') : opp.asset;
                                                             const isL = opp.direction.toUpperCase() === 'LONG';
-                                                            const beP = opp.be_price || (isL ? opp.price + (dist * 1.0) : opp.price - (dist * 1.0));
-                                                            const text = `[${activeProfileConfig.isFtmo ? 'FTMO MT5' : 'BITUNIX'}] ${action} ${sym} @ ${opp.price} | LOTES: ${lots.toFixed(2)} | SL: ${opp.stop_loss} | 🛡️ BE (+1.0R): ${formatCurrency(beP)} | 🥇 TP1: ${opp.tp1} | 🎯 TP3: ${opp.tp3}`;
+                                                            const beP = opp.be_price || (isL ? opp.price + dist : opp.price - dist);
+                                                            const sizeText = isCardTradFi ? `LOTES: ${lots.toFixed(2)}` : `POS: $${posUsdt} USDT`;
+                                                            const text = `[${isCardTradFi ? 'FTMO SWING MT5' : 'BITUNIX FUTURES'}] ${action} ${sym} @ ${opp.price} | ${sizeText} | SL: ${opp.stop_loss} | 🛡️ BE (+1.0R): ${formatCurrency(beP)} | 🥇 TP1: ${opp.tp1} | 🎯 TP3: ${opp.tp3}`;
                                                             navigator.clipboard.writeText(text);
                                                             setCopiedAsset(assetKey);
                                                             setTimeout(() => setCopiedAsset(null), 2000);
                                                         }}
-                                                        className={`w-full py-2 rounded-xl text-[10px] font-mono font-black transition-all flex items-center justify-center gap-1.5 cursor-pointer border active:scale-[0.98] ${
+                                                        className={`w-full min-h-[44px] py-2 rounded-xl text-[10px] font-mono font-black transition-all flex items-center justify-center gap-1.5 cursor-pointer border active:scale-[0.98] ${
                                                             copiedAsset === assetKey
                                                                 ? 'bg-emerald-500 text-black border-emerald-400 shadow-[0_0_15px_rgba(16,185,129,0.6)]'
                                                                 : 'bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-400 border-emerald-500/30 shadow-[0_0_10px_rgba(16,185,129,0.1)]'
                                                         }`}
                                                     >
-                                                        {copiedAsset === assetKey ? '✅ ¡ORDEN COPIADA EN 1-CLIC!' : '📋 COPIAR PARÁMETROS ORDEN MT5'}
+                                                        {copiedAsset === assetKey
+                                                            ? '✅ ¡ORDEN COPIADA EN 1-CLIC!'
+                                                            : isCardTradFi
+                                                                ? '📋 COPIAR ORDEN MT5 (FTMO SWING)'
+                                                                : '📋 COPIAR ORDEN BITUNIX'}
                                                     </button>
                                                 </div>
+                                                    );
+                                                })()}
                                             </div>
                                         </div>
 

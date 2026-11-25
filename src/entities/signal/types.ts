@@ -3,7 +3,7 @@
  * FSD Layer: entities/signal
  */
 
-export type AccountProfileType = 'PERSONAL_250K' | 'FTMO_100K' | 'FTMO_200K' | 'CUSTOM';
+export type AccountProfileType = 'PERSONAL_250K' | 'FTMO_50K' | 'FTMO_100K' | 'FTMO_200K' | 'CUSTOM';
 export type FtmoPhase = 'PHASE_1' | 'PHASE_2' | 'FUNDED';
 
 export interface AccountProfileConfig {

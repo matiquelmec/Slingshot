@@ -15,10 +15,12 @@ import MarketContextPanel from './MarketContextPanel';
 import AutonomousAdvisor from './AutonomousAdvisor';
 import SignalCardItem from './SignalCardItem';
 import OnChainMetricsPanel from './OnChainMetricsPanel';
-import { AccountProfileSelector, PROFILES_CONFIG } from './AccountProfileSelector';
+import { AccountProfileSelector } from './AccountProfileSelector';
 import { FtmoShieldWidget } from './FtmoShieldWidget';
-import { AccountProfileType, FtmoPhase } from '../../types/signal';
 import { getApiBaseUrl } from '../../utils/apiUrl';
+import { getAssetMarketCategory } from '../../utils/ftmoSpecs';
+import { useAccountTelemetryStore } from '../../store/accountTelemetryStore';
+import { isFtmoMt5Visible } from '@/shared';
 
 export default function SignalTerminal() {
     const searchParams = useSearchParams();
@@ -45,15 +47,22 @@ export default function SignalTerminal() {
     const [isLoadingSignals, setIsLoadingSignals] = React.useState(true);
     const [hideBlocked, setHideBlocked] = React.useState(true);
     const [marketCategory, setMarketCategory] = React.useState<'ALL' | 'CRYPTO' | 'FTMO'>('ALL');
-    const [accountProfile, setAccountProfile] = React.useState<AccountProfileType>('FTMO_100K');
-    const [ftmoPhase, setFtmoPhase] = React.useState<FtmoPhase>('PHASE_1');
 
-    const activeProfileConfig = PROFILES_CONFIG[accountProfile](ftmoPhase);
+    const {
+        selectedProfile: accountProfile,
+        ftmoPhase,
+        ftmoEquity,
+        ftmoDailyLossUsd,
+        setSelectedProfile: setAccountProfile,
+        setFtmoPhase,
+        getResolvedBitunixConfig,
+        getResolvedFtmoConfig,
+    } = useAccountTelemetryStore();
 
-    const isTradFiSymbol = (asset: string) => {
-        const tradfi = ['XAUUSD', 'XAGUSD', 'US100', 'US500', 'USOIL', 'GER40', 'EURUSD', 'USDJPY', 'USDCAD', 'GBPJPY'];
-        return tradfi.includes(asset?.toUpperCase());
-    };
+    const isFtmoSelected = isFtmoMt5Visible() && (accountProfile === 'FTMO_50K' || accountProfile === 'FTMO_100K' || accountProfile === 'FTMO_200K');
+    const activeProfileConfig = isFtmoSelected ? getResolvedFtmoConfig() : getResolvedBitunixConfig();
+
+    const isTradFiSymbol = (asset: string) => getAssetMarketCategory(asset) === 'FTMO_INSTITUTIONAL';
 
     useEffect(() => {
         const symbol = searchParams.get('symbol');
@@ -273,8 +282,8 @@ export default function SignalTerminal() {
                     {activeProfileConfig.isFtmo && (
                         <FtmoShieldWidget
                             config={activeProfileConfig}
-                            currentProfitUsd={0}
-                            dailyLossUsd={0}
+                            currentProfitUsd={Math.max(0, ftmoEquity - activeProfileConfig.accountSize)}
+                            dailyLossUsd={ftmoDailyLossUsd}
                         />
                     )}
                 </div>
