@@ -16,6 +16,7 @@ from typing import Any, Dict, List, Optional
 import numpy as np
 
 from engine.risk.prop_firm_governor import PROP_FIRM_TIER1_CRYPTO_UNIVERSE
+from engine.analytics.quant_statistical_rigor import stationary_bootstrap_sample
 
 
 class PropFirmPassSimulator:
@@ -122,29 +123,30 @@ class PropFirmPassSimulator:
         for risk_pct in risk_grid_pct:
             p1_passes = 0
             p2_passes = 0
+            p2_within_90d = 0
+            p2_within_180d = 0
             fail_daily_dd = 0
             fail_total_dd = 0
             fail_timeout = 0
             days_to_funded: List[int] = []
 
             for _ in range(n_trials):
-                # Circular Block Bootstrap sobre días calendario (máx. 180 días)
-                sim_days: List[Dict[str, Any]] = []
-                while len(sim_days) < 180:
-                    start = int(rng.integers(0, n_days))
-                    for k in range(block_days):
-                        sim_days.append(daily_clusters[(start + k) % n_days])
+                # Politis-Romano Stationary Bootstrap (longitud de bloque geométrica aleatoria E[L]=5d)
+                sim_days = stationary_bootstrap_sample(daily_clusters, target_len=365, mean_block_len=5.0, rng=rng)
 
                 eq_pct = 0.0
+                best_day_pct = 0.0
                 p1_ok = False
                 day_idx = 0
                 failed = False
 
-                # Fase 1: +10.1% target, -5.0% diario intradía, -10.0% total
-                while day_idx < 120:
+                # Fase 1: +10.1% target, -5.0% diario intradía, -10.0% total (tiempo ilimitado hasta 365d)
+                while day_idx < 365:
                     d = sim_days[day_idx]
                     day_idx += 1
                     eff_risk = risk_pct * 0.5 if eq_pct >= 8.5 else risk_pct
+                    if eq_pct > 0 and best_day_pct > (eq_pct * 0.35):
+                        eff_risk = min(eff_risk, 0.25)
 
                     day_net_r = d["net_r"] * shrinkage_factor if d["net_r"] > 0 else d["net_r"]
                     day_worst_r = d["worst_intraday_r"]
@@ -152,13 +154,15 @@ class PropFirmPassSimulator:
                         day_worst_r -= 0.25
                         day_net_r -= 0.25
 
-                    # Regla oficial FTMO 00:00 CE(S)T: piso diario = -5.0% desde inicio del día
                     if (day_worst_r * eff_risk) <= -5.0:
                         fail_daily_dd += 1
                         failed = True
                         break
 
-                    eq_pct += day_net_r * eff_risk
+                    day_pnl_pct = day_net_r * eff_risk
+                    if day_pnl_pct > best_day_pct:
+                        best_day_pct = day_pnl_pct
+                    eq_pct += day_pnl_pct
                     if eq_pct <= -10.0:
                         fail_total_dd += 1
                         failed = True
@@ -173,12 +177,15 @@ class PropFirmPassSimulator:
 
                 if p1_ok:
                     eq2 = 0.0
+                    best_day2 = 0.0
                     p2_ok = False
                     failed2 = False
-                    while day_idx < 180:
+                    while day_idx < 365:
                         d = sim_days[day_idx]
                         day_idx += 1
                         eff_risk2 = risk_pct * 0.5 if eq2 >= 4.25 else risk_pct
+                        if eq2 > 0 and best_day2 > (eq2 * 0.35):
+                            eff_risk2 = min(eff_risk2, 0.25)
 
                         day_net_r = d["net_r"] * shrinkage_factor if d["net_r"] > 0 else d["net_r"]
                         day_worst_r = d["worst_intraday_r"]
@@ -190,7 +197,10 @@ class PropFirmPassSimulator:
                             fail_daily_dd += 1
                             failed2 = True
                             break
-                        eq2 += day_net_r * eff_risk2
+                        day_pnl2 = day_net_r * eff_risk2
+                        if day_pnl2 > best_day2:
+                            best_day2 = day_pnl2
+                        eq2 += day_pnl2
                         if eq2 <= -10.0:
                             fail_total_dd += 1
                             failed2 = True
@@ -198,6 +208,10 @@ class PropFirmPassSimulator:
                         if eq2 >= 5.1:
                             p2_ok = True
                             p2_passes += 1
+                            if day_idx <= 90:
+                                p2_within_90d += 1
+                            if day_idx <= 180:
+                                p2_within_180d += 1
                             days_to_funded.append(day_idx)
                             break
                     if not p2_ok and not failed2:
@@ -211,6 +225,8 @@ class PropFirmPassSimulator:
                 "risk_per_trade_pct": risk_pct,
                 "phase1_pass_rate_pct": round((p1_passes / n_trials) * 100.0, 2),
                 "funded_pass_rate_pct": funded_rate,
+                "funded_within_90d_pct": round((p2_within_90d / n_trials) * 100.0, 2),
+                "funded_within_180d_pct": round((p2_within_180d / n_trials) * 100.0, 2),
                 "bust_rate_pct": round(((fail_daily_dd + fail_total_dd) / n_trials) * 100.0, 2),
                 "fail_daily_dd_pct": round((fail_daily_dd / n_trials) * 100.0, 2),
                 "fail_total_dd_pct": round((fail_total_dd / n_trials) * 100.0, 2),

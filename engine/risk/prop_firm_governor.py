@@ -10,7 +10,7 @@ Gobernanza institucional aislada para cuentas de fondeo (FTMO Swing / Crypto Pro
 4. Consistency Daily Cap: evita concentrar más del % permitido de la meta en un solo día.
 """
 
-from typing import Dict, Optional, Tuple
+from typing import Any, Dict, Optional, Tuple
 
 PROP_FIRM_TIER1_CRYPTO_UNIVERSE = (
     "ETHUSDT",
@@ -43,12 +43,12 @@ CRYPTO_PROP_APPROVED_MATRIX: Dict[str, str] = {
     "DOTUSDT": "15m",
 }
 
-# [SOP-154] Matriz FTMO Swing validada en Torneo Walk-Forward ciego (60% Train / 40% Blind OOS)
-FTMO_MT5_APPROVED_MATRIX: Dict[str, Dict[str, str]] = {
-    "XAUUSD": {"timeframe": "1h", "archetype": "IMPULSE_OTE_SMC", "cluster": "SAFE_HAVEN_METALS"},
-    "US100":  {"timeframe": "1h", "archetype": "IMPULSE_OTE_SMC", "cluster": "US_EQUITY_INDICES"},
-    "XAGUSD": {"timeframe": "1h", "archetype": "IMPULSE_OTE_SMC", "cluster": "SAFE_HAVEN_METALS"},
-    "UK100":  {"timeframe": "1h", "archetype": "LIQUIDITY_SWEEP_JUDAS", "cluster": "GLOBAL_EQUITY_INDICES"},
+# [SOP-154 & SOP-156] Matriz FTMO Swing validada en Torneo Walk-Forward ciego + Tier Weighting
+FTMO_MT5_APPROVED_MATRIX: Dict[str, Dict[str, Any]] = {
+    "XAUUSD": {"timeframe": "1h", "archetype": "IMPULSE_OTE_SMC", "cluster": "SAFE_HAVEN_METALS", "tier_weight": 1.00},
+    "US100":  {"timeframe": "1h", "archetype": "IMPULSE_OTE_SMC", "cluster": "US_EQUITY_INDICES", "tier_weight": 1.00},
+    "XAGUSD": {"timeframe": "1h", "archetype": "IMPULSE_OTE_SMC", "cluster": "SAFE_HAVEN_METALS", "tier_weight": 1.00},
+    "UK100":  {"timeframe": "1h", "archetype": "LIQUIDITY_SWEEP_JUDAS", "cluster": "GLOBAL_EQUITY_INDICES", "tier_weight": 0.65},
 }
 
 MACRO_CLUSTER_MAP: Dict[str, str] = {

@@ -23,6 +23,7 @@ from engine.core.strategy_ssot import (
     BITUNIX_CANONICAL_BASE_RISK_PCT,
     SOP119_MEAN_SL_SLIPPAGE_R,
 )
+from engine.analytics.quant_statistical_rigor import compute_wald_sprt
 
 # Expectativa y desviación estándar de referencia del backtest 1R con fricción SOP-119
 BENCHMARK_FRICTION_EXPECTANCY_R: float = 0.281
@@ -84,6 +85,11 @@ class LiveForwardAuditSummary:
     drift_z_score: float
     drift_status: str  # IN_LINE, SAMPLE_BUILDING, WARNING_DRIFT, CRITICAL_DEGRADATION
     recommended_risk_action: str = "KEEP_BASE_RISK_2_5PCT"  # Pre-registered de-risk policy
+    sprt_log_likelihood: float = 0.0
+    sprt_upper_bound: float = 2.8904
+    sprt_lower_bound: float = -2.2513
+    sprt_decision: str = "CONTINUE_SAMPLING"
+    sprt_progress_pct: float = 0.0
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
@@ -185,6 +191,8 @@ class LiveForwardTracker:
             status = "IN_LINE"
             risk_action = "KEEP_BASE_RISK_2_5PCT"
 
+        sprt = compute_wald_sprt(net_rs.tolist(), mu0=0.0, mu1=0.25, sigma=self.benchmark_std_r)
+
         return LiveForwardAuditSummary(
             parameter_freeze_date=self.parameter_freeze_date,
             configured_base_risk_pct=BITUNIX_CANONICAL_BASE_RISK_PCT,
@@ -203,6 +211,11 @@ class LiveForwardTracker:
             drift_z_score=z_score,
             drift_status=status,
             recommended_risk_action=risk_action,
+            sprt_log_likelihood=sprt["sprt_log_likelihood"],
+            sprt_upper_bound=sprt["sprt_upper_bound"],
+            sprt_lower_bound=sprt["sprt_lower_bound"],
+            sprt_decision=sprt["sprt_decision"],
+            sprt_progress_pct=sprt["sprt_progress_pct"],
         )
 
     def apply_pre_registered_policy(

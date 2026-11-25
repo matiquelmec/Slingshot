@@ -24,6 +24,10 @@ import numpy as np
 import pandas as pd
 
 from engine.indicators.tradfi_smc_engine import evaluate_tradfi_bar, prepare_tradfi_features
+from engine.analytics.quant_statistical_rigor import (
+    compute_deflated_sharpe_ratio,
+    run_cpcv_validation,
+)
 
 DATA_DIR = os.path.join(os.path.dirname(__file__), "data")
 REPORT_PATH = os.path.join(os.path.dirname(__file__), "reports", "ftmo_swing_scientific_audit_sop154.json")
@@ -140,6 +144,7 @@ def simulate_tradfi_series(
             mae_r = min(mae_r, cur_r_low)
 
             if cur_r_low <= (0.0 if is_be else -1.0):
+                mae_r = max(mae_r, 0.0 if is_be else -1.0)
                 if tp2_hit:
                     outcome_r = harvested_r + 0.20 * 1.0
                 elif tp1_hit:
@@ -258,40 +263,66 @@ def run_ftmo_swing_tournament(save_report: bool = True) -> Dict[str, Any]:
         if ok:
             approved.append(c)
 
-    # Selección de portafolio descorrelacionado (máx 1 mejor TF/arquetipo por símbolo y máx 2 por clúster)
+    # Selección 100% ciega sobre Train (Zero OOS Sorting) + Mutex de Clúster
     best_per_symbol: Dict[str, Dict[str, Any]] = {}
-    for c in sorted(approved, key=lambda x: (x["blind_oos"]["pf"], x["blind_oos"]["total_r"]), reverse=True):
+    for c in sorted(approved, key=lambda x: (x["train"]["t_stat"], x["train"]["pf"]), reverse=True):
         if c["symbol"] not in best_per_symbol:
             best_per_symbol[c["symbol"]] = c
 
     cluster_counts: Dict[str, int] = defaultdict(int)
     selected_portfolio: List[Dict[str, Any]] = []
-    oos_trade_stream: List[Dict[str, Any]] = []
+    raw_oos_trades: List[Dict[str, Any]] = []
 
     for sym, c in best_per_symbol.items():
         cl = c["cluster"]
         if cluster_counts[cl] >= 2:
             continue
         cluster_counts[cl] += 1
+        tier_weight = 1.0 if c["blind_oos"]["n"] >= 45 else 0.65
         selected_portfolio.append({
             "symbol": sym,
             "timeframe": c["timeframe"],
             "archetype": c["archetype"],
             "cluster": cl,
+            "tier_weight": tier_weight,
             "train_pf": c["train"]["pf"],
             "oos_pf": c["blind_oos"]["pf"],
             "oos_mean_r": c["blind_oos"]["mean_r"],
             "oos_n": c["blind_oos"]["n"],
             "oos_total_r": c["blind_oos"]["total_r"],
         })
-        oos_trade_stream.extend(c["oos_trades"])
+        for t in c["oos_trades"]:
+            t_copy = dict(t)
+            t_copy["cluster"] = cl
+            t_copy["tier_weight"] = tier_weight
+            t_copy["weighted_r"] = round(float(t["outcome_r"]) * tier_weight, 4)
+            raw_oos_trades.append(t_copy)
+
+    # Replay concurrente con Mutex de Clúster por día (XAUUSD <-> XAGUSD nunca simultáneos)
+    raw_oos_trades.sort(key=lambda x: (x["day"], -x["tier_weight"]))
+    oos_trade_stream: List[Dict[str, Any]] = []
+    seen_cluster_day: set = set()
+    trades_per_day: Dict[str, int] = defaultdict(int)
+    for t in raw_oos_trades:
+        c_key = (t["day"], t["cluster"])
+        if c_key in seen_cluster_day or trades_per_day[t["day"]] >= 2:
+            continue
+        seen_cluster_day.add(c_key)
+        trades_per_day[t["day"]] += 1
+        oos_trade_stream.append(t)
+
+    oos_rs = [t["weighted_r"] for t in oos_trade_stream]
+    portfolio_dsr = compute_deflated_sharpe_ratio(oos_rs, num_trials=max(1, len(candidates)))
+    cpcv_15_folds = run_cpcv_validation(oos_rs, n_splits=6, k_test=2, embargo_pct=0.02)
 
     summary_rows = [{k: v for k, v in c.items() if k != "oos_trades"} for c in candidates]
     report = {
         "total_evaluated_configs": len(candidates),
         "approved_count": len(approved),
         "selected_portfolio": selected_portfolio,
-        "oos_trade_stream": sorted(oos_trade_stream, key=lambda x: x["day"]),
+        "portfolio_dsr": portfolio_dsr,
+        "cpcv_15_folds": cpcv_15_folds,
+        "oos_trade_stream": oos_trade_stream,
         "all_candidates": summary_rows,
     }
     if save_report:

@@ -86,8 +86,10 @@ class TradFiScanner:
                 checklist = list(setup["checklist"])
                 is_tradfi_killzone = bool(setup["is_killzone"])
 
-                # Cálculo de Lotes MT5
-                lot_info = ftmo_guardian.calculate_mt5_lots(symbol, optimal_entry, stop_loss)
+                # Cálculo de Lotes MT5 con Tier Weighting (SOP-156)
+                tier_w = float(spec.get("tier_weight", 1.0))
+                base_risk_usd = ftmo_guardian.current_equity * ftmo_guardian.current_config["risk_pct"] * tier_w
+                lot_info = ftmo_guardian.calculate_mt5_lots(symbol, optimal_entry, stop_loss, risk_usd_override=base_risk_usd)
                 checklist.append({"factor": "Gestión Acelerada FTMO (+1.0R / +1.3R)", "status": "CUMPLIDO", "detail": f"Lotes recomendados: {lot_info['lots']} Lots (${lot_info['risk_usd']:.0f} USD)"})
 
                 # Precisión dinámica de decimales por activo (SOP-65)
@@ -223,28 +225,21 @@ class TradFiScanner:
                                 logger.info(f"🛑 [SOP-70 DAILY LOSS CAP] Emisión de orden {sym_mt5} cancelada: {ftmo_guardian.lockout_reason}")
                                 continue
 
-                            # [CORRELATION GOVERNOR US100 / US30]
-                            # Prevenir duplicación de riesgo direccional a 1.50% ($1,500 USD) en índices correlacionados > 85%
-                            if "US100" in sym_mt5 or "US30" in sym_mt5:
-                                other_idx = "US30.cash" if "US100" in sym_mt5 else "US100.cash"
-                                is_conn = mt5_bridge.ensure_connected()
-                                other_orders = mt5.orders_get(symbol=other_idx) or [] if is_conn else []
-                                other_pos = mt5.positions_get(symbol=other_idx) or [] if is_conn else []
-                                has_corr_conflict = False
-                                for op in list(other_orders) + list(other_pos):
-                                    op_type = getattr(op, "type", None)
-                                    op_is_long = op_type in (0, 2) if op_type is not None else True
-                                    # Si la posición en el otro índice ya está en breakeven o asegurada, se permite
-                                    op_sl = float(getattr(op, "sl", 0.0) or 0.0)
-                                    op_open = float(getattr(op, "price_open", 0.0) or 0.0)
-                                    is_secured = (op_is_long and op_sl >= op_open) or (not op_is_long and op_sl > 0 and op_sl <= op_open)
-                                    if not is_secured:
-                                        if (direction == "LONG" and op_is_long) or (direction == "SHORT" and not op_is_long):
-                                            has_corr_conflict = True
-                                            break
-                                if has_corr_conflict:
-                                    logger.info(f"🛡️ [CORRELATION_GOVERNOR] Veto de orden {sym_mt5} {direction}: ya existe exposición en riesgo no asegurado en {other_idx}. Riesgo protegido al 0.75%.")
-                                    continue
+                            # [SOP-156 MUTEX UNIVERSAL DE CLÚSTER: XAUUSD <-> XAGUSD & ÍNDICES]
+                            from engine.risk.prop_firm_governor import prop_firm_governor
+                            open_pos = mt5_bridge.get_open_positions()
+                            unsecured_symbols = [
+                                str(p.get("symbol", ""))
+                                for p in open_pos
+                                if float(p.get("profit", 0.0)) <= 0.0
+                            ]
+                            if mt5_bridge.ensure_connected() and not mt5_bridge.dry_run:
+                                for po in (mt5.orders_get() or []):
+                                    unsecured_symbols.append(str(getattr(po, "symbol", "")))
+                            cluster_ok, cluster_msg = prop_firm_governor.is_cluster_slot_available(symbol, unsecured_symbols)
+                            if not cluster_ok:
+                                logger.info(f"🛡️ [CLUSTER_MUTEX SOP-156] Orden {sym_mt5} {direction} bloqueada: {cluster_msg}")
+                                continue
 
                             has_order = False
                             if mt5_bridge.ensure_connected() and not mt5_bridge.dry_run:

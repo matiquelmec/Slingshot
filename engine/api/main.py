@@ -805,7 +805,7 @@ async def get_ftmo_pass_simulation(profile: str = Query("FTMO_SWING", descriptio
 
 @app.get("/api/v1/ftmo/universe-audit")
 async def get_ftmo_universe_audit():
-    """[SOP-154] Retorna los resultados del Torneo Walk-Forward 60/40 FTMO Swing."""
+    """[SOP-156] Retorna los resultados del Torneo Walk-Forward 60/40 FTMO Swing + DSR & CPCV."""
     import json, os
     from engine.backtest.ftmo_swing_universe_audit import REPORT_PATH
     if not os.path.exists(REPORT_PATH):
@@ -816,7 +816,20 @@ async def get_ftmo_universe_audit():
         "total_evaluated_configs": data.get("total_evaluated_configs", 0),
         "approved_count": data.get("approved_count", 0),
         "selected_portfolio": data.get("selected_portfolio", []),
+        "portfolio_dsr": data.get("portfolio_dsr", {}),
+        "cpcv_15_folds": data.get("cpcv_15_folds", {}),
     })
+
+
+@app.get("/api/v1/bitunix/quant-certification")
+async def get_bitunix_quant_certification():
+    """[SOP-156] Retorna la certificación cuantitativa CPCV(6,2) y DSR de Bitunix Core."""
+    import json, os
+    from engine.backtest.bitunix_quant_certification import CERT_REPORT
+    if not os.path.exists(CERT_REPORT):
+        return {"status": "NOT_RUN"}
+    with open(CERT_REPORT, "r", encoding="utf-8") as f:
+        return sanitize_for_json(json.load(f))
 
 
 @app.get("/api/v1/ftmo/positions")
