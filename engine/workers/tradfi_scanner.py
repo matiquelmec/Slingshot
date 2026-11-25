@@ -56,8 +56,13 @@ class TradFiScanner:
                 if df_raw is None or len(df_raw) < 210:
                     continue
 
-                from engine.indicators.tradfi_smc_engine import prepare_tradfi_features, evaluate_tradfi_bar, is_tradfi_killzone
-                df = prepare_tradfi_features(df_raw)
+                from engine.indicators.tradfi_smc_engine import SISTER_ASSET_MAP, prepare_tradfi_features, evaluate_tradfi_bar, is_tradfi_killzone
+                df_1d, _ = await tradfi_provider.get_candles_with_meta(symbol, interval="1d", limit=80)
+                sis_sym = SISTER_ASSET_MAP.get(symbol)
+                df_sis = None
+                if sis_sym:
+                    df_sis, _ = await tradfi_provider.get_candles_with_meta(sis_sym, interval=tf, limit=250)
+                df = prepare_tradfi_features(df_raw, htf_1d_df=df_1d, sister_df=df_sis)
                 if df.empty or len(df) < 210:
                     continue
 
@@ -262,7 +267,8 @@ class TradFiScanner:
                                     tp1=candidate["tp1"],
                                     tp2=candidate["tp2"],
                                     tp3=candidate["tp3"],
-                                    score=score
+                                    score=score,
+                                    risk_usd_override=candidate["risk_usd"],
                                 )
                                 if res.get("success"):
                                     if not hasattr(self, "_active_orders"):

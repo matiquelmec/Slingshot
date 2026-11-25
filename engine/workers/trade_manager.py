@@ -106,12 +106,15 @@ class TradeManager:
         logger.info("[TRADE_MANAGER] Iniciando Trailing Stop Estructural v1.0...")
         self._task = asyncio.create_task(self._management_loop())
         self._mt5_task = asyncio.create_task(self._mt5_dedicated_loop())
+        self._fastpath_task = asyncio.create_task(self._bitunix_fastpath_loop())
 
     def stop(self):
         logger.info("[TRADE_MANAGER] Deteniendo gestor de trades...")
         self._stop_event.set()
         if hasattr(self, "_mt5_task") and self._mt5_task:
             self._mt5_task.cancel()
+        if hasattr(self, "_fastpath_task") and self._fastpath_task:
+            self._fastpath_task.cancel()
 
     async def evaluate_realtime_tick_protection(
         self,
@@ -171,6 +174,38 @@ class TradeManager:
                 actions.append({"key": mem_key, "symbol": sym_clean, "action": "FAST_BE_TRIGGER", "r_profit": r_profit})
 
         return actions
+
+    async def _bitunix_fastpath_loop(self):
+        """[SOP-157] Fast-Path sub-segundo (1.5s) desde Sidecar :8080 hacia protección BE / SOP-25."""
+        import httpx
+        await asyncio.sleep(6)
+        while not self._stop_event.is_set():
+            try:
+                from engine.execution.nexus import nexus
+                active_map = getattr(nexus, "_active_positions", {}) or {}
+                if active_map:
+                    async with httpx.AsyncClient(timeout=1.0) as client:
+                        t_res, d_res = await asyncio.gather(
+                            client.get("http://127.0.0.1:8080/ticks"),
+                            client.get("http://127.0.0.1:8080/depth"),
+                            return_exceptions=True,
+                        )
+                    ticks = t_res.json() if (not isinstance(t_res, Exception) and t_res.status_code == 200) else {}
+                    depths = d_res.json() if (not isinstance(d_res, Exception) and d_res.status_code == 200) else {}
+                    triggered = False
+                    for pos in list(active_map.values()):
+                        sym = str(pos.get("asset") or pos.get("symbol") or "").replace("/", "").upper()
+                        live_p = float((ticks.get(sym) or {}).get("price") or 0.0)
+                        obi = float((depths.get(sym) or {}).get("obi") or 0.0)
+                        if live_p > 0:
+                            acts = await self.evaluate_realtime_tick_protection(sym, live_p, obi_score=obi)
+                            if acts:
+                                triggered = True
+                    if triggered:
+                        await self.sync_live_bitunix_positions()
+            except Exception as e:
+                logger.debug(f"[BITUNIX_FASTPATH] {e}")
+            await asyncio.sleep(1.5)
 
     async def _mt5_dedicated_loop(self):
         """Loop dedicado de alta frecuencia (cada 4 seg) para sincronizar y blindar MT5."""
@@ -2016,40 +2051,77 @@ class TradeManager:
                 if entry_price <= 0 or cur_price <= 0:
                     continue
 
-                sl_dist = abs(entry_price - cur_sl) if cur_sl > 0 and cur_sl != entry_price else entry_price * 0.005
+                # [SOP-157] Anclar 1R al Stop Loss inicial inmutable (mt5_trade_plans) para evitar sl_dist -> 0 en BE
+                from engine.core.vault import vault
+                plan = vault.get_mt5_trade_plan(str(ticket)) or vault.get_mt5_trade_plan(sym)
+                plan_id = str(plan["order_id"]) if plan else str(ticket)
+                if plan and float(plan.get("stop_loss", 0.0)) > 0:
+                    init_sl = float(plan["stop_loss"])
+                    self._initial_risk_cache[str(ticket)] = abs(float(plan["entry_price"]) - init_sl)
+                    sl_dist = self._initial_risk_cache[str(ticket)]
+                    stage = str(plan.get("stage", "ACTIVE")).upper()
+                    init_vol = float(plan.get("initial_volume") or pos.get("volume") or 0.0)
+                else:
+                    if str(ticket) not in self._initial_risk_cache:
+                        fallback_dist = abs(entry_price - cur_sl) if cur_sl > 0 and cur_sl != entry_price else entry_price * 0.005
+                        self._initial_risk_cache[str(ticket)] = max(fallback_dist, entry_price * 0.001)
+                    sl_dist = self._initial_risk_cache[str(ticket)]
+                    stage = "ACTIVE"
+                    init_vol = float(pos.get("volume") or 0.0)
+
                 if sl_dist <= 0:
                     sl_dist = entry_price * 0.005
 
                 r_profit = (cur_price - entry_price) / sl_dist if side == "LONG" else (entry_price - cur_price) / sl_dist
 
                 # Precisión decimal dinámica según activo
-                d_prec = 5 if any(fx in sym for fx in ["GBPUSD", "EURUSD"]) else 3 if "JPY" in sym else 2
+                d_prec = 5 if any(fx in sym for fx in ["GBPUSD", "EURUSD", "USDCHF", "NZDUSD"]) else 3 if ("JPY" in sym or "XAG" in sym) else 2
 
                 target_sl = None
-                status_msg = "EN_CURSO"
+                status_msg = f"EN_CURSO ({stage})"
                 action_taken = "NINGUNA"
-
-                # Si cualquier tramo de este símbolo ya tocó TP1 o TP2 en ganancia, FORZAR Breakeven como piso mínimo
                 has_closed_profit = sym in closed_winners
 
-                # Trailing Ratchet Estructural
-                if r_profit >= 5.0:
-                    locked_r = r_profit * 0.70
-                    profit_buffer = sl_dist * locked_r
-                    target_sl = round(entry_price + profit_buffer, d_prec) if side == "LONG" else round(entry_price - profit_buffer, d_prec)
-                    status_msg = f"PROTEGIDO_RUNNER_TP3 (+{locked_r:.1f}R)"
+                # 1. SOP-25 Early Invalidation (-0.65R) antes de BE
+                if stage == "ACTIVE" and r_profit <= -0.65:
+                    cur_vol = float(pos.get("volume") or 0.0)
+                    if cur_vol > 0 and mt5_bridge.close_partial_position(sym, ticket, cur_vol, comment="SOP25_EarlyInv"):
+                        if plan:
+                            vault.update_mt5_trade_plan_stage(plan_id, "CLOSED_SOP25")
+                        status_msg = "CLOSED_SOP25 (-0.65R)"
+                        action_taken = "SOP25_EARLY_EXIT"
+                        continue
+
+                # 2. Cosecha Parcial TP2 (+2.4R, 30%) + SL a +1.0R
+                if stage == "TP1_TAKEN" and r_profit >= 2.4:
+                    vol_tp2 = round(init_vol * 0.30, 2)
+                    if vol_tp2 >= 0.01:
+                        mt5_bridge.close_partial_position(sym, ticket, vol_tp2, comment="TP2_30pct")
+                    if plan:
+                        vault.update_mt5_trade_plan_stage(plan_id, "TP2_TAKEN")
+                    target_sl = round(entry_price + sl_dist * 1.0, d_prec) if side == "LONG" else round(entry_price - sl_dist * 1.0, d_prec)
+                    status_msg = "TP2_TAKEN_30PCT (+1.0R SL)"
+                # 3. Cosecha Parcial TP1 (+1.3R, 50%) + BE
+                elif stage in ("ACTIVE", "BE_SET") and r_profit >= 1.3:
+                    vol_tp1 = round(init_vol * 0.50, 2)
+                    if vol_tp1 >= 0.01:
+                        mt5_bridge.close_partial_position(sym, ticket, vol_tp1, comment="TP1_50pct")
+                    if plan:
+                        vault.update_mt5_trade_plan_stage(plan_id, "TP1_TAKEN")
+                    be_offset = max(entry_price * 0.0001, 1.0 if "US" in sym else 0.0001)
+                    target_sl = round(entry_price + be_offset, d_prec) if side == "LONG" else round(entry_price - be_offset, d_prec)
+                    status_msg = "TP1_TAKEN_50PCT (BE)"
+                # 4. Fast Breakeven (+1.0R)
+                elif (stage == "ACTIVE" and r_profit >= 1.0) or (has_closed_profit and stage == "ACTIVE"):
+                    be_offset = max(entry_price * 0.0001, 1.0 if "US" in sym else 0.0001)
+                    target_sl = round(entry_price + be_offset, d_prec) if side == "LONG" else round(entry_price - be_offset, d_prec)
+                    if plan:
+                        vault.update_mt5_trade_plan_stage(plan_id, "BE_SET")
+                    status_msg = "PROTEGIDO_FAST_BE"
                 elif r_profit >= 3.0:
                     profit_buffer = sl_dist * 2.0
                     target_sl = round(entry_price + profit_buffer, d_prec) if side == "LONG" else round(entry_price - profit_buffer, d_prec)
-                    status_msg = "PROTEGIDO_TP2 (+2.0R)"
-                elif r_profit >= 2.0:
-                    profit_buffer = sl_dist * 1.2
-                    target_sl = round(entry_price + profit_buffer, d_prec) if side == "LONG" else round(entry_price - profit_buffer, d_prec)
-                    status_msg = "PROTEGIDO_TP1 (+1.2R)"
-                elif r_profit >= 1.0 or has_closed_profit:
-                    be_offset = max(entry_price * 0.0001, 3.0 if "US" in sym else 0.0001)
-                    target_sl = round(entry_price + be_offset, d_prec) if side == "LONG" else round(entry_price - be_offset, d_prec)
-                    status_msg = "PROTEGIDO_FAST_BE (TP1_WINNER)" if has_closed_profit else "PROTEGIDO_FAST_BE"
+                    status_msg = "PROTEGIDO_RUNNER (+2.0R)"
 
                 # Protección de Fin de Semana Swing: si flota >= 0.8R en ventana de fin de semana, forzar BE
                 if is_weekend_window and r_profit >= 0.8:
@@ -2111,17 +2183,40 @@ class TradeManager:
                 return []
 
             now_utc = datetime.now(timezone.utc)
+            now_ts = time.time()
             is_weekend = (now_utc.weekday() == 4 and now_utc.hour >= 21) or (now_utc.weekday() in (5, 6))
 
+            from engine.core.vault import vault
             cancelled = []
             for o in orders:
                 ticket = o.ticket
                 sym = o.symbol
+                setup_ts = float(getattr(o, "time_setup", 0) or 0)
+                is_expired_6h = setup_ts > 0 and (now_ts - setup_ts) >= (6 * 3600)
+
+                tp1_touched = False
+                plan = vault.get_mt5_trade_plan(str(ticket)) or vault.get_mt5_trade_plan(sym)
+                if plan and float(plan.get("tp1", 0.0)) > 0:
+                    tick = mt5.symbol_info_tick(sym)
+                    if tick:
+                        cur_p = float(tick.bid if "LONG" in str(plan.get("direction", "")).upper() else tick.ask)
+                        tp1_p = float(plan["tp1"])
+                        if ("LONG" in str(plan.get("direction", "")).upper() and cur_p >= tp1_p) or ("SHORT" in str(plan.get("direction", "")).upper() and cur_p <= tp1_p):
+                            tp1_touched = True
+
+                reason = None
                 if is_weekend and getattr(ftmo_guardian, "account_type", "SWING") == "SWING":
+                    reason = "WEEKEND_GAP_PROTECTION"
+                elif is_expired_6h:
+                    reason = "EXPIRED_6_BARS_1H"
+                elif tp1_touched:
+                    reason = "SOP25_TP1_MISSED_ENTRY"
+
+                if reason:
                     success = mt5_bridge.cancel_order(ticket)
                     if success:
-                        logger.info(f"🛡️ [SWING_GAP_SHIELD] Orden pendiente #{ticket} ({sym}) cancelada preventivamente para fin de semana.")
-                        cancelled.append({"ticket": ticket, "symbol": sym, "reason": "WEEKEND_GAP_PROTECTION"})
+                        logger.info(f"🛡️ [MT5_PENDING_GUARD] Orden #{ticket} ({sym}) cancelada ({reason}).")
+                        cancelled.append({"ticket": ticket, "symbol": sym, "reason": reason})
 
             return cancelled
         except Exception as e:

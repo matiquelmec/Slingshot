@@ -23,7 +23,7 @@ from zoneinfo import ZoneInfo
 import numpy as np
 import pandas as pd
 
-from engine.indicators.tradfi_smc_engine import evaluate_tradfi_bar, prepare_tradfi_features
+from engine.indicators.tradfi_smc_engine import SISTER_ASSET_MAP, evaluate_tradfi_bar, prepare_tradfi_features
 from engine.analytics.quant_statistical_rigor import (
     compute_deflated_sharpe_ratio,
     run_cpcv_validation,
@@ -219,12 +219,18 @@ def run_ftmo_swing_tournament(save_report: bool = True) -> Dict[str, Any]:
     candidates: List[Dict[str, Any]] = []
 
     for sym, spec in FTMO_UNIVERSE_SPECS.items():
+        d1_path = os.path.join(DATA_DIR, f"{sym}_1d_audited.parquet")
+        d1_df = pd.read_parquet(d1_path) if os.path.exists(d1_path) else None
+        sister_sym = SISTER_ASSET_MAP.get(sym)
+
         for tf in ("1h", "15m"):
             path = os.path.join(DATA_DIR, f"{sym}_{tf}_audited.parquet")
             if not os.path.exists(path):
                 continue
             raw_df = pd.read_parquet(path)
-            df = prepare_tradfi_features(raw_df)
+            sis_path = os.path.join(DATA_DIR, f"{sister_sym}_{tf}_audited.parquet") if sister_sym else None
+            sis_df = pd.read_parquet(sis_path) if (sis_path and os.path.exists(sis_path)) else None
+            df = prepare_tradfi_features(raw_df, htf_1d_df=d1_df, sister_df=sis_df)
             if df.empty or len(df) < 240:
                 continue
 

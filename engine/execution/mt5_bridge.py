@@ -146,6 +146,7 @@ class MT5Bridge:
         tp3: float,
         score: int = 70,
         single_ticket_mode: bool = True,
+        risk_usd_override: Optional[float] = None,
     ) -> Dict[str, Any]:
         """
         Calcula lotes exactos con FTMO Guardian y transmite órdenes límite:
@@ -154,8 +155,8 @@ class MT5Bridge:
           múltiples tickets simultáneos que algunas prop firms marcan como Order Splitting).
         - Modo Multi-Tranche (single_ticket_mode=False): 3 órdenes límite 50/30/20.
         """
-        # 1. Blindaje de Riesgo FTMO ($750 USD / 0.75%)
-        lot_info = ftmo_guardian.calculate_mt5_lots(symbol, entry_price, stop_loss)
+        # 1. Blindaje de Riesgo FTMO ($750 USD / 0.75% o tier_weight override)
+        lot_info = ftmo_guardian.calculate_mt5_lots(symbol, entry_price, stop_loss, risk_usd_override=risk_usd_override)
         total_lots = float(lot_info.get("lots", 0.01))
         risk_usd = float(lot_info.get("risk_usd", 750.0))
 
@@ -285,6 +286,26 @@ class MT5Bridge:
                     logger.error(f"❌ [MT5_BRIDGE] Fallo al enviar orden [{t_label}] a MT5: {retcode} - {comment}")
 
             if placed_orders:
+                # [SOP-157] Persistir plan Single-Ticket inmutable en SQLite WAL para 1R y parciales 50/30/20
+                try:
+                    first_ord = placed_orders[0]
+                    r_dist = abs(float(entry_price) - float(stop_loss))
+                    be_price = (float(entry_price) + r_dist) if is_long else (float(entry_price) - r_dist)
+                    vault.save_mt5_trade_plan(
+                        order_id=str(first_ord.get("order_id")),
+                        symbol=sym_mt5,
+                        direction=direction,
+                        entry_price=float(entry_price),
+                        stop_loss=float(stop_loss),
+                        be_price=be_price,
+                        tp1=float(tp1),
+                        tp2=float(tp2),
+                        tp3=float(tp3),
+                        initial_volume=float(total_lots),
+                    )
+                except Exception as plan_err:
+                    logger.debug(f"[VAULT MT5 PLAN] Excepción no bloqueante: {plan_err}")
+
                 # 🗄️ TURSO DUAL-ENGINE CLOUD SYNC
                 try:
                     from engine.execution.turso_sync import turso_sync
