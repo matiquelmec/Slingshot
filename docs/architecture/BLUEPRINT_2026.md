@@ -1106,3 +1106,10 @@ Sometidas las 3 optimizaciones a la matriz experimental de 180 días en los 13 a
 - **Congelamiento Real (`FORWARD_TEST_FROZEN_MODE=true`):** Pesos fijos en `ConfluenceManager`, Bandit `BlackBox` desactivado en vivo y `reg_mult=1.0` en `NexusNode`.
 - **Seguridad `Isolated-Multi`:** `GiantFiberReflex` desactivado por defecto (`ENABLE_FAST_VELOCITY_ESCAPE=false`), deduplicación de `blackbox.record_trade()`, conteo exacto por `positionId` en `get_unprotected_risk_count()` y conexión en vivo de `LiveForwardTracker` en `TradeManager`.
 - **Paridad `MarketScanner` & Sidecar Futures WS:** `ClusterRiskGuard` conectado a `nexus._active_positions`, propagación de `is_btc_blocked`/`is_avwap_blocked` en `_format_opportunity()`, `sidecar/index.js` migrado a `wss://fstream.binance.com` sin ruta muerta `POST /execute`, y test AST permanente de aislamiento IA $\not\to$ Ejecución.
+
+
+---
+
+## Fase Actualizada: SOP-154 a SOP-158 (Paridad 100.0% Bitunix Core + FTMO Swing MT5)
+- **Bitunix Core (`SOP-147` Frozen OOS):** 13 activos canónicos, riesgo base `2.50%`, Fast-Path L2 (`1.5s`) leyendo `imbalance` + `delta_ratio` desde Sidecar `:8080` con `httpx.AsyncClient` Keep-Alive y mutex `self._bitunix_sync_lock`.
+- **FTMO Swing MT5 (`SOP-154`–`SOP-158`):** Portafolio `1H` certificado (`XAUUSD`, `XAGUSD`, `US100.cash`, `UK100.cash`) con `CPCV(6,2) 15/15 (PBO 0.0)`, ancla `1D` + `SMT` + `VWAP`, Single-Ticket `1R` inmutable en `SQLite WAL`, `Best-Day Diluter` calibrado por meta de fase y scorecards `Wald SPRT` / `CPCV` vivos en UI.

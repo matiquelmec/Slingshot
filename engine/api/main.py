@@ -795,12 +795,26 @@ async def get_ftmo_guardian_status():
     return ftmo_guardian.update_equity(ftmo_guardian.current_equity)
 
 
+_PASS_SIM_CACHE: Dict[str, Any] = {}
+_PASS_SIM_CACHE_TS: Dict[str, float] = {}
+
 @app.get("/api/v1/ftmo/pass-simulation")
 async def get_ftmo_pass_simulation(profile: str = Query("FTMO_SWING", description="Perfil: FTMO_SWING o CRYPTO_PROP")):
-    """[SOP-154] Simulación Monte Carlo de probabilidad de pase de fondeo sobre universo auditado."""
+    """[SOP-154/158] Simulación Monte Carlo no bloqueante con caché TTL 300s sobre universo auditado."""
     from engine.analytics.prop_firm_pass_simulator import prop_firm_pass_simulator
-    clusters = prop_firm_pass_simulator.load_daily_clusters(profile=profile)
-    return sanitize_for_json(prop_firm_pass_simulator.simulate_risk_grid(clusters, n_trials=2000))
+    prof_key = profile.upper()
+    now_ts = time.time()
+    if prof_key in _PASS_SIM_CACHE and (now_ts - _PASS_SIM_CACHE_TS.get(prof_key, 0.0)) < 300.0:
+        return _PASS_SIM_CACHE[prof_key]
+
+    def _run_sim():
+        clusters = prop_firm_pass_simulator.load_daily_clusters(profile=prof_key)
+        return sanitize_for_json(prop_firm_pass_simulator.simulate_risk_grid(clusters, n_trials=2000))
+
+    res = await asyncio.to_thread(_run_sim)
+    _PASS_SIM_CACHE[prof_key] = res
+    _PASS_SIM_CACHE_TS[prof_key] = now_ts
+    return res
 
 
 @app.get("/api/v1/ftmo/universe-audit")
@@ -852,7 +866,7 @@ async def get_ftmo_positions_and_telemetry():
     
     total_floating_pnl = sum(float(p.get("profit", 0.0)) for p in open_pos)
     
-    account_login = 1514537587
+    account_login = 0
     real_balance = round(ftmo_guardian.current_equity - total_floating_pnl, 2)
     real_equity = round(ftmo_guardian.current_equity, 2)
     real_margin = 0.0

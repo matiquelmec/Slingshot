@@ -174,9 +174,7 @@ class TradFiScanner:
                                 logger.warning(f"🛡️ [NEWS_SLIPPAGE_SHIELD SOP-92] Orden {symbol} {direction} pospuesta por ventana de noticia macro de alto impacto.")
                                 continue
 
-                            sym_mt5 = symbol.replace("USDT", "USD")
-                            if ".cash" not in sym_mt5 and any(idx in sym_mt5 for idx in ["US100", "US30", "US500", "GER40"]):
-                                sym_mt5 = f"{sym_mt5}.cash"
+                            sym_mt5 = mt5_bridge.resolve_broker_symbol(symbol) or symbol.replace("USDT", "USD")
 
                             # [ANTI-CHURNING COOLDOWN SENTINEL]
                             # Bloquear reentradas durante 120 min si la última operación cerró en Stop Loss

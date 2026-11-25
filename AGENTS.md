@@ -464,3 +464,19 @@ Todos los mensajes de commit deben seguir estrictamente el estándar de Conventi
    * Ningún archivo bajo `engine/aiq/` o `engine/agents/` puede importar `engine.execution`, `bitunix_executor` o `mt5_bridge`.
 4. **Sidecar Futures WS & GitOps Explícito:**
    * `sidecar/index.js` consume Binance USDⓈ-M Futures (`fstream.binance.com`) y expone únicamente `GET /health` y `GET /ticks` en `127.0.0.1:8080`; `_cicd_autonomous_worker()` permanece desactivado por defecto (`ENABLE_AUTONOMOUS_GITOPS_POLL=false`).
+
+
+---
+
+## SOP-154 a SOP-158: FTMO Swing Multi-Asset, Rigor Estadístico 10/10, E2E Full-Potential y Paridad 100.0%
+
+1. **Universo FTMO Swing Certificado (`SOP-154 / SOP-157`):**
+   * Portafolio oficial TradFi en `1H` seleccionado estrictamente por `Train` (`60%`) y validado en `OOS` (`40%`) con `CPCV(6,2) = 15/15 (100%)` y `PBO = 0.0`: **`XAUUSD` (Tier-S 1.0x)**, **`XAGUSD` (Tier-S 1.0x)**, **`US100.cash` (Tier-S 1.0x)** y **`UK100.cash` (Tier-B 0.65x)**.
+   * `tradfi_smc_engine.py` incorpora ancla estructural causal `1D` (`shift(1)` + `merge_asof` backward), `SMT Divergence` causal entre activos hermanos y `Session VWAP` (`SOP-114`).
+2. **Rigor Estadístico Institucional (`SOP-156`):**
+   * `engine/analytics/quant_statistical_rigor.py` implementa **Deflated Sharpe Ratio (DSR)**, **CPCV(6,2) con embargo**, **Politis-Romano Stationary Bootstrap** y **Wald SPRT** (`live_forward_tracker.py`), expuestos en `/api/v1/bitunix/quant-certification`, `/api/v1/ftmo/universe-audit` y `/api/v1/analytics/forward-tracker`.
+3. **Cierre de Precisión 100.0% (`SOP-158`):**
+   * **Bitunix Fast-Path L2:** `_bitunix_fastpath_loop()` lee `imbalance` (con fallback `obi` y `delta_ratio`), reutiliza `httpx.AsyncClient` Keep-Alive y serializa `sync_live_bitunix_positions()` con `self._bitunix_sync_lock`.
+   * **Homologación SSoT MT5:** `mt5_bridge.resolve_broker_symbol()` unifica sufijos `.cash`, `get_symbol_digits()` soporta `UK100`/`XAGUSD`, `ftmo_guardian.py` aplica apalancamiento Swing `1:15` en metales/índices y `1:30` en FX.
+   * **Calibración Best-Day & Monte Carlo:** `PropFirmPassSimulator` usa `weighted_r` en `FTMO_SWING` y evalúa el diluidor `Best-Day` contra la meta de fase (`10%` / `5%`) sin estrangular el Día 1, ejecutándose en `asyncio.to_thread` con caché `300s`.
+   * **UI Viva:** `ForwardTestAuditCard.tsx` renderiza `Wald SPRT` (`Λ_n`) y `FtmoTerminalView.tsx` hidrata `CPCV 15/15` y Monte Carlo en vivo.

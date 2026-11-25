@@ -286,11 +286,26 @@ class FtmoGuardianShield:
         total_profit_usd: float,
         max_share: float = 0.35,
         diluted_risk_pct: float = 0.0025,
+        phase_target_usd: Optional[float] = None,
+        min_progress_ratio: float = 0.50,
     ) -> float:
-        """[SOP-154] Si el mejor día supera el 35% del beneficio acumulado, diluye el riesgo a 0.25%."""
-        if total_profit_usd > 0 and best_day_profit_usd > 0:
-            if (best_day_profit_usd / total_profit_usd) > max_share:
-                return min(base_risk_pct, diluted_risk_pct)
+        """
+        [SOP-154/158] Si el mejor día supera el 35% de la meta de fase (o del beneficio acumulado
+        cuando ya se alcanzó >= 50% de la meta), diluye el riesgo a 0.25%.
+        Evita estrangular el Día 1 tras la primera operación ganadora.
+        """
+        if best_day_profit_usd <= 0:
+            return base_risk_pct
+        effective_base = max(total_profit_usd, phase_target_usd or 0.0)
+        if effective_base > 0 and (best_day_profit_usd / effective_base) > max_share:
+            return min(base_risk_pct, diluted_risk_pct)
+        if (
+            phase_target_usd
+            and phase_target_usd > 0
+            and total_profit_usd >= (phase_target_usd * min_progress_ratio)
+            and (best_day_profit_usd / total_profit_usd) > max_share
+        ):
+            return min(base_risk_pct, diluted_risk_pct)
         return base_risk_pct
         
     def calculate_mt5_lots(
@@ -311,8 +326,8 @@ class FtmoGuardianShield:
         """
         symbol = symbol.upper().replace(".CASH", "").replace(".SIM", "")
         canonical_contracts = {
-            "XAUUSD": 100, "XAGUSD": 5000, "USOIL": 100,
-            "US100": 1, "US500": 1, "US30": 1, "GER40": 1,
+            "XAUUSD": 100, "XAGUSD": 5000, "USOIL": 100, "UKOIL": 100,
+            "US100": 1, "US500": 1, "US30": 1, "GER40": 1, "UK100": 1, "EU50": 1, "JP225": 1, "US2000": 1,
             "BTCUSD": 1, "ETHUSD": 1, "SOLUSD": 1, "DOTUSD": 10, "XRPUSD": 100, "ADAUSD": 100,
         }
         default_cs = canonical_contracts.get(symbol, 100000 if len(symbol) == 6 else 1)
@@ -364,17 +379,17 @@ class FtmoGuardianShield:
                 "lot_error": "MIN_LOT_EXCEEDS_RISK_BUDGET",
             }
 
-        is_index = any(idx in symbol for idx in ["US100", "US30", "US500", "GER40"])
+        is_index = any(idx in symbol for idx in ["US100", "US30", "US500", "GER40", "UK100", "EU50", "JP225", "US2000"])
         stepped = max(min_lot, min(max_lot, round(raw_lots / step_lot) * step_lot))
         total_lots = round(stepped, 2 if step_lot < 0.1 else 1)
         lots_tp1 = round(total_lots * 0.50, 2 if step_lot < 0.1 else 1)
         lots_tp2 = round(total_lots * 0.30, 2 if step_lot < 0.1 else 1)
         lots_tp3 = round(max(0.0, total_lots - lots_tp1 - lots_tp2), 2 if step_lot < 0.1 else 1)
 
-        # Gobernador de Margen Libre para FTMO SWING (Apalancamiento 1:30 en Forex, 1:20 en Índices/Metales)
+        # Gobernador de Margen Libre para FTMO SWING (Apalancamiento 1:30 en Forex, 1:15 en Índices/Metales)
         margin_warning = False
         if margin_free is not None and margin_free > 0 and self.account_type == "SWING":
-            leverage = 30.0 if not is_index and "XAU" not in symbol else 20.0
+            leverage = 30.0 if not is_index and "XAU" not in symbol and "XAG" not in symbol else 15.0
             notional = total_lots * contract_size * entry_price
             est_margin_needed = notional / leverage
             # Si el margen necesario supera el 40% del margen libre remanente, activar advertencia

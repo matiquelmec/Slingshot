@@ -65,11 +65,11 @@ class PropFirmPassSimulator:
             sym = str(t.get("symbol") or t.get("asset") or "").upper()
             if profile.upper() != "FTMO_SWING" and prop_tier1_only and sym not in PROP_FIRM_TIER1_CRYPTO_UNIVERSE:
                 continue
-            raw_r = float(t.get("pnl_r") or t.get("outcome_r") or t.get("r_multiple") or 0.0)
-            # FTMO_SWING oos_trade_stream ya viene neto de spread, comisión y swap nocturno
             if profile.upper() == "FTMO_SWING":
+                raw_r = float(t.get("weighted_r") if t.get("weighted_r") is not None else (t.get("pnl_r") or t.get("outcome_r") or t.get("r_multiple") or 0.0))
                 net_r = raw_r
             else:
+                raw_r = float(t.get("pnl_r") or t.get("outcome_r") or t.get("r_multiple") or 0.0)
                 net_r = raw_r * friction_haircut if raw_r > 0 else raw_r - sl_slippage_r
             day_key = str(t.get("day") or t.get("entry_time") or t.get("timestamp") or f"day_{idx // 2}")[:10]
             by_day[day_key].append(net_r)
@@ -145,7 +145,7 @@ class PropFirmPassSimulator:
                     d = sim_days[day_idx]
                     day_idx += 1
                     eff_risk = risk_pct * 0.5 if eq_pct >= 8.5 else risk_pct
-                    if eq_pct > 0 and best_day_pct > (eq_pct * 0.35):
+                    if best_day_pct > (0.35 * max(eq_pct, 10.0)) or (eq_pct >= 5.0 and best_day_pct > (eq_pct * 0.35)):
                         eff_risk = min(eff_risk, 0.25)
 
                     day_net_r = d["net_r"] * shrinkage_factor if d["net_r"] > 0 else d["net_r"]
@@ -184,7 +184,7 @@ class PropFirmPassSimulator:
                         d = sim_days[day_idx]
                         day_idx += 1
                         eff_risk2 = risk_pct * 0.5 if eq2 >= 4.25 else risk_pct
-                        if eq2 > 0 and best_day2 > (eq2 * 0.35):
+                        if best_day2 > (0.35 * max(eq2, 5.0)) or (eq2 >= 2.5 and best_day2 > (eq2 * 0.35)):
                             eff_risk2 = min(eff_risk2, 0.25)
 
                         day_net_r = d["net_r"] * shrinkage_factor if d["net_r"] > 0 else d["net_r"]

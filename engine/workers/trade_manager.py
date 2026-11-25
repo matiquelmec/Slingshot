@@ -80,6 +80,7 @@ class TradeManager:
         self._initial_risk_cache: Dict[str, float] = {}
         self._dispatched_trade_stages: Dict[str, set] = {}
         self._last_tick_protection_ts: Dict[str, float] = {}
+        self._bitunix_sync_lock = asyncio.Lock()
 
     def _load_mt5_partial_states(self) -> Dict[str, Any]:
         path = r"C:\Slingshot\data\mt5_partial_states.json"
@@ -176,36 +177,42 @@ class TradeManager:
         return actions
 
     async def _bitunix_fastpath_loop(self):
-        """[SOP-157] Fast-Path sub-segundo (1.5s) desde Sidecar :8080 hacia protección BE / SOP-25."""
+        """[SOP-157/158] Fast-Path sub-segundo (1.5s) desde Sidecar :8080 hacia protección BE / SOP-25."""
         import httpx
         await asyncio.sleep(6)
-        while not self._stop_event.is_set():
-            try:
-                from engine.execution.nexus import nexus
-                active_map = getattr(nexus, "_active_positions", {}) or {}
-                if active_map:
-                    async with httpx.AsyncClient(timeout=1.0) as client:
+        limits = httpx.Limits(max_keepalive_connections=4, max_connections=8)
+        async with httpx.AsyncClient(timeout=1.0, limits=limits) as client:
+            while not self._stop_event.is_set():
+                try:
+                    from engine.execution.nexus import nexus
+                    active_map = getattr(nexus, "_active_positions", {}) or {}
+                    if active_map:
                         t_res, d_res = await asyncio.gather(
                             client.get("http://127.0.0.1:8080/ticks"),
                             client.get("http://127.0.0.1:8080/depth"),
                             return_exceptions=True,
                         )
-                    ticks = t_res.json() if (not isinstance(t_res, Exception) and t_res.status_code == 200) else {}
-                    depths = d_res.json() if (not isinstance(d_res, Exception) and d_res.status_code == 200) else {}
-                    triggered = False
-                    for pos in list(active_map.values()):
-                        sym = str(pos.get("asset") or pos.get("symbol") or "").replace("/", "").upper()
-                        live_p = float((ticks.get(sym) or {}).get("price") or 0.0)
-                        obi = float((depths.get(sym) or {}).get("obi") or 0.0)
-                        if live_p > 0:
-                            acts = await self.evaluate_realtime_tick_protection(sym, live_p, obi_score=obi)
-                            if acts:
-                                triggered = True
-                    if triggered:
-                        await self.sync_live_bitunix_positions()
-            except Exception as e:
-                logger.debug(f"[BITUNIX_FASTPATH] {e}")
-            await asyncio.sleep(1.5)
+                        ticks = t_res.json() if (not isinstance(t_res, Exception) and t_res.status_code == 200) else {}
+                        depths = d_res.json() if (not isinstance(d_res, Exception) and d_res.status_code == 200) else {}
+                        triggered = False
+                        for pos in list(active_map.values()):
+                            sym = str(pos.get("asset") or pos.get("symbol") or "").replace("/", "").upper()
+                            tick_entry = ticks.get(sym) or {}
+                            depth_entry = depths.get(sym) or {}
+                            live_p = float(tick_entry.get("price") or 0.0)
+                            raw_obi = depth_entry.get("imbalance") if depth_entry.get("imbalance") is not None else depth_entry.get("obi")
+                            if raw_obi is None:
+                                raw_obi = tick_entry.get("delta_ratio")
+                            obi = float(raw_obi or 0.0)
+                            if live_p > 0:
+                                acts = await self.evaluate_realtime_tick_protection(sym, live_p, obi_score=obi)
+                                if acts:
+                                    triggered = True
+                        if triggered:
+                            await self.sync_live_bitunix_positions()
+                except Exception as e:
+                    logger.debug(f"[BITUNIX_FASTPATH] {e}")
+                await asyncio.sleep(1.5)
 
     async def _mt5_dedicated_loop(self):
         """Loop dedicado de alta frecuencia (cada 4 seg) para sincronizar y blindar MT5."""
@@ -1116,14 +1123,15 @@ class TradeManager:
 
 
     async def sync_live_bitunix_positions(self) -> List[Dict[str, Any]]:
-
         """
-
         Consulta las posiciones reales abiertas en Bitunix para todas las cuentas activas (SOP-45 Multi-Cuenta),
-
-        calcula su avance en R y actualiza automAAticamente a Breakeven aquellas que hayan avanzado >= +1.0R.
-
+        calcula su avance en R y actualiza automáticamente a Breakeven aquellas que hayan avanzado >= +1.0R.
+        [SOP-158] Serializado con self._bitunix_sync_lock para evitar colisiones entre fast-path y loop principal.
         """
+        async with self._bitunix_sync_lock:
+            return await self._sync_live_bitunix_positions_impl()
+
+    async def _sync_live_bitunix_positions_impl(self) -> List[Dict[str, Any]]:
 
         managed_results = []
 

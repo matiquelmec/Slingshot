@@ -30,14 +30,14 @@ class MT5Bridge:
         sym = symbol.upper()
         if "JPY" in sym:
             return 3
-        elif any(f in sym for f in ["EUR", "GBP", "AUD", "NZD", "USD", "CAD", "CHF"]) and not any(m in sym for m in ["XAU", "XAG", "OIL", "US500", "US100", "US30", "SPX500"]):
-            return 5
         elif any(c in sym for c in ["XAU", "XAG", "OIL", "GOLD"]):
             return 2
         elif any(idx in sym for idx in ["US500", "SPX500"]):
             return 2
-        elif any(idx in sym for idx in ["US100", "US30", "NAS100", "GER40"]):
+        elif any(idx in sym for idx in ["US100", "US30", "NAS100", "GER40", "UK100", "EU50", "JP225", "US2000"]):
             return 1
+        elif any(f in sym for f in ["EUR", "GBP", "AUD", "NZD", "USD", "CAD", "CHF"]):
+            return 5
         return 2
 
     DEFAULT_TERMINAL_PATHS = [
@@ -122,7 +122,7 @@ class MT5Bridge:
         """
         base = symbol.replace("USDT", "USD").upper()
         if not MT5_AVAILABLE or self.dry_run or not self.connected:
-            if any(idx in base for idx in ["US100", "US30", "US500", "GER40", "USOIL"]):
+            if any(idx in base for idx in ["US100", "US30", "US500", "GER40", "UK100", "EU50", "JP225", "US2000", "USOIL", "UKOIL"]):
                 return f"{base}.cash" if ".cash" not in base.lower() else base
             return base
         for cand in (base, f"{base}.cash", f"{base}.sim"):
@@ -161,7 +161,7 @@ class MT5Bridge:
         risk_usd = float(lot_info.get("risk_usd", 750.0))
 
         is_long = "LONG" in direction.upper()
-        sym_mt5 = symbol.replace("USDT", "USD")
+        sym_mt5 = self.resolve_broker_symbol(symbol) or symbol.replace("USDT", "USD")
 
         # Resolución inteligente de sufijo .cash para brokers FTMO
         min_lot = 0.01
@@ -169,10 +169,7 @@ class MT5Bridge:
         digits = self.get_symbol_digits(symbol)
 
         if MT5_AVAILABLE and self.connected:
-            cash_cand = f"{sym_mt5}.cash"
             try:
-                if mt5.symbol_info(cash_cand) is not None:
-                    sym_mt5 = cash_cand
                 s_info = mt5.symbol_info(sym_mt5)
                 if s_info:
                     min_lot = s_info.volume_min or 0.01
@@ -339,29 +336,6 @@ class MT5Bridge:
             logger.error(f"❌ [MT5_BRIDGE] Excepción enviando órdenes a MT5: {e}")
             return {"success": False, "reason": str(e)}
 
-    def cancel_order(self, ticket: int) -> bool:
-        """Cancela una orden pendiente en MetaTrader 5."""
-        if self.dry_run or not self.connected or not MT5_AVAILABLE:
-            logger.info(f"🏛️ [MT5_BRIDGE:DRY_RUN] Cancelación simulada de orden #{ticket}")
-            return True
-        try:
-            request = {
-                "action": mt5.TRADE_ACTION_REMOVE,
-                "order": int(ticket)
-            }
-            res = mt5.order_send(request)
-            if res and res.retcode == mt5.TRADE_RETCODE_DONE:
-                logger.info(f"🗑️ [MT5_BRIDGE] Orden pendiente #{ticket} cancelada exitosamente.")
-                return True
-            else:
-                ret = res.retcode if res else "UNKNOWN"
-                msg = res.comment if res else "Error"
-                logger.warning(f"⚠️ [MT5_BRIDGE] Fallo al cancelar orden #{ticket}: {ret} - {msg}")
-                return False
-        except Exception as e:
-            logger.error(f"❌ [MT5_BRIDGE] Excepción cancelando orden #{ticket}: {e}")
-            return False
-
     def get_open_positions(self) -> list:
         """Obtiene las posiciones abiertas en MetaTrader 5 gestionadas por Slingshot."""
         if not MT5_AVAILABLE or self.dry_run or not self.ensure_connected():
@@ -422,7 +396,7 @@ class MT5Bridge:
 
     def get_realtime_spreads(self, symbols: Optional[List[str]] = None) -> dict:
         """Obtiene el spread en tiempo real (en puntos/pips) y precios Bid/Ask para los símbolos clave."""
-        target_symbols = symbols or ["GBPUSD", "US100.cash", "US30.cash", "XAUUSD"]
+        target_symbols = symbols or ["XAUUSD", "XAGUSD", "US100.cash", "UK100.cash"]
         spread_data = {}
         if not MT5_AVAILABLE or self.dry_run or not self.ensure_connected():
             status_label = "SIMULATED" if self.dry_run else "OFFLINE"
@@ -463,6 +437,10 @@ class MT5Bridge:
                         is_spike = spread_raw > 0.00030 # > 3 pips
                     elif "XAU" in s:
                         is_spike = spread_raw > 0.70 # > $0.70 spread en oro
+                    elif "XAG" in s:
+                        is_spike = spread_raw > 0.06 # > $0.06 spread en plata
+                    elif "UK100" in s:
+                        is_spike = spread_raw > 2.5 # > 2.5 pts spread en FTSE 100
                     elif "US100" in s or "US30" in s:
                         is_spike = spread_raw > 3.0 # > $3.0 spread en índices
                         
@@ -704,9 +682,7 @@ class MT5Bridge:
             return {"shielded": False, "reason": "MT5 no conectado o en dry-run"}
 
         try:
-            sym_mt5 = symbol.replace("USDT", "USD")
-            if ".cash" not in sym_mt5 and any(idx in sym_mt5 for idx in ["US100", "US30", "US500", "GER40"]):
-                sym_mt5 = f"{sym_mt5}.cash"
+            sym_mt5 = self.resolve_broker_symbol(symbol) or symbol.replace("USDT", "USD")
 
             positions = mt5.positions_get(symbol=sym_mt5) or []
             if not positions:

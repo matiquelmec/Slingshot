@@ -22,6 +22,9 @@ export interface ForwardTrackerSummary {
     drift_z_score: number;
     drift_status: 'IN_LINE' | 'SAMPLE_BUILDING' | 'WARNING_DRIFT' | 'CRITICAL_DEGRADATION' | string;
     recommended_risk_action: string;
+    sprt_log_likelihood?: number;
+    sprt_decision?: 'EDGE_CONFIRMED' | 'EDGE_DEGRADED' | 'CONTINUE_SAMPLING' | string;
+    sprt_progress_pct?: number;
 }
 
 export interface ForwardTrackerResponse {
@@ -201,6 +204,40 @@ export default function ForwardTestAuditCard() {
                     </p>
                 </div>
             </div>
+
+            {typeof summary.sprt_log_likelihood === 'number' && (
+                <div className="p-3 rounded-xl bg-black/40 border border-white/10 flex flex-col gap-2">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                        <span className="text-[11px] font-mono text-slate-300">
+                            WALD SPRT (SOP-156):{' '}
+                            <strong className="text-white">
+                                Λₙ = {summary.sprt_log_likelihood >= 0 ? '+' : ''}
+                                {summary.sprt_log_likelihood.toFixed(3)}
+                            </strong>{' '}
+                            <span className="text-slate-400">([-2.25, +2.89])</span>
+                        </span>
+                        <span
+                            className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold border ${
+                                summary.sprt_decision === 'EDGE_CONFIRMED'
+                                    ? 'bg-neon-green/15 text-neon-green border-neon-green/40'
+                                    : summary.sprt_decision === 'EDGE_DEGRADED'
+                                        ? 'bg-neon-red/15 text-neon-red border-neon-red/40'
+                                        : 'bg-neon-cyan/15 text-neon-cyan border-neon-cyan/40'
+                            }`}
+                        >
+                            {summary.sprt_decision || 'CONTINUE_SAMPLING'}
+                        </span>
+                    </div>
+                    <div className="w-full h-2 rounded-full bg-white/10 overflow-hidden">
+                        <div
+                            className={`h-full transition-all duration-500 ${
+                                summary.sprt_decision === 'EDGE_DEGRADED' ? 'bg-neon-red' : 'bg-neon-cyan'
+                            }`}
+                            style={{ width: `${Math.min(100, Math.max(0, summary.sprt_progress_pct ?? 0))}%` }}
+                        />
+                    </div>
+                </div>
+            )}
         </section>
     );
 }

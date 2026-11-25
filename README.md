@@ -1,6 +1,6 @@
 # Slingshot v10.0.0 — Quantitative Execution & Telemetry Platform
 
-> Plataforma full-stack de análisis estructural (Smart Money Concepts + microestructura L2) y ejecución automatizada para **Bitunix Perpetual Futures** y **MetaTrader 5 (FTMO)**. Construida con separación estricta entre el frontend **Next.js 15 (Feature-Sliced Design)**, un **Sidecar WebSocket en Node.js (`:8080`)** y el motor de ejecución en **Python 3.12 / FastAPI (`:8000`) + Polars**.  
+> Plataforma full-stack de análisis estructural (Smart Money Concepts + microestructura L2) y ejecución automatizada para **Bitunix Perpetual Futures** (13 activos canónicos congelados `SOP-147`) y **MetaTrader 5 (FTMO Swing: `XAUUSD`, `XAGUSD`, `US100.cash`, `UK100.cash`)**. Construida con separación estricta entre el frontend **Next.js 15 (Feature-Sliced Design)**, un **Sidecar WebSocket en Node.js (`:8080`)** y el motor de ejecución en **Python 3.12 / FastAPI (`:8000`) + Polars**.  
 > Gobernanza y especificaciones técnicas en [`AGENTS.md`](AGENTS.md), [`BLUEPRINT_2026.md`](docs/architecture/BLUEPRINT_2026.md) y [`ESTRUCTURA_PROYECTO.md`](docs/ESTRUCTURA_PROYECTO.md).
 
 ![Architecture](https://img.shields.io/badge/Architecture-Next.js_15_FSD_%2B_FastAPI-1a3a6e?style=flat-square)

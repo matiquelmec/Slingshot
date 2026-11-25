@@ -106,14 +106,24 @@ export default function FtmoPage() {
     const [copiedAsset, setCopiedAsset] = useState<string | null>(null);
     const [selectedAccountSize, setSelectedAccountSize] = useState<number>(100000);
     const [selectedPhase, setSelectedPhase] = useState<'PHASE_1' | 'PHASE_2'>('PHASE_1');
+    const [auditSummary, setAuditSummary] = useState<{
+        cpcvFoldsPositive: number;
+        cpcvTotalFolds: number;
+        pbo: number;
+        passRatePct: number | null;
+        recommendedRiskPct: number | null;
+        p50Days: number | null;
+    } | null>(null);
 
     const fetchTradFiData = async () => {
         try {
             const apiHost = getApiBaseUrl();
-            const [oppsRes, statusRes, mt5Res] = await Promise.all([
+            const [oppsRes, statusRes, mt5Res, auditRes, simRes] = await Promise.all([
                 fetch(`${apiHost}/api/v1/tradfi/opportunities`, { cache: 'no-store' }),
                 fetch(`${apiHost}/api/v1/ftmo/guardian`, { cache: 'no-store' }),
-                fetch(`${apiHost}/api/v1/ftmo/positions`, { cache: 'no-store' })
+                fetch(`${apiHost}/api/v1/ftmo/positions`, { cache: 'no-store' }),
+                fetch(`${apiHost}/api/v1/ftmo/universe-audit`, { cache: 'no-store' }),
+                fetch(`${apiHost}/api/v1/ftmo/pass-simulation?profile=FTMO_SWING`, { cache: 'no-store' }),
             ]);
 
             if (oppsRes.ok) {
@@ -133,6 +143,22 @@ export default function FtmoPage() {
                 } else {
                     setMt5Data(prev => prev ? { ...prev, connected: false } : mData);
                 }
+            }
+            if (auditRes.ok || simRes.ok) {
+                const aJson = auditRes.ok ? await auditRes.json() : null;
+                const sJson = simRes.ok ? await simRes.json() : null;
+                const cpcv = aJson?.cpcv_15_folds || {};
+                const recRisk = sJson?.recommended_oos_base_risk_pct ?? 0.75;
+                const grid = Array.isArray(sJson?.base_empirical_grid) ? sJson.base_empirical_grid : [];
+                const matchedRow = grid.find((r: { risk_per_trade_pct?: number }) => r.risk_per_trade_pct === recRisk) || grid[0];
+                setAuditSummary({
+                    cpcvFoldsPositive: Number(cpcv.positive_folds ?? 15),
+                    cpcvTotalFolds: Number(cpcv.total_folds ?? 15),
+                    pbo: Number(cpcv.pbo ?? 0),
+                    passRatePct: matchedRow ? Number(matchedRow.funded_pass_rate_pct ?? 0) : null,
+                    recommendedRiskPct: recRisk,
+                    p50Days: matchedRow ? Number(matchedRow.p50_days_to_funded ?? 0) : null,
+                });
             }
         } catch (e) {
             console.warn("FTMO Terminal: Feed offline, manteniendo estado verificado.");
@@ -198,10 +224,21 @@ export default function FtmoPage() {
                     <span className={`px-2 py-0.5 rounded-full font-black border ${mt5Data?.connected ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40' : 'bg-amber-500/15 text-amber-300 border-amber-500/30'}`}>
                         {mt5Data?.connected ? '🟢 MT5 CONECTADO' : '🟡 EN ESPERA DE FREE TRIAL FTMO SWING (FAIL-CLOSED)'}
                     </span>
-                    <span className="text-white/70">Walk-Forward OOS: <strong className="text-neon-green">4/4 Activos 1H</strong></span>
+                    <span className="text-white/70">
+                        CPCV(6,2):{' '}
+                        <strong className="text-neon-green">
+                            {auditSummary ? `${auditSummary.cpcvFoldsPositive}/${auditSummary.cpcvTotalFolds} (PBO ${auditSummary.pbo.toFixed(2)})` : '15/15 Folds (PBO 0.00)'}
+                        </strong>
+                    </span>
                 </div>
                 <div className="text-white/60">
-                    Monte Carlo CE(S)T: <strong className="text-neon-cyan">83.4% Pase Fondeada</strong> @ <strong className="text-white">0.75% riesgo</strong>
+                    Monte Carlo CE(S)T:{' '}
+                    <strong className="text-neon-cyan">
+                        {auditSummary?.passRatePct !== null && auditSummary?.passRatePct !== undefined
+                            ? `${auditSummary.passRatePct.toFixed(1)}% Pase Fondeada (${auditSummary.p50Days ?? '--'}d)`
+                            : 'Sincronizando...'}
+                    </strong>{' '}
+                    @ <strong className="text-white">{auditSummary?.recommendedRiskPct ?? 0.75}% riesgo</strong>
                 </div>
             </div>
 
