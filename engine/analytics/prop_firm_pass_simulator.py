@@ -246,6 +246,7 @@ class PropFirmPassSimulator:
         seed: int = 42,
         challenge_fee_usd: float = 540.0,
         account_size_usd: float = 100000.0,
+        profile: str = "CRYPTO_PROP",
     ) -> Dict[str, Any]:
         if isinstance(r_series_or_clusters, list) and r_series_or_clusters and isinstance(r_series_or_clusters[0], dict):
             clusters = r_series_or_clusters
@@ -268,14 +269,20 @@ class PropFirmPassSimulator:
             challenge_fee_usd=challenge_fee_usd, account_size_usd=account_size_usd,
         )
         best = max(stressed_results, key=lambda x: (x["funded_pass_rate_pct"], x["expected_value_usd"]))
+        is_ftmo_swing = profile.upper() == "FTMO_SWING"
+        universe_list = ["XAUUSD", "XAGUSD", "US100", "UK100"] if is_ftmo_swing else list(PROP_FIRM_TIER1_CRYPTO_UNIVERSE)
+        rec_risk = 0.75 if is_ftmo_swing else best["risk_per_trade_pct"]
 
         return {
             "simulator_version": "SOP-152_DAILY_CLUSTERED_V2",
+            "profile": profile.upper(),
             "sample_days": len(clusters),
-            "universe": list(PROP_FIRM_TIER1_CRYPTO_UNIVERSE),
+            "universe": universe_list,
             "trials_per_risk": n_trials,
             "optimal_risk_pct": best["risk_per_trade_pct"],
+            "recommended_oos_base_risk_pct": rec_risk,
             "results": base_results,
+            "base_empirical_grid": base_results,
             "stressed_oos_results": stressed_results,
         }
 

@@ -1,0 +1,3247 @@
+{
+  "total_evaluated_configs": 42,
+  "approved_count": 4,
+  "selected_portfolio": [
+    {
+      "symbol": "XAUUSD",
+      "timeframe": "1h",
+      "archetype": "IMPULSE_OTE_SMC",
+      "cluster": "SAFE_HAVEN_METALS",
+      "tier_weight": 1.0,
+      "train_pf": 1.68,
+      "oos_pf": 1.55,
+      "oos_mean_r": 0.235,
+      "oos_n": 60,
+      "oos_total_r": 14.1
+    },
+    {
+      "symbol": "XAGUSD",
+      "timeframe": "1h",
+      "archetype": "IMPULSE_OTE_SMC",
+      "cluster": "SAFE_HAVEN_METALS",
+      "tier_weight": 1.0,
+      "train_pf": 1.31,
+      "oos_pf": 1.68,
+      "oos_mean_r": 0.2633,
+      "oos_n": 49,
+      "oos_total_r": 12.9
+    },
+    {
+      "symbol": "US100",
+      "timeframe": "1h",
+      "archetype": "IMPULSE_OTE_SMC",
+      "cluster": "US_EQUITY_INDICES",
+      "tier_weight": 1.0,
+      "train_pf": 1.2,
+      "oos_pf": 1.6,
+      "oos_mean_r": 0.2291,
+      "oos_n": 87,
+      "oos_total_r": 19.93
+    },
+    {
+      "symbol": "UK100",
+      "timeframe": "1h",
+      "archetype": "LIQUIDITY_SWEEP_JUDAS",
+      "cluster": "GLOBAL_EQUITY_INDICES",
+      "tier_weight": 0.65,
+      "train_pf": 1.35,
+      "oos_pf": 1.28,
+      "oos_mean_r": 0.1282,
+      "oos_n": 30,
+      "oos_total_r": 3.85
+    }
+  ],
+  "portfolio_dsr": {
+    "sr_per_trade": 0.1708,
+    "sr_benchmark": 0.1574,
+    "dsr": 0.5775,
+    "skew": 0.451,
+    "kurtosis": 1.798
+  },
+  "cpcv_15_folds": {
+    "n_folds": 15,
+    "fold_positive_rate_pct": 100.0,
+    "median_oos_expectancy_r": 0.1746,
+    "median_oos_pf": 1.42,
+    "pbo_score": 0.0
+  },
+  "oos_trade_stream": [
+    {
+      "symbol": "UK100",
+      "archetype": "LIQUIDITY_SWEEP_JUDAS",
+      "day": "2025-07-22",
+      "outcome_r": -1.059,
+      "mae_r": -1.0,
+      "cost_r": 0.059,
+      "cluster": "GLOBAL_EQUITY_INDICES",
+      "tier_weight": 0.65,
+      "weighted_r": -0.6884
+    },
+    {
+      "symbol": "UK100",
+      "archetype": "LIQUIDITY_SWEEP_JUDAS",
+      "day": "2025-08-22",
+      "outcome_r": -1.0739,
+      "mae_r": -1.0,
+      "cost_r": 0.0739,
+      "cluster": "GLOBAL_EQUITY_INDICES",
+      "tier_weight": 0.65,
+      "weighted_r": -0.698
+    },
+    {
+      "symbol": "UK100",
+      "archetype": "LIQUIDITY_SWEEP_JUDAS",
+      "day": "2025-09-10",
+      "outcome_r": -1.0658,
+      "mae_r": -1.0,
+      "cost_r": 0.0658,
+      "cluster": "GLOBAL_EQUITY_INDICES",
+      "tier_weight": 0.65,
+      "weighted_r": -0.6928
+    },
+    {
+      "symbol": "UK100",
+      "archetype": "LIQUIDITY_SWEEP_JUDAS",
+      "day": "2025-09-12",
+      "outcome_r": 1.9721,
+      "mae_r": -0.7323,
+      "cost_r": 0.1579,
+      "cluster": "GLOBAL_EQUITY_INDICES",
+      "tier_weight": 0.65,
+      "weighted_r": 1.2819
+    },
+    {
+      "symbol": "XAUUSD",
+      "archetype": "IMPULSE_OTE_SMC",
+      "day": "2025-09-23",
+      "outcome_r": 0.6031,
+      "mae_r": 0.0,
+      "cost_r": 0.0469,
+      "cluster": "SAFE_HAVEN_METALS",
+      "tier_weight": 1.0,
+      "weighted_r": 0.6031
+    },
+    {
+      "symbol": "XAUUSD",
+      "archetype": "IMPULSE_OTE_SMC",
+      "day": "2025-09-24",
+      "outcome_r": -1.0403,
+      "mae_r": -1.0,
+      "cost_r": 0.0403,
+      "cluster": "SAFE_HAVEN_METALS",
+      "tier_weight": 1.0,
+      "weighted_r": -1.0403
+    },
+    {
+      "symbol": "XAUUSD",
+      "archetype": "IMPULSE_OTE_SMC",
+      "day": "2025-09-25",
+      "outcome_r": -1.0414,
+      "mae_r": -1.0,
+      "cost_r": 0.0414,
+      "cluster": "SAFE_HAVEN_METALS",
+      "tier_weight": 1.0,
+      "weighted_r": -1.0414
+    },
+    {
+      "symbol": "XAUUSD",
+      "archetype": "IMPULSE_OTE_SMC",
+      "day": "2025-09-26",
+      "outcome_r": 2.0497,
+      "mae_r": 0.0,
+      "cost_r": 0.0803,
+      "cluster": "SAFE_HAVEN_METALS",
+      "tier_weight": 1.0,
+      "weighted_r": 2.0497
+    },
+    {
+      "symbol": "XAUUSD",
+      "archetype": "IMPULSE_OTE_SMC",
+      "day": "2025-09-30",
+      "outcome_r": -1.0385,
+      "mae_r": -1.0,
+      "cost_r": 0.0385,
+      "cluster": "SAFE_HAVEN_METALS",
+      "tier_weight": 1.0,
+      "weighted_r": -1.0385
+    },
+    {
+      "symbol": "XAUUSD",
+      "archetype": "IMPULSE_OTE_SMC",
+      "day": "2025-10-01",
+      "outcome_r": 0.601,
+      "mae_r": 0.0,
+      "cost_r": 0.049,
+      "cluster": "SAFE_HAVEN_METALS",
+      "tier_weight": 1.0,
+      "weighted_r": 0.601
+    },
+    {
+      "symbol": "UK100",
+      "archetype": "LIQUIDITY_SWEEP_JUDAS",
+      "day": "2025-10-02",
+      "outcome_r": 0.5864,
+      "mae_r": 0.0,
+      "cost_r": 0.0636,
+      "cluster": "GLOBAL_EQUITY_INDICES",
+      "tier_weight": 0.65,
+      "weighted_r": 0.3812
+    },
+    {
+      "symbol": "XAUUSD",
+      "archetype": "IMPULSE_OTE_SMC",
+      "day": "2025-10-03",
+      "outcome_r": 2.0489,
+      "mae_r": 0.0,
+      "cost_r": 0.0811,
+      "cluster": "SAFE_HAVEN_METALS",
+      "tier_weight": 1.0,
+      "weighted_r": 2.0489
+    },
+    {
+      "symbol": "XAUUSD",
+      "archetype": "IMPULSE_OTE_SMC",
+      "day": "2025-10-06",
+      "outcome_r": 0.6123,
+      "mae_r": 0.0,
+      "cost_r": 0.0377,
+      "cluster": "SAFE_HAVEN_METALS",
+      "tier_weight": 1.0,
+      "weighted_r": 0.6123
+    },
+    {
+      "symbol": "UK100",
+      "archetype": "LIQUIDITY_SWEEP_JUDAS",
+      "day": "2025-10-06",
+      "outcome_r": -1.053,
+      "mae_r": -1.0,
+      "cost_r": 0.053,
+      "cluster": "GLOBAL_EQUITY_INDICES",
+      "tier_weight": 0.65,
+      "weighted_r": -0.6845
+    },
+    {
+      "symbol": "XAUUSD",
+      "archetype": "IMPULSE_OTE_SMC",
+      "day": "2025-10-08",
+      "outcome_r": -0.0403,
+      "mae_r": 0.0,
+      "cost_r": 0.0403,
+      "cluster": "SAFE_HAVEN_METALS",
+      "tier_weight": 1.0,
+      "weighted_r": -0.0403
+    },
+    {
+      "symbol": "UK100",
+      "archetype": "LIQUIDITY_SWEEP_JUDAS",
+      "day": "2025-10-08",
+      "outcome_r": 2.0576,
+      "mae_r": -0.4656,
+      "cost_r": 0.0724,
+      "cluster": "GLOBAL_EQUITY_INDICES",
+      "tier_weight": 0.65,
+      "weighted_r": 1.3374
+    },
+    {
+      "symbol": "XAUUSD",
+      "archetype": "IMPULSE_OTE_SMC",
+      "day": "2025-10-10",
+      "outcome_r": 2.0822,
+      "mae_r": -0.336,
+      "cost_r": 0.0478,
+      "cluster": "SAFE_HAVEN_METALS",
+      "tier_weight": 1.0,
+      "weighted_r": 2.0822
+    },
+    {
+      "symbol": "XAUUSD",
+      "archetype": "IMPULSE_OTE_SMC",
+      "day": "2025-10-14",
+      "outcome_r": -1.0312,
+      "mae_r": -1.0,
+      "cost_r": 0.0312,
+      "cluster": "SAFE_HAVEN_METALS",
+      "tier_weight": 1.0,
+      "weighted_r": -1.0312
+    },
+    {
+      "symbol": "XAUUSD",
+      "archetype": "IMPULSE_OTE_SMC",
+      "day": "2025-10-15",
+      "outcome_r": 2.0923,
+      "mae_r": -0.8349,
+      "cost_r": 0.0377,
+      "cluster": "SAFE_HAVEN_METALS",
+      "tier_weight": 1.0,
+      "weighted_r": 2.0923
+    },
+    {
+      "symbol": "XAUUSD",
+      "archetype": "IMPULSE_OTE_SMC",
+      "day": "2025-10-16",
+      "outcome_r": 2.093,
+      "mae_r": 0.0,
+      "cost_r": 0.037,
+      "cluster": "SAFE_HAVEN_METALS",
+      "tier_weight": 1.0,
+      "weighted_r": 2.093
+    },
+    {
+      "symbol": "XAUUSD",
+      "archetype": "IMPULSE_OTE_SMC",
+      "day": "2025-10-17",
+      "outcome_r": -0.0221,
+      "mae_r": 0.0,
+      "cost_r": 0.0221,
+      "cluster": "SAFE_HAVEN_METALS",
+      "tier_weight": 1.0,
+      "weighted_r": -0.0221
+    },
+    {
+      "symbol": "XAUUSD",
+      "archetype": "IMPULSE_OTE_SMC",
+      "day": "2025-10-20",
+      "outcome_r": -0.0242,
+      "mae_r": 0.0,
+      "cost_r": 0.0242,
+      "cluster": "SAFE_HAVEN_METALS",
+      "tier_weight": 1.0,
+      "weighted_r": -0.0242
+    },
+    {
+      "symbol": "XAUUSD",
+      "archetype": "IMPULSE_OTE_SMC",
+      "day": "2025-11-10",
+      "outcome_r": 2.0655,
+      "mae_r": -0.4475,
+      "cost_r": 0.0645,
+      "cluster": "SAFE_HAVEN_METALS",
+      "tier_weight": 1.0,
+      "weighted_r": 2.0655
+    },
+    {
+      "symbol": "XAUUSD",
+      "archetype": "IMPULSE_OTE_SMC",
+      "day": "2025-11-13",
+      "outcome_r": -1.0303,
+      "mae_r": -1.0,
+      "cost_r": 0.0303,
+      "cluster": "SAFE_HAVEN_METALS",
+      "tier_weight": 1.0,
+      "weighted_r": -1.0303
+    },
+    {
+      "symbol": "XAUUSD",
+      "archetype": "IMPULSE_OTE_SMC",
+      "day": "2025-11-14",
+      "outcome_r": -1.0256,
+      "mae_r": -1.0,
+      "cost_r": 0.0256,
+      "cluster": "SAFE_HAVEN_METALS",
+      "tier_weight": 1.0,
+      "weighted_r": -1.0256
+    },
+    {
+      "symbol": "UK100",
+      "archetype": "LIQUIDITY_SWEEP_JUDAS",
+      "day": "2025-11-25",
+      "outcome_r": -1.0433,
+      "mae_r": -1.0,
+      "cost_r": 0.0433,
+      "cluster": "GLOBAL_EQUITY_INDICES",
+      "tier_weight": 0.65,
+      "weighted_r": -0.6781
+    },
+    {
+      "symbol": "XAUUSD",
+      "archetype": "IMPULSE_OTE_SMC",
+      "day": "2025-11-28",
+      "outcome_r": 0.6238,
+      "mae_r": 0.0,
+      "cost_r": 0.0262,
+      "cluster": "SAFE_HAVEN_METALS",
+      "tier_weight": 1.0,
+      "weighted_r": 0.6238
+    },
+    {
+      "symbol": "UK100",
+      "archetype": "LIQUIDITY_SWEEP_JUDAS",
+      "day": "2025-11-28",
+      "outcome_r": 0.4984,
+      "mae_r": 0.0,
+      "cost_r": 0.1516,
+      "cluster": "GLOBAL_EQUITY_INDICES",
+      "tier_weight": 0.65,
+      "weighted_r": 0.324
+    },
+    {
+      "symbol": "US100",
+      "archetype": "IMPULSE_OTE_SMC",
+      "day": "2025-12-04",
+      "outcome_r": -1.0326,
+      "mae_r": -1.0,
+      "cost_r": 0.0326,
+      "cluster": "US_EQUITY_INDICES",
+      "tier_weight": 1.0,
+      "weighted_r": -1.0326
+    },
+    {
+      "symbol": "US100",
+      "archetype": "IMPULSE_OTE_SMC",
+      "day": "2025-12-05",
+      "outcome_r": -1.0292,
+      "mae_r": -1.0,
+      "cost_r": 0.0292,
+      "cluster": "US_EQUITY_INDICES",
+      "tier_weight": 1.0,
+      "weighted_r": -1.0292
+    },
+    {
+      "symbol": "US100",
+      "archetype": "IMPULSE_OTE_SMC",
+      "day": "2025-12-11",
+      "outcome_r": -1.0204,
+      "mae_r": -1.0,
+      "cost_r": 0.0204,
+      "cluster": "US_EQUITY_INDICES",
+      "tier_weight": 1.0,
+      "weighted_r": -1.0204
+    },
+    {
+      "symbol": "XAUUSD",
+      "archetype": "IMPULSE_OTE_SMC",
+      "day": "2025-12-12",
+      "outcome_r": -1.0369,
+      "mae_r": -1.0,
+      "cost_r": 0.0369,
+      "cluster": "SAFE_HAVEN_METALS",
+      "tier_weight": 1.0,
+      "weighted_r": -1.0369
+    },
+    {
+      "symbol": "XAUUSD",
+      "archetype": "IMPULSE_OTE_SMC",
+      "day": "2025-12-15",
+      "outcome_r": -1.0332,
+      "mae_r": -1.0,
+      "cost_r": 0.0332,
+      "cluster": "SAFE_HAVEN_METALS",
+      "tier_weight": 1.0,
+      "weighted_r": -1.0332
+    },
+    {
+      "symbol": "US100",
+      "archetype": "IMPULSE_OTE_SMC",
+      "day": "2025-12-16",
+      "outcome_r": -1.0178,
+      "mae_r": -1.0,
+      "cost_r": 0.0178,
+      "cluster": "US_EQUITY_INDICES",
+      "tier_weight": 1.0,
+      "weighted_r": -1.0178
+    },
+    {
+      "symbol": "XAUUSD",
+      "archetype": "IMPULSE_OTE_SMC",
+      "day": "2025-12-17",
+      "outcome_r": -0.0474,
+      "mae_r": 0.0,
+      "cost_r": 0.0474,
+      "cluster": "SAFE_HAVEN_METALS",
+      "tier_weight": 1.0,
+      "weighted_r": -0.0474
+    },
+    {
+      "symbol": "XAUUSD",
+      "archetype": "IMPULSE_OTE_SMC",
+      "day": "2025-12-19",
+      "outcome_r": 2.045,
+      "mae_r": -0.2514,
+      "cost_r": 0.085,
+      "cluster": "SAFE_HAVEN_METALS",
+      "tier_weight": 1.0,
+      "weighted_r": 2.045
+    },
+    {
+      "symbol": "US100",
+      "archetype": "IMPULSE_OTE_SMC",
+      "day": "2025-12-22",
+      "outcome_r": 0.6235,
+      "mae_r": 0.0,
+      "cost_r": 0.0265,
+      "cluster": "US_EQUITY_INDICES",
+      "tier_weight": 1.0,
+      "weighted_r": 0.6235
+    },
+    {
+      "symbol": "XAUUSD",
+      "archetype": "IMPULSE_OTE_SMC",
+      "day": "2025-12-23",
+      "outcome_r": -0.0403,
+      "mae_r": 0.0,
+      "cost_r": 0.0403,
+      "cluster": "SAFE_HAVEN_METALS",
+      "tier_weight": 1.0,
+      "weighted_r": -0.0403
+    },
+    {
+      "symbol": "US100",
+      "archetype": "IMPULSE_OTE_SMC",
+      "day": "2025-12-24",
+      "outcome_r": 1.4315,
+      "mae_r": 0.0,
+      "cost_r": 0.1385,
+      "cluster": "US_EQUITY_INDICES",
+      "tier_weight": 1.0,
+      "weighted_r": 1.4315
+    },
+    {
+      "symbol": "XAUUSD",
+      "archetype": "IMPULSE_OTE_SMC",
+      "day": "2025-12-26",
+      "outcome_r": -1.0605,
+      "mae_r": -1.0,
+      "cost_r": 0.0605,
+      "cluster": "SAFE_HAVEN_METALS",
+      "tier_weight": 1.0,
+      "weighted_r": -1.0605
+    },
+    {
+      "symbol": "US100",
+      "archetype": "IMPULSE_OTE_SMC",
+      "day": "2025-12-30",
+      "outcome_r": 0.6154,
+      "mae_r": 0.0,
+      "cost_r": 0.0346,
+      "cluster": "US_EQUITY_INDICES",
+      "tier_weight": 1.0,
+      "weighted_r": 0.6154
+    },
+    {
+      "symbol": "XAUUSD",
+      "archetype": "IMPULSE_OTE_SMC",
+      "day": "2026-01-06",
+      "outcome_r": -0.6819,
+      "mae_r": -0.7742,
+      "cost_r": 0.0319,
+      "cluster": "SAFE_HAVEN_METALS",
+      "tier_weight": 1.0,
+      "weighted_r": -0.6819
+    },
+    {
+      "symbol": "UK100",
+      "archetype": "LIQUIDITY_SWEEP_JUDAS",
+      "day": "2026-01-06",
+      "outcome_r": -1.0738,
+      "mae_r": -1.0,
+      "cost_r": 0.0738,
+      "cluster": "GLOBAL_EQUITY_INDICES",
+      "tier_weight": 0.65,
+      "weighted_r": -0.698
+    },
+    {
+      "symbol": "XAUUSD",
+      "archetype": "IMPULSE_OTE_SMC",
+      "day": "2026-01-07",
+      "outcome_r": -1.0328,
+      "mae_r": -1.0,
+      "cost_r": 0.0328,
+      "cluster": "SAFE_HAVEN_METALS",
+      "tier_weight": 1.0,
+      "weighted_r": -1.0328
+    },
+    {
+      "symbol": "US100",
+      "archetype": "IMPULSE_OTE_SMC",
+      "day": "2026-01-07",
+      "outcome_r": -1.0307,
+      "mae_r": -1.0,
+      "cost_r": 0.0307,
+      "cluster": "US_EQUITY_INDICES",
+      "tier_weight": 1.0,
+      "weighted_r": -1.0307
+    },
+    {
+      "symbol": "US100",
+      "archetype": "IMPULSE_OTE_SMC",
+      "day": "2026-01-08",
+      "outcome_r": -0.0286,
+      "mae_r": 0.0,
+      "cost_r": 0.0286,
+      "cluster": "US_EQUITY_INDICES",
+      "tier_weight": 1.0,
+      "weighted_r": -0.0286
+    },
+    {
+      "symbol": "XAUUSD",
+      "archetype": "IMPULSE_OTE_SMC",
+      "day": "2026-01-09",
+      "outcome_r": 2.0599,
+      "mae_r": -0.4706,
+      "cost_r": 0.0701,
+      "cluster": "SAFE_HAVEN_METALS",
+      "tier_weight": 1.0,
+      "weighted_r": 2.0599
+    },
+    {
+      "symbol": "US100",
+      "archetype": "IMPULSE_OTE_SMC",
+      "day": "2026-01-09",
+      "outcome_r": -1.0303,
+      "mae_r": -1.0,
+      "cost_r": 0.0303,
+      "cluster": "US_EQUITY_INDICES",
+      "tier_weight": 1.0,
+      "weighted_r": -1.0303
+    },
+    {
+      "symbol": "XAUUSD",
+      "archetype": "IMPULSE_OTE_SMC",
+      "day": "2026-01-12",
+      "outcome_r": -1.0371,
+      "mae_r": -1.0,
+      "cost_r": 0.0371,
+      "cluster": "SAFE_HAVEN_METALS",
+      "tier_weight": 1.0,
+      "weighted_r": -1.0371
+    },
+    {
+      "symbol": "US100",
+      "archetype": "IMPULSE_OTE_SMC",
+      "day": "2026-01-12",
+      "outcome_r": -0.6885,
+      "mae_r": -0.7344,
+      "cost_r": 0.0385,
+      "cluster": "US_EQUITY_INDICES",
+      "tier_weight": 1.0,
+      "weighted_r": -0.6885
+    },
+    {
+      "symbol": "XAUUSD",
+      "archetype": "IMPULSE_OTE_SMC",
+      "day": "2026-01-13",
+      "outcome_r": -1.0315,
+      "mae_r": -1.0,
+      "cost_r": 0.0315,
+      "cluster": "SAFE_HAVEN_METALS",
+      "tier_weight": 1.0,
+      "weighted_r": -1.0315
+    },
+    {
+      "symbol": "US100",
+      "archetype": "IMPULSE_OTE_SMC",
+      "day": "2026-01-13",
+      "outcome_r": 0.6199,
+      "mae_r": 0.0,
+      "cost_r": 0.0301,
+      "cluster": "US_EQUITY_INDICES",
+      "tier_weight": 1.0,
+      "weighted_r": 0.6199
+    },
+    {
+      "symbol": "XAUUSD",
+      "archetype": "IMPULSE_OTE_SMC",
+      "day": "2026-01-15",
+      "outcome_r": -1.0325,
+      "mae_r": -1.0,
+      "cost_r": 0.0325,
+      "cluster": "SAFE_HAVEN_METALS",
+      "tier_weight": 1.0,
+      "weighted_r": -1.0325
+    },
+    {
+      "symbol": "XAUUSD",
+      "archetype": "IMPULSE_OTE_SMC",
+      "day": "2026-01-21",
+      "outcome_r": -1.0253,
+      "mae_r": -1.0,
+      "cost_r": 0.0253,
+      "cluster": "SAFE_HAVEN_METALS",
+      "tier_weight": 1.0,
+      "weighted_r": -1.0253
+    },
+    {
+      "symbol": "XAUUSD",
+      "archetype": "IMPULSE_OTE_SMC",
+      "day": "2026-01-26",
+      "outcome_r": 0.6275,
+      "mae_r": 0.0,
+      "cost_r": 0.0225,
+      "cluster": "SAFE_HAVEN_METALS",
+      "tier_weight": 1.0,
+      "weighted_r": 0.6275
+    },
+    {
+      "symbol": "US100",
+      "archetype": "IMPULSE_OTE_SMC",
+      "day": "2026-01-26",
+      "outcome_r": 2.0964,
+      "mae_r": -0.4841,
+      "cost_r": 0.0336,
+      "cluster": "US_EQUITY_INDICES",
+      "tier_weight": 1.0,
+      "weighted_r": 2.0964
+    },
+    {
+      "symbol": "US100",
+      "archetype": "IMPULSE_OTE_SMC",
+      "day": "2026-01-27",
+      "outcome_r": 2.0834,
+      "mae_r": -0.3796,
+      "cost_r": 0.0466,
+      "cluster": "US_EQUITY_INDICES",
+      "tier_weight": 1.0,
+      "weighted_r": 2.0834
+    },
+    {
+      "symbol": "UK100",
+      "archetype": "LIQUIDITY_SWEEP_JUDAS",
+      "day": "2026-01-27",
+      "outcome_r": 2.0253,
+      "mae_r": -0.5576,
+      "cost_r": 0.1047,
+      "cluster": "GLOBAL_EQUITY_INDICES",
+      "tier_weight": 0.65,
+      "weighted_r": 1.3164
+    },
+    {
+      "symbol": "XAUUSD",
+      "archetype": "IMPULSE_OTE_SMC",
+      "day": "2026-01-28",
+      "outcome_r": -0.0199,
+      "mae_r": 0.0,
+      "cost_r": 0.0199,
+      "cluster": "SAFE_HAVEN_METALS",
+      "tier_weight": 1.0,
+      "weighted_r": -0.0199
+    },
+    {
+      "symbol": "US100",
+      "archetype": "IMPULSE_OTE_SMC",
+      "day": "2026-01-28",
+      "outcome_r": -1.0328,
+      "mae_r": -1.0,
+      "cost_r": 0.0328,
+      "cluster": "US_EQUITY_INDICES",
+      "tier_weight": 1.0,
+      "weighted_r": -1.0328
+    },
+    {
+      "symbol": "US100",
+      "archetype": "IMPULSE_OTE_SMC",
+      "day": "2026-02-03",
+      "outcome_r": -1.0149,
+      "mae_r": -1.0,
+      "cost_r": 0.0149,
+      "cluster": "US_EQUITY_INDICES",
+      "tier_weight": 1.0,
+      "weighted_r": -1.0149
+    },
+    {
+      "symbol": "US100",
+      "archetype": "IMPULSE_OTE_SMC",
+      "day": "2026-02-04",
+      "outcome_r": 2.1128,
+      "mae_r": -0.263,
+      "cost_r": 0.0172,
+      "cluster": "US_EQUITY_INDICES",
+      "tier_weight": 1.0,
+      "weighted_r": 2.1128
+    },
+    {
+      "symbol": "US100",
+      "archetype": "IMPULSE_OTE_SMC",
+      "day": "2026-02-05",
+      "outcome_r": 2.1183,
+      "mae_r": -0.3236,
+      "cost_r": 0.0117,
+      "cluster": "US_EQUITY_INDICES",
+      "tier_weight": 1.0,
+      "weighted_r": 2.1183
+    },
+    {
+      "symbol": "US100",
+      "archetype": "IMPULSE_OTE_SMC",
+      "day": "2026-02-06",
+      "outcome_r": -1.0082,
+      "mae_r": -1.0,
+      "cost_r": 0.0082,
+      "cluster": "US_EQUITY_INDICES",
+      "tier_weight": 1.0,
+      "weighted_r": -1.0082
+    },
+    {
+      "symbol": "XAUUSD",
+      "archetype": "IMPULSE_OTE_SMC",
+      "day": "2026-02-11",
+      "outcome_r": -1.0237,
+      "mae_r": -1.0,
+      "cost_r": 0.0237,
+      "cluster": "SAFE_HAVEN_METALS",
+      "tier_weight": 1.0,
+      "weighted_r": -1.0237
+    },
+    {
+      "symbol": "US100",
+      "archetype": "IMPULSE_OTE_SMC",
+      "day": "2026-02-11",
+      "outcome_r": -1.0245,
+      "mae_r": -1.0,
+      "cost_r": 0.0245,
+      "cluster": "US_EQUITY_INDICES",
+      "tier_weight": 1.0,
+      "weighted_r": -1.0245
+    },
+    {
+      "symbol": "US100",
+      "archetype": "IMPULSE_OTE_SMC",
+      "day": "2026-02-13",
+      "outcome_r": 0.6362,
+      "mae_r": 0.0,
+      "cost_r": 0.0138,
+      "cluster": "US_EQUITY_INDICES",
+      "tier_weight": 1.0,
+      "weighted_r": 0.6362
+    },
+    {
+      "symbol": "US100",
+      "archetype": "IMPULSE_OTE_SMC",
+      "day": "2026-02-17",
+      "outcome_r": -1.0124,
+      "mae_r": -1.0,
+      "cost_r": 0.0124,
+      "cluster": "US_EQUITY_INDICES",
+      "tier_weight": 1.0,
+      "weighted_r": -1.0124
+    },
+    {
+      "symbol": "UK100",
+      "archetype": "LIQUIDITY_SWEEP_JUDAS",
+      "day": "2026-02-18",
+      "outcome_r": -1.0786,
+      "mae_r": -1.0,
+      "cost_r": 0.0786,
+      "cluster": "GLOBAL_EQUITY_INDICES",
+      "tier_weight": 0.65,
+      "weighted_r": -0.7011
+    },
+    {
+      "symbol": "XAUUSD",
+      "archetype": "IMPULSE_OTE_SMC",
+      "day": "2026-02-20",
+      "outcome_r": 0.6201,
+      "mae_r": 0.0,
+      "cost_r": 0.0299,
+      "cluster": "SAFE_HAVEN_METALS",
+      "tier_weight": 1.0,
+      "weighted_r": 0.6201
+    },
+    {
+      "symbol": "US100",
+      "archetype": "IMPULSE_OTE_SMC",
+      "day": "2026-02-23",
+      "outcome_r": 1.5393,
+      "mae_r": 0.0,
+      "cost_r": 0.0307,
+      "cluster": "US_EQUITY_INDICES",
+      "tier_weight": 1.0,
+      "weighted_r": 1.5393
+    },
+    {
+      "symbol": "XAUUSD",
+      "archetype": "IMPULSE_OTE_SMC",
+      "day": "2026-02-24",
+      "outcome_r": -1.0254,
+      "mae_r": -1.0,
+      "cost_r": 0.0254,
+      "cluster": "SAFE_HAVEN_METALS",
+      "tier_weight": 1.0,
+      "weighted_r": -1.0254
+    },
+    {
+      "symbol": "XAUUSD",
+      "archetype": "IMPULSE_OTE_SMC",
+      "day": "2026-02-25",
+      "outcome_r": -1.0268,
+      "mae_r": -1.0,
+      "cost_r": 0.0268,
+      "cluster": "SAFE_HAVEN_METALS",
+      "tier_weight": 1.0,
+      "weighted_r": -1.0268
+    },
+    {
+      "symbol": "XAUUSD",
+      "archetype": "IMPULSE_OTE_SMC",
+      "day": "2026-02-27",
+      "outcome_r": 2.0683,
+      "mae_r": 0.0,
+      "cost_r": 0.0617,
+      "cluster": "SAFE_HAVEN_METALS",
+      "tier_weight": 1.0,
+      "weighted_r": 2.0683
+    },
+    {
+      "symbol": "UK100",
+      "archetype": "LIQUIDITY_SWEEP_JUDAS",
+      "day": "2026-02-27",
+      "outcome_r": 0.5701,
+      "mae_r": 0.0,
+      "cost_r": 0.0799,
+      "cluster": "GLOBAL_EQUITY_INDICES",
+      "tier_weight": 0.65,
+      "weighted_r": 0.3706
+    },
+    {
+      "symbol": "XAUUSD",
+      "archetype": "IMPULSE_OTE_SMC",
+      "day": "2026-03-02",
+      "outcome_r": 0.6316,
+      "mae_r": 0.0,
+      "cost_r": 0.0184,
+      "cluster": "SAFE_HAVEN_METALS",
+      "tier_weight": 1.0,
+      "weighted_r": 0.6316
+    },
+    {
+      "symbol": "US100",
+      "archetype": "IMPULSE_OTE_SMC",
+      "day": "2026-03-02",
+      "outcome_r": 1.5558,
+      "mae_r": 0.0,
+      "cost_r": 0.0142,
+      "cluster": "US_EQUITY_INDICES",
+      "tier_weight": 1.0,
+      "weighted_r": 1.5558
+    },
+    {
+      "symbol": "US100",
+      "archetype": "IMPULSE_OTE_SMC",
+      "day": "2026-03-03",
+      "outcome_r": -1.0137,
+      "mae_r": -1.0,
+      "cost_r": 0.0137,
+      "cluster": "US_EQUITY_INDICES",
+      "tier_weight": 1.0,
+      "weighted_r": -1.0137
+    },
+    {
+      "symbol": "US100",
+      "archetype": "IMPULSE_OTE_SMC",
+      "day": "2026-03-09",
+      "outcome_r": -0.6596,
+      "mae_r": -0.9185,
+      "cost_r": 0.0096,
+      "cluster": "US_EQUITY_INDICES",
+      "tier_weight": 1.0,
+      "weighted_r": -0.6596
+    },
+    {
+      "symbol": "US100",
+      "archetype": "IMPULSE_OTE_SMC",
+      "day": "2026-03-12",
+      "outcome_r": 0.6271,
+      "mae_r": 0.0,
+      "cost_r": 0.0229,
+      "cluster": "US_EQUITY_INDICES",
+      "tier_weight": 1.0,
+      "weighted_r": 0.6271
+    },
+    {
+      "symbol": "UK100",
+      "archetype": "LIQUIDITY_SWEEP_JUDAS",
+      "day": "2026-03-16",
+      "outcome_r": 0.5827,
+      "mae_r": 0.0,
+      "cost_r": 0.0673,
+      "cluster": "GLOBAL_EQUITY_INDICES",
+      "tier_weight": 0.65,
+      "weighted_r": 0.3788
+    },
+    {
+      "symbol": "XAGUSD",
+      "archetype": "IMPULSE_OTE_SMC",
+      "day": "2026-03-17",
+      "outcome_r": -0.0505,
+      "mae_r": 0.0,
+      "cost_r": 0.0505,
+      "cluster": "SAFE_HAVEN_METALS",
+      "tier_weight": 1.0,
+      "weighted_r": -0.0505
+    },
+    {
+      "symbol": "XAGUSD",
+      "archetype": "IMPULSE_OTE_SMC",
+      "day": "2026-03-19",
+      "outcome_r": 2.0921,
+      "mae_r": -0.6287,
+      "cost_r": 0.0379,
+      "cluster": "SAFE_HAVEN_METALS",
+      "tier_weight": 1.0,
+      "weighted_r": 2.0921
+    },
+    {
+      "symbol": "US100",
+      "archetype": "IMPULSE_OTE_SMC",
+      "day": "2026-03-19",
+      "outcome_r": 0.6338,
+      "mae_r": 0.0,
+      "cost_r": 0.0162,
+      "cluster": "US_EQUITY_INDICES",
+      "tier_weight": 1.0,
+      "weighted_r": 0.6338
+    },
+    {
+      "symbol": "US100",
+      "archetype": "IMPULSE_OTE_SMC",
+      "day": "2026-03-20",
+      "outcome_r": 2.1141,
+      "mae_r": -0.25,
+      "cost_r": 0.0159,
+      "cluster": "US_EQUITY_INDICES",
+      "tier_weight": 1.0,
+      "weighted_r": 2.1141
+    },
+    {
+      "symbol": "XAGUSD",
+      "archetype": "IMPULSE_OTE_SMC",
+      "day": "2026-03-22",
+      "outcome_r": 2.1011,
+      "mae_r": -0.1921,
+      "cost_r": 0.0289,
+      "cluster": "SAFE_HAVEN_METALS",
+      "tier_weight": 1.0,
+      "weighted_r": 2.1011
+    },
+    {
+      "symbol": "US100",
+      "archetype": "IMPULSE_OTE_SMC",
+      "day": "2026-03-23",
+      "outcome_r": 0.6381,
+      "mae_r": 0.0,
+      "cost_r": 0.0119,
+      "cluster": "US_EQUITY_INDICES",
+      "tier_weight": 1.0,
+      "weighted_r": 0.6381
+    },
+    {
+      "symbol": "US100",
+      "archetype": "IMPULSE_OTE_SMC",
+      "day": "2026-03-24",
+      "outcome_r": -0.0093,
+      "mae_r": 0.0,
+      "cost_r": 0.0093,
+      "cluster": "US_EQUITY_INDICES",
+      "tier_weight": 1.0,
+      "weighted_r": -0.0093
+    },
+    {
+      "symbol": "UK100",
+      "archetype": "LIQUIDITY_SWEEP_JUDAS",
+      "day": "2026-03-25",
+      "outcome_r": 2.0804,
+      "mae_r": -0.6474,
+      "cost_r": 0.0496,
+      "cluster": "GLOBAL_EQUITY_INDICES",
+      "tier_weight": 0.65,
+      "weighted_r": 1.3523
+    },
+    {
+      "symbol": "XAGUSD",
+      "archetype": "IMPULSE_OTE_SMC",
+      "day": "2026-03-26",
+      "outcome_r": 2.0948,
+      "mae_r": -0.166,
+      "cost_r": 0.0352,
+      "cluster": "SAFE_HAVEN_METALS",
+      "tier_weight": 1.0,
+      "weighted_r": 2.0948
+    },
+    {
+      "symbol": "US100",
+      "archetype": "IMPULSE_OTE_SMC",
+      "day": "2026-03-26",
+      "outcome_r": 2.116,
+      "mae_r": -0.2152,
+      "cost_r": 0.014,
+      "cluster": "US_EQUITY_INDICES",
+      "tier_weight": 1.0,
+      "weighted_r": 2.116
+    },
+    {
+      "symbol": "US100",
+      "archetype": "IMPULSE_OTE_SMC",
+      "day": "2026-03-27",
+      "outcome_r": 2.0903,
+      "mae_r": 0.0,
+      "cost_r": 0.0397,
+      "cluster": "US_EQUITY_INDICES",
+      "tier_weight": 1.0,
+      "weighted_r": 2.0903
+    },
+    {
+      "symbol": "US100",
+      "archetype": "IMPULSE_OTE_SMC",
+      "day": "2026-03-31",
+      "outcome_r": -1.0112,
+      "mae_r": -1.0,
+      "cost_r": 0.0112,
+      "cluster": "US_EQUITY_INDICES",
+      "tier_weight": 1.0,
+      "weighted_r": -1.0112
+    },
+    {
+      "symbol": "UK100",
+      "archetype": "LIQUIDITY_SWEEP_JUDAS",
+      "day": "2026-03-31",
+      "outcome_r": -1.0548,
+      "mae_r": -1.0,
+      "cost_r": 0.0548,
+      "cluster": "GLOBAL_EQUITY_INDICES",
+      "tier_weight": 0.65,
+      "weighted_r": -0.6856
+    },
+    {
+      "symbol": "US100",
+      "archetype": "IMPULSE_OTE_SMC",
+      "day": "2026-04-02",
+      "outcome_r": -0.0134,
+      "mae_r": 0.0,
+      "cost_r": 0.0134,
+      "cluster": "US_EQUITY_INDICES",
+      "tier_weight": 1.0,
+      "weighted_r": -0.0134
+    },
+    {
+      "symbol": "UK100",
+      "archetype": "LIQUIDITY_SWEEP_JUDAS",
+      "day": "2026-04-02",
+      "outcome_r": 0.6175,
+      "mae_r": 0.0,
+      "cost_r": 0.0325,
+      "cluster": "GLOBAL_EQUITY_INDICES",
+      "tier_weight": 0.65,
+      "weighted_r": 0.4014
+    },
+    {
+      "symbol": "XAGUSD",
+      "archetype": "IMPULSE_OTE_SMC",
+      "day": "2026-04-07",
+      "outcome_r": -0.6924,
+      "mae_r": -0.8925,
+      "cost_r": 0.0424,
+      "cluster": "SAFE_HAVEN_METALS",
+      "tier_weight": 1.0,
+      "weighted_r": -0.6924
+    },
+    {
+      "symbol": "US100",
+      "archetype": "IMPULSE_OTE_SMC",
+      "day": "2026-04-08",
+      "outcome_r": -1.0127,
+      "mae_r": -1.0,
+      "cost_r": 0.0127,
+      "cluster": "US_EQUITY_INDICES",
+      "tier_weight": 1.0,
+      "weighted_r": -1.0127
+    },
+    {
+      "symbol": "XAUUSD",
+      "archetype": "IMPULSE_OTE_SMC",
+      "day": "2026-04-09",
+      "outcome_r": 0.618,
+      "mae_r": 0.0,
+      "cost_r": 0.032,
+      "cluster": "SAFE_HAVEN_METALS",
+      "tier_weight": 1.0,
+      "weighted_r": 0.618
+    },
+    {
+      "symbol": "XAGUSD",
+      "archetype": "IMPULSE_OTE_SMC",
+      "day": "2026-04-10",
+      "outcome_r": -1.0884,
+      "mae_r": -1.0,
+      "cost_r": 0.0884,
+      "cluster": "SAFE_HAVEN_METALS",
+      "tier_weight": 1.0,
+      "weighted_r": -1.0884
+    },
+    {
+      "symbol": "US100",
+      "archetype": "IMPULSE_OTE_SMC",
+      "day": "2026-04-10",
+      "outcome_r": 0.5982,
+      "mae_r": 0.0,
+      "cost_r": 0.0518,
+      "cluster": "US_EQUITY_INDICES",
+      "tier_weight": 1.0,
+      "weighted_r": 0.5982
+    },
+    {
+      "symbol": "XAUUSD",
+      "archetype": "IMPULSE_OTE_SMC",
+      "day": "2026-04-14",
+      "outcome_r": 2.0891,
+      "mae_r": -0.2561,
+      "cost_r": 0.0409,
+      "cluster": "SAFE_HAVEN_METALS",
+      "tier_weight": 1.0,
+      "weighted_r": 2.0891
+    },
+    {
+      "symbol": "XAUUSD",
+      "archetype": "IMPULSE_OTE_SMC",
+      "day": "2026-04-15",
+      "outcome_r": -0.0418,
+      "mae_r": 0.0,
+      "cost_r": 0.0418,
+      "cluster": "SAFE_HAVEN_METALS",
+      "tier_weight": 1.0,
+      "weighted_r": -0.0418
+    },
+    {
+      "symbol": "US100",
+      "archetype": "IMPULSE_OTE_SMC",
+      "day": "2026-04-16",
+      "outcome_r": -1.0236,
+      "mae_r": -1.0,
+      "cost_r": 0.0236,
+      "cluster": "US_EQUITY_INDICES",
+      "tier_weight": 1.0,
+      "weighted_r": -1.0236
+    },
+    {
+      "symbol": "XAUUSD",
+      "archetype": "IMPULSE_OTE_SMC",
+      "day": "2026-04-17",
+      "outcome_r": -1.0561,
+      "mae_r": -1.0,
+      "cost_r": 0.0561,
+      "cluster": "SAFE_HAVEN_METALS",
+      "tier_weight": 1.0,
+      "weighted_r": -1.0561
+    },
+    {
+      "symbol": "US100",
+      "archetype": "IMPULSE_OTE_SMC",
+      "day": "2026-04-17",
+      "outcome_r": -1.0606,
+      "mae_r": -1.0,
+      "cost_r": 0.0606,
+      "cluster": "US_EQUITY_INDICES",
+      "tier_weight": 1.0,
+      "weighted_r": -1.0606
+    },
+    {
+      "symbol": "US100",
+      "archetype": "IMPULSE_OTE_SMC",
+      "day": "2026-04-20",
+      "outcome_r": 0.6281,
+      "mae_r": 0.0,
+      "cost_r": 0.0219,
+      "cluster": "US_EQUITY_INDICES",
+      "tier_weight": 1.0,
+      "weighted_r": 0.6281
+    },
+    {
+      "symbol": "US100",
+      "archetype": "IMPULSE_OTE_SMC",
+      "day": "2026-04-21",
+      "outcome_r": -0.0267,
+      "mae_r": 0.0,
+      "cost_r": 0.0267,
+      "cluster": "US_EQUITY_INDICES",
+      "tier_weight": 1.0,
+      "weighted_r": -0.0267
+    },
+    {
+      "symbol": "US100",
+      "archetype": "IMPULSE_OTE_SMC",
+      "day": "2026-04-22",
+      "outcome_r": 0.6142,
+      "mae_r": 0.0,
+      "cost_r": 0.0358,
+      "cluster": "US_EQUITY_INDICES",
+      "tier_weight": 1.0,
+      "weighted_r": 0.6142
+    },
+    {
+      "symbol": "XAGUSD",
+      "archetype": "IMPULSE_OTE_SMC",
+      "day": "2026-04-23",
+      "outcome_r": -1.0571,
+      "mae_r": -1.0,
+      "cost_r": 0.0571,
+      "cluster": "SAFE_HAVEN_METALS",
+      "tier_weight": 1.0,
+      "weighted_r": -1.0571
+    },
+    {
+      "symbol": "XAGUSD",
+      "archetype": "IMPULSE_OTE_SMC",
+      "day": "2026-04-24",
+      "outcome_r": -1.0531,
+      "mae_r": -1.0,
+      "cost_r": 0.0531,
+      "cluster": "SAFE_HAVEN_METALS",
+      "tier_weight": 1.0,
+      "weighted_r": -1.0531
+    },
+    {
+      "symbol": "US100",
+      "archetype": "IMPULSE_OTE_SMC",
+      "day": "2026-04-24",
+      "outcome_r": 1.5045,
+      "mae_r": 0.0,
+      "cost_r": 0.0655,
+      "cluster": "US_EQUITY_INDICES",
+      "tier_weight": 1.0,
+      "weighted_r": 1.5045
+    },
+    {
+      "symbol": "XAGUSD",
+      "archetype": "IMPULSE_OTE_SMC",
+      "day": "2026-04-28",
+      "outcome_r": 0.588,
+      "mae_r": 0.0,
+      "cost_r": 0.062,
+      "cluster": "SAFE_HAVEN_METALS",
+      "tier_weight": 1.0,
+      "weighted_r": 0.588
+    },
+    {
+      "symbol": "XAGUSD",
+      "archetype": "IMPULSE_OTE_SMC",
+      "day": "2026-04-29",
+      "outcome_r": 1.4939,
+      "mae_r": 0.0,
+      "cost_r": 0.0761,
+      "cluster": "SAFE_HAVEN_METALS",
+      "tier_weight": 1.0,
+      "weighted_r": 1.4939
+    },
+    {
+      "symbol": "US100",
+      "archetype": "IMPULSE_OTE_SMC",
+      "day": "2026-04-30",
+      "outcome_r": 0.6364,
+      "mae_r": 0.0,
+      "cost_r": 0.0136,
+      "cluster": "US_EQUITY_INDICES",
+      "tier_weight": 1.0,
+      "weighted_r": 0.6364
+    },
+    {
+      "symbol": "US100",
+      "archetype": "IMPULSE_OTE_SMC",
+      "day": "2026-05-01",
+      "outcome_r": -0.05,
+      "mae_r": 0.0,
+      "cost_r": 0.05,
+      "cluster": "US_EQUITY_INDICES",
+      "tier_weight": 1.0,
+      "weighted_r": -0.05
+    },
+    {
+      "symbol": "XAGUSD",
+      "archetype": "IMPULSE_OTE_SMC",
+      "day": "2026-05-04",
+      "outcome_r": 0.5872,
+      "mae_r": 0.0,
+      "cost_r": 0.0628,
+      "cluster": "SAFE_HAVEN_METALS",
+      "tier_weight": 1.0,
+      "weighted_r": 0.5872
+    },
+    {
+      "symbol": "US100",
+      "archetype": "IMPULSE_OTE_SMC",
+      "day": "2026-05-05",
+      "outcome_r": 2.0917,
+      "mae_r": -0.1966,
+      "cost_r": 0.0383,
+      "cluster": "US_EQUITY_INDICES",
+      "tier_weight": 1.0,
+      "weighted_r": 2.0917
+    },
+    {
+      "symbol": "US100",
+      "archetype": "IMPULSE_OTE_SMC",
+      "day": "2026-05-06",
+      "outcome_r": 2.1086,
+      "mae_r": 0.0,
+      "cost_r": 0.0214,
+      "cluster": "US_EQUITY_INDICES",
+      "tier_weight": 1.0,
+      "weighted_r": 2.1086
+    },
+    {
+      "symbol": "XAUUSD",
+      "archetype": "IMPULSE_OTE_SMC",
+      "day": "2026-05-07",
+      "outcome_r": -1.0282,
+      "mae_r": -1.0,
+      "cost_r": 0.0282,
+      "cluster": "SAFE_HAVEN_METALS",
+      "tier_weight": 1.0,
+      "weighted_r": -1.0282
+    },
+    {
+      "symbol": "US100",
+      "archetype": "IMPULSE_OTE_SMC",
+      "day": "2026-05-07",
+      "outcome_r": 0.626,
+      "mae_r": 0.0,
+      "cost_r": 0.024,
+      "cluster": "US_EQUITY_INDICES",
+      "tier_weight": 1.0,
+      "weighted_r": 0.626
+    },
+    {
+      "symbol": "XAGUSD",
+      "archetype": "IMPULSE_OTE_SMC",
+      "day": "2026-05-11",
+      "outcome_r": -0.0523,
+      "mae_r": 0.0,
+      "cost_r": 0.0523,
+      "cluster": "SAFE_HAVEN_METALS",
+      "tier_weight": 1.0,
+      "weighted_r": -0.0523
+    },
+    {
+      "symbol": "US100",
+      "archetype": "IMPULSE_OTE_SMC",
+      "day": "2026-05-11",
+      "outcome_r": -0.0205,
+      "mae_r": 0.0,
+      "cost_r": 0.0205,
+      "cluster": "US_EQUITY_INDICES",
+      "tier_weight": 1.0,
+      "weighted_r": -0.0205
+    },
+    {
+      "symbol": "XAUUSD",
+      "archetype": "IMPULSE_OTE_SMC",
+      "day": "2026-05-12",
+      "outcome_r": -1.0285,
+      "mae_r": -1.0,
+      "cost_r": 0.0285,
+      "cluster": "SAFE_HAVEN_METALS",
+      "tier_weight": 1.0,
+      "weighted_r": -1.0285
+    },
+    {
+      "symbol": "US100",
+      "archetype": "IMPULSE_OTE_SMC",
+      "day": "2026-05-12",
+      "outcome_r": -1.0212,
+      "mae_r": -1.0,
+      "cost_r": 0.0212,
+      "cluster": "US_EQUITY_INDICES",
+      "tier_weight": 1.0,
+      "weighted_r": -1.0212
+    },
+    {
+      "symbol": "US100",
+      "archetype": "IMPULSE_OTE_SMC",
+      "day": "2026-05-13",
+      "outcome_r": -1.0192,
+      "mae_r": -1.0,
+      "cost_r": 0.0192,
+      "cluster": "US_EQUITY_INDICES",
+      "tier_weight": 1.0,
+      "weighted_r": -1.0192
+    },
+    {
+      "symbol": "US100",
+      "archetype": "IMPULSE_OTE_SMC",
+      "day": "2026-05-14",
+      "outcome_r": 0.6222,
+      "mae_r": 0.0,
+      "cost_r": 0.0278,
+      "cluster": "US_EQUITY_INDICES",
+      "tier_weight": 1.0,
+      "weighted_r": 0.6222
+    },
+    {
+      "symbol": "XAGUSD",
+      "archetype": "IMPULSE_OTE_SMC",
+      "day": "2026-05-18",
+      "outcome_r": -0.6893,
+      "mae_r": -0.821,
+      "cost_r": 0.0393,
+      "cluster": "SAFE_HAVEN_METALS",
+      "tier_weight": 1.0,
+      "weighted_r": -0.6893
+    },
+    {
+      "symbol": "UK100",
+      "archetype": "LIQUIDITY_SWEEP_JUDAS",
+      "day": "2026-05-19",
+      "outcome_r": 2.0528,
+      "mae_r": -0.8921,
+      "cost_r": 0.0772,
+      "cluster": "GLOBAL_EQUITY_INDICES",
+      "tier_weight": 0.65,
+      "weighted_r": 1.3343
+    },
+    {
+      "symbol": "XAGUSD",
+      "archetype": "IMPULSE_OTE_SMC",
+      "day": "2026-05-20",
+      "outcome_r": -0.0452,
+      "mae_r": 0.0,
+      "cost_r": 0.0452,
+      "cluster": "SAFE_HAVEN_METALS",
+      "tier_weight": 1.0,
+      "weighted_r": -0.0452
+    },
+    {
+      "symbol": "US100",
+      "archetype": "IMPULSE_OTE_SMC",
+      "day": "2026-05-20",
+      "outcome_r": 2.0978,
+      "mae_r": -0.3526,
+      "cost_r": 0.0322,
+      "cluster": "US_EQUITY_INDICES",
+      "tier_weight": 1.0,
+      "weighted_r": 2.0978
+    },
+    {
+      "symbol": "UK100",
+      "archetype": "LIQUIDITY_SWEEP_JUDAS",
+      "day": "2026-05-21",
+      "outcome_r": -1.0965,
+      "mae_r": -1.0,
+      "cost_r": 0.0965,
+      "cluster": "GLOBAL_EQUITY_INDICES",
+      "tier_weight": 0.65,
+      "weighted_r": -0.7127
+    },
+    {
+      "symbol": "UK100",
+      "archetype": "LIQUIDITY_SWEEP_JUDAS",
+      "day": "2026-05-22",
+      "outcome_r": -0.0558,
+      "mae_r": 0.0,
+      "cost_r": 0.0558,
+      "cluster": "GLOBAL_EQUITY_INDICES",
+      "tier_weight": 0.65,
+      "weighted_r": -0.0363
+    },
+    {
+      "symbol": "US100",
+      "archetype": "IMPULSE_OTE_SMC",
+      "day": "2026-05-26",
+      "outcome_r": 2.0985,
+      "mae_r": -0.0061,
+      "cost_r": 0.0315,
+      "cluster": "US_EQUITY_INDICES",
+      "tier_weight": 1.0,
+      "weighted_r": 2.0985
+    },
+    {
+      "symbol": "XAGUSD",
+      "archetype": "IMPULSE_OTE_SMC",
+      "day": "2026-05-27",
+      "outcome_r": 2.0636,
+      "mae_r": -0.1509,
+      "cost_r": 0.0664,
+      "cluster": "SAFE_HAVEN_METALS",
+      "tier_weight": 1.0,
+      "weighted_r": 2.0636
+    },
+    {
+      "symbol": "US100",
+      "archetype": "IMPULSE_OTE_SMC",
+      "day": "2026-05-29",
+      "outcome_r": 0.6257,
+      "mae_r": 0.0,
+      "cost_r": 0.0243,
+      "cluster": "US_EQUITY_INDICES",
+      "tier_weight": 1.0,
+      "weighted_r": 0.6257
+    },
+    {
+      "symbol": "US100",
+      "archetype": "IMPULSE_OTE_SMC",
+      "day": "2026-06-01",
+      "outcome_r": -1.0215,
+      "mae_r": -1.0,
+      "cost_r": 0.0215,
+      "cluster": "US_EQUITY_INDICES",
+      "tier_weight": 1.0,
+      "weighted_r": -1.0215
+    },
+    {
+      "symbol": "US100",
+      "archetype": "IMPULSE_OTE_SMC",
+      "day": "2026-06-02",
+      "outcome_r": 0.6133,
+      "mae_r": 0.0,
+      "cost_r": 0.0367,
+      "cluster": "US_EQUITY_INDICES",
+      "tier_weight": 1.0,
+      "weighted_r": 0.6133
+    },
+    {
+      "symbol": "XAGUSD",
+      "archetype": "IMPULSE_OTE_SMC",
+      "day": "2026-06-03",
+      "outcome_r": 0.5768,
+      "mae_r": 0.0,
+      "cost_r": 0.0732,
+      "cluster": "SAFE_HAVEN_METALS",
+      "tier_weight": 1.0,
+      "weighted_r": 0.5768
+    },
+    {
+      "symbol": "US100",
+      "archetype": "IMPULSE_OTE_SMC",
+      "day": "2026-06-03",
+      "outcome_r": -0.0255,
+      "mae_r": 0.0,
+      "cost_r": 0.0255,
+      "cluster": "US_EQUITY_INDICES",
+      "tier_weight": 1.0,
+      "weighted_r": -0.0255
+    },
+    {
+      "symbol": "XAGUSD",
+      "archetype": "IMPULSE_OTE_SMC",
+      "day": "2026-06-05",
+      "outcome_r": -1.0715,
+      "mae_r": -1.0,
+      "cost_r": 0.0715,
+      "cluster": "SAFE_HAVEN_METALS",
+      "tier_weight": 1.0,
+      "weighted_r": -1.0715
+    },
+    {
+      "symbol": "UK100",
+      "archetype": "LIQUIDITY_SWEEP_JUDAS",
+      "day": "2026-06-05",
+      "outcome_r": 1.4501,
+      "mae_r": 0.0,
+      "cost_r": 0.1199,
+      "cluster": "GLOBAL_EQUITY_INDICES",
+      "tier_weight": 0.65,
+      "weighted_r": 0.9426
+    },
+    {
+      "symbol": "US100",
+      "archetype": "IMPULSE_OTE_SMC",
+      "day": "2026-06-08",
+      "outcome_r": -1.0105,
+      "mae_r": -1.0,
+      "cost_r": 0.0105,
+      "cluster": "US_EQUITY_INDICES",
+      "tier_weight": 1.0,
+      "weighted_r": -1.0105
+    },
+    {
+      "symbol": "XAGUSD",
+      "archetype": "IMPULSE_OTE_SMC",
+      "day": "2026-06-09",
+      "outcome_r": 2.0798,
+      "mae_r": -0.8516,
+      "cost_r": 0.0502,
+      "cluster": "SAFE_HAVEN_METALS",
+      "tier_weight": 1.0,
+      "weighted_r": 2.0798
+    },
+    {
+      "symbol": "US100",
+      "archetype": "IMPULSE_OTE_SMC",
+      "day": "2026-06-09",
+      "outcome_r": -0.6609,
+      "mae_r": -0.8762,
+      "cost_r": 0.0109,
+      "cluster": "US_EQUITY_INDICES",
+      "tier_weight": 1.0,
+      "weighted_r": -0.6609
+    },
+    {
+      "symbol": "XAGUSD",
+      "archetype": "IMPULSE_OTE_SMC",
+      "day": "2026-06-10",
+      "outcome_r": -1.0425,
+      "mae_r": -1.0,
+      "cost_r": 0.0425,
+      "cluster": "SAFE_HAVEN_METALS",
+      "tier_weight": 1.0,
+      "weighted_r": -1.0425
+    },
+    {
+      "symbol": "US100",
+      "archetype": "IMPULSE_OTE_SMC",
+      "day": "2026-06-10",
+      "outcome_r": -1.01,
+      "mae_r": -1.0,
+      "cost_r": 0.01,
+      "cluster": "US_EQUITY_INDICES",
+      "tier_weight": 1.0,
+      "weighted_r": -1.01
+    },
+    {
+      "symbol": "XAGUSD",
+      "archetype": "IMPULSE_OTE_SMC",
+      "day": "2026-06-11",
+      "outcome_r": -0.6878,
+      "mae_r": -0.8372,
+      "cost_r": 0.0378,
+      "cluster": "SAFE_HAVEN_METALS",
+      "tier_weight": 1.0,
+      "weighted_r": -0.6878
+    },
+    {
+      "symbol": "US100",
+      "archetype": "IMPULSE_OTE_SMC",
+      "day": "2026-06-11",
+      "outcome_r": -0.6579,
+      "mae_r": -0.8565,
+      "cost_r": 0.0079,
+      "cluster": "US_EQUITY_INDICES",
+      "tier_weight": 1.0,
+      "weighted_r": -0.6579
+    },
+    {
+      "symbol": "US100",
+      "archetype": "IMPULSE_OTE_SMC",
+      "day": "2026-06-15",
+      "outcome_r": -1.0231,
+      "mae_r": -1.0,
+      "cost_r": 0.0231,
+      "cluster": "US_EQUITY_INDICES",
+      "tier_weight": 1.0,
+      "weighted_r": -1.0231
+    },
+    {
+      "symbol": "US100",
+      "archetype": "IMPULSE_OTE_SMC",
+      "day": "2026-06-17",
+      "outcome_r": -0.0182,
+      "mae_r": 0.0,
+      "cost_r": 0.0182,
+      "cluster": "US_EQUITY_INDICES",
+      "tier_weight": 1.0,
+      "weighted_r": -0.0182
+    },
+    {
+      "symbol": "XAGUSD",
+      "archetype": "IMPULSE_OTE_SMC",
+      "day": "2026-06-18",
+      "outcome_r": 2.0638,
+      "mae_r": 0.0,
+      "cost_r": 0.0662,
+      "cluster": "SAFE_HAVEN_METALS",
+      "tier_weight": 1.0,
+      "weighted_r": 2.0638
+    },
+    {
+      "symbol": "XAGUSD",
+      "archetype": "IMPULSE_OTE_SMC",
+      "day": "2026-06-23",
+      "outcome_r": -0.0393,
+      "mae_r": 0.0,
+      "cost_r": 0.0393,
+      "cluster": "SAFE_HAVEN_METALS",
+      "tier_weight": 1.0,
+      "weighted_r": -0.0393
+    },
+    {
+      "symbol": "US100",
+      "archetype": "IMPULSE_OTE_SMC",
+      "day": "2026-06-24",
+      "outcome_r": -1.0164,
+      "mae_r": -1.0,
+      "cost_r": 0.0164,
+      "cluster": "US_EQUITY_INDICES",
+      "tier_weight": 1.0,
+      "weighted_r": -1.0164
+    },
+    {
+      "symbol": "XAGUSD",
+      "archetype": "IMPULSE_OTE_SMC",
+      "day": "2026-06-25",
+      "outcome_r": -0.0329,
+      "mae_r": 0.0,
+      "cost_r": 0.0329,
+      "cluster": "SAFE_HAVEN_METALS",
+      "tier_weight": 1.0,
+      "weighted_r": -0.0329
+    },
+    {
+      "symbol": "UK100",
+      "archetype": "LIQUIDITY_SWEEP_JUDAS",
+      "day": "2026-06-25",
+      "outcome_r": -1.0719,
+      "mae_r": -1.0,
+      "cost_r": 0.0719,
+      "cluster": "GLOBAL_EQUITY_INDICES",
+      "tier_weight": 0.65,
+      "weighted_r": -0.6967
+    },
+    {
+      "symbol": "XAGUSD",
+      "archetype": "IMPULSE_OTE_SMC",
+      "day": "2026-06-26",
+      "outcome_r": -1.0365,
+      "mae_r": -1.0,
+      "cost_r": 0.0365,
+      "cluster": "SAFE_HAVEN_METALS",
+      "tier_weight": 1.0,
+      "weighted_r": -1.0365
+    },
+    {
+      "symbol": "US100",
+      "archetype": "IMPULSE_OTE_SMC",
+      "day": "2026-06-26",
+      "outcome_r": 0.6416,
+      "mae_r": 0.0,
+      "cost_r": 0.0084,
+      "cluster": "US_EQUITY_INDICES",
+      "tier_weight": 1.0,
+      "weighted_r": 0.6416
+    },
+    {
+      "symbol": "XAGUSD",
+      "archetype": "IMPULSE_OTE_SMC",
+      "day": "2026-06-29",
+      "outcome_r": 0.5957,
+      "mae_r": 0.0,
+      "cost_r": 0.0543,
+      "cluster": "SAFE_HAVEN_METALS",
+      "tier_weight": 1.0,
+      "weighted_r": 0.5957
+    },
+    {
+      "symbol": "UK100",
+      "archetype": "LIQUIDITY_SWEEP_JUDAS",
+      "day": "2026-07-03",
+      "outcome_r": 1.5137,
+      "mae_r": 0.0,
+      "cost_r": 0.0563,
+      "cluster": "GLOBAL_EQUITY_INDICES",
+      "tier_weight": 0.65,
+      "weighted_r": 0.9839
+    },
+    {
+      "symbol": "XAGUSD",
+      "archetype": "IMPULSE_OTE_SMC",
+      "day": "2026-07-08",
+      "outcome_r": -1.0481,
+      "mae_r": -1.0,
+      "cost_r": 0.0481,
+      "cluster": "SAFE_HAVEN_METALS",
+      "tier_weight": 1.0,
+      "weighted_r": -1.0481
+    },
+    {
+      "symbol": "US100",
+      "archetype": "IMPULSE_OTE_SMC",
+      "day": "2026-07-08",
+      "outcome_r": 0.6381,
+      "mae_r": 0.0,
+      "cost_r": 0.0119,
+      "cluster": "US_EQUITY_INDICES",
+      "tier_weight": 1.0,
+      "weighted_r": 0.6381
+    },
+    {
+      "symbol": "XAGUSD",
+      "archetype": "IMPULSE_OTE_SMC",
+      "day": "2026-07-10",
+      "outcome_r": 2.0344,
+      "mae_r": -0.0766,
+      "cost_r": 0.0956,
+      "cluster": "SAFE_HAVEN_METALS",
+      "tier_weight": 1.0,
+      "weighted_r": 2.0344
+    },
+    {
+      "symbol": "XAGUSD",
+      "archetype": "IMPULSE_OTE_SMC",
+      "day": "2026-07-15",
+      "outcome_r": -1.0729,
+      "mae_r": -1.0,
+      "cost_r": 0.0729,
+      "cluster": "SAFE_HAVEN_METALS",
+      "tier_weight": 1.0,
+      "weighted_r": -1.0729
+    },
+    {
+      "symbol": "US100",
+      "archetype": "IMPULSE_OTE_SMC",
+      "day": "2026-07-16",
+      "outcome_r": 2.1053,
+      "mae_r": 0.0,
+      "cost_r": 0.0247,
+      "cluster": "US_EQUITY_INDICES",
+      "tier_weight": 1.0,
+      "weighted_r": 2.1053
+    },
+    {
+      "symbol": "XAGUSD",
+      "archetype": "IMPULSE_OTE_SMC",
+      "day": "2026-07-17",
+      "outcome_r": -0.7072,
+      "mae_r": -0.7574,
+      "cost_r": 0.0572,
+      "cluster": "SAFE_HAVEN_METALS",
+      "tier_weight": 1.0,
+      "weighted_r": -0.7072
+    },
+    {
+      "symbol": "US100",
+      "archetype": "IMPULSE_OTE_SMC",
+      "day": "2026-07-17",
+      "outcome_r": 0.6361,
+      "mae_r": 0.0,
+      "cost_r": 0.0139,
+      "cluster": "US_EQUITY_INDICES",
+      "tier_weight": 1.0,
+      "weighted_r": 0.6361
+    },
+    {
+      "symbol": "UK100",
+      "archetype": "LIQUIDITY_SWEEP_JUDAS",
+      "day": "2026-07-20",
+      "outcome_r": 0.6106,
+      "mae_r": 0.0,
+      "cost_r": 0.0394,
+      "cluster": "GLOBAL_EQUITY_INDICES",
+      "tier_weight": 0.65,
+      "weighted_r": 0.3969
+    },
+    {
+      "symbol": "US100",
+      "archetype": "IMPULSE_OTE_SMC",
+      "day": "2026-07-22",
+      "outcome_r": -1.0202,
+      "mae_r": -1.0,
+      "cost_r": 0.0202,
+      "cluster": "US_EQUITY_INDICES",
+      "tier_weight": 1.0,
+      "weighted_r": -1.0202
+    },
+    {
+      "symbol": "UK100",
+      "archetype": "LIQUIDITY_SWEEP_JUDAS",
+      "day": "2026-07-22",
+      "outcome_r": -1.0339,
+      "mae_r": -1.0,
+      "cost_r": 0.0339,
+      "cluster": "GLOBAL_EQUITY_INDICES",
+      "tier_weight": 0.65,
+      "weighted_r": -0.672
+    },
+    {
+      "symbol": "US100",
+      "archetype": "IMPULSE_OTE_SMC",
+      "day": "2026-07-23",
+      "outcome_r": 0.6299,
+      "mae_r": 0.0,
+      "cost_r": 0.0201,
+      "cluster": "US_EQUITY_INDICES",
+      "tier_weight": 1.0,
+      "weighted_r": 0.6299
+    },
+    {
+      "symbol": "US100",
+      "archetype": "IMPULSE_OTE_SMC",
+      "day": "2026-07-27",
+      "outcome_r": -1.0119,
+      "mae_r": -1.0,
+      "cost_r": 0.0119,
+      "cluster": "US_EQUITY_INDICES",
+      "tier_weight": 1.0,
+      "weighted_r": -1.0119
+    },
+    {
+      "symbol": "XAGUSD",
+      "archetype": "IMPULSE_OTE_SMC",
+      "day": "2026-07-28",
+      "outcome_r": 0.574,
+      "mae_r": 0.0,
+      "cost_r": 0.076,
+      "cluster": "SAFE_HAVEN_METALS",
+      "tier_weight": 1.0,
+      "weighted_r": 0.574
+    },
+    {
+      "symbol": "US100",
+      "archetype": "IMPULSE_OTE_SMC",
+      "day": "2026-07-28",
+      "outcome_r": 1.5497,
+      "mae_r": 0.0,
+      "cost_r": 0.0203,
+      "cluster": "US_EQUITY_INDICES",
+      "tier_weight": 1.0,
+      "weighted_r": 1.5497
+    },
+    {
+      "symbol": "US100",
+      "archetype": "IMPULSE_OTE_SMC",
+      "day": "2026-07-29",
+      "outcome_r": -1.0093,
+      "mae_r": -1.0,
+      "cost_r": 0.0093,
+      "cluster": "US_EQUITY_INDICES",
+      "tier_weight": 1.0,
+      "weighted_r": -1.0093
+    },
+    {
+      "symbol": "US100",
+      "archetype": "IMPULSE_OTE_SMC",
+      "day": "2026-07-30",
+      "outcome_r": -0.6571,
+      "mae_r": -0.9217,
+      "cost_r": 0.0071,
+      "cluster": "US_EQUITY_INDICES",
+      "tier_weight": 1.0,
+      "weighted_r": -0.6571
+    },
+    {
+      "symbol": "UK100",
+      "archetype": "LIQUIDITY_SWEEP_JUDAS",
+      "day": "2026-07-30",
+      "outcome_r": 0.5885,
+      "mae_r": 0.0,
+      "cost_r": 0.0615,
+      "cluster": "GLOBAL_EQUITY_INDICES",
+      "tier_weight": 0.65,
+      "weighted_r": 0.3825
+    },
+    {
+      "symbol": "XAGUSD",
+      "archetype": "IMPULSE_OTE_SMC",
+      "day": "2026-08-03",
+      "outcome_r": -0.7127,
+      "mae_r": -0.8008,
+      "cost_r": 0.0627,
+      "cluster": "SAFE_HAVEN_METALS",
+      "tier_weight": 1.0,
+      "weighted_r": -0.7127
+    },
+    {
+      "symbol": "US100",
+      "archetype": "IMPULSE_OTE_SMC",
+      "day": "2026-08-04",
+      "outcome_r": 2.1133,
+      "mae_r": 0.0,
+      "cost_r": 0.0167,
+      "cluster": "US_EQUITY_INDICES",
+      "tier_weight": 1.0,
+      "weighted_r": 2.1133
+    },
+    {
+      "symbol": "XAUUSD",
+      "archetype": "IMPULSE_OTE_SMC",
+      "day": "2026-08-05",
+      "outcome_r": 2.1022,
+      "mae_r": 0.0,
+      "cost_r": 0.0278,
+      "cluster": "SAFE_HAVEN_METALS",
+      "tier_weight": 1.0,
+      "weighted_r": 2.1022
+    },
+    {
+      "symbol": "US100",
+      "archetype": "IMPULSE_OTE_SMC",
+      "day": "2026-08-05",
+      "outcome_r": 0.6314,
+      "mae_r": 0.0,
+      "cost_r": 0.0186,
+      "cluster": "US_EQUITY_INDICES",
+      "tier_weight": 1.0,
+      "weighted_r": 0.6314
+    },
+    {
+      "symbol": "US100",
+      "archetype": "IMPULSE_OTE_SMC",
+      "day": "2026-08-06",
+      "outcome_r": -1.0163,
+      "mae_r": -1.0,
+      "cost_r": 0.0163,
+      "cluster": "US_EQUITY_INDICES",
+      "tier_weight": 1.0,
+      "weighted_r": -1.0163
+    },
+    {
+      "symbol": "XAUUSD",
+      "archetype": "IMPULSE_OTE_SMC",
+      "day": "2026-08-07",
+      "outcome_r": 1.3036,
+      "mae_r": -0.627,
+      "cost_r": 0.0664,
+      "cluster": "SAFE_HAVEN_METALS",
+      "tier_weight": 1.0,
+      "weighted_r": 1.3036
+    },
+    {
+      "symbol": "US100",
+      "archetype": "IMPULSE_OTE_SMC",
+      "day": "2026-08-07",
+      "outcome_r": 1.5004,
+      "mae_r": 0.0,
+      "cost_r": 0.0696,
+      "cluster": "US_EQUITY_INDICES",
+      "tier_weight": 1.0,
+      "weighted_r": 1.5004
+    },
+    {
+      "symbol": "XAGUSD",
+      "archetype": "IMPULSE_OTE_SMC",
+      "day": "2026-08-10",
+      "outcome_r": 2.0498,
+      "mae_r": -0.5732,
+      "cost_r": 0.0802,
+      "cluster": "SAFE_HAVEN_METALS",
+      "tier_weight": 1.0,
+      "weighted_r": 2.0498
+    },
+    {
+      "symbol": "XAUUSD",
+      "archetype": "IMPULSE_OTE_SMC",
+      "day": "2026-08-12",
+      "outcome_r": 0.6172,
+      "mae_r": 0.0,
+      "cost_r": 0.0328,
+      "cluster": "SAFE_HAVEN_METALS",
+      "tier_weight": 1.0,
+      "weighted_r": 0.6172
+    },
+    {
+      "symbol": "US100",
+      "archetype": "IMPULSE_OTE_SMC",
+      "day": "2026-08-12",
+      "outcome_r": 2.0814,
+      "mae_r": 0.0,
+      "cost_r": 0.0486,
+      "cluster": "US_EQUITY_INDICES",
+      "tier_weight": 1.0,
+      "weighted_r": 2.0814
+    },
+    {
+      "symbol": "XAGUSD",
+      "archetype": "IMPULSE_OTE_SMC",
+      "day": "2026-08-14",
+      "outcome_r": -0.7276,
+      "mae_r": -0.7875,
+      "cost_r": 0.0776,
+      "cluster": "SAFE_HAVEN_METALS",
+      "tier_weight": 1.0,
+      "weighted_r": -0.7276
+    },
+    {
+      "symbol": "US100",
+      "archetype": "IMPULSE_OTE_SMC",
+      "day": "2026-08-14",
+      "outcome_r": -1.0342,
+      "mae_r": -1.0,
+      "cost_r": 0.0342,
+      "cluster": "US_EQUITY_INDICES",
+      "tier_weight": 1.0,
+      "weighted_r": -1.0342
+    },
+    {
+      "symbol": "XAGUSD",
+      "archetype": "IMPULSE_OTE_SMC",
+      "day": "2026-08-17",
+      "outcome_r": -0.0864,
+      "mae_r": 0.0,
+      "cost_r": 0.0864,
+      "cluster": "SAFE_HAVEN_METALS",
+      "tier_weight": 1.0,
+      "weighted_r": -0.0864
+    },
+    {
+      "symbol": "US100",
+      "archetype": "IMPULSE_OTE_SMC",
+      "day": "2026-08-17",
+      "outcome_r": -1.0339,
+      "mae_r": -1.0,
+      "cost_r": 0.0339,
+      "cluster": "US_EQUITY_INDICES",
+      "tier_weight": 1.0,
+      "weighted_r": -1.0339
+    },
+    {
+      "symbol": "XAUUSD",
+      "archetype": "IMPULSE_OTE_SMC",
+      "day": "2026-08-20",
+      "outcome_r": -0.6759,
+      "mae_r": -0.874,
+      "cost_r": 0.0259,
+      "cluster": "SAFE_HAVEN_METALS",
+      "tier_weight": 1.0,
+      "weighted_r": -0.6759
+    },
+    {
+      "symbol": "XAUUSD",
+      "archetype": "IMPULSE_OTE_SMC",
+      "day": "2026-08-21",
+      "outcome_r": 2.1014,
+      "mae_r": 0.0,
+      "cost_r": 0.0286,
+      "cluster": "SAFE_HAVEN_METALS",
+      "tier_weight": 1.0,
+      "weighted_r": 2.1014
+    },
+    {
+      "symbol": "US100",
+      "archetype": "IMPULSE_OTE_SMC",
+      "day": "2026-08-24",
+      "outcome_r": 1.5382,
+      "mae_r": 0.0,
+      "cost_r": 0.0318,
+      "cluster": "US_EQUITY_INDICES",
+      "tier_weight": 1.0,
+      "weighted_r": 1.5382
+    },
+    {
+      "symbol": "XAGUSD",
+      "archetype": "IMPULSE_OTE_SMC",
+      "day": "2026-08-25",
+      "outcome_r": -1.0668,
+      "mae_r": -1.0,
+      "cost_r": 0.0668,
+      "cluster": "SAFE_HAVEN_METALS",
+      "tier_weight": 1.0,
+      "weighted_r": -1.0668
+    },
+    {
+      "symbol": "XAGUSD",
+      "archetype": "IMPULSE_OTE_SMC",
+      "day": "2026-08-26",
+      "outcome_r": -0.7155,
+      "mae_r": -0.8657,
+      "cost_r": 0.0655,
+      "cluster": "SAFE_HAVEN_METALS",
+      "tier_weight": 1.0,
+      "weighted_r": -0.7155
+    },
+    {
+      "symbol": "US100",
+      "archetype": "IMPULSE_OTE_SMC",
+      "day": "2026-08-26",
+      "outcome_r": -0.0194,
+      "mae_r": 0.0,
+      "cost_r": 0.0194,
+      "cluster": "US_EQUITY_INDICES",
+      "tier_weight": 1.0,
+      "weighted_r": -0.0194
+    }
+  ],
+  "all_candidates": [
+    {
+      "symbol": "XAUUSD",
+      "timeframe": "1h",
+      "archetype": "IMPULSE_OTE_SMC",
+      "cluster": "SAFE_HAVEN_METALS",
+      "train": {
+        "n": 89,
+        "total_r": 20.34,
+        "mean_r": 0.2285,
+        "pf": 1.68,
+        "t_stat": 2.0,
+        "p_value": 0.0228
+      },
+      "blind_oos": {
+        "n": 60,
+        "total_r": 14.1,
+        "mean_r": 0.235,
+        "pf": 1.55,
+        "t_stat": 1.45,
+        "p_value": 0.0731
+      },
+      "fdr_passed": false,
+      "approved_for_ftmo": true
+    },
+    {
+      "symbol": "XAUUSD",
+      "timeframe": "15m",
+      "archetype": "IMPULSE_OTE_SMC",
+      "cluster": "SAFE_HAVEN_METALS",
+      "train": {
+        "n": 16,
+        "total_r": 6.16,
+        "mean_r": 0.3852,
+        "pf": 2.02,
+        "t_stat": 1.22,
+        "p_value": 0.1104
+      },
+      "blind_oos": {
+        "n": 11,
+        "total_r": -0.59,
+        "mean_r": -0.0532,
+        "pf": 0.89,
+        "t_stat": -0.16,
+        "p_value": 0.5638
+      },
+      "fdr_passed": false,
+      "approved_for_ftmo": false
+    },
+    {
+      "symbol": "XAGUSD",
+      "timeframe": "1h",
+      "archetype": "IMPULSE_OTE_SMC",
+      "cluster": "SAFE_HAVEN_METALS",
+      "train": {
+        "n": 72,
+        "total_r": 10.05,
+        "mean_r": 0.1395,
+        "pf": 1.31,
+        "t_stat": 0.99,
+        "p_value": 0.1602
+      },
+      "blind_oos": {
+        "n": 49,
+        "total_r": 12.9,
+        "mean_r": 0.2633,
+        "pf": 1.68,
+        "t_stat": 1.51,
+        "p_value": 0.0651
+      },
+      "fdr_passed": false,
+      "approved_for_ftmo": true
+    },
+    {
+      "symbol": "USOIL",
+      "timeframe": "1h",
+      "archetype": "IMPULSE_OTE_SMC",
+      "cluster": "INDUSTRIAL_ENERGY",
+      "train": {
+        "n": 82,
+        "total_r": -2.98,
+        "mean_r": -0.0364,
+        "pf": 0.93,
+        "t_stat": -0.3,
+        "p_value": 0.6167
+      },
+      "blind_oos": {
+        "n": 55,
+        "total_r": -8.34,
+        "mean_r": -0.1516,
+        "pf": 0.72,
+        "t_stat": -1.04,
+        "p_value": 0.8514
+      },
+      "fdr_passed": false,
+      "approved_for_ftmo": false
+    },
+    {
+      "symbol": "USOIL",
+      "timeframe": "1h",
+      "archetype": "LIQUIDITY_SWEEP_JUDAS",
+      "cluster": "INDUSTRIAL_ENERGY",
+      "train": {
+        "n": 24,
+        "total_r": -2.5,
+        "mean_r": -0.1041,
+        "pf": 0.81,
+        "t_stat": -0.44,
+        "p_value": 0.6711
+      },
+      "blind_oos": {
+        "n": 17,
+        "total_r": -3.91,
+        "mean_r": -0.23,
+        "pf": 0.66,
+        "t_stat": -0.77,
+        "p_value": 0.7783
+      },
+      "fdr_passed": false,
+      "approved_for_ftmo": false
+    },
+    {
+      "symbol": "USOIL",
+      "timeframe": "15m",
+      "archetype": "IMPULSE_OTE_SMC",
+      "cluster": "INDUSTRIAL_ENERGY",
+      "train": {
+        "n": 14,
+        "total_r": -2.34,
+        "mean_r": -0.1675,
+        "pf": 0.62,
+        "t_stat": -0.72,
+        "p_value": 0.7657
+      },
+      "blind_oos": {
+        "n": 10,
+        "total_r": -0.28,
+        "mean_r": -0.028,
+        "pf": 0.9,
+        "t_stat": -0.12,
+        "p_value": 0.5494
+      },
+      "fdr_passed": false,
+      "approved_for_ftmo": false
+    },
+    {
+      "symbol": "UKOIL",
+      "timeframe": "1h",
+      "archetype": "IMPULSE_OTE_SMC",
+      "cluster": "INDUSTRIAL_ENERGY",
+      "train": {
+        "n": 105,
+        "total_r": -5.01,
+        "mean_r": -0.0477,
+        "pf": 0.91,
+        "t_stat": -0.44,
+        "p_value": 0.6687
+      },
+      "blind_oos": {
+        "n": 70,
+        "total_r": 0.28,
+        "mean_r": 0.004,
+        "pf": 1.01,
+        "t_stat": 0.03,
+        "p_value": 0.4888
+      },
+      "fdr_passed": false,
+      "approved_for_ftmo": false
+    },
+    {
+      "symbol": "UKOIL",
+      "timeframe": "1h",
+      "archetype": "LIQUIDITY_SWEEP_JUDAS",
+      "cluster": "INDUSTRIAL_ENERGY",
+      "train": {
+        "n": 46,
+        "total_r": -10.93,
+        "mean_r": -0.2376,
+        "pf": 0.45,
+        "t_stat": -2.04,
+        "p_value": 0.9793
+      },
+      "blind_oos": {
+        "n": 31,
+        "total_r": 12.53,
+        "mean_r": 0.4042,
+        "pf": 1.94,
+        "t_stat": 1.66,
+        "p_value": 0.0487
+      },
+      "fdr_passed": false,
+      "approved_for_ftmo": false
+    },
+    {
+      "symbol": "HGUSD",
+      "timeframe": "1h",
+      "archetype": "IMPULSE_OTE_SMC",
+      "cluster": "INDUSTRIAL_ENERGY",
+      "train": {
+        "n": 97,
+        "total_r": -0.03,
+        "mean_r": -0.0004,
+        "pf": 1.0,
+        "t_stat": -0.0,
+        "p_value": 0.5013
+      },
+      "blind_oos": {
+        "n": 66,
+        "total_r": 2.73,
+        "mean_r": 0.0414,
+        "pf": 1.09,
+        "t_stat": 0.31,
+        "p_value": 0.3767
+      },
+      "fdr_passed": false,
+      "approved_for_ftmo": false
+    },
+    {
+      "symbol": "HGUSD",
+      "timeframe": "1h",
+      "archetype": "LIQUIDITY_SWEEP_JUDAS",
+      "cluster": "INDUSTRIAL_ENERGY",
+      "train": {
+        "n": 21,
+        "total_r": -1.97,
+        "mean_r": -0.094,
+        "pf": 0.8,
+        "t_stat": -0.45,
+        "p_value": 0.6746
+      },
+      "blind_oos": {
+        "n": 14,
+        "total_r": -1.99,
+        "mean_r": -0.1421,
+        "pf": 0.75,
+        "t_stat": -0.47,
+        "p_value": 0.6792
+      },
+      "fdr_passed": false,
+      "approved_for_ftmo": false
+    },
+    {
+      "symbol": "US100",
+      "timeframe": "1h",
+      "archetype": "IMPULSE_OTE_SMC",
+      "cluster": "US_EQUITY_INDICES",
+      "train": {
+        "n": 129,
+        "total_r": 11.71,
+        "mean_r": 0.0908,
+        "pf": 1.2,
+        "t_stat": 0.92,
+        "p_value": 0.1801
+      },
+      "blind_oos": {
+        "n": 87,
+        "total_r": 19.93,
+        "mean_r": 0.2291,
+        "pf": 1.6,
+        "t_stat": 1.86,
+        "p_value": 0.0318
+      },
+      "fdr_passed": false,
+      "approved_for_ftmo": true
+    },
+    {
+      "symbol": "US100",
+      "timeframe": "1h",
+      "archetype": "LIQUIDITY_SWEEP_JUDAS",
+      "cluster": "US_EQUITY_INDICES",
+      "train": {
+        "n": 124,
+        "total_r": 8.09,
+        "mean_r": 0.0652,
+        "pf": 1.13,
+        "t_stat": 0.59,
+        "p_value": 0.2765
+      },
+      "blind_oos": {
+        "n": 84,
+        "total_r": -5.74,
+        "mean_r": -0.0683,
+        "pf": 0.88,
+        "t_stat": -0.51,
+        "p_value": 0.6951
+      },
+      "fdr_passed": false,
+      "approved_for_ftmo": false
+    },
+    {
+      "symbol": "US100",
+      "timeframe": "15m",
+      "archetype": "IMPULSE_OTE_SMC",
+      "cluster": "US_EQUITY_INDICES",
+      "train": {
+        "n": 45,
+        "total_r": -8.49,
+        "mean_r": -0.1887,
+        "pf": 0.68,
+        "t_stat": -1.15,
+        "p_value": 0.8747
+      },
+      "blind_oos": {
+        "n": 30,
+        "total_r": 3.23,
+        "mean_r": 0.1077,
+        "pf": 1.28,
+        "t_stat": 0.53,
+        "p_value": 0.2967
+      },
+      "fdr_passed": false,
+      "approved_for_ftmo": false
+    },
+    {
+      "symbol": "US100",
+      "timeframe": "15m",
+      "archetype": "LIQUIDITY_SWEEP_JUDAS",
+      "cluster": "US_EQUITY_INDICES",
+      "train": {
+        "n": 25,
+        "total_r": 5.37,
+        "mean_r": 0.2149,
+        "pf": 1.51,
+        "t_stat": 0.87,
+        "p_value": 0.1922
+      },
+      "blind_oos": {
+        "n": 18,
+        "total_r": -7.74,
+        "mean_r": -0.4301,
+        "pf": 0.38,
+        "t_stat": -1.75,
+        "p_value": 0.9601
+      },
+      "fdr_passed": false,
+      "approved_for_ftmo": false
+    },
+    {
+      "symbol": "US500",
+      "timeframe": "1h",
+      "archetype": "IMPULSE_OTE_SMC",
+      "cluster": "US_EQUITY_INDICES",
+      "train": {
+        "n": 136,
+        "total_r": -8.44,
+        "mean_r": -0.0621,
+        "pf": 0.88,
+        "t_stat": -0.66,
+        "p_value": 0.7455
+      },
+      "blind_oos": {
+        "n": 91,
+        "total_r": 16.47,
+        "mean_r": 0.181,
+        "pf": 1.46,
+        "t_stat": 1.53,
+        "p_value": 0.0631
+      },
+      "fdr_passed": false,
+      "approved_for_ftmo": false
+    },
+    {
+      "symbol": "US500",
+      "timeframe": "1h",
+      "archetype": "LIQUIDITY_SWEEP_JUDAS",
+      "cluster": "US_EQUITY_INDICES",
+      "train": {
+        "n": 102,
+        "total_r": -5.74,
+        "mean_r": -0.0562,
+        "pf": 0.9,
+        "t_stat": -0.46,
+        "p_value": 0.6779
+      },
+      "blind_oos": {
+        "n": 69,
+        "total_r": -18.94,
+        "mean_r": -0.2745,
+        "pf": 0.58,
+        "t_stat": -2.06,
+        "p_value": 0.9801
+      },
+      "fdr_passed": false,
+      "approved_for_ftmo": false
+    },
+    {
+      "symbol": "US500",
+      "timeframe": "15m",
+      "archetype": "IMPULSE_OTE_SMC",
+      "cluster": "US_EQUITY_INDICES",
+      "train": {
+        "n": 33,
+        "total_r": -7.55,
+        "mean_r": -0.2286,
+        "pf": 0.59,
+        "t_stat": -1.32,
+        "p_value": 0.9064
+      },
+      "blind_oos": {
+        "n": 23,
+        "total_r": 2.32,
+        "mean_r": 0.101,
+        "pf": 1.26,
+        "t_stat": 0.47,
+        "p_value": 0.3196
+      },
+      "fdr_passed": false,
+      "approved_for_ftmo": false
+    },
+    {
+      "symbol": "US500",
+      "timeframe": "15m",
+      "archetype": "LIQUIDITY_SWEEP_JUDAS",
+      "cluster": "US_EQUITY_INDICES",
+      "train": {
+        "n": 15,
+        "total_r": 8.63,
+        "mean_r": 0.5754,
+        "pf": 2.34,
+        "t_stat": 1.47,
+        "p_value": 0.0708
+      },
+      "blind_oos": {
+        "n": 10,
+        "total_r": 1.01,
+        "mean_r": 0.1009,
+        "pf": 1.23,
+        "t_stat": 0.27,
+        "p_value": 0.395
+      },
+      "fdr_passed": false,
+      "approved_for_ftmo": false
+    },
+    {
+      "symbol": "US30",
+      "timeframe": "1h",
+      "archetype": "IMPULSE_OTE_SMC",
+      "cluster": "US_EQUITY_INDICES",
+      "train": {
+        "n": 139,
+        "total_r": -11.42,
+        "mean_r": -0.0821,
+        "pf": 0.85,
+        "t_stat": -0.85,
+        "p_value": 0.802
+      },
+      "blind_oos": {
+        "n": 93,
+        "total_r": 16.01,
+        "mean_r": 0.1722,
+        "pf": 1.38,
+        "t_stat": 1.36,
+        "p_value": 0.0873
+      },
+      "fdr_passed": false,
+      "approved_for_ftmo": false
+    },
+    {
+      "symbol": "US30",
+      "timeframe": "1h",
+      "archetype": "LIQUIDITY_SWEEP_JUDAS",
+      "cluster": "US_EQUITY_INDICES",
+      "train": {
+        "n": 100,
+        "total_r": 1.05,
+        "mean_r": 0.0105,
+        "pf": 1.02,
+        "t_stat": 0.08,
+        "p_value": 0.4675
+      },
+      "blind_oos": {
+        "n": 67,
+        "total_r": -4.03,
+        "mean_r": -0.0601,
+        "pf": 0.89,
+        "t_stat": -0.43,
+        "p_value": 0.6672
+      },
+      "fdr_passed": false,
+      "approved_for_ftmo": false
+    },
+    {
+      "symbol": "US30",
+      "timeframe": "15m",
+      "archetype": "IMPULSE_OTE_SMC",
+      "cluster": "US_EQUITY_INDICES",
+      "train": {
+        "n": 28,
+        "total_r": -2.42,
+        "mean_r": -0.0866,
+        "pf": 0.83,
+        "t_stat": -0.42,
+        "p_value": 0.6643
+      },
+      "blind_oos": {
+        "n": 19,
+        "total_r": 1.94,
+        "mean_r": 0.1021,
+        "pf": 1.24,
+        "t_stat": 0.39,
+        "p_value": 0.3491
+      },
+      "fdr_passed": false,
+      "approved_for_ftmo": false
+    },
+    {
+      "symbol": "US30",
+      "timeframe": "15m",
+      "archetype": "LIQUIDITY_SWEEP_JUDAS",
+      "cluster": "US_EQUITY_INDICES",
+      "train": {
+        "n": 17,
+        "total_r": 1.04,
+        "mean_r": 0.0614,
+        "pf": 1.11,
+        "t_stat": 0.18,
+        "p_value": 0.4285
+      },
+      "blind_oos": {
+        "n": 12,
+        "total_r": 0.98,
+        "mean_r": 0.0814,
+        "pf": 1.15,
+        "t_stat": 0.22,
+        "p_value": 0.4136
+      },
+      "fdr_passed": false,
+      "approved_for_ftmo": false
+    },
+    {
+      "symbol": "US2000",
+      "timeframe": "1h",
+      "archetype": "IMPULSE_OTE_SMC",
+      "cluster": "US_EQUITY_INDICES",
+      "train": {
+        "n": 84,
+        "total_r": -15.57,
+        "mean_r": -0.1854,
+        "pf": 0.69,
+        "t_stat": -1.52,
+        "p_value": 0.9363
+      },
+      "blind_oos": {
+        "n": 56,
+        "total_r": -6.3,
+        "mean_r": -0.1125,
+        "pf": 0.8,
+        "t_stat": -0.73,
+        "p_value": 0.766
+      },
+      "fdr_passed": false,
+      "approved_for_ftmo": false
+    },
+    {
+      "symbol": "GER40",
+      "timeframe": "1h",
+      "archetype": "IMPULSE_OTE_SMC",
+      "cluster": "GLOBAL_EQUITY_INDICES",
+      "train": {
+        "n": 100,
+        "total_r": 8.69,
+        "mean_r": 0.0869,
+        "pf": 1.17,
+        "t_stat": 0.69,
+        "p_value": 0.2454
+      },
+      "blind_oos": {
+        "n": 67,
+        "total_r": -9.95,
+        "mean_r": -0.1485,
+        "pf": 0.72,
+        "t_stat": -1.18,
+        "p_value": 0.8811
+      },
+      "fdr_passed": false,
+      "approved_for_ftmo": false
+    },
+    {
+      "symbol": "GER40",
+      "timeframe": "1h",
+      "archetype": "LIQUIDITY_SWEEP_JUDAS",
+      "cluster": "GLOBAL_EQUITY_INDICES",
+      "train": {
+        "n": 81,
+        "total_r": -9.11,
+        "mean_r": -0.1125,
+        "pf": 0.82,
+        "t_stat": -0.82,
+        "p_value": 0.7945
+      },
+      "blind_oos": {
+        "n": 54,
+        "total_r": 7.85,
+        "mean_r": 0.1454,
+        "pf": 1.29,
+        "t_stat": 0.83,
+        "p_value": 0.2026
+      },
+      "fdr_passed": false,
+      "approved_for_ftmo": false
+    },
+    {
+      "symbol": "GER40",
+      "timeframe": "15m",
+      "archetype": "IMPULSE_OTE_SMC",
+      "cluster": "GLOBAL_EQUITY_INDICES",
+      "train": {
+        "n": 20,
+        "total_r": -2.33,
+        "mean_r": -0.1163,
+        "pf": 0.82,
+        "t_stat": -0.38,
+        "p_value": 0.6493
+      },
+      "blind_oos": {
+        "n": 14,
+        "total_r": -0.74,
+        "mean_r": -0.0527,
+        "pf": 0.9,
+        "t_stat": -0.16,
+        "p_value": 0.5646
+      },
+      "fdr_passed": false,
+      "approved_for_ftmo": false
+    },
+    {
+      "symbol": "UK100",
+      "timeframe": "1h",
+      "archetype": "IMPULSE_OTE_SMC",
+      "cluster": "GLOBAL_EQUITY_INDICES",
+      "train": {
+        "n": 106,
+        "total_r": -38.08,
+        "mean_r": -0.3593,
+        "pf": 0.45,
+        "t_stat": -3.77,
+        "p_value": 0.9999
+      },
+      "blind_oos": {
+        "n": 72,
+        "total_r": -20.84,
+        "mean_r": -0.2894,
+        "pf": 0.53,
+        "t_stat": -2.38,
+        "p_value": 0.9913
+      },
+      "fdr_passed": false,
+      "approved_for_ftmo": false
+    },
+    {
+      "symbol": "UK100",
+      "timeframe": "1h",
+      "archetype": "LIQUIDITY_SWEEP_JUDAS",
+      "cluster": "GLOBAL_EQUITY_INDICES",
+      "train": {
+        "n": 43,
+        "total_r": 7.83,
+        "mean_r": 0.1821,
+        "pf": 1.35,
+        "t_stat": 0.88,
+        "p_value": 0.1883
+      },
+      "blind_oos": {
+        "n": 30,
+        "total_r": 3.85,
+        "mean_r": 0.1282,
+        "pf": 1.28,
+        "t_stat": 0.58,
+        "p_value": 0.28
+      },
+      "fdr_passed": false,
+      "approved_for_ftmo": true
+    },
+    {
+      "symbol": "UK100",
+      "timeframe": "15m",
+      "archetype": "IMPULSE_OTE_SMC",
+      "cluster": "GLOBAL_EQUITY_INDICES",
+      "train": {
+        "n": 20,
+        "total_r": -4.25,
+        "mean_r": -0.2123,
+        "pf": 0.6,
+        "t_stat": -0.96,
+        "p_value": 0.8327
+      },
+      "blind_oos": {
+        "n": 14,
+        "total_r": -10.2,
+        "mean_r": -0.7286,
+        "pf": 0.05,
+        "t_stat": -5.2,
+        "p_value": 1.0
+      },
+      "fdr_passed": false,
+      "approved_for_ftmo": false
+    },
+    {
+      "symbol": "JP225",
+      "timeframe": "1h",
+      "archetype": "IMPULSE_OTE_SMC",
+      "cluster": "GLOBAL_EQUITY_INDICES",
+      "train": {
+        "n": 94,
+        "total_r": -0.14,
+        "mean_r": -0.0015,
+        "pf": 1.0,
+        "t_stat": -0.01,
+        "p_value": 0.5046
+      },
+      "blind_oos": {
+        "n": 64,
+        "total_r": -15.33,
+        "mean_r": -0.2395,
+        "pf": 0.61,
+        "t_stat": -1.76,
+        "p_value": 0.9608
+      },
+      "fdr_passed": false,
+      "approved_for_ftmo": false
+    },
+    {
+      "symbol": "JP225",
+      "timeframe": "15m",
+      "archetype": "IMPULSE_OTE_SMC",
+      "cluster": "GLOBAL_EQUITY_INDICES",
+      "train": {
+        "n": 15,
+        "total_r": 0.45,
+        "mean_r": 0.0299,
+        "pf": 1.08,
+        "t_stat": 0.12,
+        "p_value": 0.4537
+      },
+      "blind_oos": {
+        "n": 11,
+        "total_r": -2.92,
+        "mean_r": -0.2656,
+        "pf": 0.59,
+        "t_stat": -0.74,
+        "p_value": 0.7706
+      },
+      "fdr_passed": false,
+      "approved_for_ftmo": false
+    },
+    {
+      "symbol": "EU50",
+      "timeframe": "1h",
+      "archetype": "IMPULSE_OTE_SMC",
+      "cluster": "GLOBAL_EQUITY_INDICES",
+      "train": {
+        "n": 97,
+        "total_r": -17.62,
+        "mean_r": -0.1817,
+        "pf": 0.7,
+        "t_stat": -1.55,
+        "p_value": 0.9395
+      },
+      "blind_oos": {
+        "n": 66,
+        "total_r": -17.77,
+        "mean_r": -0.2692,
+        "pf": 0.57,
+        "t_stat": -2.11,
+        "p_value": 0.9826
+      },
+      "fdr_passed": false,
+      "approved_for_ftmo": false
+    },
+    {
+      "symbol": "EU50",
+      "timeframe": "1h",
+      "archetype": "LIQUIDITY_SWEEP_JUDAS",
+      "cluster": "GLOBAL_EQUITY_INDICES",
+      "train": {
+        "n": 46,
+        "total_r": 5.3,
+        "mean_r": 0.1153,
+        "pf": 1.23,
+        "t_stat": 0.62,
+        "p_value": 0.2687
+      },
+      "blind_oos": {
+        "n": 32,
+        "total_r": -5.5,
+        "mean_r": -0.172,
+        "pf": 0.74,
+        "t_stat": -0.77,
+        "p_value": 0.78
+      },
+      "fdr_passed": false,
+      "approved_for_ftmo": false
+    },
+    {
+      "symbol": "EU50",
+      "timeframe": "15m",
+      "archetype": "IMPULSE_OTE_SMC",
+      "cluster": "GLOBAL_EQUITY_INDICES",
+      "train": {
+        "n": 21,
+        "total_r": 3.22,
+        "mean_r": 0.1535,
+        "pf": 1.46,
+        "t_stat": 0.71,
+        "p_value": 0.2378
+      },
+      "blind_oos": {
+        "n": 14,
+        "total_r": -1.25,
+        "mean_r": -0.0896,
+        "pf": 0.86,
+        "t_stat": -0.26,
+        "p_value": 0.6019
+      },
+      "fdr_passed": false,
+      "approved_for_ftmo": false
+    },
+    {
+      "symbol": "EURUSD",
+      "timeframe": "1h",
+      "archetype": "IMPULSE_OTE_SMC",
+      "cluster": "G10_FX_USD",
+      "train": {
+        "n": 157,
+        "total_r": -2.87,
+        "mean_r": -0.0183,
+        "pf": 0.96,
+        "t_stat": -0.2,
+        "p_value": 0.58
+      },
+      "blind_oos": {
+        "n": 106,
+        "total_r": -13.01,
+        "mean_r": -0.1228,
+        "pf": 0.77,
+        "t_stat": -1.18,
+        "p_value": 0.8807
+      },
+      "fdr_passed": false,
+      "approved_for_ftmo": false
+    },
+    {
+      "symbol": "EURUSD",
+      "timeframe": "15m",
+      "archetype": "IMPULSE_OTE_SMC",
+      "cluster": "G10_FX_USD",
+      "train": {
+        "n": 25,
+        "total_r": -3.75,
+        "mean_r": -0.15,
+        "pf": 0.6,
+        "t_stat": -1.16,
+        "p_value": 0.8761
+      },
+      "blind_oos": {
+        "n": 17,
+        "total_r": -3.07,
+        "mean_r": -0.1803,
+        "pf": 0.48,
+        "t_stat": -1.23,
+        "p_value": 0.8909
+      },
+      "fdr_passed": false,
+      "approved_for_ftmo": false
+    },
+    {
+      "symbol": "USDJPY",
+      "timeframe": "1h",
+      "archetype": "IMPULSE_OTE_SMC",
+      "cluster": "G10_FX_USD",
+      "train": {
+        "n": 139,
+        "total_r": 17.63,
+        "mean_r": 0.1268,
+        "pf": 1.29,
+        "t_stat": 1.3,
+        "p_value": 0.0976
+      },
+      "blind_oos": {
+        "n": 94,
+        "total_r": -10.59,
+        "mean_r": -0.1127,
+        "pf": 0.78,
+        "t_stat": -1.06,
+        "p_value": 0.8562
+      },
+      "fdr_passed": false,
+      "approved_for_ftmo": false
+    },
+    {
+      "symbol": "USDJPY",
+      "timeframe": "15m",
+      "archetype": "IMPULSE_OTE_SMC",
+      "cluster": "G10_FX_USD",
+      "train": {
+        "n": 19,
+        "total_r": -2.46,
+        "mean_r": -0.1296,
+        "pf": 0.61,
+        "t_stat": -0.87,
+        "p_value": 0.8073
+      },
+      "blind_oos": {
+        "n": 14,
+        "total_r": -4.69,
+        "mean_r": -0.3353,
+        "pf": 0.18,
+        "t_stat": -2.74,
+        "p_value": 0.9969
+      },
+      "fdr_passed": false,
+      "approved_for_ftmo": false
+    },
+    {
+      "symbol": "AUDUSD",
+      "timeframe": "1h",
+      "archetype": "IMPULSE_OTE_SMC",
+      "cluster": "G10_FX_USD",
+      "train": {
+        "n": 37,
+        "total_r": -13.86,
+        "mean_r": -0.3747,
+        "pf": 0.43,
+        "t_stat": -2.34,
+        "p_value": 0.9904
+      },
+      "blind_oos": {
+        "n": 25,
+        "total_r": 1.8,
+        "mean_r": 0.072,
+        "pf": 1.21,
+        "t_stat": 0.37,
+        "p_value": 0.3554
+      },
+      "fdr_passed": false,
+      "approved_for_ftmo": false
+    },
+    {
+      "symbol": "USDCHF",
+      "timeframe": "1h",
+      "archetype": "IMPULSE_OTE_SMC",
+      "cluster": "G10_FX_USD",
+      "train": {
+        "n": 34,
+        "total_r": -8.22,
+        "mean_r": -0.2417,
+        "pf": 0.6,
+        "t_stat": -1.36,
+        "p_value": 0.9128
+      },
+      "blind_oos": {
+        "n": 23,
+        "total_r": -3.16,
+        "mean_r": -0.1373,
+        "pf": 0.76,
+        "t_stat": -0.57,
+        "p_value": 0.7143
+      },
+      "fdr_passed": false,
+      "approved_for_ftmo": false
+    },
+    {
+      "symbol": "EURJPY",
+      "timeframe": "1h",
+      "archetype": "IMPULSE_OTE_SMC",
+      "cluster": "G10_FX_CROSS",
+      "train": {
+        "n": 40,
+        "total_r": -8.08,
+        "mean_r": -0.202,
+        "pf": 0.65,
+        "t_stat": -1.17,
+        "p_value": 0.8783
+      },
+      "blind_oos": {
+        "n": 27,
+        "total_r": -10.92,
+        "mean_r": -0.4044,
+        "pf": 0.31,
+        "t_stat": -2.6,
+        "p_value": 0.9953
+      },
+      "fdr_passed": false,
+      "approved_for_ftmo": false
+    },
+    {
+      "symbol": "GBPJPY",
+      "timeframe": "1h",
+      "archetype": "IMPULSE_OTE_SMC",
+      "cluster": "G10_FX_CROSS",
+      "train": {
+        "n": 25,
+        "total_r": 3.77,
+        "mean_r": 0.1507,
+        "pf": 1.44,
+        "t_stat": 0.74,
+        "p_value": 0.2287
+      },
+      "blind_oos": {
+        "n": 17,
+        "total_r": -0.31,
+        "mean_r": -0.0181,
+        "pf": 0.96,
+        "t_stat": -0.07,
+        "p_value": 0.5261
+      },
+      "fdr_passed": false,
+      "approved_for_ftmo": false
+    }
+  ]
+}

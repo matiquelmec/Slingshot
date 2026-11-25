@@ -82,3 +82,61 @@ def test_trade_manager_has_bitunix_sync_lock():
 def test_fastapi_gateway_imports_cleanly():
     from engine.api.main import app
     assert app is not None
+
+
+def test_ftmo_guardian_auto_resets_on_new_mt5_account_login(tmp_path: Path):
+    state_file = tmp_path / "ftmo_daily.json"
+    state_file.write_text(json.dumps({
+        "account_login": 111111,
+        "account_size": 100000.0,
+        "daily_starting_equity": 93027.73,
+        "current_equity": 93027.73,
+        "is_daily_lockout": True,
+        "lockout_reason": "OLD_TEST_LOCKOUT",
+        "daily_loss_count": 2,
+    }), encoding="utf-8")
+
+    g = FtmoGuardianShield(account_size=100000.0, phase="PHASE_1", account_type="SWING", state_file=str(state_file))
+    assert g.is_daily_lockout is True
+
+    # Mismo login no resetea
+    assert g.sync_mt5_account_identity(111111, 93027.73, 93027.73) is False
+
+    # Nuevo login ($50K Free Trial o Challenge): auto-resetea a limpio
+    changed = g.sync_mt5_account_identity(999888, 50000.0, 50000.0)
+    assert changed is True
+    assert g.account_login == 999888
+    assert g.account_size == 50000.0
+    assert g.daily_starting_equity == 50000.0
+    assert g.is_daily_lockout is False
+    assert g.daily_loss_count == 0
+
+
+def test_prop_firm_simulator_ftmo_swing_profile_keys():
+    clusters = [
+        {"day": f"2026-02-{i+1:02d}", "net_r": 0.9 if i % 2 == 0 else -0.6, "worst_intraday_r": -0.8, "trades": 1}
+        for i in range(12)
+    ]
+    res = PropFirmPassSimulator.simulate_risk_grid(
+        PropFirmPassSimulator(),
+        clusters,
+        risk_grid_pct=[0.50, 0.75],
+        n_trials=100,
+        profile="FTMO_SWING",
+    )
+    assert res["universe"] == ["XAUUSD", "XAGUSD", "US100", "UK100"]
+    assert res["recommended_oos_base_risk_pct"] == 0.75
+    assert "results" in res and "base_empirical_grid" in res
+    assert len(res["results"]) == 2
+
+
+def test_onchain_provider_multi_exchange_waf_resilient():
+    from engine.indicators import onchain_provider
+
+    async def _run():
+        await onchain_provider.refresh_symbol_onchain("BTCUSDT", force=True)
+        return onchain_provider.get_onchain_summary("BTCUSDT")
+
+    summary = asyncio.run(_run())
+    assert summary["oi_delta_pct"] is not None
+    assert onchain_provider._cache["BTCUSDT"].oi > 0

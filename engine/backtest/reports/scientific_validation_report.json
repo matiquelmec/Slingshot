@@ -1,0 +1,511 @@
+{
+  "generated_at": "2026-11-20T21:12:32.007905+00:00",
+  "protocol": "SOP-146 Scientific Out-of-Sample, Sensitivity & Ablation Validation",
+  "sample_size_trades": 262,
+  "temporal_out_of_sample_audit": {
+    "train_ratio": 0.6,
+    "methodology_note": "Split cronológico de estabilidad temporal sobre la ventana histórica de 180 días (In-Sample Temporal Split). Dado que la selección de activos y reglas se realizó observando la ventana completa, la única validación verdaderamente Out-of-Sample es el Forward-Test en vivo a partir de PARAMETER_FREEZE_DATE.",
+    "full_sample_flat_1r": {
+      "trades_count": 262,
+      "win_rate_pct": 51.53,
+      "profit_factor": 2.22,
+      "total_r": 100.55,
+      "expectancy_r": 0.384,
+      "std_r": 1.062,
+      "standard_error_r": 0.066,
+      "ci95_low_r": 0.255,
+      "ci95_high_r": 0.512,
+      "max_drawdown_r": 5.28,
+      "t_statistic": 5.85
+    },
+    "full_sample_friction_sop119_1r": {
+      "trades_count": 262,
+      "win_rate_pct": 50.38,
+      "profit_factor": 1.87,
+      "total_r": 73.74,
+      "expectancy_r": 0.281,
+      "std_r": 0.982,
+      "standard_error_r": 0.061,
+      "ci95_low_r": 0.163,
+      "ci95_high_r": 0.4,
+      "max_drawdown_r": 6.01,
+      "t_statistic": 4.64
+    },
+    "daily_clustered_flat_1r": {
+      "active_days_count": 123,
+      "mean_daily_r": 0.817,
+      "std_daily_r": 1.745,
+      "daily_se_r": 0.157,
+      "daily_ci95_low_r": 0.509,
+      "daily_ci95_high_r": 1.126,
+      "daily_t_statistic": 5.19
+    },
+    "daily_clustered_friction_sop119_1r": {
+      "active_days_count": 123,
+      "mean_daily_r": 0.599,
+      "std_daily_r": 1.578,
+      "daily_se_r": 0.142,
+      "daily_ci95_low_r": 0.321,
+      "daily_ci95_high_r": 0.878,
+      "daily_t_statistic": 4.21
+    },
+    "weekly_clustered_flat_1r": {
+      "active_weeks_count": 28,
+      "mean_weekly_r": 3.591,
+      "std_weekly_r": 3.719,
+      "weekly_se_r": 0.703,
+      "weekly_ci95_low_r": 2.213,
+      "weekly_ci95_high_r": 4.969,
+      "weekly_t_statistic": 5.11
+    },
+    "weekly_clustered_friction_sop119_1r": {
+      "active_weeks_count": 28,
+      "mean_weekly_r": 2.633,
+      "std_weekly_r": 3.253,
+      "weekly_se_r": 0.615,
+      "weekly_ci95_low_r": 1.429,
+      "weekly_ci95_high_r": 3.838,
+      "weekly_t_statistic": 4.28
+    },
+    "in_sample_60pct": {
+      "start_date": "2026-02-09",
+      "end_date": "2026-05-13",
+      "flat_1r": {
+        "trades_count": 157,
+        "win_rate_pct": 49.68,
+        "profit_factor": 2.09,
+        "total_r": 55.89,
+        "expectancy_r": 0.356,
+        "std_r": 1.075,
+        "standard_error_r": 0.086,
+        "ci95_low_r": 0.188,
+        "ci95_high_r": 0.524,
+        "max_drawdown_r": 5.28,
+        "t_statistic": 4.15
+      },
+      "friction_sop119_1r": {
+        "trades_count": 157,
+        "win_rate_pct": 47.77,
+        "profit_factor": 1.7,
+        "total_r": 37.61,
+        "expectancy_r": 0.24,
+        "std_r": 0.994,
+        "standard_error_r": 0.079,
+        "ci95_low_r": 0.084,
+        "ci95_high_r": 0.395,
+        "max_drawdown_r": 6.01,
+        "t_statistic": 3.02
+      }
+    },
+    "out_of_sample_40pct": {
+      "start_date": "2026-05-13",
+      "end_date": "2026-08-26",
+      "flat_1r": {
+        "trades_count": 105,
+        "win_rate_pct": 54.29,
+        "profit_factor": 2.45,
+        "total_r": 44.66,
+        "expectancy_r": 0.425,
+        "std_r": 1.046,
+        "standard_error_r": 0.102,
+        "ci95_low_r": 0.225,
+        "ci95_high_r": 0.625,
+        "max_drawdown_r": 2.05,
+        "t_statistic": 4.17
+      },
+      "friction_sop119_1r": {
+        "trades_count": 105,
+        "win_rate_pct": 54.29,
+        "profit_factor": 2.18,
+        "total_r": 36.12,
+        "expectancy_r": 0.344,
+        "std_r": 0.965,
+        "standard_error_r": 0.094,
+        "ci95_low_r": 0.159,
+        "ci95_high_r": 0.529,
+        "max_drawdown_r": 2.45,
+        "t_statistic": 3.65
+      }
+    },
+    "oos_expectancy_retention_ratio": 1.194,
+    "rolling_3_folds": [
+      {
+        "fold": 1,
+        "start_date": "2026-02-09",
+        "end_date": "2026-03-27",
+        "flat_1r": {
+          "trades_count": 87,
+          "win_rate_pct": 52.87,
+          "profit_factor": 2.41,
+          "total_r": 37.24,
+          "expectancy_r": 0.428,
+          "std_r": 1.083,
+          "standard_error_r": 0.116,
+          "ci95_low_r": 0.201,
+          "ci95_high_r": 0.656,
+          "max_drawdown_r": 5.28,
+          "t_statistic": 3.69
+        },
+        "friction_sop119_1r": {
+          "trades_count": 87,
+          "win_rate_pct": 49.43,
+          "profit_factor": 1.89,
+          "total_r": 24.84,
+          "expectancy_r": 0.285,
+          "std_r": 0.997,
+          "standard_error_r": 0.107,
+          "ci95_low_r": 0.076,
+          "ci95_high_r": 0.495,
+          "max_drawdown_r": 5.95,
+          "t_statistic": 2.67
+        }
+      },
+      {
+        "fold": 2,
+        "start_date": "2026-03-28",
+        "end_date": "2026-05-29",
+        "flat_1r": {
+          "trades_count": 87,
+          "win_rate_pct": 48.28,
+          "profit_factor": 1.85,
+          "total_r": 25.23,
+          "expectancy_r": 0.29,
+          "std_r": 1.045,
+          "standard_error_r": 0.112,
+          "ci95_low_r": 0.07,
+          "ci95_high_r": 0.51,
+          "max_drawdown_r": 5.09,
+          "t_statistic": 2.59
+        },
+        "friction_sop119_1r": {
+          "trades_count": 87,
+          "win_rate_pct": 48.28,
+          "profit_factor": 1.58,
+          "total_r": 17.78,
+          "expectancy_r": 0.204,
+          "std_r": 0.975,
+          "standard_error_r": 0.104,
+          "ci95_low_r": -0.0,
+          "ci95_high_r": 0.409,
+          "max_drawdown_r": 6.01,
+          "t_statistic": 1.96
+        }
+      },
+      {
+        "fold": 3,
+        "start_date": "2026-05-30",
+        "end_date": "2026-08-26",
+        "flat_1r": {
+          "trades_count": 88,
+          "win_rate_pct": 53.41,
+          "profit_factor": 2.45,
+          "total_r": 38.08,
+          "expectancy_r": 0.433,
+          "std_r": 1.065,
+          "standard_error_r": 0.114,
+          "ci95_low_r": 0.21,
+          "ci95_high_r": 0.655,
+          "max_drawdown_r": 2.05,
+          "t_statistic": 3.81
+        },
+        "friction_sop119_1r": {
+          "trades_count": 88,
+          "win_rate_pct": 53.41,
+          "profit_factor": 2.21,
+          "total_r": 31.12,
+          "expectancy_r": 0.354,
+          "std_r": 0.979,
+          "standard_error_r": 0.104,
+          "ci95_low_r": 0.149,
+          "ci95_high_r": 0.558,
+          "max_drawdown_r": 2.45,
+          "t_statistic": 3.39
+        }
+      }
+    ]
+  },
+  "survivorship_bias_audit": {
+    "canonical_13_assets_flat_1r": {
+      "trades_count": 262,
+      "win_rate_pct": 51.53,
+      "profit_factor": 2.22,
+      "total_r": 100.55,
+      "expectancy_r": 0.384,
+      "std_r": 1.062,
+      "standard_error_r": 0.066,
+      "ci95_low_r": 0.255,
+      "ci95_high_r": 0.512,
+      "max_drawdown_r": 5.28,
+      "t_statistic": 5.85
+    },
+    "canonical_13_assets_friction_1r": {
+      "trades_count": 262,
+      "win_rate_pct": 50.38,
+      "profit_factor": 1.87,
+      "total_r": 73.74,
+      "expectancy_r": 0.281,
+      "std_r": 0.982,
+      "standard_error_r": 0.061,
+      "ci95_low_r": 0.163,
+      "ci95_high_r": 0.4,
+      "max_drawdown_r": 6.01,
+      "t_statistic": 4.64
+    },
+    "unpruned_15_assets_flat_1r": {
+      "trades_count": 335,
+      "win_rate_pct": 45.97,
+      "profit_factor": 1.65,
+      "total_r": 82.85,
+      "expectancy_r": 0.247,
+      "std_r": 1.09,
+      "standard_error_r": 0.06,
+      "ci95_low_r": 0.131,
+      "ci95_high_r": 0.364,
+      "max_drawdown_r": 18.45,
+      "t_statistic": 4.15
+    },
+    "unpruned_15_assets_friction_1r": {
+      "trades_count": 335,
+      "win_rate_pct": 45.07,
+      "profit_factor": 1.39,
+      "total_r": 51.33,
+      "expectancy_r": 0.153,
+      "std_r": 1.012,
+      "standard_error_r": 0.055,
+      "ci95_low_r": 0.045,
+      "ci95_high_r": 0.262,
+      "max_drawdown_r": 22.41,
+      "t_statistic": 2.77
+    },
+    "survivorship_pf_delta_flat": 0.57,
+    "survivorship_expectancy_delta_r": 0.137,
+    "methodology_note": "La poda de AVAXUSDT, RENDERUSDT y combinaciones Activo:Timeframe de baja eficiencia se realizó sobre la muestra histórica de 180 días, lo que introduce sesgo de selección in-sample (+0.38 en Profit Factor). Incluso sin dicha poda (Universo 15 activos bruto), la estrategia base en 1R plano mantiene expectativa matemática positiva con fricción real."
+  },
+  "parameter_sensitivity_audit": {
+    "grid": [
+      {
+        "perturbation": "-20%",
+        "scale_factor": 0.8,
+        "flat_1r_profit_factor": 2.22,
+        "flat_1r_expectancy_r": 0.306,
+        "friction_1r_profit_factor": 1.87,
+        "friction_1r_expectancy_r": 0.224,
+        "friction_1r_ci95_low_r": 0.129,
+        "max_drawdown_r": 4.81
+      },
+      {
+        "perturbation": "-10%",
+        "scale_factor": 0.9,
+        "flat_1r_profit_factor": 2.22,
+        "flat_1r_expectancy_r": 0.345,
+        "friction_1r_profit_factor": 1.87,
+        "friction_1r_expectancy_r": 0.253,
+        "friction_1r_ci95_low_r": 0.146,
+        "max_drawdown_r": 5.41
+      },
+      {
+        "perturbation": "BASE (0%)",
+        "scale_factor": 1.0,
+        "flat_1r_profit_factor": 2.22,
+        "flat_1r_expectancy_r": 0.384,
+        "friction_1r_profit_factor": 1.87,
+        "friction_1r_expectancy_r": 0.281,
+        "friction_1r_ci95_low_r": 0.163,
+        "max_drawdown_r": 6.01
+      },
+      {
+        "perturbation": "+10%",
+        "scale_factor": 1.1,
+        "flat_1r_profit_factor": 2.04,
+        "flat_1r_expectancy_r": 0.357,
+        "friction_1r_profit_factor": 1.56,
+        "friction_1r_expectancy_r": 0.198,
+        "friction_1r_ci95_low_r": 0.082,
+        "max_drawdown_r": 8.44
+      },
+      {
+        "perturbation": "+20%",
+        "scale_factor": 1.2,
+        "flat_1r_profit_factor": 1.85,
+        "flat_1r_expectancy_r": 0.319,
+        "friction_1r_profit_factor": 1.3,
+        "friction_1r_expectancy_r": 0.115,
+        "friction_1r_ci95_low_r": 0.002,
+        "max_drawdown_r": 12.18
+      }
+    ],
+    "parameter_stability_score": 0.735,
+    "min_profit_factor_across_grid": 1.3,
+    "is_robust_across_pm20pct": true
+  },
+  "ablation_study": [
+    {
+      "configuration": "1. Baseline SMC Puro (1.0R Plano, Sin Multiplicadores)",
+      "full_sample": {
+        "trades_count": 262,
+        "win_rate_pct": 51.53,
+        "profit_factor": 2.22,
+        "total_r": 100.55,
+        "expectancy_r": 0.384,
+        "std_r": 1.062,
+        "standard_error_r": 0.066,
+        "ci95_low_r": 0.255,
+        "ci95_high_r": 0.512,
+        "max_drawdown_r": 5.28,
+        "t_statistic": 5.85
+      },
+      "in_sample_60pct": {
+        "trades_count": 157,
+        "win_rate_pct": 49.68,
+        "profit_factor": 2.09,
+        "total_r": 55.89,
+        "expectancy_r": 0.356,
+        "std_r": 1.075,
+        "standard_error_r": 0.086,
+        "ci95_low_r": 0.188,
+        "ci95_high_r": 0.524,
+        "max_drawdown_r": 5.28,
+        "t_statistic": 4.15
+      },
+      "out_of_sample_40pct": {
+        "trades_count": 105,
+        "win_rate_pct": 54.29,
+        "profit_factor": 2.45,
+        "total_r": 44.66,
+        "expectancy_r": 0.425,
+        "std_r": 1.046,
+        "standard_error_r": 0.102,
+        "ci95_low_r": 0.225,
+        "ci95_high_r": 0.625,
+        "max_drawdown_r": 2.05,
+        "t_statistic": 4.17
+      }
+    },
+    {
+      "configuration": "2. Baseline SMC + Fricción Real en Vivo (SOP-119 Haircut & Slippage)",
+      "full_sample": {
+        "trades_count": 262,
+        "win_rate_pct": 50.38,
+        "profit_factor": 1.87,
+        "total_r": 73.74,
+        "expectancy_r": 0.281,
+        "std_r": 0.982,
+        "standard_error_r": 0.061,
+        "ci95_low_r": 0.163,
+        "ci95_high_r": 0.4,
+        "max_drawdown_r": 6.01,
+        "t_statistic": 4.64
+      },
+      "in_sample_60pct": {
+        "trades_count": 157,
+        "win_rate_pct": 47.77,
+        "profit_factor": 1.7,
+        "total_r": 37.61,
+        "expectancy_r": 0.24,
+        "std_r": 0.994,
+        "standard_error_r": 0.079,
+        "ci95_low_r": 0.084,
+        "ci95_high_r": 0.395,
+        "max_drawdown_r": 6.01,
+        "t_statistic": 3.02
+      },
+      "out_of_sample_40pct": {
+        "trades_count": 105,
+        "win_rate_pct": 54.29,
+        "profit_factor": 2.18,
+        "total_r": 36.12,
+        "expectancy_r": 0.344,
+        "std_r": 0.965,
+        "standard_error_r": 0.094,
+        "ci95_low_r": 0.159,
+        "ci95_high_r": 0.529,
+        "max_drawdown_r": 2.45,
+        "t_statistic": 3.65
+      }
+    },
+    {
+      "configuration": "3. Baseline SMC + Escudo de Racha (SOP-94 Streak Modulation Only)",
+      "full_sample": {
+        "trades_count": 262,
+        "win_rate_pct": 51.53,
+        "profit_factor": 2.21,
+        "total_r": 88.21,
+        "expectancy_r": 0.337,
+        "std_r": 0.949,
+        "standard_error_r": 0.059,
+        "ci95_low_r": 0.222,
+        "ci95_high_r": 0.452,
+        "max_drawdown_r": 4.64,
+        "t_statistic": 5.74
+      },
+      "in_sample_60pct": {
+        "trades_count": 157,
+        "win_rate_pct": 49.68,
+        "profit_factor": 2.14,
+        "total_r": 50.2,
+        "expectancy_r": 0.32,
+        "std_r": 0.952,
+        "standard_error_r": 0.076,
+        "ci95_low_r": 0.171,
+        "ci95_high_r": 0.469,
+        "max_drawdown_r": 4.64,
+        "t_statistic": 4.21
+      },
+      "out_of_sample_40pct": {
+        "trades_count": 105,
+        "win_rate_pct": 54.29,
+        "profit_factor": 2.32,
+        "total_r": 38.01,
+        "expectancy_r": 0.362,
+        "std_r": 0.949,
+        "standard_error_r": 0.093,
+        "ci95_low_r": 0.181,
+        "ci95_high_r": 0.543,
+        "max_drawdown_r": 2.38,
+        "t_statistic": 3.91
+      }
+    },
+    {
+      "configuration": "4. Stack Completo con Alpha-Tier Sizing (Trinidad + Golden Hours + Meta-Labeling)",
+      "full_sample": {
+        "trades_count": 262,
+        "win_rate_pct": 51.53,
+        "profit_factor": 2.37,
+        "total_r": 132.29,
+        "expectancy_r": 0.505,
+        "std_r": 1.4,
+        "standard_error_r": 0.086,
+        "ci95_low_r": 0.335,
+        "ci95_high_r": 0.674,
+        "max_drawdown_r": 7.74,
+        "t_statistic": 5.84
+      },
+      "in_sample_60pct": {
+        "trades_count": 157,
+        "win_rate_pct": 49.68,
+        "profit_factor": 2.24,
+        "total_r": 73.49,
+        "expectancy_r": 0.468,
+        "std_r": 1.397,
+        "standard_error_r": 0.111,
+        "ci95_low_r": 0.25,
+        "ci95_high_r": 0.687,
+        "max_drawdown_r": 7.74,
+        "t_statistic": 4.2
+      },
+      "out_of_sample_40pct": {
+        "trades_count": 105,
+        "win_rate_pct": 54.29,
+        "profit_factor": 2.59,
+        "total_r": 58.79,
+        "expectancy_r": 0.56,
+        "std_r": 1.409,
+        "standard_error_r": 0.137,
+        "ci95_low_r": 0.29,
+        "ci95_high_r": 0.829,
+        "max_drawdown_r": 2.79,
+        "t_statistic": 4.07
+      }
+    }
+  ]
+}

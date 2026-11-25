@@ -1,0 +1,22 @@
+{
+  "protocol": "SOP-156_BITUNIX_QUANT_CERTIFICATION",
+  "frozen_mode_respected": true,
+  "base_risk_pct": 2.5,
+  "trades_audited": 262,
+  "net_expectancy_r": 0.2814,
+  "net_total_r": 73.74,
+  "deflated_sharpe": {
+    "sr_per_trade": 0.2866,
+    "sr_benchmark": 0.1094,
+    "dsr": 0.9983,
+    "skew": 0.196,
+    "kurtosis": 1.292
+  },
+  "cpcv_15_folds": {
+    "n_folds": 15,
+    "fold_positive_rate_pct": 100.0,
+    "median_oos_expectancy_r": 0.2818,
+    "median_oos_pf": 1.88,
+    "pbo_score": 0.0
+  }
+}

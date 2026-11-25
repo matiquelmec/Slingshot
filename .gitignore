@@ -65,6 +65,12 @@ data/backups/
 # 🗑️ Slingshot Cleanup & Build Artifacts
 scratch/
 reports/
+!engine/backtest/reports/
+engine/backtest/reports/*
+!engine/backtest/reports/ftmo_swing_scientific_audit_sop154.json
+!engine/backtest/reports/bitunix_quant_certification_sop156.json
+!engine/backtest/reports/chronological_backtest_report.json
+!engine/backtest/reports/scientific_validation_report.json
 *.db
 crash_log*.txt
 .vault_v9_legacy/

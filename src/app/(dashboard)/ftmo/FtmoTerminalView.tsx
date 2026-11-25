@@ -148,9 +148,16 @@ export default function FtmoPage() {
                 const aJson = auditRes.ok ? await auditRes.json() : null;
                 const sJson = simRes.ok ? await simRes.json() : null;
                 const cpcv = aJson?.cpcv_15_folds || {};
-                const recRisk = sJson?.recommended_oos_base_risk_pct ?? 0.75;
-                const grid = Array.isArray(sJson?.base_empirical_grid) ? sJson.base_empirical_grid : [];
-                const matchedRow = grid.find((r: { risk_per_trade_pct?: number }) => r.risk_per_trade_pct === recRisk) || grid[0];
+                const recRisk = sJson?.recommended_oos_base_risk_pct ?? sJson?.optimal_risk_pct ?? 0.75;
+                const grid = Array.isArray(sJson?.results)
+                    ? sJson.results
+                    : Array.isArray(sJson?.base_empirical_grid)
+                        ? sJson.base_empirical_grid
+                        : [];
+                const matchedRow =
+                    grid.find((r: { risk_per_trade_pct?: number }) => r.risk_per_trade_pct === 0.75) ||
+                    grid.find((r: { risk_per_trade_pct?: number }) => r.risk_per_trade_pct === recRisk) ||
+                    grid[0];
                 setAuditSummary({
                     cpcvFoldsPositive: Number(cpcv.positive_folds ?? 15),
                     cpcvTotalFolds: Number(cpcv.total_folds ?? 15),

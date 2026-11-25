@@ -50,6 +50,7 @@ class FtmoGuardianShield:
         self.consecutive_losses = 0
         self.max_daily_losses = int(os.getenv("FTMO_MAX_DAILY_LOSSES", "2"))
         self.is_target_locked = False
+        self.account_login: int = 0
         self.min_trading_days = int(os.getenv("FTMO_MIN_TRADING_DAYS", "4"))
         self.trading_days_count = int(os.getenv("FTMO_TRADING_DAYS_COUNT", "0"))
         self._load_state()
@@ -72,6 +73,8 @@ class FtmoGuardianShield:
             if self.state_file and os.path.exists(self.state_file):
                 with open(self.state_file, "r", encoding="utf-8") as f:
                     data = json.load(f)
+                    self.account_login = int(data.get("account_login", 0))
+                    self.current_equity = float(data.get("current_equity", self.account_size))
                     self.daily_starting_equity = float(data.get("daily_starting_equity", self.account_size))
                     self.current_broker_date = str(data.get("current_broker_date", ""))
                     self.is_daily_lockout = bool(data.get("is_daily_lockout", False))
@@ -79,7 +82,7 @@ class FtmoGuardianShield:
                     self.peak_equity = float(data.get("peak_equity", self.account_size))
                     self.daily_loss_count = int(data.get("daily_loss_count", 0))
                     self.consecutive_losses = int(data.get("consecutive_losses", 0))
-                    logger.info(f"🛡️ [FTMO_GUARDIAN] Estado restaurado desde disco: Base Diaria=${self.daily_starting_equity:,.2f} | Fecha Broker={self.current_broker_date} | Lockout={self.is_daily_lockout} | Pérdidas Hoy={self.daily_loss_count}")
+                    logger.info(f"🛡️ [FTMO_GUARDIAN] Estado restaurado desde disco: Login=#{self.account_login} | Base Diaria=${self.daily_starting_equity:,.2f} | Fecha Broker={self.current_broker_date} | Lockout={self.is_daily_lockout} | Pérdidas Hoy={self.daily_loss_count}")
         except Exception as e:
             logger.debug(f"[FTMO_GUARDIAN] No se pudo cargar estado previo: {e}")
 
@@ -90,6 +93,7 @@ class FtmoGuardianShield:
                 folder = os.path.dirname(os.path.abspath(self.state_file))
                 os.makedirs(folder, exist_ok=True)
                 payload = {
+                    "account_login": self.account_login,
                     "account_size": self.account_size,
                     "phase": self.phase,
                     "account_type": self.account_type,
@@ -158,6 +162,38 @@ class FtmoGuardianShield:
                 logger.error(f"🛑 [FTMO_GUARDIAN] {self.lockout_reason}")
                 self._purge_mt5_pending_orders_on_lockout()
         self._save_state()
+
+    def sync_mt5_account_identity(self, account_login: int, balance: float, equity: float) -> bool:
+        """
+        [SOP-159 AUTO-RESET POR NUEVO LOGIN MT5]
+        Cuando se conecta una cuenta MT5 nueva (Free Trial o Challenge real), auto-reinicia la línea base
+        y limpia lockouts heredados de cuentas previas para evitar falsos Kill-Switches.
+        """
+        if account_login > 0 and account_login != self.account_login:
+            old_login = self.account_login
+            inferred_size = round(balance, 2)
+            for tier in (10000.0, 25000.0, 50000.0, 100000.0, 200000.0):
+                if abs(balance - tier) / tier <= 0.15:
+                    inferred_size = tier
+                    break
+            self.account_login = int(account_login)
+            self.account_size = inferred_size
+            self.daily_starting_equity = max(balance, equity)
+            self.current_equity = equity
+            self.peak_equity = max(inferred_size, equity)
+            self.is_daily_lockout = False
+            self.is_target_locked = False
+            self.lockout_reason = ""
+            self.daily_loss_count = 0
+            self.consecutive_losses = 0
+            self.trades_today = 0
+            self._save_state()
+            logger.info(
+                f"🔄 [FTMO_GUARDIAN] Nueva cuenta MT5 vinculada (#{old_login} -> #{self.account_login}) | "
+                f"Size=${inferred_size:,.2f} | Base Diaria=${self.daily_starting_equity:,.2f}"
+            )
+            return True
+        return False
 
     def evaluate_broker_day(self, server_time: Optional[datetime], live_balance: float, live_equity: float):
         """
@@ -242,6 +278,7 @@ class FtmoGuardianShield:
         effective_total_dd_pct = max(0.0, total_dd_pct)
 
         return {
+            "account_login": self.account_login,
             "account_size": self.account_size,
             "account_type": self.account_type,
             "current_equity": self.current_equity,

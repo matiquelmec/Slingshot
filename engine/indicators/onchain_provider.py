@@ -53,17 +53,18 @@ async def get_client() -> httpx.AsyncClient:
     global _shared_client
     if _shared_client is None or _shared_client.is_closed:
         _shared_client = httpx.AsyncClient(
-            timeout=httpx.Timeout(2.5, connect=1.5), 
-            verify=False, 
+            timeout=httpx.Timeout(3.5, connect=2.0),
+            verify=False,
             follow_redirects=True,
-            limits=httpx.Limits(max_keepalive_connections=10, max_connections=20)
+            headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) SlingshotQuant/10.0"},
+            limits=httpx.Limits(max_keepalive_connections=10, max_connections=20),
         )
     return _shared_client
 
 async def refresh_symbol_onchain(symbol: str, force: bool = False):
     """
-    Lógica de refresco resiliente para un símbolo específico.
-    v8.7.0: Incluye TTL de 45s para evitar redundancia entre workers.
+    Lógica de refresco resiliente multi-exchange (Bybit V5 -> OKX -> Binance) para VPS y Cloud WAF.
+    v8.7.0+: Incluye TTL de 45s para evitar redundancia entre workers.
     """
     symbol = symbol.upper()
     
@@ -71,52 +72,99 @@ async def refresh_symbol_onchain(symbol: str, force: bool = False):
         logger.debug(f"[ONCHAIN] {symbol} saltado (Activo Spot-Only)")
         return
 
-    # 0. Verificar TTL (v8.7.0) — Evita spam si varios workers piden el dato
+    # 0. Verificar TTL — Evita spam si varios workers piden el dato
     async with _lock:
         if not force and symbol in _cache:
             age = datetime.now().timestamp() - _cache[symbol].last_updated
-            if age < 45: # 45 segundos de frescura garantizada
+            if age < 45:
                 return
 
-    # 1. Intentar obtener datos desde mirrors con Semáforo
+    # 1. Intentar obtener datos multi-exchange con Semáforo
     success = False
     new_oi = 0.0
     new_fr = 0.0
+    provider_used = ""
+    bybit_sym = "PAXGUSDT" if symbol == "XAUUSDT" else symbol
     last_error = "Desconocido"
     
     client = await get_client()
     
     async with _semaphore:
-        for base_url in MIRRORS:
-            try:
-                # Obtenemos OI y FR secuencialmente para máxima estabilidad
-                oi_r = await client.get(f"{base_url}/fapi/v1/openInterest", params={"symbol": symbol})
-                if oi_r.status_code == 200:
-                    val = float(oi_r.json().get("openInterest", 0))
-                    # Validación de Seguridad: Si es un activo mayor y el OI es 0, es un error del mirror
-                    if val > 0 or symbol not in ["BTCUSDT", "ETHUSDT", "SOLUSDT"]:
+        # 1A. Primario: Bybit V5 Linear (HTTP 200 estable desde datacenter VPS)
+        try:
+            b_res = await client.get(
+                "https://api.bybit.com/v5/market/tickers",
+                params={"category": "linear", "symbol": bybit_sym},
+            )
+            if b_res.status_code == 200:
+                b_json = b_res.json()
+                b_list = (b_json.get("result") or {}).get("list") or []
+                if b_json.get("retCode") == 0 and b_list:
+                    item = b_list[0]
+                    val = float(item.get("openInterest") or 0.0)
+                    if val > 0:
                         new_oi = val
-                        
-                        # Si el OI es válido, pedimos el Funding
-                        fr_r = await client.get(f"{base_url}/fapi/v1/fundingRate", params={"symbol": symbol, "limit": 1})
-                        if fr_r.status_code == 200:
-                            fr_data = fr_r.json()
-                            if isinstance(fr_data, list) and len(fr_data) > 0:
-                                new_fr = float(fr_data[-1].get("fundingRate", 0)) * 100
-                        
+                        new_fr = float(item.get("fundingRate") or 0.0) * 100.0
+                        provider_used = "BYBIT"
                         success = True
-                        break
-                elif oi_r.status_code == 429:
-                    last_error = "Rate Limit 429"
-                    logger.warning(f"[ONCHAIN] ⚠️ Binance Rate Limit (429) detectado en {base_url}")
-                    await asyncio.sleep(2) # Pausa de cortesía
-                else:
-                    last_error = f"HTTP {oi_r.status_code}"
-                    logger.debug(f"[ONCHAIN] Mirror {base_url} retornó {oi_r.status_code} para {symbol}")
+        except Exception as e:
+            last_error = f"Bybit err: {e}"
+
+        # 1B. Secundario: OKX Public Swap (incluye XAU-USDT-SWAP)
+        if not success:
+            try:
+                inst_id = f"{symbol.replace('USDT', '')}-USDT-SWAP"
+                okx_oi_r = await client.get(
+                    "https://www.okx.com/api/v5/public/open-interest",
+                    params={"instType": "SWAP", "instId": inst_id},
+                )
+                if okx_oi_r.status_code == 200:
+                    okx_data = okx_oi_r.json().get("data") or []
+                    if okx_data:
+                        val = float(okx_data[0].get("oiCcy") or okx_data[0].get("oi") or 0.0)
+                        if val > 0:
+                            new_oi = val
+                            okx_fr_r = await client.get(
+                                "https://www.okx.com/api/v5/public/funding-rate",
+                                params={"instId": inst_id},
+                            )
+                            if okx_fr_r.status_code == 200:
+                                fr_list = okx_fr_r.json().get("data") or []
+                                if fr_list:
+                                    new_fr = float(fr_list[0].get("fundingRate") or 0.0) * 100.0
+                            provider_used = "OKX"
+                            success = True
             except Exception as e:
-                last_error = f"Error en mirror {base_url}: {str(e)}"
-                logger.warning(f"[ONCHAIN] Mirror {base_url} falló para {symbol}: {e}")
-                continue
+                last_error = f"OKX err: {e}"
+
+        # 1C. Terciario: Binance Mirrors
+        if not success:
+            for base_url in MIRRORS:
+                try:
+                    oi_r = await client.get(f"{base_url}/fapi/v1/openInterest", params={"symbol": symbol})
+                    if oi_r.status_code == 200:
+                        val = float(oi_r.json().get("openInterest", 0))
+                        if val > 0 or symbol not in ["BTCUSDT", "ETHUSDT", "SOLUSDT"]:
+                            new_oi = val
+                            fr_r = await client.get(f"{base_url}/fapi/v1/fundingRate", params={"symbol": symbol, "limit": 1})
+                            if fr_r.status_code == 200:
+                                fr_data = fr_r.json()
+                                if isinstance(fr_data, list) and len(fr_data) > 0:
+                                    new_fr = float(fr_data[-1].get("fundingRate", 0)) * 100
+                            provider_used = "BINANCE"
+                            success = True
+                            break
+                    elif oi_r.status_code == 429:
+                        last_error = "Rate Limit 429"
+                        logger.warning(f"[ONCHAIN] ⚠️ Binance Rate Limit (429) detectado en {base_url}")
+                        await asyncio.sleep(2)
+                    else:
+                        last_error = f"HTTP {oi_r.status_code}"
+                        logger.debug(f"[ONCHAIN] Mirror {base_url} retornó {oi_r.status_code} para {symbol}")
+                except Exception as e:
+                    last_error = f"Error en mirror {base_url}: {str(e)}"
+                    logger.warning(f"[ONCHAIN] Mirror {base_url} falló para {symbol}: {e}")
+                    continue
 
     # 2. Actualizar Caché Global
     async with _lock:
@@ -126,26 +174,30 @@ async def refresh_symbol_onchain(symbol: str, force: bool = False):
         state = _cache[symbol]
         
         if success:
-            # 🚀 [v8.8.1] Hidratación Histórica Inteligente
-            # Si no tenemos referencia, intentamos obtener el OI de hace 1h para tener un delta real inmediato
+            # Hidratación Histórica Inteligente (~1h atrás) según proveedor activo
             if state.reference_oi is None or state.reference_oi == 0:
                 try:
-                    # Intentar obtener el primer punto del historial (hace ~1h o 5min según limit)
-                    hist_r = await client.get(f"{MIRRORS[0]}/futures/data/openInterestHist", params={"symbol": symbol, "period": "5m", "limit": 12})
-                    if hist_r.status_code == 200:
-                        hist_data = hist_r.json()
-                        if isinstance(hist_data, list) and len(hist_data) > 0:
-                            state.reference_oi = float(hist_data[0].get("sumOpenInterest", new_oi))
-                            logger.info(f"[ONCHAIN] 📚 Referencia Histórica cargada para {symbol}: {state.reference_oi:,.0f}")
-                        else:
-                            logger.warning(f"[ONCHAIN] ⚠️ Historial vacío para {symbol}")
-                    else:
-                        logger.warning(f"[ONCHAIN] ⚠️ Error HTTP {hist_r.status_code} al cargar historial para {symbol}")
+                    if provider_used == "BYBIT":
+                        hist_r = await client.get(
+                            "https://api.bybit.com/v5/market/open-interest",
+                            params={"category": "linear", "symbol": bybit_sym, "intervalTime": "5min", "limit": 12},
+                        )
+                        if hist_r.status_code == 200:
+                            hist_json = hist_r.json()
+                            hist_list = (hist_json.get("result") or {}).get("list") or []
+                            if hist_json.get("retCode") == 0 and hist_list:
+                                state.reference_oi = float(hist_list[-1].get("openInterest", new_oi))
+                                logger.info(f"[ONCHAIN] 📚 Referencia Histórica (Bybit) cargada para {symbol}: {state.reference_oi:,.0f}")
+                    elif provider_used == "BINANCE":
+                        hist_r = await client.get(f"{MIRRORS[0]}/futures/data/openInterestHist", params={"symbol": symbol, "period": "5m", "limit": 12})
+                        if hist_r.status_code == 200:
+                            hist_data = hist_r.json()
+                            if isinstance(hist_data, list) and len(hist_data) > 0:
+                                state.reference_oi = float(hist_data[0].get("sumOpenInterest", new_oi))
+                                logger.info(f"[ONCHAIN] 📚 Referencia Histórica cargada para {symbol}: {state.reference_oi:,.0f}")
                 except Exception as e:
-                    logger.error(f"[ONCHAIN] ❌ Error cargando historial para {symbol}: {e}")
-                    pass
+                    logger.debug(f"[ONCHAIN] Fallback de referencia histórica para {symbol}: {e}")
                 
-                # Fallback a precio actual si el historial falla
                 if state.reference_oi is None or state.reference_oi == 0:
                     state.reference_oi = new_oi
                     logger.debug(f"[ONCHAIN] 🔄 Fallback de referencia para {symbol} (Using current OI)")

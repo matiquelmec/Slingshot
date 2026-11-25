@@ -789,6 +789,7 @@ async def get_ftmo_guardian_status():
             import MetaTrader5 as mt5
             acc = await asyncio.to_thread(mt5.account_info)
             if acc:
+                ftmo_guardian.sync_mt5_account_identity(int(acc.login), float(acc.balance), float(acc.equity))
                 return ftmo_guardian.update_equity(float(acc.equity), float(acc.balance))
         except Exception:
             pass
@@ -809,7 +810,7 @@ async def get_ftmo_pass_simulation(profile: str = Query("FTMO_SWING", descriptio
 
     def _run_sim():
         clusters = prop_firm_pass_simulator.load_daily_clusters(profile=prof_key)
-        return sanitize_for_json(prop_firm_pass_simulator.simulate_risk_grid(clusters, n_trials=2000))
+        return sanitize_for_json(prop_firm_pass_simulator.simulate_risk_grid(clusters, n_trials=2000, profile=prof_key))
 
     res = await asyncio.to_thread(_run_sim)
     _PASS_SIM_CACHE[prof_key] = res
@@ -879,6 +880,7 @@ async def get_ftmo_positions_and_telemetry():
             import MetaTrader5 as mt5
             acc = await asyncio.to_thread(mt5.account_info)
             if acc:
+                ftmo_guardian.sync_mt5_account_identity(int(acc.login), float(acc.balance), float(acc.equity))
                 account_login = acc.login
                 real_balance = round(float(acc.balance), 2)
                 real_equity = round(float(acc.equity), 2)
