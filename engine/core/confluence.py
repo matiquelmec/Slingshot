@@ -792,8 +792,13 @@ class ConfluenceManager:
 
         # Rule 3: Filtro Temporal de Días de Alta Probabilidad (Exclusión Lunes Pre-NY)
         try:
+            from zoneinfo import ZoneInfo as _ZI
+            from engine.core.session_manager import classify_market_session
+            from engine.core.market_calendar import get_venue_liquidity_status
+
             now_dt = pd.to_datetime(current.get('timestamp', pd.Timestamp.now(tz=timezone.utc)), utc=True)
-            day_wk = now_dt.strftime('%A')
+            ny_dt = now_dt.astimezone(_ZI("America/New_York"))
+            day_wk = ny_dt.strftime('%A')
             hr_utc = now_dt.hour
             
             day_weight = 5
@@ -801,35 +806,29 @@ class ConfluenceManager:
             if day_wk in ["Tuesday", "Wednesday", "Thursday", "Friday"]:
                 score += day_weight
                 checklist.append({"factor": "Día Institucional", "status": "CONFIRMADO", "detail": f"{day_wk}: Día de Alta Expansión de Tendencia (+5pts)"})
-            elif day_wk == "Monday" and hr_utc < 13:
+            elif day_wk == "Monday" and ny_dt.hour < 9:
                 score -= 5
                 checklist.append({"factor": "Día Institucional", "status": "PRECAUCIÓN", "detail": "Lunes Pre-NY Open: Riesgo de Manipulación / Rango Inicial (-5pts)"})
             else:
                 checklist.append({"factor": "Día Institucional", "status": "NEUTRAL", "detail": f"Sesión en {day_wk}"})
 
-            # 🚀 Rule 3.5: SOP-29 SESSION ALPHA GATING v50.0 (Dynamic Global Master Sync)
-            # Evalúa prioritariamente el estado del SessionManager (con soporte horario DST exacto en NY/Londres).
-            # Fallback a horas UTC locales de la vela si no se dispone de telemetría en vivo.
+            # 🚀 Rule 3.5: SOP-29 + SOP-160 SESSION ALPHA GATING (100% DST-Aware)
             sess_name = (session_data.get("current_session") or "").upper() if isinstance(session_data, dict) else ""
             is_kz = bool(session_data.get("is_killzone", False)) if isinstance(session_data, dict) else False
             is_sb = bool(session_data.get("is_silver_bullet", False)) if isinstance(session_data, dict) else False
             is_ol = bool(session_data.get("is_overlap", False)) if isinstance(session_data, dict) else False
 
-            # Detección adaptativa de sesión activa:
-            # [SOP-121] Si hay telemetría de sesión en vivo (SessionManager), es la ÚNICA fuente de verdad.
-            # El fallback por hora de la vela solo aplica sin session_data (backtest), ya que en 1h/1D
-            # el timestamp de apertura (p.ej. 00:00 UTC) no representa la sesión vigente.
-            if sess_name:
-                sess_hr = int(session_data.get("utc_hour", hr_utc)) if isinstance(session_data, dict) else hr_utc
-                is_ny_session = (sess_name in ["NEW_YORK", "NY_KILLZONE", "LONDON_NY_OVERLAP", "NY_SILVER_BULLET_PM"]) or is_sb or is_ol
-                is_rebalance = (sess_name == "OFF_HOURS") and (21 <= sess_hr < 24)
-                is_asia_session = (sess_name == "ASIA")
-                is_london_session = (sess_name in ["LONDON", "LONDON_KILLZONE", "FRANKFURT_OPEN"])
-            else:
-                is_ny_session = is_sb or is_ol or (13 <= hr_utc < 17)
-                is_rebalance = (21 <= hr_utc < 24)
-                is_asia_session = (0 <= hr_utc < 7)
-                is_london_session = (7 <= hr_utc < 13)
+            if not sess_name:
+                cls_live = classify_market_session(now_dt.to_pydatetime())
+                sess_name = str(cls_live["current_session"]).upper()
+                is_kz = bool(cls_live["is_killzone"])
+                is_sb = bool(cls_live["is_silver_bullet"])
+                is_ol = bool(cls_live["is_overlap"])
+
+            is_ny_session = (sess_name in ["NEW_YORK", "NY_KILLZONE", "LONDON_NY_OVERLAP", "NY_SILVER_BULLET_PM"]) or is_sb or is_ol
+            is_rebalance = (sess_name == "OFF_HOURS") and (16 <= ny_dt.hour < 19)
+            is_asia_session = (sess_name == "ASIA")
+            is_london_session = (sess_name in ["LONDON", "LONDON_KILLZONE", "FRANKFURT_OPEN"])
 
             if is_ny_session:
                 score += 5
@@ -848,13 +847,20 @@ class ConfluenceManager:
                 score += 1
                 checklist.append({"factor": "Session Alpha Gating", "status": "NEUTRAL", "detail": f"Sesión Fuera de Horario / Transición ({hr_utc:02d}:00 UTC) (+1pt)"})
 
-            # 🚀 Killzone Timing Gating para Índices TradFi (v25.0 FTMO Titanium)
-            # Índices (US100, US30, US500, GER40): Exclusivamente en London Open o NY Open adaptativos
-            is_tradfi_index = any(idx in asset_name for idx in ["US100", "US30", "US500", "GER40", "NQ", "YM", "ES"])
+            # 🚀 Killzone Timing Gating & Calendario Bursátil para Índices TradFi (SOP-160)
+            is_tradfi_index = any(idx in asset_name for idx in ["US100", "US30", "US500", "GER40", "UK100", "EU50", "JP225", "US2000", "NQ", "YM", "ES"])
             if is_tradfi_index:
-                in_london_kz = (sess_name in ["LONDON_KILLZONE", "FRANKFURT_OPEN"]) or (7 <= hr_utc < 10)
+                venue_st = get_venue_liquidity_status(asset_name, now_dt.to_pydatetime())
+                in_london_kz = sess_name in ["LONDON_KILLZONE", "FRANKFURT_OPEN"]
                 in_ny_kz = is_ny_session
-                if not (in_london_kz or in_ny_kz):
+                if not venue_st.get("execution_allowed", True):
+                    multiplier *= 0.0
+                    checklist.append({
+                        "factor": "Calendario Bursátil TradFi (SOP-160)",
+                        "status": "DENEGADO",
+                        "detail": f"Veto Feriado / Early Close: {venue_st.get('holiday_name') or venue_st.get('liquidity_regime')}"
+                    })
+                elif not (in_london_kz or in_ny_kz):
                     multiplier *= 0.0
                     checklist.append({
                         "factor": "Killzone Timing TradFi",

@@ -15,7 +15,7 @@ CARACTERÍSTICAS:
 from engine.core.logger import logger
 import json
 from zoneinfo import ZoneInfo
-from datetime import datetime, timezone, date
+from datetime import datetime, timezone, date, timedelta
 from pathlib import Path
 from typing import Optional, Any
 
@@ -33,6 +33,29 @@ _NY_TZ     = ZoneInfo("America/New_York")
 _LONDON_TZ = ZoneInfo("Europe/London")
 _TOKYO_TZ  = ZoneInfo("Asia/Tokyo")
 _FRA_TZ    = ZoneInfo("Europe/Berlin") # Frankfurt
+_PRAGUE_TZ = ZoneInfo("Europe/Prague") # FTMO Server Rollover (CE(S)T)
+
+
+def _is_tradfi_or_metal_symbol(symbol: str) -> bool:
+    s = (symbol or "").upper().replace(".CASH", "").replace(".SIM", "")
+    if not s or s == "GLOBAL":
+        return False
+    if "XAU" in s or "XAG" in s:
+        return True
+    return not s.endswith("USDT")
+
+
+def _resolve_trading_day(ts_utc: datetime, symbol: str) -> date:
+    """
+    [SOP-160 TRUE TRADING DAY]
+    - Cripto 24/7: rota a las 00:00 UTC.
+    - TradFi / Metales (FTMO / CME / ICT): rota a las 17:00 America/New_York
+      (21:00 UTC en verano EDT / 22:00 UTC en invierno EST).
+    """
+    ts_u = _ensure_utc(ts_utc)
+    if _is_tradfi_or_metal_symbol(symbol):
+        return (ts_u.astimezone(_NY_TZ) + timedelta(hours=7)).date()
+    return ts_u.date()
 
 # --- GLOBAL SESSION CACHE v5.7.156 (Bootstrap Sync) ---
 # Almacena el resultado del bootstrap por símbolo para que se haga solo una vez
@@ -437,7 +460,7 @@ class SessionManager:
         data = candle.get("data", candle) if isinstance(candle, dict) else candle
         
         ts      = datetime.fromtimestamp(_normalize_ts_seconds(data["timestamp"]), tz=timezone.utc)
-        today   = ts.date()
+        today   = _resolve_trading_day(ts, self._symbol)
         high    = float(data["high"])
         low     = float(data["low"])
 
@@ -615,6 +638,10 @@ class SessionManager:
         # 🎯 YOSH EXECUTION WINDOW (10:00 - 11:30 AM EST)
         yosh_window      = cls["yosh_window"]
 
+        from engine.core.market_calendar import get_venue_liquidity_status
+        now_prague = now_utc.astimezone(_PRAGUE_TZ)
+        venue_status = get_venue_liquidity_status(self._symbol, now_utc)
+
         return {
             "type": "session_update",
             "data": {
@@ -626,6 +653,8 @@ class SessionManager:
                 "local_time":          now_chile.strftime("%H:%M Chile"),
                 "local_time_ny":       now_ny.strftime("%H:%M"),
                 "local_time_lon":      now_lon.strftime("%H:%M"),
+                "local_time_prague":   now_prague.strftime("%H:%M"),
+                "venue_status":        venue_status,
                 "is_killzone":         bool(is_killzone),
                 "is_silver_bullet":    bool(is_silver_bullet),
                 "is_overlap":          bool(is_overlap),

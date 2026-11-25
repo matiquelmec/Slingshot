@@ -480,3 +480,17 @@ Todos los mensajes de commit deben seguir estrictamente el estándar de Conventi
    * **Homologación SSoT MT5:** `mt5_bridge.resolve_broker_symbol()` unifica sufijos `.cash`, `get_symbol_digits()` soporta `UK100`/`XAGUSD`, `ftmo_guardian.py` aplica apalancamiento Swing `1:15` en metales/índices y `1:30` en FX.
    * **Calibración Best-Day & Monte Carlo:** `PropFirmPassSimulator` usa `weighted_r` en `FTMO_SWING` y evalúa el diluidor `Best-Day` contra la meta de fase (`10%` / `5%`) sin estrangular el Día 1, ejecutándose en `asyncio.to_thread` con caché `300s`.
    * **UI Viva:** `ForwardTestAuditCard.tsx` renderiza `Wald SPRT` (`Λ_n`) y `FtmoTerminalView.tsx` hidrata `CPCV 15/15` y Monte Carlo en vivo.
+
+
+---
+
+## SOP-160: Motor Institucional de Sesiones, True Day ICT/CME y Calendario Bursátil Global (10/10)
+
+1. **Calendario Algorítmico `NYSE / CME / LSE` (`engine/core/market_calendar.py` & `src/shared/lib/marketCalendar.ts`):**
+   * Cero dependencias externas (`Computus` de Gauss/Meeus + reglas federales US y UK Bank Holidays `2020–2060`).
+   * Bloquea ejecución FTMO/TradFi en feriados completos (`Good Friday`, `Thanksgiving`, `Independence Day`, `UK Summer Bank Holiday`, etc.) y tras las `12:30 NY` en días de *Early Close* (`13:00 NY`: *Black Friday*, *July 3rd*, *Christmas Eve*).
+   * En Cripto 24/7 aplica defensa de liquidez (`US_BANK_HOLIDAY_THIN`, `+4 pts`) cuando NYSE está cerrado.
+2. **Erradicación de Horas UTC Fijas (`strategy_ssot.py`, `market_scanner.py`, `confluence.py`):**
+   * `is_toxic_hour_sop137()` evalúa `ZoneInfo("Europe/London")` (`08h, 11h`) y `ZoneInfo("America/New_York")` (`10h, 17h, 18h`) absorbiendo automáticamente verano, invierno y las 3 semanas anuales de desfase transatlántico US/EU.
+3. **True Trading Day (`17:00 NY` TradFi vs `00:00 UTC` Cripto) & Multi-Session AVWAP TradFi:**
+   * `SessionManager` rota `PDH/PDL` a las `17:00 America/New_York` para metales y TradFi, y `tradfi_smc_engine.py` ancla el `Session VWAP` a `Globex 18:00 NY` / `London 08:00` / `NY RTH 09:30`.

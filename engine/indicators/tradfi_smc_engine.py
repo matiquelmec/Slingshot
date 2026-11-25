@@ -66,10 +66,18 @@ def prepare_tradfi_features(
     out["prev_swing_high"] = out["high"].shift(1).rolling(20).max()
     out["prev_swing_low"] = out["low"].shift(1).rolling(20).min()
 
-    # Session VWAP intradía (reinicio 00:00 UTC)
+    # Multi-Session Anchored VWAP DST-Aware (Globex 18:00 NY / London 08:00 / NY RTH 09:30)
     tp = (out["high"].astype(float) + out["low"].astype(float) + close_s) / 3.0
     vol = out["volume"].fillna(1.0).astype(float).replace(0.0, 1.0)
-    day_key = out["timestamp"].dt.strftime("%Y-%m-%d")
+    ny_ts = out["timestamp"].dt.tz_convert(NY_TZ)
+    lon_ts = out["timestamp"].dt.tz_convert(LONDON_TZ)
+    ny_mins = ny_ts.dt.hour * 60 + ny_ts.dt.minute
+    lon_mins = lon_ts.dt.hour * 60 + lon_ts.dt.minute
+    cme_day_key = (ny_ts + pd.Timedelta(hours=6)).dt.strftime("%Y-%m-%d")
+    is_ny_rth = (ny_mins >= 570) & (ny_mins < 1080)
+    is_london = (~is_ny_rth) & (lon_mins >= 480) & (ny_mins < 570)
+    sess_id = np.where(is_ny_rth, "NY", np.where(is_london, "LON", "GLOBEX"))
+    day_key = cme_day_key + "_" + sess_id
     cum_pv = (tp * vol).groupby(day_key).cumsum()
     cum_v = vol.groupby(day_key).cumsum()
     out["session_vwap"] = (cum_pv / (cum_v + 1e-9)).fillna(close_s)
@@ -127,10 +135,15 @@ def prepare_tradfi_features(
     return out
 
 
-def is_tradfi_killzone(ts: pd.Timestamp) -> bool:
-    """Killzones reales DST-aware: Londres (07-11) y Nueva York (08-14)."""
+def is_tradfi_killzone(ts: pd.Timestamp, symbol: str = "") -> bool:
+    """Killzones reales DST-aware: Londres (07-11) y Nueva York (08-14), vetando feriados y Early Closes."""
+    from engine.core.market_calendar import get_venue_liquidity_status
     if ts.tzinfo is None:
         ts = ts.tz_localize("UTC")
+    if symbol:
+        dt_py = ts.to_pydatetime() if hasattr(ts, "to_pydatetime") else ts
+        if not get_venue_liquidity_status(symbol, dt_py).get("execution_allowed", True):
+            return False
     lon_h = ts.astimezone(LONDON_TZ).hour
     ny_h = ts.astimezone(NY_TZ).hour
     return (7 <= lon_h <= 11) or (8 <= ny_h <= 14)
@@ -211,7 +224,7 @@ def evaluate_tradfi_bar(
             checklist.append({"factor": "Fair Value Gap OTE", "status": "CUMPLIDO", "detail": "Desplazamiento con FVG activo"})
 
     elif archetype == "LIQUIDITY_SWEEP_JUDAS":
-        if not is_tradfi_killzone(ts):
+        if not is_tradfi_killzone(ts, symbol=symbol):
             return None
         laf_bear = bool(row.get("laf_bear", False))
         lbf_bull = bool(row.get("lbf_bull", False))

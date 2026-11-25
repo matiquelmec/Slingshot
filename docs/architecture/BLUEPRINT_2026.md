@@ -1113,3 +1113,11 @@ Sometidas las 3 optimizaciones a la matriz experimental de 180 días en los 13 a
 ## Fase Actualizada: SOP-154 a SOP-158 (Paridad 100.0% Bitunix Core + FTMO Swing MT5)
 - **Bitunix Core (`SOP-147` Frozen OOS):** 13 activos canónicos, riesgo base `2.50%`, Fast-Path L2 (`1.5s`) leyendo `imbalance` + `delta_ratio` desde Sidecar `:8080` con `httpx.AsyncClient` Keep-Alive y mutex `self._bitunix_sync_lock`.
 - **FTMO Swing MT5 (`SOP-154`–`SOP-158`):** Portafolio `1H` certificado (`XAUUSD`, `XAGUSD`, `US100.cash`, `UK100.cash`) con `CPCV(6,2) 15/15 (PBO 0.0)`, ancla `1D` + `SMT` + `VWAP`, Single-Ticket `1R` inmutable en `SQLite WAL`, `Best-Day Diluter` calibrado por meta de fase y scorecards `Wald SPRT` / `CPCV` vivos en UI.
+
+
+---
+
+## SOP-160: Arquitectura Temporal & Calendario Bursátil (10/10)
+- **Calendario Institucional (`market_calendar.py` / `marketCalendar.ts`):** Detección en `<0.01ms` de feriados `NYSE/CME/LSE` y *Early Closes 13:00 NY*.
+- **Cero Horas UTC Fijas:** `is_toxic_hour_sop137`, `Confluence` y `MarketScanner` operan con `ZoneInfo` IANA (inmunes a DST y brecha transatlántica de 3 semanas).
+- **True Trading Day & Multi-Session AVWAP:** TradFi rota `PDH/PDL` a las `17:00 NY` y ancla `Session VWAP` en `18:00 NY Globex`, `08:00 Londres` y `09:30 NY RTH`; `SessionClock.tsx` integra alertas de feriado/Early Close y reloj `Europe/Prague`.

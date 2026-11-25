@@ -151,18 +151,20 @@ def is_directional_setup_allowed_sop137(
 
 
 def is_toxic_hour_sop137(
-    hour_utc: int,
+    hour_or_dt: object,
     spread_bps: Optional[float] = None,
     obi_score: Optional[float] = None,
     ker: Optional[float] = None,
     depth_usd: Optional[float] = None,
 ) -> bool:
     """
-    [SOP-137 + SOP-142] Evalúa toxicidad horaria:
-    - Sin telemetría L2: usa el calendario estático TOXIC_UTC_HOURS_SOP137.
+    [SOP-137 + SOP-142 + SOP-160 DST-AWARE] Evalúa toxicidad horaria:
     - Con telemetría L2: desbloquea horas si la liquidez es excepcional
       (spread <= 4.0 bps, depth >= $150k, ker >= 0.45) y bloquea cualquier hora
       si el spread > 8.0 bps o ker < 0.20.
+    - Sin telemetría L2: si recibe datetime/Timestamp, evalúa dinámicamente vía ZoneInfo
+      (08:00 y 11:00 Londres + 10:00, 17:00 y 18:00 NY), absorbiendo verano/invierno y
+      la brecha transatlántica de 3 semanas. Si recibe int plano, preserva compatibilidad.
     """
     if spread_bps is not None or ker is not None or depth_usd is not None:
         if spread_bps is not None and float(spread_bps) > 8.0:
@@ -178,7 +180,16 @@ def is_toxic_hour_sop137(
             and float(ker) >= 0.45
         ):
             return False
-    return int(hour_utc) in TOXIC_UTC_HOURS_SOP137
+
+    if hasattr(hour_or_dt, "astimezone") and hasattr(hour_or_dt, "hour"):
+        from datetime import timezone as _tz
+        from zoneinfo import ZoneInfo as _ZI
+        dt_utc = hour_or_dt.replace(tzinfo=_tz.utc) if getattr(hour_or_dt, "tzinfo", None) is None else hour_or_dt.astimezone(_tz.utc)
+        lon_h = dt_utc.astimezone(_ZI("Europe/London")).hour
+        ny_h = dt_utc.astimezone(_ZI("America/New_York")).hour
+        return (lon_h in (8, 11)) or (ny_h in (10, 17, 18))
+
+    return int(hour_or_dt) in TOXIC_UTC_HOURS_SOP137
 
 
 def calculate_priority_score(symbol: str, confluence_score: float = 70.0) -> float:

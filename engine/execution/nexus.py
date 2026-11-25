@@ -1484,6 +1484,7 @@ class NexusNode:
                     symbol=asset,
                     confluence_score=confluence_score,
                     hour_utc=hour_now,
+                    now_utc=datetime.now(timezone.utc),
                     playbook=pb_sig,
                     apply_trinity_boost=bool(pb_sig),
                     apply_golden_hours=bool(pb_sig),

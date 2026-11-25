@@ -1,5 +1,5 @@
 {
-  "total_evaluated_configs": 42,
+  "total_evaluated_configs": 40,
   "approved_count": 4,
   "selected_portfolio": [
     {
@@ -53,8 +53,8 @@
   ],
   "portfolio_dsr": {
     "sr_per_trade": 0.1708,
-    "sr_benchmark": 0.1574,
-    "dsr": 0.5775,
+    "sr_benchmark": 0.156,
+    "dsr": 0.5853,
     "skew": 0.451,
     "kurtosis": 1.798
   },
@@ -2333,30 +2333,6 @@
     },
     {
       "symbol": "USOIL",
-      "timeframe": "1h",
-      "archetype": "LIQUIDITY_SWEEP_JUDAS",
-      "cluster": "INDUSTRIAL_ENERGY",
-      "train": {
-        "n": 24,
-        "total_r": -2.5,
-        "mean_r": -0.1041,
-        "pf": 0.81,
-        "t_stat": -0.44,
-        "p_value": 0.6711
-      },
-      "blind_oos": {
-        "n": 17,
-        "total_r": -3.91,
-        "mean_r": -0.23,
-        "pf": 0.66,
-        "t_stat": -0.77,
-        "p_value": 0.7783
-      },
-      "fdr_passed": false,
-      "approved_for_ftmo": false
-    },
-    {
-      "symbol": "USOIL",
       "timeframe": "15m",
       "archetype": "IMPULSE_OTE_SMC",
       "cluster": "INDUSTRIAL_ENERGY",
@@ -2409,20 +2385,20 @@
       "archetype": "LIQUIDITY_SWEEP_JUDAS",
       "cluster": "INDUSTRIAL_ENERGY",
       "train": {
-        "n": 46,
-        "total_r": -10.93,
-        "mean_r": -0.2376,
-        "pf": 0.45,
-        "t_stat": -2.04,
-        "p_value": 0.9793
+        "n": 36,
+        "total_r": -8.48,
+        "mean_r": -0.2355,
+        "pf": 0.43,
+        "t_stat": -1.91,
+        "p_value": 0.9717
       },
       "blind_oos": {
-        "n": 31,
-        "total_r": 12.53,
-        "mean_r": 0.4042,
-        "pf": 1.94,
-        "t_stat": 1.66,
-        "p_value": 0.0487
+        "n": 25,
+        "total_r": 15.3,
+        "mean_r": 0.612,
+        "pf": 2.7,
+        "t_stat": 2.26,
+        "p_value": 0.012
       },
       "fdr_passed": false,
       "approved_for_ftmo": false
@@ -2447,30 +2423,6 @@
         "pf": 1.09,
         "t_stat": 0.31,
         "p_value": 0.3767
-      },
-      "fdr_passed": false,
-      "approved_for_ftmo": false
-    },
-    {
-      "symbol": "HGUSD",
-      "timeframe": "1h",
-      "archetype": "LIQUIDITY_SWEEP_JUDAS",
-      "cluster": "INDUSTRIAL_ENERGY",
-      "train": {
-        "n": 21,
-        "total_r": -1.97,
-        "mean_r": -0.094,
-        "pf": 0.8,
-        "t_stat": -0.45,
-        "p_value": 0.6746
-      },
-      "blind_oos": {
-        "n": 14,
-        "total_r": -1.99,
-        "mean_r": -0.1421,
-        "pf": 0.75,
-        "t_stat": -0.47,
-        "p_value": 0.6792
       },
       "fdr_passed": false,
       "approved_for_ftmo": false
@@ -2505,20 +2457,20 @@
       "archetype": "LIQUIDITY_SWEEP_JUDAS",
       "cluster": "US_EQUITY_INDICES",
       "train": {
-        "n": 124,
-        "total_r": 8.09,
-        "mean_r": 0.0652,
-        "pf": 1.13,
-        "t_stat": 0.59,
-        "p_value": 0.2765
+        "n": 120,
+        "total_r": 10.44,
+        "mean_r": 0.087,
+        "pf": 1.17,
+        "t_stat": 0.76,
+        "p_value": 0.2223
       },
       "blind_oos": {
-        "n": 84,
-        "total_r": -5.74,
-        "mean_r": -0.0683,
-        "pf": 0.88,
-        "t_stat": -0.51,
-        "p_value": 0.6951
+        "n": 80,
+        "total_r": -4.71,
+        "mean_r": -0.0589,
+        "pf": 0.9,
+        "t_stat": -0.43,
+        "p_value": 0.6672
       },
       "fdr_passed": false,
       "approved_for_ftmo": false
@@ -2554,19 +2506,19 @@
       "cluster": "US_EQUITY_INDICES",
       "train": {
         "n": 25,
-        "total_r": 5.37,
-        "mean_r": 0.2149,
-        "pf": 1.51,
-        "t_stat": 0.87,
-        "p_value": 0.1922
+        "total_r": 4.98,
+        "mean_r": 0.1993,
+        "pf": 1.45,
+        "t_stat": 0.8,
+        "p_value": 0.2126
       },
       "blind_oos": {
-        "n": 18,
-        "total_r": -7.74,
-        "mean_r": -0.4301,
-        "pf": 0.38,
-        "t_stat": -1.75,
-        "p_value": 0.9601
+        "n": 17,
+        "total_r": -6.68,
+        "mean_r": -0.3932,
+        "pf": 0.41,
+        "t_stat": -1.53,
+        "p_value": 0.9367
       },
       "fdr_passed": false,
       "approved_for_ftmo": false
@@ -2601,20 +2553,20 @@
       "archetype": "LIQUIDITY_SWEEP_JUDAS",
       "cluster": "US_EQUITY_INDICES",
       "train": {
-        "n": 102,
-        "total_r": -5.74,
-        "mean_r": -0.0562,
-        "pf": 0.9,
-        "t_stat": -0.46,
-        "p_value": 0.6779
+        "n": 101,
+        "total_r": -7.82,
+        "mean_r": -0.0774,
+        "pf": 0.87,
+        "t_stat": -0.64,
+        "p_value": 0.7386
       },
       "blind_oos": {
-        "n": 69,
-        "total_r": -18.94,
-        "mean_r": -0.2745,
-        "pf": 0.58,
-        "t_stat": -2.06,
-        "p_value": 0.9801
+        "n": 68,
+        "total_r": -17.85,
+        "mean_r": -0.2625,
+        "pf": 0.59,
+        "t_stat": -1.94,
+        "p_value": 0.974
       },
       "fdr_passed": false,
       "approved_for_ftmo": false
@@ -2697,20 +2649,20 @@
       "archetype": "LIQUIDITY_SWEEP_JUDAS",
       "cluster": "US_EQUITY_INDICES",
       "train": {
-        "n": 100,
-        "total_r": 1.05,
-        "mean_r": 0.0105,
+        "n": 97,
+        "total_r": 0.98,
+        "mean_r": 0.0101,
         "pf": 1.02,
         "t_stat": 0.08,
-        "p_value": 0.4675
+        "p_value": 0.4694
       },
       "blind_oos": {
-        "n": 67,
-        "total_r": -4.03,
-        "mean_r": -0.0601,
-        "pf": 0.89,
-        "t_stat": -0.43,
-        "p_value": 0.6672
+        "n": 66,
+        "total_r": -5.78,
+        "mean_r": -0.0876,
+        "pf": 0.84,
+        "t_stat": -0.63,
+        "p_value": 0.7343
       },
       "fdr_passed": false,
       "approved_for_ftmo": false
@@ -2817,20 +2769,20 @@
       "archetype": "LIQUIDITY_SWEEP_JUDAS",
       "cluster": "GLOBAL_EQUITY_INDICES",
       "train": {
-        "n": 81,
-        "total_r": -9.11,
-        "mean_r": -0.1125,
-        "pf": 0.82,
-        "t_stat": -0.82,
-        "p_value": 0.7945
+        "n": 79,
+        "total_r": -4.48,
+        "mean_r": -0.0566,
+        "pf": 0.9,
+        "t_stat": -0.4,
+        "p_value": 0.6571
       },
       "blind_oos": {
-        "n": 54,
-        "total_r": 7.85,
-        "mean_r": 0.1454,
-        "pf": 1.29,
-        "t_stat": 0.83,
-        "p_value": 0.2026
+        "n": 53,
+        "total_r": 6.41,
+        "mean_r": 0.1209,
+        "pf": 1.24,
+        "t_stat": 0.69,
+        "p_value": 0.2464
       },
       "fdr_passed": false,
       "approved_for_ftmo": false

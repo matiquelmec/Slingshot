@@ -121,13 +121,9 @@ class MarketScanner:
     @classmethod
     def is_toxic_hour_sop137(cls, dt: datetime) -> bool:
         """
-        [SOP-137] Identifica horas intradía con expectativa matemática negativa:
-        - 07:00 UTC: Pre-London Judas Swing Fakeout (WR 28.6%, PF 0.83)
-        - 10:00 UTC: London Trap
-        - 14:00 UTC: NY Open Chop
-        - 21:00-22:00 UTC: NY Close Dead Zone (WR 0.0%)
+        [SOP-137 + SOP-160 DST-AWARE] Evalúa toxicidad horaria vía ZoneInfo real de Londres y NY.
         """
-        return ssot_is_toxic_hour_sop137(dt.hour)
+        return ssot_is_toxic_hour_sop137(dt)
 
     def __init__(self):
         self.router = SlingshotRouter()
@@ -835,11 +831,15 @@ class MarketScanner:
                 if playbook_c == "LIQUIDITY_SWEEP_FVG" and ker_c < 0.40:
                     min_score = max(min_score, 82)
 
-            # [SOP-49 ASIAN SESSION GATING: 00:00 - 06:59 UTC]
+            # [SOP-49 & SOP-160 ASIAN SESSION + US BANK HOLIDAY THIN LIQUIDITY GATING]
             now_utc_dispatch = datetime.now(timezone.utc)
-            if 0 <= now_utc_dispatch.hour <= 6:
+            from engine.core.session_manager import classify_market_session
+            from engine.core.market_calendar import get_venue_liquidity_status
+            if classify_market_session(now_utc_dispatch).get("current_session") == "ASIA":
                 if not any(sym_upper.startswith(ldr) for ldr in RiskManager.ALPHA_LEADERS):
                     min_score += 5
+            if get_venue_liquidity_status(sym_upper, now_utc_dispatch).get("liquidity_regime") == "US_BANK_HOLIDAY_THIN":
+                min_score += 4
 
             # [SOP-92 DYNAMIC HIGH-IMPACT NEWS SENTINEL]
             from engine.indicators.news_interceptor import news_interceptor

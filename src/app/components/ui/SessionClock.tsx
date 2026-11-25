@@ -6,6 +6,7 @@ import { Clock, Zap, TrendingUp, TrendingDown, Activity } from 'lucide-react';
 import { useTelemetryStore } from '../../store/telemetryStore';
 import { SessionInfo } from '../../types/signal';
 import { formatCurrency } from '../../utils/formatters';
+import { getClientVenueLiquidityStatus } from '../../../shared/lib/marketCalendar';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -226,14 +227,28 @@ export default function SessionClock() {
         minute: '2-digit',
         hour12: false,
     });
+    const pragueStr = nowUtc.toLocaleTimeString('en-GB', {
+        timeZone: 'Europe/Prague',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false,
+    });
 
-    // Clasificación en tiempo real (evita congelamiento cuando el backend no emite ticks nuevos)
+    // Clasificación en tiempo real + Calendario Bursátil SOP-160
     const liveCls = classifyClientLiveSession(nowUtc);
+    const venueStatus = getClientVenueLiquidityStatus(nowUtc, activeSymbol);
+    const isVenueBlocked = !venueStatus.execution_allowed;
     const session = liveCls.current_session;
-    const isKz = liveCls.is_killzone;
-    const isOverlap = liveCls.is_overlap;
-    const isSilverBullet = liveCls.is_silver_bullet;
-    const disp = SESSION_DISPLAY[session] ?? SESSION_DISPLAY.OFF_HOURS;
+    const isKz = isVenueBlocked ? false : liveCls.is_killzone;
+    const isOverlap = isVenueBlocked ? false : liveCls.is_overlap;
+    const isSilverBullet = isVenueBlocked ? false : liveCls.is_silver_bullet;
+    const disp = isVenueBlocked
+        ? {
+            label: venueStatus.is_early_close ? 'EARLY CLOSE 13:00 NY' : 'FERIADO BURSÁTIL',
+            color: 'text-amber-300',
+            bg: 'bg-amber-500/15 border-amber-400/40',
+        }
+        : (SESSION_DISPLAY[session] ?? SESSION_DISPLAY.OFF_HOURS);
 
     const isMatchingAsset =
         Boolean(sessionData?.sessions) &&
@@ -276,6 +291,9 @@ export default function SessionClock() {
                         </span>
                         <span className="text-[10px] font-mono font-bold text-slate-200 tracking-tight uppercase px-1.5 py-0.5 rounded border border-white/15 bg-white/[0.04]">
                             🏦 {lonStr} LON
+                        </span>
+                        <span className="text-[10px] font-mono font-bold text-emerald-300 tracking-tight uppercase px-1.5 py-0.5 rounded border border-emerald-500/30 bg-emerald-500/10">
+                            🏛️ {pragueStr} PRG
                         </span>
                     </div>
                     <div className="flex gap-2 items-baseline">

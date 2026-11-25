@@ -97,6 +97,12 @@ class TradFiScanner:
                 lot_info = ftmo_guardian.calculate_mt5_lots(symbol, optimal_entry, stop_loss, risk_usd_override=base_risk_usd)
                 checklist.append({"factor": "Gestión Acelerada FTMO (+1.0R / +1.3R)", "status": "CUMPLIDO", "detail": f"Lotes recomendados: {lot_info['lots']} Lots (${lot_info['risk_usd']:.0f} USD)"})
 
+                from engine.core.market_calendar import get_venue_liquidity_status
+                now_utc = datetime.now(timezone.utc)
+                venue_status = get_venue_liquidity_status(symbol, now_utc)
+                if not venue_status.get("execution_allowed", True):
+                    is_tradfi_killzone = False
+
                 # Precisión dinámica de decimales por activo (SOP-65)
                 d_prec = 5 if symbol in ["EURUSD", "GBPUSD"] else 3 if ("JPY" in symbol or symbol == "XAGUSD") else 2
                 candidate = {
@@ -118,7 +124,13 @@ class TradFiScanner:
                     "risk_usd": lot_info["risk_usd"],
                     "spread_usd": spec["spread_usd"],
                     "checklist": checklist,
-                    "session_status": "KILLZONE ACTIVA (EJECUCIÓN PERMITIDA)" if is_tradfi_killzone else "STANDBY (MONITOREO FUERA DE KILLZONE)",
+                    "liquidity_regime": venue_status.get("liquidity_regime", "NORMAL"),
+                    "holiday_name": venue_status.get("holiday_name"),
+                    "session_status": (
+                        f"FERIADO / EARLY CLOSE ({venue_status.get('holiday_name')})"
+                        if not venue_status.get("execution_allowed", True)
+                        else ("KILLZONE ACTIVA (EJECUCIÓN PERMITIDA)" if is_tradfi_killzone else "STANDBY (MONITOREO FUERA DE KILLZONE)")
+                    ),
                     "is_killzone": is_tradfi_killzone,
                     "data_source": data_source,
                     "timestamp": datetime.now(timezone.utc).isoformat()
