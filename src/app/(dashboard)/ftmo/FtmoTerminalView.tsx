@@ -158,10 +158,15 @@ export default function FtmoPage() {
                     grid.find((r: { risk_per_trade_pct?: number }) => r.risk_per_trade_pct === 0.75) ||
                     grid.find((r: { risk_per_trade_pct?: number }) => r.risk_per_trade_pct === recRisk) ||
                     grid[0];
+                const totalFolds = Number(cpcv.total_folds ?? cpcv.n_folds ?? 15);
+                const posFolds =
+                    cpcv.positive_folds !== undefined
+                        ? Number(cpcv.positive_folds)
+                        : Math.round(totalFolds * (Number(cpcv.fold_positive_rate_pct ?? 100) / 100));
                 setAuditSummary({
-                    cpcvFoldsPositive: Number(cpcv.positive_folds ?? 15),
-                    cpcvTotalFolds: Number(cpcv.total_folds ?? 15),
-                    pbo: Number(cpcv.pbo ?? 0),
+                    cpcvFoldsPositive: posFolds,
+                    cpcvTotalFolds: totalFolds,
+                    pbo: Number(cpcv.pbo_score ?? cpcv.pbo ?? 0),
                     passRatePct: matchedRow ? Number(matchedRow.funded_pass_rate_pct ?? 0) : null,
                     recommendedRiskPct: recRisk,
                     p50Days: matchedRow ? Number(matchedRow.p50_days_to_funded ?? 0) : null,
