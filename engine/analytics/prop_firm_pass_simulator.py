@@ -27,6 +27,12 @@ class PropFirmPassSimulator:
         "reports",
         "chronological_backtest_report.json",
     )
+    FTMO_SWING_REPORT_PATH = os.path.join(
+        os.path.dirname(os.path.dirname(__file__)),
+        "backtest",
+        "reports",
+        "ftmo_swing_scientific_audit_sop154.json",
+    )
 
     @classmethod
     def load_daily_clusters(
@@ -35,9 +41,13 @@ class PropFirmPassSimulator:
         prop_tier1_only: bool = True,
         friction_haircut: float = 0.884,
         sl_slippage_r: float = 0.04,
+        profile: str = "CRYPTO_PROP",
     ) -> List[Dict[str, Any]]:
         """Agrupa los trades auditados por día calendario para preservar correlación intradía."""
-        path = report_path or cls.DEFAULT_REPORT_PATH
+        if profile.upper() == "FTMO_SWING":
+            path = report_path or cls.FTMO_SWING_REPORT_PATH
+        else:
+            path = report_path or cls.DEFAULT_REPORT_PATH
         if not os.path.exists(path):
             return [
                 {"day": f"d{i}", "net_r": r, "worst_intraday_r": min(r, -1.04), "trades": 1}
@@ -47,16 +57,20 @@ class PropFirmPassSimulator:
         with open(path, "r", encoding="utf-8") as f:
             data = json.load(f)
 
-        trades = data.get("trades") or data.get("trade_log") or []
+        trades = data.get("oos_trade_stream") or data.get("trades") or data.get("trade_log") or []
         by_day: Dict[str, List[float]] = defaultdict(list)
 
         for idx, t in enumerate(trades):
             sym = str(t.get("symbol") or t.get("asset") or "").upper()
-            if prop_tier1_only and sym not in PROP_FIRM_TIER1_CRYPTO_UNIVERSE:
+            if profile.upper() != "FTMO_SWING" and prop_tier1_only and sym not in PROP_FIRM_TIER1_CRYPTO_UNIVERSE:
                 continue
             raw_r = float(t.get("pnl_r") or t.get("outcome_r") or t.get("r_multiple") or 0.0)
-            net_r = raw_r * friction_haircut if raw_r > 0 else raw_r - sl_slippage_r
-            day_key = str(t.get("entry_time") or t.get("timestamp") or f"day_{idx // 2}")[:10]
+            # FTMO_SWING oos_trade_stream ya viene neto de spread, comisión y swap nocturno
+            if profile.upper() == "FTMO_SWING":
+                net_r = raw_r
+            else:
+                net_r = raw_r * friction_haircut if raw_r > 0 else raw_r - sl_slippage_r
+            day_key = str(t.get("day") or t.get("entry_time") or t.get("timestamp") or f"day_{idx // 2}")[:10]
             by_day[day_key].append(net_r)
 
         clusters: List[Dict[str, Any]] = []

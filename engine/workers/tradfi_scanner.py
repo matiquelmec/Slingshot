@@ -47,91 +47,57 @@ class TradFiScanner:
         
         for symbol, spec in TRADFI_ASSETS_CONFIG.items():
             try:
-                # [SOP-67 TIER-A FILTER & PODA INSTITUCIONAL]
+                # [SOP-67 & SOP-154 TIER-A FILTER & PARIDAD 1:1]
                 if spec.get("tier") == "EXCLUDED" or not spec.get("enabled", True):
                     continue
-                df, data_source = await tradfi_provider.get_candles_with_meta(symbol, interval=self.interval, limit=100)
-                if df is None or len(df) < 50:
+                tf = spec.get("optimal_timeframe", self.interval)
+                archetype = spec.get("archetype", "IMPULSE_OTE_SMC")
+                df_raw, data_source = await tradfi_provider.get_candles_with_meta(symbol, interval=tf, limit=250)
+                if df_raw is None or len(df_raw) < 210:
                     continue
-                    
-                current_price = float(df["close"].iloc[-1])
-                c_high = float(df["high"].iloc[-1])
-                c_low = float(df["low"].iloc[-1])
-                atr_val = float(df["atr"].iloc[-1]) if "atr" in df.columns else (current_price * 0.002)
-                ema50 = float(df["ema50"].iloc[-1])
-                ema200 = float(df["ema200"].iloc[-1])
-                
-                # IdentificaciA3n de Swings OTE (20 velas recientes)
-                lookback = df.iloc[-20:]
-                swing_high = float(lookback["high"].max())
-                swing_low = float(lookback["low"].min())
-                swing_range = swing_high - swing_low
-                
-                if swing_range <= (atr_val * 0.5):
-                    continue
-                    
-                # [SOP-29 & SOP-129 DST-AWARE SESSION KILLZONE GATE]
-                # Indices y Forex TradFi operan sincronizados con la hora local real de Londres y Nueva York (ZoneInfo IANA)
-                from engine.core.session_manager import classify_market_session
-                from zoneinfo import ZoneInfo
-                now_utc = datetime.now(timezone.utc)
-                cls_sess = classify_market_session(now_utc)
-                lon_h = now_utc.astimezone(ZoneInfo("Europe/London")).hour
-                ny_h = now_utc.astimezone(ZoneInfo("America/New_York")).hour
-                is_tradfi_killzone = bool(cls_sess.get("is_killzone")) or (8 <= lon_h <= 11) or (8 <= ny_h <= 14)
-                
-                # Evaluar Sesgo Institucional
-                is_bull = current_price > ema50 and ema50 > ema200
-                is_bear = current_price < ema50 and ema50 < ema200
-                
-                direction = "LONG" if is_bull else "SHORT" if is_bear else ("LONG" if current_price >= ema50 else "SHORT")
 
-                # [SOP-68 VETO INSTITUCIONAL ORO: LONG-ONLY]
-                if "XAU" in symbol and direction != "LONG":
+                from engine.indicators.tradfi_smc_engine import prepare_tradfi_features, evaluate_tradfi_bar, is_tradfi_killzone
+                df = prepare_tradfi_features(df_raw)
+                if df.empty or len(df) < 210:
                     continue
-                    
-                if direction == "LONG":
-                    optimal_entry = swing_high - (swing_range * 0.618)
-                    stop_loss = swing_low - (atr_val * 0.2)
-                    dist = abs(optimal_entry - stop_loss)
-                    be_price = optimal_entry + (dist * 1.0)
-                    tp1 = optimal_entry + (dist * 1.3)
-                    tp2 = optimal_entry + (dist * 2.5)
-                    tp3 = optimal_entry + (dist * 4.0)
-                else:
-                    optimal_entry = swing_low + (swing_range * 0.618)
-                    stop_loss = swing_high + (atr_val * 0.2)
-                    dist = abs(optimal_entry - stop_loss)
-                    be_price = optimal_entry - (dist * 1.0)
-                    tp1 = optimal_entry - (dist * 1.3)
-                    tp2 = optimal_entry - (dist * 2.5)
-                    tp3 = optimal_entry - (dist * 4.0)
-                    
-                # CAlculo de Lotes MT5
+
+                cost_rt = float(spec.get("spread_usd", 0.0)) / max(float(df["close"].iloc[-1]), 1e-9)
+                setup = evaluate_tradfi_bar(
+                    df,
+                    idx=len(df) - 1,
+                    symbol=symbol,
+                    archetype=archetype,
+                    long_only=bool(spec.get("long_only", False)),
+                    cost_pct_rt=cost_rt,
+                    max_spread_to_risk=0.08,
+                )
+                if setup is None:
+                    continue
+
+                direction = setup["direction"]
+                optimal_entry = float(setup["price"])
+                current_price = float(setup["current_price"])
+                stop_loss = float(setup["stop_loss"])
+                be_price = float(setup["be_price"])
+                tp1 = float(setup["tp1"])
+                tp2 = float(setup["tp2"])
+                tp3 = float(setup["tp3"])
+                score = int(setup["confluence_score"])
+                checklist = list(setup["checklist"])
+                is_tradfi_killzone = bool(setup["is_killzone"])
+
+                # Cálculo de Lotes MT5
                 lot_info = ftmo_guardian.calculate_mt5_lots(symbol, optimal_entry, stop_loss)
-                
-                # Score de Confluencia Institucional
-                score = 65
-                checklist = []
-                
-                if (direction == "LONG" and current_price > ema200) or (direction == "SHORT" and current_price < ema200):
-                    score += 15
-                    checklist.append({"factor": "AlineaciA3n Macro EMA 200", "status": "CUMPLIDO", "detail": "DirecciA3n a favor de la tendencia mayor"})
-                    
-                if c_low <= optimal_entry <= c_high or abs(current_price - optimal_entry) / optimal_entry < 0.003:
-                    score += 15
-                    checklist.append({"factor": "Golden Pocket Fibonacci (61.8%)", "status": "CUMPLIDO", "detail": "Precio en zona OTE de alta probabilidad"})
-                    
-                checklist.append({"factor": "GestiA3n Acelerada FTMO (+1.0R / +1.3R)", "status": "CUMPLIDO", "detail": f"Lotes recomendados: {lot_info['lots']} Lots ($750 USD)"})
-                
-                # Precision dinamica de decimales por activo (SOP-65)
-                d_prec = 5 if symbol in ["EURUSD", "GBPUSD"] else 3 if "JPY" in symbol else 2
+                checklist.append({"factor": "Gestión Acelerada FTMO (+1.0R / +1.3R)", "status": "CUMPLIDO", "detail": f"Lotes recomendados: {lot_info['lots']} Lots (${lot_info['risk_usd']:.0f} USD)"})
+
+                # Precisión dinámica de decimales por activo (SOP-65)
+                d_prec = 5 if symbol in ["EURUSD", "GBPUSD"] else 3 if ("JPY" in symbol or symbol == "XAGUSD") else 2
                 candidate = {
                     "asset": symbol,
                     "name": spec["name"],
                     "category": spec["category"],
                     "direction": direction,
-                    "type": "TradFi SMC Setup",
+                    "type": f"TradFi {archetype}",
                     "price": round(optimal_entry, d_prec),
                     "current_price": round(current_price, d_prec),
                     "stop_loss": round(stop_loss, d_prec),
@@ -139,7 +105,7 @@ class TradFiScanner:
                     "tp1": round(tp1, d_prec),
                     "tp2": round(tp2, d_prec),
                     "tp3": round(tp3, d_prec),
-                    "rr_ratio_tp3": 4.0,
+                    "rr_ratio_tp3": 3.8,
                     "confluence_score": score,
                     "mt5_lots": lot_info["lots"],
                     "risk_usd": lot_info["risk_usd"],

@@ -796,11 +796,27 @@ async def get_ftmo_guardian_status():
 
 
 @app.get("/api/v1/ftmo/pass-simulation")
-async def get_ftmo_pass_simulation():
-    """[SOP-151] Simulación Monte Carlo de probabilidad de pase de fondeo sobre universo Prop Tier-1."""
+async def get_ftmo_pass_simulation(profile: str = Query("FTMO_SWING", description="Perfil: FTMO_SWING o CRYPTO_PROP")):
+    """[SOP-154] Simulación Monte Carlo de probabilidad de pase de fondeo sobre universo auditado."""
     from engine.analytics.prop_firm_pass_simulator import prop_firm_pass_simulator
-    r_series = prop_firm_pass_simulator.load_audited_r_series(prop_tier1_only=True)
-    return sanitize_for_json(prop_firm_pass_simulator.simulate_risk_grid(r_series, n_trials=1000))
+    clusters = prop_firm_pass_simulator.load_daily_clusters(profile=profile)
+    return sanitize_for_json(prop_firm_pass_simulator.simulate_risk_grid(clusters, n_trials=2000))
+
+
+@app.get("/api/v1/ftmo/universe-audit")
+async def get_ftmo_universe_audit():
+    """[SOP-154] Retorna los resultados del Torneo Walk-Forward 60/40 FTMO Swing."""
+    import json, os
+    from engine.backtest.ftmo_swing_universe_audit import REPORT_PATH
+    if not os.path.exists(REPORT_PATH):
+        return {"status": "NOT_RUN", "selected_portfolio": []}
+    with open(REPORT_PATH, "r", encoding="utf-8") as f:
+        data = json.load(f)
+    return sanitize_for_json({
+        "total_evaluated_configs": data.get("total_evaluated_configs", 0),
+        "approved_count": data.get("approved_count", 0),
+        "selected_portfolio": data.get("selected_portfolio", []),
+    })
 
 
 @app.get("/api/v1/ftmo/positions")

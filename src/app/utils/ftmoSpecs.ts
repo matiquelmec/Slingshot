@@ -52,6 +52,10 @@ export const FTMO_CONTRACT_SIZES: Record<string, number> = {
     'GER40': 25,
     'DAX40': 25,
     'DE40': 25,
+    'UK100': 1,
+    'US2000': 1,
+    'EU50': 1,
+    'UKOIL': 100,
 
     // Forex Majors & Cruces
     'EURUSD': 100000,

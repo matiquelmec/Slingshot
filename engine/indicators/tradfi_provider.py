@@ -27,7 +27,24 @@ TRADFI_ASSETS_CONFIG = {
         "point_size": 0.01,
         "tier": "TIER_A",
         "enabled": True,
-        "long_only": True
+        "long_only": True,
+        "optimal_timeframe": "1h",
+        "archetype": "IMPULSE_OTE_SMC"
+    },
+    "XAGUSD": {
+        "ticker": "SI=F",
+        "name": "Silver Spot",
+        "category": "COMMODITIES",
+        "contract_size": 5000,
+        "spread_usd": 0.02,
+        "min_lot": 0.01,
+        "pip_value": 5.0,
+        "point_size": 0.001,
+        "tier": "TIER_A",
+        "enabled": True,
+        "long_only": False,
+        "optimal_timeframe": "1h",
+        "archetype": "IMPULSE_OTE_SMC"
     },
     "US100": {
         "ticker": "NQ=F",
@@ -40,7 +57,24 @@ TRADFI_ASSETS_CONFIG = {
         "point_size": 0.25,
         "tier": "TIER_A",
         "enabled": True,
-        "long_only": False
+        "long_only": False,
+        "optimal_timeframe": "1h",
+        "archetype": "IMPULSE_OTE_SMC"
+    },
+    "UK100": {
+        "ticker": "^FTSE",
+        "name": "FTSE 100 Cash",
+        "category": "INDICES",
+        "contract_size": 1,
+        "spread_usd": 0.90,
+        "min_lot": 0.1,
+        "pip_value": 1.0,
+        "point_size": 0.5,
+        "tier": "TIER_A",
+        "enabled": True,
+        "long_only": False,
+        "optimal_timeframe": "1h",
+        "archetype": "LIQUIDITY_SWEEP_JUDAS"
     },
     "GBPUSD": {
         "ticker": "GBPUSD=X",

@@ -259,20 +259,39 @@ class FtmoGuardianShield:
             "phase_passed": profit_usd >= (self.account_size * (target_pct / 100.0)) and target_pct > 0
         }
 
-    def check_midnight_rollover_risk(self, hour_utc: int, minute: int) -> bool:
+    def check_midnight_rollover_risk(self, hour_utc: int, minute: int, now_utc: Optional[datetime] = None) -> bool:
         """
-        [SOP-85 EXTENDED MIDNIGHT ROLL-OVER ARMOR]
-        Ventana de 60 minutos de corte bancario interbancario (21:30 a 22:30 UTC / 23:30 a 00:30 CE(S)T).
-        Durante estos 60 minutos se congelan de forma absoluta nuevas órdenes en FTMO MT5 para
-        blindar la cuenta de fondeo contra el ensanchamiento masivo de spreads interbancarios.
+        [SOP-154 DST-AWARE EUROPE/PRAGUE ROLLOVER ARMOR]
+        Bloquea nuevas órdenes 15 min antes y 15 min después de las 00:00 Europe/Prague (CE(S)T),
+        adaptándose automáticamente a horario de invierno (CET UTC+1) y verano (CEST UTC+2).
         """
-        # Ventana 21:30 a 21:59 UTC
-        if hour_utc == 21 and minute >= 30:
+        from zoneinfo import ZoneInfo
+        prague_tz = ZoneInfo("Europe/Prague")
+        if now_utc is not None:
+            dt_utc = now_utc if now_utc.tzinfo else now_utc.replace(tzinfo=timezone.utc)
+        else:
+            base = datetime.now(timezone.utc)
+            dt_utc = base.replace(hour=hour_utc, minute=minute, second=0, microsecond=0)
+        dt_prague = dt_utc.astimezone(prague_tz)
+        if dt_prague.hour == 23 and dt_prague.minute >= 45:
             return True
-        # Ventana 22:00 a 22:30 UTC
-        if hour_utc == 22 and minute <= 30:
+        if dt_prague.hour == 0 and dt_prague.minute <= 15:
             return True
         return False
+
+    @staticmethod
+    def compute_best_day_diluted_risk(
+        base_risk_pct: float,
+        best_day_profit_usd: float,
+        total_profit_usd: float,
+        max_share: float = 0.35,
+        diluted_risk_pct: float = 0.0025,
+    ) -> float:
+        """[SOP-154] Si el mejor día supera el 35% del beneficio acumulado, diluye el riesgo a 0.25%."""
+        if total_profit_usd > 0 and best_day_profit_usd > 0:
+            if (best_day_profit_usd / total_profit_usd) > max_share:
+                return min(base_risk_pct, diluted_risk_pct)
+        return base_risk_pct
         
     def calculate_mt5_lots(
         self,
