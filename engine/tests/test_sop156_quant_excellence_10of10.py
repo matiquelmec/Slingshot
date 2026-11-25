@@ -28,7 +28,7 @@ def test_stationary_bootstrap_and_wald_sprt():
     sample = stationary_bootstrap_sample(items, target_len=365, mean_block_len=5.0)
     assert len(sample) == 365
 
-    sprt_pos = compute_wald_sprt([0.35] * 25, mu0=0.0, mu1=0.25, sigma=0.985)
+    sprt_pos = compute_wald_sprt([0.45] * 36, mu0=0.0, mu1=0.25, sigma=0.985)
     assert sprt_pos["sprt_decision"] == "EDGE_CERTIFIED"
     assert sprt_pos["sprt_log_likelihood"] >= sprt_pos["sprt_upper_bound"]
 
